@@ -109,6 +109,18 @@ describe("drawJudgeInvarianceSample — balanced blind sample", () => {
     expect(c.key.map((k) => k.issue_id)).not.toEqual(a.key.map((k) => k.issue_id));
   });
 
+  it("rejects a quota too small to sample every populated stratum (B6)", () => {
+    // Both cells hold candidates in all three strata; quota 2 would always
+    // stop after anchored + partially_anchored, silently never assessing the
+    // judge on unanchored issues.
+    expect(() =>
+      drawJudgeInvarianceSample(
+        [run("full", "medium", "fx-a", 1, 2), run("partial", "medium", "fx-a", 1, 2)],
+        { seed: 1, perCellQuota: 2 },
+      ),
+    ).toThrow(/stratum unanchored has candidates but drew 0/);
+  });
+
   it("fails loud on duplicate runs, duplicate issue ids, bad quota", () => {
     expect(() =>
       drawJudgeInvarianceSample([run("z", "e", "f", 1, 1), run("z", "e", "f", 1, 1)], {
@@ -131,6 +143,7 @@ describe("drawJudgeInvarianceSample — balanced blind sample", () => {
 describe("assessJudgeInvariance — fail-closed comparability verdict", () => {
   const keyFor = (
     cells: Array<[zone: string, effort: string, count: number]>,
+    stratum: BlindSampleKeyEntry["stratum"] = "anchored",
   ): BlindSampleKeyEntry[] =>
     cells.flatMap(([zone, effort, count]) =>
       Array.from({ length: count }, (_, i) => ({
@@ -140,6 +153,7 @@ describe("assessJudgeInvariance — fail-closed comparability verdict", () => {
         fixture: "fx",
         rep: 1,
         issue_id: `i-${i}`,
+        stratum,
       })),
     );
 
@@ -227,6 +241,65 @@ describe("assessJudgeInvariance — fail-closed comparability verdict", () => {
       minPerCell: 3,
     });
     expect(thin.outcome).toBe("not_evaluable");
+  });
+
+  it("withholding one arm's labels → not_evaluable, never comparable (B7/C3)", () => {
+    const key = keyFor([
+      ["full", "medium", 4],
+      ["partial", "medium", 4],
+    ]);
+    // Label ONLY the full arm, with well-defined FNR/FPR.
+    const labels: DualLabelRecord[] = key
+      .filter((k) => k.zone === "full")
+      .map((entry, i) => ({
+        blind_id: entry.blind_id,
+        gold_attributed: i % 2 === 0,
+        judge_attributed: i % 2 === 0,
+      }));
+    const verdict = assessJudgeInvariance(key, labels, {
+      maxFnrGap: 0.5,
+      maxFprGap: 0.5,
+      minPerCell: 2,
+    });
+    expect(verdict.outcome).toBe("not_evaluable");
+    expect(verdict.reason).toMatch(/partial, medium/); // the unlabeled cell is named
+  });
+
+  it("a single-cell key cannot be assessed — there is nothing to compare", () => {
+    const key = keyFor([["full", "medium", 6]]);
+    const labels = key.map((entry, i) => ({
+      blind_id: entry.blind_id,
+      gold_attributed: i % 2 === 0,
+      judge_attributed: true,
+    }));
+    const verdict = assessJudgeInvariance(key, labels, {
+      maxFnrGap: 0.5,
+      maxFprGap: 0.5,
+      minPerCell: 2,
+    });
+    expect(verdict.outcome).toBe("not_evaluable");
+    expect(verdict.reason).toMatch(/at least 2 arms/);
+  });
+
+  it("unequal specificity mixes across arms → not_evaluable (C4)", () => {
+    // full arm labeled entirely on anchored issues, partial arm entirely on
+    // unanchored ones — identical aggregate rates would still be incomparable.
+    const key = [
+      ...keyFor([["full", "medium", 4]], "anchored"),
+      ...keyFor([["partial", "medium", 4]], "unanchored"),
+    ];
+    const labels = key.map((entry, i) => ({
+      blind_id: entry.blind_id,
+      gold_attributed: i % 2 === 0,
+      judge_attributed: i % 2 === 0,
+    }));
+    const verdict = assessJudgeInvariance(key, labels, {
+      maxFnrGap: 0.5,
+      maxFprGap: 0.5,
+      minPerCell: 2,
+    });
+    expect(verdict.outcome).toBe("not_evaluable");
+    expect(verdict.reason).toMatch(/stratum mixes differ/);
   });
 
   it("fails loud on unknown or duplicate blind ids and bad options", () => {

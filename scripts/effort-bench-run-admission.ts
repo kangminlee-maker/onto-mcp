@@ -11,18 +11,21 @@
  * the witness (any pre-witness session) is inadmissible — fail-closed, never
  * "probably fine".
  *
- * Cost capture (§4-6, reporting-only — cost is never a gate): the worker
- * execution path does not persist provider token counts, so the deterministic
- * capture from execution-result.yaml is:
- *   - durationMs   = total_duration_ms (whole-pipeline wall-time),
- *   - promptChars  = Σ packet_bytes over LEAF execution entries,
- *   - outputChars  = Σ output_bytes  over LEAF execution entries,
- * where leaf entries are lens_execution_results + issue_artifact_execution_results
- * + deliberation_execution_results + (synthesize child_results when present,
- * else the synthesize parent). The synthesize parent's own byte fields measure
- * stage artifacts (work-items / ledger), not the per-issue dispatches — summing
- * parent AND children would double-count the stage. Bytes stand in for the
- * char-scale fields (UTF-8 proxy; providerTokens is honestly omitted).
+ * Cost capture (§4-6, reporting-only — cost is never a gate): deterministic
+ * projection from execution-result.yaml:
+ *   - durationMs     = total_duration_ms (whole-pipeline wall-time),
+ *   - promptChars    = Σ packet_bytes over LEAF execution entries,
+ *   - outputChars    = Σ output_bytes  over LEAF execution entries,
+ *   - providerTokens = Σ output_tokens over the same leaves, present only
+ *     when at least one leaf carries token telemetry (the codex worker path
+ *     persists none; direct-call paths do — artifact-types.ts:828-829). Arms
+ *     compare like-for-like executor paths, so partial telemetry is symmetric.
+ * A leaf is each entry of lens/issue_artifact/deliberation collections and
+ * the synthesize result, EXCEPT that an entry with `child_results` is a
+ * container whose own byte fields measure stage artifacts, not dispatches
+ * (e.g. issue-stance-matrix and synthesize both fan out children) — its
+ * children are the leaves, uniformly for every collection. Bytes stand in
+ * for the char-scale fields (UTF-8 proxy — a documented approximation).
  *
  * `assembleBenchRun` composes both into a schema-valid `m3-bench-run/1` row
  * via the P0 ingest validator (`parseM3BenchRun`) — the only path a run takes
@@ -117,13 +120,13 @@ export function assertRunAdmission(
   }
 }
 
-interface UnitBytes {
+interface UnitLeaf {
   packet_bytes: number;
   output_bytes: number;
+  output_tokens: number | null;
 }
 
-const requireUnitBytes = (v: unknown, label: string): UnitBytes => {
-  if (!isRecord(v)) fail(`${label} must be an object`);
+const requireUnitLeaf = (v: Record<string, unknown>, label: string): UnitLeaf => {
   const packet = v.packet_bytes;
   const output = v.output_bytes;
   if (!Number.isInteger(packet) || (packet as number) < 0) {
@@ -132,7 +135,34 @@ const requireUnitBytes = (v: unknown, label: string): UnitBytes => {
   if (!Number.isInteger(output) || (output as number) < 0) {
     fail(`${label}.output_bytes must be a non-negative integer, got ${JSON.stringify(output)}`);
   }
-  return { packet_bytes: packet as number, output_bytes: output as number };
+  const tokens = v.output_tokens;
+  if (tokens !== undefined && tokens !== null && (!Number.isInteger(tokens) || (tokens as number) < 0)) {
+    fail(`${label}.output_tokens must be a non-negative integer when present, got ${JSON.stringify(tokens)}`);
+  }
+  return {
+    packet_bytes: packet as number,
+    output_bytes: output as number,
+    output_tokens: tokens === undefined || tokens === null ? null : (tokens as number),
+  };
+};
+
+/**
+ * An entry with a non-empty `child_results` is a container: its children are
+ * the execution leaves; its own byte fields measure stage artifacts and are
+ * excluded (counting both would double-count the stage). One nesting level,
+ * matching the artifact contract (child_results holds plain unit results).
+ */
+const collectLeaves = (entry: unknown, label: string, out: UnitLeaf[]): void => {
+  if (!isRecord(entry)) fail(`${label} must be an object`);
+  const children = entry.child_results;
+  if (Array.isArray(children) && children.length > 0) {
+    children.forEach((child, i) => {
+      if (!isRecord(child)) fail(`${label}.child_results[${i}] must be an object`);
+      out.push(requireUnitLeaf(child, `${label}.child_results[${i}]`));
+    });
+    return;
+  }
+  out.push(requireUnitLeaf(entry, label));
 };
 
 const LEAF_COLLECTIONS = [
@@ -148,32 +178,28 @@ export function extractExecutionCost(executionResultDoc: unknown): EffortCostSum
   if (!Number.isInteger(total) || (total as number) < 0) {
     fail(`total_duration_ms must be a non-negative integer, got ${JSON.stringify(total)}`);
   }
-  const leaves: UnitBytes[] = [];
+  const leaves: UnitLeaf[] = [];
   for (const key of LEAF_COLLECTIONS) {
     const rows = executionResultDoc[key];
     if (rows === undefined || rows === null) continue;
     if (!Array.isArray(rows)) fail(`${key} must be a list when present`);
-    rows.forEach((row, i) => leaves.push(requireUnitBytes(row, `${key}[${i}]`)));
+    rows.forEach((row, i) => collectLeaves(row, `${key}[${i}]`, leaves));
   }
   const synthesize = executionResultDoc.synthesize_execution_result;
   if (synthesize !== undefined && synthesize !== null) {
-    if (!isRecord(synthesize)) fail("synthesize_execution_result must be an object");
-    const children = synthesize.child_results;
-    if (Array.isArray(children) && children.length > 0) {
-      children.forEach((row, i) =>
-        leaves.push(requireUnitBytes(row, `synthesize_execution_result.child_results[${i}]`)),
-      );
-    } else {
-      leaves.push(requireUnitBytes(synthesize, "synthesize_execution_result"));
-    }
+    collectLeaves(synthesize, "synthesize_execution_result", leaves);
   }
   if (leaves.length === 0) {
     fail("execution result has no leaf execution entries — nothing to cost");
   }
+  const tokenLeaves = leaves.filter((u) => u.output_tokens !== null);
   return {
     durationMs: total as number,
     promptChars: leaves.reduce((acc, u) => acc + u.packet_bytes, 0),
     outputChars: leaves.reduce((acc, u) => acc + u.output_bytes, 0),
+    ...(tokenLeaves.length > 0
+      ? { providerTokens: tokenLeaves.reduce((acc, u) => acc + (u.output_tokens as number), 0) }
+      : {}),
   };
 }
 
@@ -188,18 +214,50 @@ export interface AssembleBenchRunArgs {
   contextManifest: unknown;
   /** Parsed execution-result.yaml of the candidate session. */
   executionResult: unknown;
-  /** The cell's registered knob value this run was supposed to receive. */
-  intendedMaxEmbedLines: number;
+  /**
+   * The REGISTERED zone → max_embed_lines mapping (from the pre-registration
+   * evidence). The intended knob is derived from the row's own zone label, so
+   * a caller cannot label one witnessed treatment as two different arms — the
+   * zone label and the witnessed knob are bound through this table (review
+   * finding B1). NOTE the honest limit: the effort label has no per-run
+   * witness (execution results do not persist the seat effort); effort
+   * binding rests on the arm settings' confound-diff proof plus the P2
+   * harness's run provenance.
+   */
+  registeredZoneKnobs: Record<string, number>;
 }
 
+const requireSessionId = (doc: unknown, label: string): string => {
+  if (!isRecord(doc) || typeof doc.session_id !== "string" || doc.session_id.length === 0) {
+    fail(`${label} must carry a non-empty session_id — an unidentified artifact cannot be admitted`);
+  }
+  return doc.session_id;
+};
+
 /**
- * Admit one review session into a bench cell: witness assert → cost capture →
- * schema-validated `m3-bench-run/1` row. Throws (and admits nothing) on any
- * witness mismatch or malformed artifact.
+ * Admit one review session into a bench cell: identity binding → witness
+ * assert → cost capture → schema-validated `m3-bench-run/1` row. The context
+ * manifest (treatment witness) and execution result (costed run) MUST name
+ * the SAME session — otherwise a correctly-witnessed manifest could vouch for
+ * a differently-treated execution. Throws (and admits nothing) on any
+ * mismatch or malformed artifact.
  */
 export function assembleBenchRun(args: AssembleBenchRunArgs): M3BenchRun {
+  const manifestSession = requireSessionId(args.contextManifest, "context manifest");
+  const executionSession = requireSessionId(args.executionResult, "execution result");
+  if (manifestSession !== executionSession) {
+    fail(
+      `witness/execution session mismatch: context manifest is ${manifestSession} but execution result is ${executionSession} — the witness does not cover this run`,
+    );
+  }
+  const intendedMaxEmbedLines = args.registeredZoneKnobs[args.zone];
+  if (intendedMaxEmbedLines === undefined) {
+    fail(
+      `zone ${JSON.stringify(args.zone)} is not in the registered zone→knob table [${Object.keys(args.registeredZoneKnobs).sort().join(", ")}] — an unregistered arm label cannot be admitted`,
+    );
+  }
   const witness = parseEmbedBudgetWitness(args.contextManifest);
-  assertRunAdmission(witness, args.intendedMaxEmbedLines);
+  assertRunAdmission(witness, intendedMaxEmbedLines);
   const cost = extractExecutionCost(args.executionResult);
   return parseM3BenchRun({
     schema_version: M3_BENCH_RUN_SCHEMA_VERSION,

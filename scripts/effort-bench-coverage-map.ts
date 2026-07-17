@@ -14,12 +14,14 @@
  *   outcome-based fixture selection is circular; this report is the ONLY
  *   admissible basis for the pre-registration manifest's knob/zone choice).
  *
- * Note on line arithmetic: `rendered_lines` is `text.split("\n").length`, the
- * exact convention `truncateForEmbedding` cuts by. A rendered document ending
- * in a newline therefore counts one more than `wc -l`; a knob equal to
- * `wc -l`'s count still truncates (it drops the trailing empty segment and
- * appends the truncation marker). The "full" zone must use a knob >=
- * rendered_lines as reported HERE.
+ * Note on line arithmetic: the packet stage embeds
+ * `truncateForEmbedding(materializedInputText.trim(), maxLines, …)`
+ * (materialize-review-prompt-packets.ts:1276-1282) — the TREATED document is
+ * the TRIMMED render, one line shorter than the renderer's newline-terminated
+ * output under the split("\n") convention. This module mirrors that exactly
+ * (`treatedEmbedText`), so `rendered_lines` here equals the treated line
+ * count (`wc -l` of the persisted materialized-input.md) and a knob >=
+ * rendered_lines as reported HERE realizes full coverage with no cut.
  *
  * CLI:
  *   npx tsx scripts/effort-bench-coverage-map.ts \
@@ -148,6 +150,18 @@ export async function loadFixtureAnchorSet(fixtureId: string): Promise<DefectEvi
 }
 
 /**
+ * The exact text the packet stage feeds to `truncateForEmbedding`: the
+ * rendered materialized input, TRIMMED (materialize-review-prompt-packets.ts
+ * :1276-1282). Coverage MUST be computed over this text — the untrimmed
+ * render carries a trailing empty split segment that shifts the boundary by
+ * one line (a knob equal to the treated line count would be misreported as
+ * truncated/ineligible).
+ */
+export function treatedEmbedText(renderedText: string): string {
+  return renderedText.trim();
+}
+
+/**
  * Render a fixture's materialized input with the production renderer. The
  * fixture target directory must hold exactly one file (these benchmarks
  * materialize a single ontology document); anything else means the fixture
@@ -245,7 +259,9 @@ export async function buildCoverageMapReport(
       renderFixtureMaterializedInput(fixtureId),
       loadFixtureAnchorSet(fixtureId),
     ]);
-    fixtures.push(buildFixtureCoverageMap(fixtureId, renderedText, defects, knobLadder, minMaterialOut));
+    fixtures.push(
+      buildFixtureCoverageMap(fixtureId, treatedEmbedText(renderedText), defects, knobLadder, minMaterialOut),
+    );
   }
   return {
     schema_version: COVERAGE_MAP_SCHEMA_VERSION,

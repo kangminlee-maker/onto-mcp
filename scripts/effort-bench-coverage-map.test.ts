@@ -52,18 +52,31 @@ describe("evidence anchors — validity over all fixtures (fail-loud gate)", () 
     }
   });
 
-  it("rendered_lines follows the renderer arithmetic (target newlines + 6)", async () => {
-    // 1 kind + 1 blank + 1 `##` + 1 `ref:` + 1 blank = 5 header lines, plus
-    // the trailing empty split segment (the split-length convention
-    // truncateForEmbedding cuts by) = +6 over the target's newline count.
+  it("rendered_lines follows the TREATED-document arithmetic (target newlines + 5)", async () => {
+    // 1 kind + 1 blank + 1 `##` + 1 `ref:` + 1 blank = 5 header lines. The
+    // treated document is the TRIMMED render (the packet stage trims before
+    // truncateForEmbedding — materialize-review-prompt-packets.ts:1276-1282),
+    // so no trailing empty split segment is counted: +5, matching `wc -l` of
+    // the session-persisted materialized-input.md and the design's stated
+    // "94-123-line targets render to 99-128 lines".
     const report = await buildCoverageMapReport();
     for (const fixture of report.fixtures) {
       const targetDir = path.join(FIXTURES_ROOT, fixture.fixture, "target");
       const [entry] = await fs.readdir(targetDir);
       const raw = await fs.readFile(path.join(targetDir, entry!), "utf8");
       const targetNewlines = raw.split("\n").length - 1;
-      expect(fixture.rendered_lines).toBe(targetNewlines + 6);
+      expect(fixture.rendered_lines).toBe(targetNewlines + 5);
     }
+  });
+
+  it("a knob equal to the treated line count realizes FULL coverage (no cut)", async () => {
+    // The exact off-by-one the untrimmed coordinate would get wrong: at
+    // knob == rendered_lines the production packet embeds the whole treated
+    // document unchanged, so the map must report truncated=false.
+    const report = await buildCoverageMapReport({
+      knobLadder: [(await buildCoverageMapReport()).fixtures[0]!.rendered_lines],
+    });
+    expect(report.fixtures[0]!.cells[0]!.truncated).toBe(false);
   });
 });
 

@@ -15,7 +15,7 @@ knob_ladder:
 eligibility_min_material_out: 2
 fixtures:
   - fixture: clinical-lab-workflow
-    rendered_lines: 129
+    rendered_lines: 128
     defects:
       - id: CLW-1
         material: true
@@ -134,7 +134,7 @@ fixtures:
         eligible: true
         reason: full coverage (baseline cell)
   - fixture: credit-risk-taxonomy
-    rendered_lines: 100
+    rendered_lines: 99
     defects:
       - id: CRT-1
         material: true
@@ -240,7 +240,7 @@ fixtures:
         eligible: true
         reason: full coverage (baseline cell)
   - fixture: logistics-fulfillment
-    rendered_lines: 119
+    rendered_lines: 118
     defects:
       - id: LSC-1
         material: true
@@ -268,7 +268,6 @@ fixtures:
       - id: LSC-6
         material: true
         anchor_lines:
-          - 41
           - 54
       - id: LSC-7
         material: true
@@ -287,7 +286,6 @@ fixtures:
         material: true
         anchor_lines:
           - 30
-          - 109
     cells:
       - max_embed_lines: 40
         truncated: true
@@ -301,9 +299,8 @@ fixtures:
           - LSC-9
         straddle:
           - LSC-1
-          - LSC-10
         material_out_count: 6
-        material_straddle_count: 2
+        material_straddle_count: 1
         eligible: true
         reason: 6 material defect(s) fully beyond the cut (>= 2)
       - max_embed_lines: 60
@@ -314,9 +311,8 @@ fixtures:
           - LSC-8
         straddle:
           - LSC-1
-          - LSC-10
         material_out_count: 3
-        material_straddle_count: 2
+        material_straddle_count: 1
         eligible: true
         reason: 3 material defect(s) fully beyond the cut (>= 2)
       - max_embed_lines: 80
@@ -325,10 +321,9 @@ fixtures:
           - LSC-2
           - LSC-3
           - LSC-8
-        straddle:
-          - LSC-10
+        straddle: []
         material_out_count: 3
-        material_straddle_count: 1
+        material_straddle_count: 0
         eligible: true
         reason: 3 material defect(s) fully beyond the cut (>= 2)
       - max_embed_lines: 120
@@ -348,7 +343,7 @@ fixtures:
         eligible: true
         reason: full coverage (baseline cell)
   - fixture: manufacturing-bom
-    rendered_lines: 101
+    rendered_lines: 100
     defects:
       - id: MBO-1
         material: true

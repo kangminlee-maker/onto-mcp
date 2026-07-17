@@ -29,6 +29,14 @@ gate:
 coverage_levels: [full, partial, low]
 efforts: [medium, high]
 
+# The registered fixture cohort — the evaluation universe. Both evaluators
+# treat THIS list as the denominator: a registered fixture whose cells go
+# missing after registration makes every affected predicate not_evaluable
+# (fail-closed anti-attrition, R2-6 — survivors-only evaluation is banned).
+# Choose fixtures from the deterministic eligibility report
+# (coverage-map-report.yaml), never from observed review outcomes.
+fixtures: [clinical-lab-workflow, credit-risk-taxonomy, logistics-fulfillment, manufacturing-bom]
+
 # Cluster / power structure (design §4-3, finding R2-7): K judge draws repeat
 # WITHIN one review; R reviews repeat within a fixture. Never pool R×K as one
 # distribution.

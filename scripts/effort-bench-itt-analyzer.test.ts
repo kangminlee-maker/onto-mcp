@@ -15,7 +15,11 @@ function baseManifestRaw(): Record<string, unknown> {
     gate: { recall_cut: 1.0, precision_floor: 0.8 },
     coverage_levels: ["full", "partial", "full-restored"],
     efforts: ["medium"],
-    cluster: { min_reps_per_cell: 4, min_fixtures_per_level: 2, judge_runs: 8 },
+    fixtures: ["fx-a", "fx-b"],
+    // judge_runs=1 here because most synthetic worlds below use single-draw
+    // reviews; the K-pin behavior itself is tested explicitly (K=8 manifests
+    // reject 1-draw observations and vice versa).
+    cluster: { min_reps_per_cell: 4, min_fixtures_per_level: 2, judge_runs: 1 },
     analysis: { ci: "cluster-bootstrap-by-review", multiplicity: "all-registered-contrasts-must-hold" },
     aggregation: "per_fixture_all",
     contrasts: [
@@ -106,10 +110,10 @@ describe("analyzePreregWithCI — synthetic known effect", () => {
 
   it("determinism: same seed ⇒ deep-equal report; different seed ⇒ different CI bounds", () => {
     const manifest = buildManifest();
-    const r1 = analyzePreregWithCI(manifest, knownEffectObservations, { seed: 123, bootstrapIterations: 500 });
-    const r2 = analyzePreregWithCI(manifest, knownEffectObservations, { seed: 123, bootstrapIterations: 500 });
+    const r1 = analyzePreregWithCI(manifest, knownEffectObservations, { seed: 123, bootstrapIterations: 1000 });
+    const r2 = analyzePreregWithCI(manifest, knownEffectObservations, { seed: 123, bootstrapIterations: 1000 });
     expect(r1).toEqual(r2);
-    const r3 = analyzePreregWithCI(manifest, knownEffectObservations, { seed: 456, bootstrapIterations: 500 });
+    const r3 = analyzePreregWithCI(manifest, knownEffectObservations, { seed: 456, bootstrapIterations: 1000 });
     // A single CI bound can coincidentally collide when the underlying data
     // has low value diversity (small quantized set of possible resample
     // means); compare the whole CI-bearing report so an incidental collision
@@ -199,7 +203,9 @@ describe("analyzePreregWithCI — cluster-by-review vs naive pooled-by-draw (the
   }
 
   it("cluster-by-review CI is strictly wider than a naive pooled-by-draw CI", () => {
-    const manifest = buildManifest();
+    const manifest = buildManifest((m) => {
+      (m.cluster as Record<string, unknown>).judge_runs = K;
+    });
     const report = analyzePreregWithCI(manifest, clusterObservations, { seed: 9, bootstrapIterations: 3000 });
     const c = report.contrasts[0]!;
 
@@ -239,10 +245,11 @@ describe("analyzePreregWithCI — fail-closed power/completeness", () => {
     const c = report.contrasts[0]!;
     expect(c.outcome).toBe("not_evaluable");
     expect(c.per_fixture).toEqual([]);
-    expect(c.underpowered).toHaveLength(1);
-    expect(c.underpowered[0]!.fixture).toBe("fx-a");
+    // fx-a is underpowered (R=3 < 4) and registered fx-b has no cells at all —
+    // both are attrition against the registered cohort.
+    expect(c.underpowered.map((u) => u.fixture).sort()).toEqual(["fx-a", "fx-b"]);
     expect(c.underpowered[0]!.reason).toMatch(/fail-closed/);
-    expect(c.reason).toMatch(/fail-closed/);
+    expect(c.reason).toMatch(/attrition/);
     expect(report.all_met).toBe(false);
   });
 
@@ -376,5 +383,69 @@ describe("analyzePreregWithCI — validation", () => {
     expect(() => analyzePreregWithCI(manifest, [obs("full", "fx-a", 1, [1.0])], { seed: 1 })).toThrow(
       /cluster-bootstrap-by-review/,
     );
+  });
+
+  it("rejects a manifest whose multiplicity rule is not the implemented conjunction (B5/C2)", () => {
+    const manifest = buildManifest((m) => {
+      (m.analysis as Record<string, unknown>).multiplicity = "bonferroni";
+    });
+    expect(() =>
+      analyzePreregWithCI(manifest, [obs("full", "fx-a", 1, [1.0])], { seed: 1 }),
+    ).toThrow(/all-registered-contrasts-must-hold/);
+  });
+
+  it("rejects observations whose K differs from the registered judge_runs (B3/C1)", () => {
+    const k8 = buildManifest((m) => {
+      (m.cluster as Record<string, unknown>).judge_runs = 8;
+    });
+    expect(() =>
+      analyzePreregWithCI(k8, [obs("full", "fx-a", 1, [1.0])], { seed: 1 }),
+    ).toThrow(/judge_runs=8/);
+    const k1 = buildManifest();
+    expect(() =>
+      analyzePreregWithCI(k1, [obs("full", "fx-a", 1, [1.0, 0.9])], { seed: 1 }),
+    ).toThrow(/judge_runs=1/);
+  });
+
+  it("rejects a degenerate bootstrap (iterations below the floor) and out-of-range alpha (B2)", () => {
+    const manifest = buildManifest();
+    expect(() =>
+      analyzePreregWithCI(manifest, [obs("full", "fx-a", 1, [1.0])], { seed: 1, bootstrapIterations: 1 }),
+    ).toThrow(/>= 1000/);
+    expect(() =>
+      analyzePreregWithCI(manifest, [obs("full", "fx-a", 1, [1.0])], { seed: 1, alpha: 0.9 }),
+    ).toThrow(/alpha/);
+  });
+
+  it("rejects observations naming a fixture outside the registered cohort (B4)", () => {
+    const manifest = buildManifest();
+    expect(() =>
+      analyzePreregWithCI(manifest, [obs("full", "fx-ghost", 1, [1.0])], { seed: 1 }),
+    ).toThrow(/outside the registered cohort/);
+  });
+});
+
+describe("analyzePreregWithCI — selective attrition of a registered fixture (B4)", () => {
+  it("two strong surviving fixtures cannot certify a three-fixture registration", () => {
+    // fx-c is registered but its data is gone. The survivors show a strong
+    // effect and satisfy min_fixtures_per_level=2 — evaluating them anyway
+    // would be the outcome-based selection R2-6 bans.
+    const manifest = buildManifest((m) => {
+      m.fixtures = ["fx-a", "fx-b", "fx-c"];
+    });
+    const observations: BenchReviewObservation[] = [];
+    for (const fixture of ["fx-a", "fx-b"]) {
+      for (let rep = 1; rep <= 4; rep++) {
+        observations.push(obs("full", fixture, rep, [0.99]));
+        observations.push(obs("partial", fixture, rep, [0.55]));
+        observations.push(obs("full-restored", fixture, rep, [0.99]));
+      }
+    }
+    const report = analyzePreregWithCI(manifest, observations, { seed: 11 });
+    expect(report.contrasts[0]!.outcome).toBe("not_evaluable");
+    expect(report.contrasts[0]!.reason).toMatch(/attrition/);
+    expect(report.contrasts[0]!.underpowered.map((u) => u.fixture)).toContain("fx-c");
+    expect(report.recovery.outcome).toBe("not_evaluable");
+    expect(report.all_met).toBe(false);
   });
 });

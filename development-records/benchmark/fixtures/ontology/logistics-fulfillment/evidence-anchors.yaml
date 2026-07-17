@@ -25,7 +25,8 @@ defects:
       - "단위는 소스 시스템마다 다르다"
   - id: LSC-6
     anchors:
-      - "배송 구간(DeliveryLeg)도 Shipment의 일종이다"
+      # 정의 프로즈(36행)와 is_a(49행)는 각각 단독으로 탐지 충분 — 독립 충분
+      # 지점을 공동 앵커하면 거짓 straddle이 생기므로 where가 지목한 is_a만 앵커.
       - "is_a: Shipment"
   - id: LSC-7
     anchors:
@@ -39,5 +40,6 @@ defects:
       - "현장 운영팀이 상황을 보고 수기로 조정한다"
   - id: LSC-10
     anchors:
+      # target 25-26행 주석이 단독으로 탐지 충분(누락 참조를 명시 서술).
+      # 104행 fulfills note는 재서술이라 공동 앵커 시 거짓 straddle — 제외.
       - "충족한 화물/구간으로의 참조가 없다"
-      - "주문 단위 관계이며 OrderLine 단위 매핑은 두지 않는다"

@@ -82,42 +82,80 @@ describe("extractExecutionCost — real committed execution result", () => {
     ) as Record<string, unknown>;
     const cost = extractExecutionCost(doc);
     expect(cost.durationMs).toBe(643736);
-    // Independent in-test reduction over the same leaf definition (lens +
-    // issue_artifact + deliberation arrays + synthesize CHILDREN, never the
-    // synthesize parent when children exist — its bytes are stage artifacts).
-    const rows: Array<Record<string, number>> = [
-      ...(doc.lens_execution_results as Array<Record<string, number>>),
-      ...(doc.issue_artifact_execution_results as Array<Record<string, number>>),
-      ...(doc.deliberation_execution_results as Array<Record<string, number>>),
-      ...((doc.synthesize_execution_result as Record<string, unknown>)
-        .child_results as Array<Record<string, number>>),
-    ];
-    expect(rows.length).toBeGreaterThan(0); // non-vacuous subject set
+    // Independent in-test reduction over the same leaf definition: any entry
+    // with non-empty child_results contributes its CHILDREN (uniformly — the
+    // real artifact fans out under both issue-stance-matrix and synthesize),
+    // every other entry contributes itself.
+    const expand = (rows: Array<Record<string, unknown>>): Array<Record<string, number>> =>
+      rows.flatMap((r) =>
+        Array.isArray(r.child_results) && r.child_results.length > 0
+          ? (r.child_results as Array<Record<string, number>>)
+          : [r as Record<string, number>],
+      );
+    const rows = expand([
+      ...(doc.lens_execution_results as Array<Record<string, unknown>>),
+      ...(doc.issue_artifact_execution_results as Array<Record<string, unknown>>),
+      ...(doc.deliberation_execution_results as Array<Record<string, unknown>>),
+      doc.synthesize_execution_result as Record<string, unknown>,
+    ]);
+    // Non-vacuous: the container expansion actually fired (issue-stance-matrix
+    // has 6 children, synthesize has 15 in this artifact).
+    expect(rows.length).toBeGreaterThan(
+      (doc.lens_execution_results as unknown[]).length +
+        (doc.issue_artifact_execution_results as unknown[]).length +
+        (doc.deliberation_execution_results as unknown[]).length +
+        1,
+    );
     expect(cost.promptChars).toBe(rows.reduce((a, r) => a + r.packet_bytes!, 0));
     expect(cost.outputChars).toBe(rows.reduce((a, r) => a + r.output_bytes!, 0));
+    // The codex worker artifact persists no token telemetry — honest omission.
+    expect(cost.providerTokens).toBeUndefined();
   });
 
-  it("uses the synthesize parent only when it has no children", () => {
+  it("expands child_results uniformly (any collection) and excludes the container", () => {
     const base = {
       total_duration_ms: 100,
       lens_execution_results: [{ packet_bytes: 10, output_bytes: 1 }],
     };
     const withChildren = extractExecutionCost({
       ...base,
+      issue_artifact_execution_results: [
+        {
+          packet_bytes: 500,
+          output_bytes: 500,
+          child_results: [{ packet_bytes: 7, output_bytes: 3 }],
+        },
+      ],
       synthesize_execution_result: {
         packet_bytes: 1000,
         output_bytes: 1000,
         child_results: [{ packet_bytes: 20, output_bytes: 2 }],
       },
     });
-    expect(withChildren.promptChars).toBe(30); // 10 + 20, parent excluded
-    expect(withChildren.outputChars).toBe(3);
+    expect(withChildren.promptChars).toBe(37); // 10 + 7 + 20, containers excluded
+    expect(withChildren.outputChars).toBe(6);
     const withoutChildren = extractExecutionCost({
       ...base,
       synthesize_execution_result: { packet_bytes: 40, output_bytes: 4 },
     });
     expect(withoutChildren.promptChars).toBe(50); // 10 + 40
     expect(withoutChildren.outputChars).toBe(5);
+  });
+
+  it("sums output_tokens into providerTokens when telemetry is present", () => {
+    const cost = extractExecutionCost({
+      total_duration_ms: 100,
+      lens_execution_results: [
+        { packet_bytes: 10, output_bytes: 1, output_tokens: 111 },
+        { packet_bytes: 10, output_bytes: 1, output_tokens: null }, // worker path
+      ],
+    });
+    expect(cost.providerTokens).toBe(111);
+    const none = extractExecutionCost({
+      total_duration_ms: 100,
+      lens_execution_results: [{ packet_bytes: 10, output_bytes: 1 }],
+    });
+    expect(none.providerTokens).toBeUndefined();
   });
 
   it("fails loud on malformed entries and empty results", () => {
@@ -131,26 +169,43 @@ describe("extractExecutionCost — real committed execution result", () => {
     expect(() =>
       extractExecutionCost({ lens_execution_results: [{ packet_bytes: 1, output_bytes: 1 }] }),
     ).toThrow(/total_duration_ms/);
+    expect(() =>
+      extractExecutionCost({
+        total_duration_ms: 1,
+        lens_execution_results: [{ packet_bytes: 1, output_bytes: 1, output_tokens: -5 }],
+      }),
+    ).toThrow(/output_tokens/);
   });
 });
 
 describe("assembleBenchRun — admission → cost → schema-valid bench row", () => {
+  const SESSION = "20260718-abc123";
   const executionResult = {
+    session_id: SESSION,
     total_duration_ms: 5000,
     lens_execution_results: [{ packet_bytes: 100, output_bytes: 200 }],
+  };
+  const manifestFor = (effective: number, session = SESSION) => ({
+    session_id: session,
+    ...witness(effective),
+  });
+  const ZONE_KNOBS = { full: 300, partial: 60, low: 40 };
+
+  const baseArgs = {
+    effort: "medium",
+    fixture: "clinical-lab-workflow",
+    rep: 1,
+    metrics: { recall_material: 0.8, precision: 0.9 },
+    executionResult,
+    registeredZoneKnobs: ZONE_KNOBS,
   };
 
   it("assembles an m3-bench-run/1 row for an admitted run", () => {
     const run = assembleBenchRun({
+      ...baseArgs,
       zone: "partial",
-      effort: "medium",
-      fixture: "clinical-lab-workflow",
-      rep: 1,
-      metrics: { recall_material: 0.8, precision: 0.9 },
       judge_runs: 8,
-      contextManifest: witness(60),
-      executionResult,
-      intendedMaxEmbedLines: 60,
+      contextManifest: manifestFor(60),
     });
     expect(run.schema_version).toBe("m3-bench-run/1");
     expect(run.zone).toBe("partial");
@@ -159,30 +214,45 @@ describe("assembleBenchRun — admission → cost → schema-valid bench row", (
 
   it("admits nothing on a witness mismatch (the run never becomes a row)", () => {
     expect(() =>
-      assembleBenchRun({
-        zone: "partial",
-        effort: "medium",
-        fixture: "f",
-        rep: 1,
-        metrics: { recall_material: 0.8, precision: 0.9 },
-        contextManifest: witness(300),
-        executionResult,
-        intendedMaxEmbedLines: 60,
-      }),
+      assembleBenchRun({ ...baseArgs, zone: "partial", contextManifest: manifestFor(300) }),
     ).toThrow(/run rejected/);
+  });
+
+  it("binds the zone label to its registered knob — one treatment cannot wear two arm labels (B1)", () => {
+    // The same witnessed 60-line treatment: admissible only as the zone whose
+    // registered knob is 60. Labeling it "full" (knob 300) must be rejected.
+    expect(() =>
+      assembleBenchRun({ ...baseArgs, zone: "full", contextManifest: manifestFor(60) }),
+    ).toThrow(/effective=60.*intended knob 300/);
+    expect(() =>
+      assembleBenchRun({ ...baseArgs, zone: "ghost-zone", contextManifest: manifestFor(60) }),
+    ).toThrow(/not in the registered zone→knob table/);
+  });
+
+  it("rejects a witness/execution session mismatch — the witness must cover the costed run (A3)", () => {
+    expect(() =>
+      assembleBenchRun({
+        ...baseArgs,
+        zone: "partial",
+        contextManifest: manifestFor(60, "20260718-other"),
+      }),
+    ).toThrow(/session mismatch/);
+    expect(() =>
+      assembleBenchRun({
+        ...baseArgs,
+        zone: "partial",
+        contextManifest: witness(60), // no session_id at all
+      }),
+    ).toThrow(/session_id/);
   });
 
   it("rejects out-of-range metrics via the P0 ingest validator", () => {
     expect(() =>
       assembleBenchRun({
+        ...baseArgs,
         zone: "partial",
-        effort: "medium",
-        fixture: "f",
-        rep: 1,
         metrics: { recall_material: 1.2, precision: 0.9 },
-        contextManifest: witness(60),
-        executionResult,
-        intendedMaxEmbedLines: 60,
+        contextManifest: manifestFor(60),
       }),
     ).toThrow(/recall_material/);
   });
