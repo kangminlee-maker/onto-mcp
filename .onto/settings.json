@@ -22,6 +22,14 @@
       "deliberation": "controlled-lens-deliberation",
       "artifact_generation_realization": "live",
       "max_concurrent_lenses": 4,
+      "ontological_anchoring": {
+        "obligations": {
+          "enabled": true
+        },
+        "judgment_anchor": {
+          "enabled": true
+        }
+      },
       "retry": {
         "lens_max_retries": 2,
         "issue_artifact_max_retries": 2,
