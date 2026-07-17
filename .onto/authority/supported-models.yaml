@@ -119,14 +119,30 @@ supported_models:
       performance claim beyond the candidate>=baseline comparison.
   - provider: openai
     model: gpt-5.6-sol
-    verified_at: "2026-07-13"
+    verified_at: "2026-07-17"
     roles:
       - review
+      - author
+      - confirmation_provider
     benchmark_evidence_refs:
       - development-records/benchmark/review-cert/20260713-095011/review-cert-record.json
+      - development-records/benchmark/reconstruct-pipeline-live-sol-role-expansion-20260717.json
+      - development-records/benchmark/reconstruct-pipeline-live-sol-role-expansion-20260717-v2retry.json
     notes: >-
-      Role-scoped certification for `review` (INV-MODEL-1 review-role
-      registration design §4; review-cert/v2 resubmit-enabled contract) at
+      `author` + `confirmation_provider` added 2026-07-17 (owner-directed
+      role-expansion evidence runs via the B7 allowance, disclosed in-record
+      as role_expansion_candidate): golden full-pipeline LIVE completions at
+      reasoning_effort=medium over the codex OAuth route with gpt-5.6-sol on
+      BOTH actor seats, on BOTH golden fixtures — v1 (820s) and v2 (753s;
+      one prior v2 attempt failed a competency-question artifact validation,
+      disclosed in the first record). Every unit's route_identity witnessed
+      openai/codex_cli. Support/completion evidence ONLY — the golden
+      semantic-quality gate failed on both completed runs, the same
+      support-not-performance framing as the gpt-5.5 baseline entry (whose
+      cited completion also carries a failed quality gate); no performance
+      claim. Role-scoped certification for `review` (2026-07-13; INV-MODEL-1
+      review-role registration design §4; review-cert/v2 resubmit-enabled
+      contract) at
       reasoning_effort=medium via the codex OAuth route. Verified via the
       two-arm live cert run 20260713-095011: contemporaneous registry-anchored
       baseline gpt-5.5@medium vs candidate gpt-5.6-sol@medium, 3 reps × 2

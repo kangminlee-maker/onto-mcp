@@ -123,7 +123,7 @@
         "deliberation_resolution": {
           "llm": {
             "model": "gpt-5.6-sol",
-            "effort": "low"
+            "effort": "medium"
           },
           "timeout_ms": 600000,
           "max_retries": 2,
@@ -179,7 +179,7 @@
           "llm": {
             "auth": "oauth",
             "provider": "openai",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium",
             "service_tier": "fast"
           }
@@ -188,7 +188,7 @@
           "llm": {
             "auth": "oauth",
             "provider": "openai",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium",
             "service_tier": "fast"
           }
