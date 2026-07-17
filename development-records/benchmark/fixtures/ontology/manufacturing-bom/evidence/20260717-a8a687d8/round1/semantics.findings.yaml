@@ -1,0 +1,194 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart
+    evidence_anchor: entities.AlternatePart.definition;
+      entities.AlternatePart.attributes.direction
+    claim: AlternatePart의 대칭 관계 정의와 one_way 방향 모델이 서로 다른 의미를 부여한다.
+    what: 정의는 대체 관계가 항상 대칭이라고 선언하지만, direction은 one_way를 허용하고 이를 기본값으로 둔다.
+    why: 상호 대체 가능성과 단방향 대체 가능성은 동일한 관계가 아니다. 이 모순이 해소되지 않으면 PLM의 승인 대체 방향을 MES가 반대로
+      적용하는 등 부품 투입 판단이 달라질 수 있다.
+    how_to_fix: 대체 관계를 방향성 관계로 정의하고 bidirectional을 두 방향 관계의 축약으로 명시하거나, 항상 대칭인 관계가
+      의도라면 direction을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준
+      failure_condition: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때
+      impact: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다.
+      evidence_refs:
+        - entities.AlternatePart.definition
+        - entities.AlternatePart.attributes.direction
+    causal_path:
+      root_cause_candidate: 방향성 대체와 상호 대체를 하나의 관계 의미로 혼합했다.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: AlternatePart는 대칭 관계로 정의되면서 one_way 상태를 허용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.AlternatePart.definition
+            - entities.AlternatePart.attributes.direction.values
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 관계의 정규 의미가 방향성인지 대칭성인지 결정되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.AlternatePart.definition
+            - entities.AlternatePart.attributes.direction.note
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: manufacturing-bom-ontology.yaml — InspectionPlan inheritance
+    evidence_anchor: entities.Operation.definition;
+      entities.InspectionPlan.definition; entities.InspectionPlan.is_a
+    claim: InspectionPlan을 Operation의 하위 유형으로 둔 것은 계획 정보와 공정 단계를 존재론적으로 혼동한다.
+    what: InspectionPlan은 검사 파라미터와 합격 기준을 담는 계획 문서로 정의되지만, 실제 라우팅 단계인 Operation을
+      상속한다.
+    why: 계획·명세는 공정 단계가 수행될 때 참조되는 정보 객체이지 그 단계 자체와 동일하지 않다. 상속하면 InspectionPlan이
+      work_center와 std_time_min을 가진 라우팅 단계라는 의미까지 물려받아 PLM 품질계획과 MES 작업 단계의 식별이
+      흐려진다.
+    how_to_fix: "검사 공정은 Operation의 하위 유형(예: InspectionOperation)으로 두고,
+      InspectionPlan은 별도 정보 객체로 모델링하여 검사 공정이 이를 참조하게 한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준
+      failure_condition: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을
+        계획 자체의 속성으로 해석할 때
+      impact: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다.
+      evidence_refs:
+        - entities.Operation.definition
+        - entities.InspectionPlan.definition
+        - entities.InspectionPlan.is_a
+        - entities.Operation.attributes
+    causal_path:
+      root_cause_candidate: 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급했다.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: InspectionPlan이 Operation을 상속하여 공정 단계의 속성과 역할을 획득한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.InspectionPlan.is_a
+            - entities.Operation.attributes
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 계획 정보 객체와 라우팅 단계가 분리되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.InspectionPlan.definition
+            - entities.Operation.definition
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: manufacturing-bom-ontology.yaml — Part and Assembly
+    evidence_anchor: entities.Part.definition; entities.Assembly.definition;
+      entities.Assembly.is_a
+    claim: Part의 '최소 관리 단위' 정의는 하위 Part를 포함하는 Assembly가 Part라는 계층과 의미적으로 충돌한다.
+    what: Part를 최소 단위라고 정의하면서 분해 가능한 조립품도 Part의 일종이라고 선언한다.
+    why: "'최소'를 구성상 최소로 읽으면 Assembly는 Part가 될 수 없고, 관리 식별 단위로 읽으면 최소라는 표현이 불필요하게 분해
+      불가능성을 암시한다. 양 시스템이 Part를 서로 다른 입도와 범위로 해석할 수 있다."
+    how_to_fix: Part를 '구매·제조·재고·변경관리의 식별 대상 품목'처럼 구성과 무관한 관리 품목으로 정의하고, Assembly를 하위
+      품목 구조를 가진 Part로 한정한다. 정말 최소 구성요소를 뜻한다면 별도 LeafPart 개념으로 분리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목과 BOM 계층의 공통 개념 기준
+      failure_condition: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때
+      impact: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다.
+      evidence_refs:
+        - entities.Part.definition
+        - entities.Assembly.definition
+        - entities.Assembly.is_a
+    causal_path:
+      root_cause_candidate: 관리 단위라는 역할 개념과 구성상 최소 단위라는 구조 개념을 Part 정의에서 구분하지 않았다.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: 분해 가능한 Assembly가 최소 단위인 Part를 상속한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Part.definition
+            - entities.Assembly.definition
+            - entities.Assembly.is_a
+        - cause_id: semantics-candidate-003.cause-002
+          claim: Part의 최소성이 관리 식별성인지 구성 원자성인지 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Part.definition
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: manufacturing-bom-ontology.yaml — BomLine.scrap_rate
+    evidence_anchor: entities.BomLine.attributes.qty_per; entities.BomLine.attributes.scrap_rate
+    claim: scrap_rate가 비율인지 소요량 보정계수인지 정의되지 않은 채 독립 복사 값으로 모델링되었다.
+    what: 속성명은 rate를 뜻하지만 설명은 '공정 불량 감안 계수'라고 하며, 산식·범위·단위 없이 별도 엑셀 값을 복사하도록 한다.
+    why: 같은 값이 불량 비율, 수율 손실률 또는 gross-up 계수 중 무엇인지에 따라 qty_per 보정식이 달라진다. 원천 엑셀과
+      복사본의 불일치까지 허용되어 시스템별 소요량 계산 결과가 갈릴 수 있다.
+    how_to_fix: 정규 의미를 하나로 선택해 이름, 값 범위, 단위 및 qty_per와의 계산식을 명시한다. 값의 원본을 하나로 정하고,
+      다른 시스템에는 원천값 또는 결정적 파생값만 전달한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준
+      failure_condition: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때
+      impact: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다.
+      evidence_refs:
+        - entities.BomLine.attributes.qty_per
+        - entities.BomLine.attributes.scrap_rate
+    causal_path:
+      root_cause_candidate: 파생량의 정규 산식과 원천 권한을 정의하지 않았다.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: scrap_rate라는 이름과 '계수'라는 설명이 서로 다른 수량 의미를 허용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.BomLine.attributes.scrap_rate
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 값의 범위·단위·계산식 없이 외부 엑셀 값을 복사하도록 모델링했다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine.attributes.qty_per
+            - entities.BomLine.attributes.scrap_rate.note
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: manufacturing-bom-ontology.yaml — WorkCenter.capacity_per_shift
+    evidence_anchor: entities.WorkCenter.attributes.capacity_per_shift
+    claim: capacity_per_shift 하나에 개수와 시간이라는 서로 다른 차원의 값을 허용한다.
+    what: 동일한 숫자 속성이 작업장에 따라 처리 개수 또는 가용 시간을 의미하지만 단위나 측정 종류를 식별할 필드가 없다.
+    why: 개수/교대와 시간/교대는 비교·합산·부하율 계산 방식이 다른 수량이다. 속성명만으로 소비자가 의미를 판별할 수 없어 작업장 능력과 부하
+      계산이 시스템마다 달라질 수 있다.
+    how_to_fix: 용량의 측정 종류와 UOM을 명시하는 구조로 바꾸거나 quantity_capacity_per_shift와
+      available_time_per_shift처럼 차원별 속성 또는 하위 유형으로 분리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅 작업장 능력을 PLM/MES가 동일한 수량 의미로 교환하는 기준
+      failure_condition: 여러 WorkCenter의 capacity_per_shift를 비교·집계하거나 공정 표준시간과 결합해 부하를 산출할 때
+      impact: 차원이 다른 값을 같은 수치로 처리해 생산능력 및 일정 판단을 왜곡할 수 있다.
+      evidence_refs:
+        - entities.WorkCenter.attributes.capacity_per_shift
+    causal_path:
+      root_cause_candidate: 용량이라는 상위 용어 아래 처리량과 가용시간을 구분하지 않았다.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: capacity_per_shift가 개수 또는 시간일 수 있어 인스턴스별 의미가 달라진다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.WorkCenter.attributes.capacity_per_shift.note
+        - cause_id: semantics-candidate-005.cause-002
+          claim: 측정 종류와 UOM이 데이터 구조에 표현되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.WorkCenter.attributes.capacity_per_shift
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 외부 제조 표준은 적용하지 않았으며, 대상 문서 자체의 정의와 일반적인 수량·존재론 의미만
+    사용했다.
+  - scrap_rate라는 명칭은 비율을, coefficient/계수라는 설명은 배수를 뜻할 수 있으므로 계산식을 명시하지 않으면 둘을
+    안전하게 동일시할 수 없다고 가정했다.
+  - 계획·명세 정보 객체와 그것이 규정하는 제조 공정 단계는 서로 다른 정체성과 수명주기를 가진다고 가정했다.
+validation:
+  unaddressable_candidates: []

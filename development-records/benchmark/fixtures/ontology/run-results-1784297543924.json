@@ -1,0 +1,22 @@
+[
+  {
+    "fixture": "clinical-lab-workflow",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-9qAV69/.onto/review/20260717-2b4d329d",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/clinical-lab-workflow/evidence/20260717-2b4d329d",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-9qAV69",
+    "elapsed_sec": 796,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  },
+  {
+    "fixture": "manufacturing-bom",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-OtJLYi/.onto/review/20260717-aa03f0e2",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/manufacturing-bom/evidence/20260717-aa03f0e2",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-OtJLYi",
+    "elapsed_sec": 762,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  }
+]

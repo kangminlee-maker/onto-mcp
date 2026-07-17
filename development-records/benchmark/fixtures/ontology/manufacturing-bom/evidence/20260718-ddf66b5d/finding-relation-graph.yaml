@@ -1,0 +1,135 @@
+schema_version: 1
+session_id: 20260718-ddf66b5d
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-005
+    to_finding_id: finding-009
+    relation: duplicates
+    root_hypothesis: 두 finding은 모두 BOM·라우팅을 불변 버전과 효력 구간으로 모델링하지 않은 결함을 지적하며, 버전별 구성
+      기준선을 도입하면 두 실패 조건이 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-005는 시점별 구성 재구성 불가를 coverage 관점에서, finding-009는 변경 전후 데이터 연속성
+      단절을 evolution 관점에서 기술한다. 증거 범위와 제안 조치가 실질적으로 동일하다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: 생산오더가 효력 있는 불변 구성 버전을 고정 참조했다면 주간 Part.rev 동기화 지연만으로 구 리비전 생산이 허용되지 않아야 한다.
+    shared_cause: null
+    rationale: finding-001의 ECO 발효 후 구 리비전 생산 위험은 finding-005가 지적한 버전별 BOM·라우팅 기준선과
+      효력 구간 부재가 운영 게이트에서 드러난 현상이다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-017
+    to_finding_id: finding-005
+    relation: same_root_candidate
+    root_hypothesis: 품목·도면·ECO·생산 효력을 구분하는 불변 revision/effectivity 모델을 도입하면
+      finding-017의 용어 혼합과 finding-005의 과거 구성 재구성 실패가 함께 사라져야 한다.
+    shared_cause: null
+    rationale: finding-017은 서로 다른 revision 의미의 통합을, finding-005는 그 결과인 시간별 구성 기준선
+      부재를 지적한다. 둘 다 현재 scalar 상태로 변경 효력을 표현한 구조를 공통 근원으로 가진다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-005
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: 제어 대상의 변경을 현재 status/scalar가 아니라 불변 버전과 lifecycle event로 기록하면
+      구성 이력과 승인·정정 이력이 모두 재구성 가능해야 한다.
+    shared_cause:
+      cause_claim: 통제되는 제조 정의를 불변 버전·수명주기 사건으로 모델링하지 않고 현재값 속성과 짧은 상태 열거로 표현했다.
+      from_cause_ref: finding-005.cause-002
+      to_cause_ref: finding-006.cause-002
+    rationale: finding-005의 시점별 구성 부재와 finding-006의 종료·정정·감사 경로 부재는 모두 이력을 독립 객체로
+      보존하지 않는 현재상태 중심 모델링에서 발생한다. 다만 버전 기준선과 승인 증거는 별도 하위 개념이므로 중복으로 보지는 않는다.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-003
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: 스크랩 회수를 BomLine이 아닌 별도 material-flow 관계로 옮기면 두 finding의 자기참조·전개
+      안전성 문제가 같은 변경으로 해소되어야 한다.
+    shared_cause: null
+    rationale: 두 finding 모두 제품 구성 관계를 스크랩 재투입 공정 흐름에 재사용하여 BOM 의미와 전개 종료성을 훼손한다는 동일
+      결함을 각각 가치·의미 관점에서 기술한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-012
+    to_finding_id: finding-016
+    relation: symptom_of
+    root_hypothesis: 스크랩 재투입을 BOM part-whole 관계에서 분리하면 전역 비순환 규칙과 자기포함 허용 사이의 논리 충돌도 제거되어야 한다.
+    shared_cause: null
+    rationale: finding-012의 직접 모순은 finding-016이 지적한 의미적으로 다른 공정 흐름을 BomLine으로 표현한
+      결과다. 별도 관계라면 BOM 비순환 규칙을 유지하면서 재투입을 표현할 수 있다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-007
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: 확장 가능한 UnitOfMeasure와 단위가 결합된 Quantity 및 유효한 변환 규칙을 도입하면 현재 계산
+      불일치와 향후 스키마 변경 요구가 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-007은 현재 단위·환산 통제 부재를 coverage 관점에서, finding-011은 같은 폐쇄형·무차원
+      모델의 확장 및 이력 연속성 문제를 evolution 관점에서 기술한다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-019
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: 모든 측정값에 명시적 단위와 quantity type을 요구하는 공통 모델이 적용되면
+      capacity_per_shift를 시간과 개수 중 어느 차원으로 해석할지에 대한 모호성이 없어져야 한다.
+    shared_cause: null
+    rationale: finding-019의 무차원 용량 속성은 finding-007이 지적한 governed quantity/unit 하위
+      도메인 부재가 WorkCenter에서 구체화된 사례다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-008
+    to_finding_id: finding-002
+    relation: symptom_of
+    root_hypothesis: 공유 제조 수치마다 단일 권위 원천과 파생·동기화·대사 계약을 두면 scrap rate와 표준시간 복제본의 승자
+      부재 및 감사 불가능성이 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-002는 여러 핵심 수치를 복사·수기 입력에 맡기는 광범위한 권위 결함을 지적하고, finding-008은 그
+      결함이 scrap rate와 표준시간 복제본에서 나타나는 구체적 증상이다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-002
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: scrap 값을 권위 있는 원천에서 명시된 단위·범위·공식으로 파생하도록 만들면 복제값 불일치와
+      rate/coefficient 의미 불일치가 함께 사라져야 한다.
+    shared_cause: null
+    rationale: finding-002의 수기·복사 기반 권위 부재와 finding-018의 scrap_rate 수치 의미 부재는 모두
+      scrap 값을 출처와 계산 계약이 있는 통합 개념으로 정의하지 않은 선택에서 발생한다.
+    confidence: medium
+  - relation_id: rel-011
+    from_finding_id: finding-013
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 대체를 명시적 source와 target을 가진 방향 관계로 정규화하고 상호 대체를 두 방향 assertion으로
+      표현하면 두 finding의 해석 충돌이 같은 변경으로 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-013은 symmetric 정의와 one_way 상태의 논리적 비양립을, finding-014는 동일 비양립이
+      만드는 의미적 권한 혼선을 지적한다. 대상 속성, 실패 조건, 해결 방향이 동일하다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-020
+    to_finding_id: finding-014
+    relation: enables
+    root_hypothesis: AlternatePart를 경유하며 direction을 보존하는 명시적 relations 경로가 존재했다면
+      relations-only 소비자가 방향을 잃는 추가적인 의미 혼선은 발생하지 않아야 한다.
+    shared_cause: null
+    rationale: finding-014의 기본 대칭/방향 충돌은 구조 수정만으로 완전히 해결되지 않지만, finding-020의 reified
+      entity 연결 부재와 Part→Part shortcut은 소비자가 direction을 복구하지 못하게 하여 그 충돌이 통합
+      경로에서 발현되도록 한다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-004
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-010
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-015
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

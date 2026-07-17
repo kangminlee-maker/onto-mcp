@@ -1,0 +1,114 @@
+schema_version: 1
+session_id: 20260717-2b4d329d
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: Result.status와 Report.result_status의 권위·동기화 계약
+    evidence_anchor: .onto/review/20260717-2b4d329d/execution-preparation/materialized-input.md:69-83,123
+    claim: Report의 상태가 Result와 동일 정보를 유지하는 권위 값이라는 선언은 정정 후 야간 배치까지의 지연 상태와 동시에 만족될
+      수 없다.
+    what: "Result.status는 LIS가 기록하고 Report.result_status에도 동일 정보가 유지된다고 선언하지만,
+      Report 값도 별도로 권위 값이라고 선언한다. Result가 corrected로 바뀐 뒤 Report를 amended로 만드는
+      작업은 야간 1회이므로 그 사이에는 Result=corrected, Report=finalized인 허용 상태가 생긴다.
+      conflict_pair: lines 72-83 ↔ line 123; satisfiability: inter-claim
+      temporal conflict; modality: mixed necessary/obligatory."
+    why: 두 상태를 현재 정보로 간주하면 배치 지연 구간에서 동일성 불변식과 Report의 권위성이 깨진다. 게다가 두 enum의 값 집합도
+      preliminary/final/corrected와 prelim/finalized/amended로 달라 명시적 대응 규칙 없이는 동일
+      정보라는 제약을 형식적으로 판정할 수 없다. EMR 소비자는 정정된 결과가 있는데도 finalized를 권위 값으로 수신할 수 있다.
+      용어의 ‘동일 정보’가 단순 의미 대응을 뜻하는지는 semantics lens에 인계할 수 있지만, 대응을 정해도 비동기 지연으로
+      인한 시간적 충돌은 남는다.
+    how_to_fix: 상태 권위를 하나로 단일화하고 Report 상태를 파생 값으로 정의한다. 두 필드를 유지해야 한다면 enum별 전사 매핑,
+      정정 이벤트 발생 시 원자적 또는 이벤트 기반 갱신, 버전·갱신 시각, 지연 중 소비 가능 여부를 명시한다. 야간 배치를 유지한다면
+      ‘동일한 현재 정보’가 아니라 명시적인 eventual-consistency 계약으로 낮추고 stale 상태를 권위 값으로 노출하지
+      않는다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계에서 결과 상태의 개념 권위와 임상의가 신뢰할 보고 상태를 제공하는 목적
+      failure_condition: Result가 final에서 corrected로 변경된 후 야간 동기화가 실행되기 전까지
+        Report.result_status가 finalized로 남는 경우
+      impact: 동일 임상 결과에 대해 두 시스템이 서로 다른 권위 상태를 관찰할 수 있어 통합 계약의 판정 가능성과 임상의 대상 상태 신뢰가
+        직접 약화된다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: 동일 개념의 상태를 두 필드에 중복 권위화하면서 동기화는 비동기 배치로 정의하고, 정합성 시점과 enum 매핑을 정의하지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 정정 직후 Result.status와 Report.result_status가 서로 다른 상태를 나타내는 실행 경로가 허용된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 불일치는 ‘동일 정보 유지’와 Report 권위 값 선언이 비동기 갱신 규칙과 결합된 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:72-83
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-003
+          claim: 두 상태 필드 사이의 권위, 매핑, 정합성 시점이 단일 계약으로 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:123
+      unresolved_beyond_evidence: ‘동일 정보’가 문자 값 동일성인지 의미 대응인지 문서만으로 확정할 수 없지만, 어느
+        해석에서도 비동기 지연 구간의 현재 상태 불일치는 남는다.
+  - candidate_id: logic-candidate-002
+    target: Order completed 전이 규칙과 Result 정정 경로
+    evidence_anchor: .onto/review/20260717-2b4d329d/execution-preparation/materialized-input.md:23,69-72,122-123
+    claim: Order 완료 판정은 이후 corrected로 바뀔 수 있는 Result.final에 의존하지만, 정정 이후 completed
+      상태를 유지·해제·재평가하는 규칙이 없어 시간 전개상 완료 일관성을 보존하지 못한다.
+    what: "모든 Result가 final인 시점에는 Order가 completed로 전이한다. 이후 명시적으로 허용된 corrected 변경이
+      발생하면 완료 조건은 더 이상 성립하지 않지만 Order lifecycle에는 completed 이후의 재개 또는 정정 대응 전이가
+      정의되어 있지 않다. 따라서 all-final → completed → one-result-corrected 경로에서 완료 상태와 그
+      판정 근거가 분리된다. conflict_pair: lines 122 ↔ 69-72,123; satisfiability:
+      inter-claim temporal conflict; modality: mixed necessary/possible."
+    why: 완료가 종결 상태로 소비될 경우 동일 주문이 completed이면서 현재 모든 결과가 final은 아닌 상태가 된다. 문서는 완료
+      조건을 충분조건으로만 쓴 것인지 지속 불변식으로 쓴 것인지도 구분하지 않아 EMR과 LIS가 정정 후 주문 상태를 서로 다르게 처리할
+      수 있다.
+    how_to_fix: 완료 의미를 명시적으로 선택한다. completed가 현재 상태라면 corrected 발생 시 in_progress 또는
+      amended/reopened 같은 기존 또는 신규 상태로 전이하고 재완료 조건을 정의한다. completed가 역사적 마일스톤이라면
+      이름과 규칙을 released_once 같은 불변 사건으로 분리하고, 현재 정합 상태를 별도 파생 속성으로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order부터 Report까지 상태 모델을 EMR/LIS 통합의 개념 권위로 사용하는 목적
+      failure_condition: 모든 결과가 final이어서 Order가 completed가 된 뒤 하나 이상의 Result가 corrected로 변경되는 경우
+      impact: 동일 사건 경로에서 완료 상태 해석이 구현별로 갈려 주문 종결, 재처리, 화면 표시 및 후속 연동 판단이 일관되지 않게 된다.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:69-72
+        - materialized-input.md:122-123
+    causal_path:
+      root_cause_candidate: 가역적인 Result 상태를 Order의 종결 판정에 사용하면서 정정 후 상태 전이 또는 완료 의미의 시간 양상을 정의하지 않았다.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 정정 후에는 Order가 completed인 채로 모든 Result가 final이라는 완료 근거가 거짓이 될 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:122-123
+        - cause_id: logic-candidate-002.cause-002
+          claim: 이 상태는 completed 이후 corrected 사건에 대한 재평가·재개 전이가 없는 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:122-123
+        - cause_id: logic-candidate-002.cause-003
+          claim: 완료 규칙이 가역 상태에 의존하지만 completed가 현재 불변식인지 역사적 사건인지 구분하지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:69-72
+            - materialized-input.md:122-123
+      unresolved_beyond_evidence: completed가 단순 과거 전이 기록이라면 엄밀한 모순은 완화되지만, 그 해석과 소비
+        규칙은 현재 경계 안의 문서에 선언되어 있지 않다.
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

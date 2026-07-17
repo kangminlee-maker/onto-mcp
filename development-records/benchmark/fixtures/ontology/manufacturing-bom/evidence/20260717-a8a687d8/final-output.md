@@ -1,0 +1,1461 @@
+---
+session_id: 20260717-a8a687d8
+process: review
+target: "manufacturing-bom-ontology.yaml"
+domain: none
+date: 2026-07-17
+---
+
+## 9-Lens Review Result
+
+### Review Target
+- `manufacturing-bom-ontology.yaml`
+
+### Verification Context
+- Domain: none
+- Review mode: core-axis
+- Execution realization: worker
+- Host runtime: codex
+- Artifact generation realization: live
+- Semantic quality evidence: not_evaluated (real_semantic_path_only)
+- Finding ledger: `.onto/review/20260717-a8a687d8/finding-ledger.yaml`
+- Issue ledger: `.onto/review/20260717-a8a687d8/issue-ledger.yaml`
+- Problem framing: `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+- Controlled deliberation: `.onto/review/20260717-a8a687d8/deliberation.md`
+- Source artifact: `.onto/review/20260717-a8a687d8/synthesis-ledger.yaml`
+- Synthesis projection: `.onto/review/20260717-a8a687d8/synthesis.md`
+- Execution status: completed
+
+### Domain Selection
+- Explicit no-domain token was provided; runtime will run without domain documents.
+
+### Final Review Result
+#### Review Basis
+- Execution status: completed
+- Deliberation status: performed
+- Participating lenses: 6/6
+- Degraded lenses: none
+- Halt reason: none
+
+#### Synthesis Summary
+18 material issue(s) require attention. Highest-priority issue: issue-001 (high) — ECO effective_date와 비동기 갱신되는 Part.rev가 변경 효력의 권위를 나누고 있어, 주간 동기화 전에는 생산에 적용할 revision을 유일하게 결정할 수 없는 high 결함이다. Unresolved disagreement remains: coverage 렌즈는 더 포괄적인 원인을 Part·BOM·Routing 전체의 시점별 형상 기준선 부재로 본다. 심각도와 현재 결함의 존재에는 이견이 없지만, 두 결함의 same-root 또는 상하위 관계를 확정할 근거는 남아 있지 않다.
+
+#### Classification Summary
+- Highest severity: high
+- Severity counts: blocker=0, high=6, medium=15, low=0, info=0
+- Finding count: 23
+- Root-cause issue count: 21
+- Material issue count: 18
+- Non-material finding count: 3
+
+#### Material Issues
+- issue-001 (high)
+  - affected purpose: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제
+  - failure condition: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우
+  - impact: 동일 생산분의 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다. Source finding context: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-001`, `materialized-input.md:7`, `materialized-input.md:20-21`, `materialized-input.md:69-75`, `materialized-input.md:96`, `review-value-alignment-criteria.yaml:6-18`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - problem definition: ECO 효력일과 비동기 Part.rev가 변경 효력의 권위를 나누어 생산 적용 revision을 유일하게 결정할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / inferred
+
+- issue-002 (high)
+  - affected purpose: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준
+  - failure condition: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우
+  - impact: 소비자가 무한 전개나 중복 계산을 수행하거나 예외를 서로 다르게 해석할 수 있다. Source finding context: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-002`, `materialized-input.md:7`, `materialized-input.md:23-35`, `materialized-input.md:93-94`, `review-value-alignment-criteria.yaml:6-18`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - problem definition: 제품 구성과 회수·재투입 흐름을 같은 BomLine으로 표현해 비순환 구성 규칙과 순환 예외가 충돌한다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-003 (high)
+  - affected purpose: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제
+  - failure condition: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우
+  - impact: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치가 발생할 수 있다. Source finding context: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-003`, `materialized-input.md:7`, `materialized-input.md:19`, `materialized-input.md:29-35`, `materialized-input.md:100`, `review-value-alignment-criteria.yaml:6-18`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - problem definition: 품목별 UOM과 권위 있는 환산 규칙이 없어 BOM 수량의 공통 계산 의미가 성립하지 않는다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-005 (high)
+  - affected purpose: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공
+  - failure condition: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우
+  - impact: 생산 시점의 유효 BOM·라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다. Source finding context: 생산 시점의 유효 BOM/라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `materialized-input.md:20-21`, `materialized-input.md:29-35`, `materialized-input.md:55-61`, `materialized-input.md:69-75`, `materialized-input.md:96`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - problem definition: 품목·BOM·라우팅의 revision과 effectivity 기준선이 없어 생산 시점 형상을 선택하거나 재구성할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-007 (high)
+  - affected purpose: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합
+  - failure condition: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우
+  - impact: 필요 자재량과 작업장 부하를 결정적으로 계산할 수 없어 부족·과다 투입 및 잘못된 일정 산정 위험이 생긴다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003`, `materialized-input.md:19`, `materialized-input.md:34-35`, `materialized-input.md:63-67`, `materialized-input.md:100`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - problem definition: 수량과 능력 값에 측정 차원·UOM·변환 규칙이 없어 BOM 소요량과 작업장 부하를 결정적으로 계산할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-011 (high)
+  - affected purpose: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성 제공 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적
+  - failure condition: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때
+  - impact: 생산 시점의 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성 및 재작업 판단의 신뢰가 저하된다. Source finding context: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-001`, `entities.Part.attributes.rev/current_eco`, `entities.BomLine.attributes`, `entities.Routing.attributes`, `entities.ECO.attributes.effective_date/status`, `integrity_rules[2]`
+  - source lenses: evolution
+  - action candidates: fix_now
+  - problem definition: 가변 현재값과 불변 revision 기준선을 구분하지 않아 변경 전후 BOM·라우팅 형상의 연속적 보존이 불가능하다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-004 (medium)
+  - affected purpose: BOM·라우팅 및 소요량 계산을 PLM/MES가 일관되게 해석하는 통합 개념 기준 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준
+  - failure condition: 공정 불량률이 변경되거나 소비자가 scrap_rate를 손실 비율과 수량 배수 중 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때
+  - impact: 필요 수량과 자재 투입량이 시스템별로 달라지고 기준값의 권위와 계산 결과를 감사·재현하기 어렵다. Source finding context: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다. Source finding context: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-004`, `materialized-input.md:7`, `materialized-input.md:29-35`, `materialized-input.md:47-61`, `review-value-alignment-criteria.yaml:6-18`, `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-004`, `entities.BomLine.attributes.qty_per`, `entities.BomLine.attributes.scrap_rate`
+  - source lenses: axiology, semantics
+  - action candidates: fix_before_release, fix_now
+  - problem definition: scrap_rate가 의미·산식·권위·유효기간이 없는 복사 스칼라이므로 소요량 계산과 변경 재현이 불확정적이다.
+  - problem framing: root_cause / next_step_blocker / fix_now / must_close_before_next_stage / observed
+
+- issue-006 (medium)
+  - affected purpose: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적
+  - failure condition: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우
+  - impact: 상태값만으로 변경의 정당성이나 실제 적용 경위를 입증할 수 없어 제조 변경 통제에 대한 신뢰가 약화된다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-002`, `materialized-input.md:69-75`
+  - source lenses: coverage
+  - action candidates: follow_up
+  - problem definition: ECO가 현재 상태만 보존해 예외 lifecycle과 승인·적용의 감사 증거를 재현할 수 없다.
+  - problem framing: independent_issue / planned_follow_up / carry_forward / may_close_during_next_stage / observed
+
+- issue-008 (medium)
+  - affected purpose: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석
+  - failure condition: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우
+  - impact: 기준값 선택이 시스템별 또는 사용자별로 달라져 계획·원가 결과를 신뢰하거나 재현하기 어렵다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004`, `materialized-input.md:35`, `materialized-input.md:53`, `materialized-input.md:99`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - problem definition: 병행 관리되는 제조 기준값에 권위·복제 출처·유효기간·대사 이력이 없어 신뢰할 값을 일관되게 선택할 수 없다.
+  - problem framing: root_cause / next_step_blocker / carry_forward / must_close_before_next_stage / observed
+
+- issue-009 (medium)
+  - affected purpose: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공
+  - failure condition: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우
+  - impact: 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 통합 계약이 없다. Source finding context: 마스터 데이터에서 실행 기록으로 이어지는 통합 계약이 없어 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-005`, `materialized-input.md:12-82`, `materialized-input.md:95`
+  - source lenses: coverage
+  - action candidates: fix_before_release, accept_risk
+  - problem definition: 생산오더 규칙이 적용 형상 고정 접점이나 명시적인 MES 실행 경계를 제공하지 않아 마스터와 실행 간 최소 계약이 미완결이다.
+  - problem framing: conflicting_interpretation / next_step_blocker / needs_decision / must_close_before_next_stage / contested
+
+- issue-010 (medium)
+  - affected purpose: BOM 대체품의 조건과 방향을 PLM/MES가 동일하게 해석하는 기준 제공 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공
+  - failure condition: 대체 승인이 특정 개정·기간·공장·공정·수량에 한정되거나 relations 그래프로 대체 관계를 탐색할 때 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때
+  - impact: MES가 대체 권한을 과도하게 넓게 해석하거나 방향성과 승인 근거를 잃어 잘못된 자재 대체가 가능하다. Source finding context: 조건을 표현할 수 없어 MES가 과도하게 넓은 대체 권한으로 해석하거나 승인 근거를 확인하지 못할 수 있다. Source finding context: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006`, `materialized-input.md:37-45`, `materialized-input.md:91`, `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-001`, `entities.AlternatePart.attributes.primary_ref`, `entities.AlternatePart.attributes.alternate_ref`, `entities.AlternatePart.attributes.direction`, `relations: Part→Part alternate_of note`
+  - source lenses: coverage, structure
+  - action candidates: fix_before_release, fix_now
+  - problem definition: AlternatePart가 조건·방향·승인 근거를 가진 일급 규칙으로 완결되지 않아 실제 대체 허용 범위를 결정할 수 없다.
+  - problem framing: root_cause / next_step_blocker / fix_now / must_close_before_next_stage / observed
+
+- issue-013 (medium)
+  - affected purpose: 라우팅 개념을 PLM 공정 정의와 MES 실행 자원 배정 사이의 확장 가능한 기준으로 사용하는 목적 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적
+  - failure condition: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때
+  - impact: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-003`, `entities.Operation.attributes.work_center/std_time_min`, `entities.Routing.attributes.operations`, `relations Routing→Operation and Operation→WorkCenter`
+  - source lenses: evolution
+  - action candidates: follow_up
+  - problem definition: 재사용 공정 정의와 라우팅별 자원·시간 배정을 Operation 하나에 결합해 문맥별 변형을 복제 없이 표현할 수 없다.
+  - problem framing: root_cause / planned_follow_up / carry_forward / may_close_during_next_stage / observed
+
+- issue-015 (medium)
+  - affected purpose: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준 제공 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적
+  - failure condition: direction=one_way인 AlternatePart를 생성하거나 교환할 때
+  - impact: 동일 데이터가 시스템에 따라 단방향 또는 양방향 대체로 해석되어 통합 계약의 일관성과 실행 가능성이 약화된다. Source finding context: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을 약화한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001`, `manufacturing-bom-ontology.yaml:33`, `manufacturing-bom-ontology.yaml:37-40`
+  - source lenses: logic
+  - action candidates: fix_before_release, fix_now
+  - problem definition: AlternatePart에 무조건 대칭성과 one_way 허용을 동시에 부과해 동일 인스턴스의 방향 계약이 모순된다.
+  - problem framing: root_cause / next_step_blocker / fix_now / must_close_before_next_stage / observed
+
+- issue-016 (medium)
+  - affected purpose: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준
+  - failure condition: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때
+  - impact: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-001`, `entities.AlternatePart.definition`, `entities.AlternatePart.attributes.direction`
+  - source lenses: semantics
+  - action candidates: fix_before_release, fix_now
+  - problem definition: 방향성 대체와 상호 대체를 하나의 AlternatePart 의미로 혼합해 정규 관계 의미가 결정되지 않는다.
+  - problem framing: conflicting_interpretation / next_step_blocker / fix_now / must_close_before_next_stage / observed
+
+- issue-017 (medium)
+  - affected purpose: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준
+  - failure condition: InspectionPlan을 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때
+  - impact: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-002`, `entities.Operation.definition`, `entities.InspectionPlan.definition`, `entities.InspectionPlan.is_a`, `entities.Operation.attributes`
+  - source lenses: semantics
+  - action candidates: fix_before_release, fix_now
+  - problem definition: 검사 계획 정보 객체와 실행 검사 공정을 같은 Operation 유형으로 취급해 역할과 수명주기를 혼합한다.
+  - problem framing: root_cause / next_step_blocker / fix_now / must_close_before_next_stage / observed
+
+- issue-018 (medium)
+  - affected purpose: 품목과 BOM 계층의 공통 개념 기준
+  - failure condition: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때
+  - impact: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-003`, `entities.Part.definition`, `entities.Assembly.definition`, `entities.Assembly.is_a`
+  - source lenses: semantics
+  - action candidates: follow_up, accept_risk
+  - problem definition: Part의 관리 식별 역할과 구성상 원자성을 구분하지 않아 Assembly 상속과 BOM 대상 범위의 의미가 모호하다.
+  - problem framing: conflicting_interpretation / planned_follow_up / needs_decision / may_close_during_next_stage / contested
+
+- issue-020 (medium)
+  - affected purpose: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공
+  - failure condition: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우
+  - impact: 적용 대상은 알 수 있어도 적용할 revision은 결정할 수 없어 구 revision 생산이나 외부 추정에 의존하게 된다. Source finding context: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나 외부 추정에 의존하게 된다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-002`, `entities.Part.attributes.rev`, `entities.Part.attributes.current_eco`, `entities.ECO.attributes.affected_parts`, `entities.ECO.attributes.effective_date`, `integrity_rules[2]`
+  - source lenses: structure
+  - action candidates: fix_before_release, fix_now
+  - problem definition: ECO가 영향 품목별 이전·결과 revision 전이를 연결하지 않아 적용 시점의 생산 revision을 결정할 수 없다.
+  - problem framing: root_cause / next_step_blocker / fix_now / must_close_before_next_stage / contested
+
+- issue-021 (medium)
+  - affected purpose: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공
+  - failure condition: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때
+  - impact: 정상 재투입이 거부되거나 임의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. Source finding context: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-003`, `integrity_rules[0]`, `entities.BomLine.attributes.parent_ref`, `entities.BomLine.attributes.child_ref`, `entities.BomLine.attributes 전체`
+  - source lenses: structure
+  - action candidates: fix_before_release, follow_up
+  - problem definition: 제품 구성과 재투입 흐름의 개념 혼합 때문에 허용된 자기참조와 오류 순환을 구조적으로 구별할 수 없다.
+  - problem framing: symptom / next_step_blocker / carry_forward / must_close_before_next_stage / inferred
+
+#### Synthesized Material Issue Explanations
+- issue-001 (high): ECO effective_date와 비동기 갱신되는 Part.rev가 변경 효력의 권위를 나누고 있어, 주간 동기화 전에는 생산에 적용할 revision을 유일하게 결정할 수 없는 high 결함이다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, evolution, logic, semantics, structure
+  - issue stance disagreement: 1/6
+  - disagreeing stance lenses: coverage
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 5/6 deliberation participants
+  - accepted lenses: axiology, evolution, logic, semantics, structure
+  - remaining disagreement: 1/6 deliberation participants
+  - remaining disagreement lenses: coverage
+  - raised by lenses: axiology
+  - issue statement: ECO 효력과 Part 리비전 갱신의 권위가 분산되어 변경 적용 시점이 모호하다. Source finding context: manufacturing-bom-ontology.yaml — ECO 효력과 Part 리비전 적용 규칙 Source finding context: materialized-input.md:7; materialized-input.md:20-21; materialized-input.md:69-75; materialized-input.md:96; review-value-alignment-criteria.yaml:6-18 (value_type=purpose, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…변경관리 개념의 정합성과 제조 운영 위험을 중심으로”) Source finding context: ECO 효력일과 주간 리비전 동기화의 불일치가 통합 기준의 변경 적용 시점을 모호하게 만든다. Source finding context: 효력일 이후부터 다음 동기화까지 ECO와 Part.rev가 서로 다른 답을 줄 수 있다. 이 상태에서는 PLM과 MES가 동일 생산분에 서로 다른 설계 리비전을 적용할 수 있어 변경관리 정합성과 제조 실행 안전이라는 선언 목적을 직접 약화한다. Source finding context: 유효기간을 가진 PartRevision과 ECO 적용 관계를 모델링하고, 생산 오더가 생성 시점의 적용 리비전을 명시적으로 고정하도록 한다. 배치 동기화 상태와 무관하게 effective_date 기준 조회가 단일 결과를 반환하도록 우선순위와 실패 규칙도 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제 Source finding context: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우 Source finding context: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다. Source finding context: 변경 효력의 권위가 effective-dated revision 객체가 아니라 비동기 갱신되는 Part.rev와 ECO에 분산되어 있다. Source finding context: 효력일 이후 신규 rev 적용을 요구하지만 Part.rev 갱신은 주간 배치 이후에만 이루어진다. Source finding context: 생산 오더가 적용 리비전을 직접 참조하거나 고정하는 모델이 없다. Source finding context: 변경 효력과 현재 리비전의 권위가 별도 원본 및 비동기 필드에 분산되어 있다.
+  - affected purpose: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제
+  - failure condition: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우
+  - impact: 동일 생산분의 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다. Source finding context: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다.
+  - root hypothesis: 변경 효력의 권위가 effective-dated revision 객체가 아니라 비동기 갱신되는 Part.rev와 ECO에 분산되어 있어, 동기화 지연 구간에는 생산 적용 리비전이 단일하게 결정되지 않는다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-001`, `materialized-input.md:7`, `materialized-input.md:20-21`, `materialized-input.md:69-75`, `materialized-input.md:96`, `review-value-alignment-criteria.yaml:6-18`, `finding-ledger.yaml#finding-001`, `finding-001.cause-001`, `finding-001.cause-002`, `materialized-input.md:14-21`, `materialized-input.md:93-96`, `finding-001.cause-003`, `issue-stance-matrix.yaml#stances.issue-001.axiology`, `issue-stance-matrix.yaml#stances.issue-001.coverage`, `issue-ledger.yaml#issue-001`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-001.evolution`, `issue-stance-matrix.yaml#stances.issue-001.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-001`, `issue-stance-matrix.yaml#stances.issue-001.semantics`, `issue-stance-matrix.yaml#stances.issue-001.structure`, `issue-001과 제조 형상 기준선 결함 사이의 same-root 또는 상하위 관계 근거`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: ECO 효력일이 지났지만 Part.rev가 아직 갱신되지 않은 기간에 생산 오더가 생성되면 PLM과 MES가 동일 생산분에 서로 다른 설계 revision을 적용할 수 있다. 이는 구형 설계 생산, 추적성 상실, 재작업 판단 오류를 초래할 수 있어 PLM/MES 통합 기준의 변경관리 정합성과 제조 운영 위험 통제 목적을 직접 약화한다.
+  - root cause: 문제의 출발점은 변경 효력의 권위가 effective-dated PartRevision에 단일화되지 않고 ECO effective_date와 배치 갱신되는 Part.rev에 분산된 구조다. 이 권위 분산 때문에 동기화 상태에 따라 적용 revision의 답이 달라지며, 생산 오더에도 그 답을 확정해 보존할 참조가 없다.
+  - causal path: ECO는 effective_date 이후 신규 revision 적용을 요구하지만 Part.rev는 주간 배치 후에야 갱신된다. 그 사이 두 원본이 서로 다른 revision을 가리키고, 생산 오더가 생성 시점의 적용 revision을 직접 참조하거나 고정하지 않으므로 동일 생산분의 설계 기준이 시스템별로 갈릴 수 있다.
+  - action: 먼저 유효기간을 가진 PartRevision을 변경 효력의 단일 권위로 모델링하고 ECO와의 적용 관계, effective_date 기준 선택 우선순위, 중복·공백 시 실패 규칙을 정의해야 한다. 이어 생산 오더가 생성 시점에 결정된 PartRevision을 명시적으로 고정하도록 해야 한다. 이 순서로 구현해야 배치 동기화 상태와 무관하게 조회가 단일 결과를 반환하고 실행 이력도 보존된다.
+  - unresolved disagreement: coverage 렌즈는 더 포괄적인 원인을 Part·BOM·Routing 전체의 시점별 형상 기준선 부재로 본다. 심각도와 현재 결함의 존재에는 이견이 없지만, 두 결함의 same-root 또는 상하위 관계를 확정할 근거는 남아 있지 않다.
+
+- issue-002 (high): 제품 구성과 스크랩 회수·재투입을 같은 BomLine으로 표현한 개념 혼합은 비순환 BOM 계약과 자기참조 예외를 충돌시키는 high 결함이다. 재투입 흐름은 BOM에서 분리해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 제품 구성과 스크랩 재투입 흐름의 개념 혼합이 BOM 전개 안전성을 훼손한다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 금지와 스크랩 재투입 예외 Source finding context: materialized-input.md:7; materialized-input.md:23-35; materialized-input.md:93-94; review-value-alignment-criteria.yaml:6-18 (value_type=tradeoff, alignment_direction=misaligned; authority excerpt: “BOM/공정 온톨로지가 PLM/MES 통합의 개념 기준 문서로 적절한지…BOM…정합성과 제조 운영 위험을 중심으로”) Source finding context: 재생 원료 흐름을 자기 참조 BOM으로 표현하는 국소 편의가 BOM 전개의 안전성과 의미를 훼손한다. Source finding context: 제품 구성 구조와 공정 중 회수·재투입 흐름은 목적과 계산 방식이 다르다. 이를 동일 BOM 계층에 넣으면 BOM 폭발, 소요량 계산, 원가 누적 또는 순환 검증이 예외별 동작에 의존하게 되어 통합 개념 기준의 예측 가능성을 잃는다. Source finding context: BOM은 비순환 제품 구성 구조로 유지하고, 스크랩 발생·회수·재투입은 Operation 또는 별도의 MaterialRecovery/MaterialFlow 관계로 분리한다. 재투입률과 질량수지 규칙을 해당 흐름에 배치한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준 Source finding context: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우 Source finding context: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다. Source finding context: 제품 구성과 공정 물질 흐름이라는 서로 다른 목적의 개념을 BomLine 하나로 통합했다. Source finding context: 비순환 BOM 원칙과 자기 포함 예외가 같은 무결성 규칙에 공존한다. Source finding context: 스크랩 재투입이 별도 흐름 관계가 아니라 Assembly의 child BomLine으로 표현된다. Source finding context: 제품 구성 구조와 공정 회수 흐름을 구분하는 개념이 모델에 없다.
+  - affected purpose: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준
+  - failure condition: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우
+  - impact: 소비자가 무한 전개나 중복 계산을 수행하거나 예외를 서로 다르게 해석할 수 있다. Source finding context: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다.
+  - root hypothesis: 제품 구성 구조와 공정 회수·재투입 흐름을 BomLine 하나로 표현하여 비순환 BOM 규칙과 자기참조 예외가 충돌한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-002`, `materialized-input.md:7`, `materialized-input.md:23-35`, `materialized-input.md:93-94`, `review-value-alignment-criteria.yaml:6-18`, `finding-ledger.yaml#finding-002`, `finding-002.cause-001`, `finding-002.cause-002`, `finding-002.cause-003`, `materialized-input.md:12-100`, `issue-stance-matrix.yaml#stances.issue-002.axiology`, `issue-stance-matrix.yaml#stances.issue-002.coverage`, `issue-ledger.yaml#issue-002`, `issue-stance-matrix.yaml#stances.issue-002.evolution`, `issue-stance-matrix.yaml#stances.issue-002.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-002`, `issue-stance-matrix.yaml#stances.issue-002.semantics`, `issue-stance-matrix.yaml#stances.issue-002.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: 이 모델을 PLM/MES의 공통 개념 기준으로 사용할 때 스크랩 재투입이 포함된 Assembly를 일반 BOM처럼 전개하거나 소요량·원가를 계산하면 무한 전개, 중복 수량 계산 또는 시스템별 예외 해석이 발생할 수 있다. 따라서 공유 기준에 필요한 계산의 예측 가능성과 운영 안전성이 훼손된다.
+  - root cause: 출발점은 목적과 계산 규칙이 다른 제품 구성 구조와 공정 회수·재투입 흐름을 구분하는 개념이 없고 둘을 BomLine 하나로 통합한 것이다. 이 때문에 비순환이어야 하는 일반 구성 관계 안에 자기참조 재투입 예외가 들어가며, 이후의 전개 및 계산 문제를 구조적으로 발생시킨다.
+  - causal path: 모델이 BOM 비순환 원칙과 자기 포함 예외를 같은 무결성 규칙에 두고, 스크랩 재투입을 별도 흐름이 아닌 Assembly의 child BomLine으로 표현한다. 그 결과 일반 소비자는 구성 간선과 회수 간선을 구별할 수 없고, 종료 조건과 수량 계산을 개별 예외 처리에 의존하게 되어 무한 전개·중복 계산·소비자별 해석 불일치로 이어진다.
+  - action: 먼저 BOM을 비순환 제품 구성 구조로 한정하고, 스크랩 발생·회수·재투입을 별도의 MaterialFlow 계열 관계로 분리해야 한다. 그다음 재투입률, 질량수지 및 종료 규칙을 해당 흐름에 배치하여 BOM 전개·소요량·원가 소비자가 예외 없이 구성 관계를 처리하고 공정 흐름 소비자가 별도 규칙을 적용하도록 해야 한다. 이 조치는 현재 차단 결함으로서 대상 범위에서 반드시 완료되어야 한다.
+
+- issue-003 (high): 품목별 UOM 변환의 권위·유효성·실패 규칙이 통합 모델에 없어 BOM 수량의 공통 계산 의미를 보장할 수 없는 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 권위 있는 품목별 UOM 환산 모델이 없어 BOM 수량의 공통 의미를 보장하지 못한다. Source finding context: manufacturing-bom-ontology.yaml — 품목 UOM과 현장 환산 Source finding context: materialized-input.md:7; materialized-input.md:19; materialized-input.md:29-35; materialized-input.md:100; review-value-alignment-criteria.yaml:6-18 (value_type=commitment, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…제조 운영 위험을 중심으로”) Source finding context: 환산계수 없이 현장 판단에 맡긴 단위 변환은 BOM 수량을 시스템 간 공통 의미로 만들지 못한다. Source finding context: 동일 qty_per가 어느 단위를 기준으로 해석되는지와 변환 근거가 통합 데이터로 재현되지 않는다. 특히 개수와 질량 간 환산은 품목별 물성에 의존하므로 현장별 계산 차이가 자재 소요량, 불출량 및 재고 정합성을 훼손할 수 있다. Source finding context: BomLine 수량에 명시적 UOM을 부여하고, 품목별 기준 UOM 및 유효기간·출처를 가진 변환 규칙을 권위 있는 마스터로 모델링한다. 필요한 변환이 없거나 차원이 맞지 않으면 생산 또는 인터페이스 처리를 실패시키도록 규정한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제 Source finding context: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우 Source finding context: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다. Source finding context: 수량 단위와 변환 규칙을 통합 모델의 권위 있는 개념으로 두지 않았다. Source finding context: 품목별 환산계수 마스터가 없고 변환을 현장에서 수행한다. Source finding context: BomLine.qty_per에는 자체 단위 또는 기준 단위 규칙이 없다. Source finding context: 모델은 Part.uom 열거만 제공하고 단위 변환의 권위·유효성·실패 규칙을 제공하지 않는다.
+  - affected purpose: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제
+  - failure condition: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우
+  - impact: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치가 발생할 수 있다. Source finding context: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다.
+  - root hypothesis: 수량 단위와 품목별 변환 규칙을 권위 있는 통합 개념으로 두지 않아 BOM 수량 환산이 현장 판단에 의존한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-003`, `materialized-input.md:7`, `materialized-input.md:19`, `materialized-input.md:29-35`, `materialized-input.md:100`, `review-value-alignment-criteria.yaml:6-18`, `finding-ledger.yaml#finding-003`, `finding-003.cause-001`, `finding-003.cause-002`, `finding-003.cause-003`, `issue-stance-matrix.yaml#stances.issue-003.axiology`, `issue-stance-matrix.yaml#stances.issue-003.coverage`, `issue-ledger.yaml#issue-003`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003`, `issue-stance-matrix.yaml#stances.issue-003.evolution`, `issue-stance-matrix.yaml#stances.issue-003.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-003`, `issue-stance-matrix.yaml#stances.issue-003.semantics`, `issue-stance-matrix.yaml#stances.issue-003.structure`, `issue-ledger.yaml#dep-001`, `rel-007`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: BOM 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목 물성에 따른 환산이 필요할 때, 시스템과 작업자가 서로 다른 결과를 산출할 수 있다. 이는 과소·과다 불출, 계획 오차, 재고 불일치를 유발하여 PLM/MES 간 수량 의미의 일관성과 제조 운영 위험 통제를 직접 약화한다.
+  - root cause: 출발점은 수량 단위와 품목별 변환 규칙을 권위 있는 통합 개념으로 두지 않은 것이다. 이로 인해 변환계수의 출처와 유효기간, 적용 가능 차원, 실패 조건을 시스템이 결정하거나 추적할 수 없고 환산이 현장 판단에 의존한다.
+  - causal path: 모델은 Part.uom만 열거하며 권위 있는 품목별 환산 마스터를 제공하지 않고, BomLine.qty_per에도 자체 단위나 기준 단위 규칙이 없다. 따라서 동일한 qty_per의 단위와 변환 근거를 통합 데이터에서 재현할 수 없으며, 필요한 환산을 현장에서 수행하게 되어 시스템별 계산 차이와 BOM 수량 의미의 불일치로 이어진다. 참여 렌즈들은 이 루트 가설과 high 심각도에 동의했고 별도 숙의가 필요하지 않았다.
+  - action: 먼저 출처와 유효기간을 가진 품목별 기준 UOM 및 변환 규칙을 권위 있는 마스터로 정의하고, 그다음 BomLine 수량에 명시적 UOM을 연결해야 한다. 이후 변환 시점에 해당 규칙을 적용하고, 필요한 규칙이 없거나 단위 차원이 호환되지 않으면 생산 또는 인터페이스 처리를 실패시키는 검증 규칙을 두어 임의 환산을 차단해야 한다.
+
+- issue-005 (high): BOM·라우팅의 revision·effectivity 형상 기준선 부재는 생산 시점의 유효 제조 구성을 선택하거나 과거 구성을 재구성할 수 없게 하는 high 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: BOM·라우팅의 개정·유효기간·형상 기준선 부재로 생산 시점의 제조 구성을 재구성할 수 없다. Source finding context: BOM·라우팅 구성의 시점별 형상 관리 Source finding context: materialized-input.md:14-35, 55-61, 69-75, 93-96 Source finding context: BOM과 라우팅에 개정·유효기간·형상 기준선 개념이 없어 과거 또는 특정 생산일의 제조 구성을 재구성할 수 없다. Source finding context: ECO 적용 전후의 BOM 및 공정 순서를 같은 Part에서 구분할 수 없으므로, 주간 rev 동기화 지연 중 어느 구성을 생산에 사용해야 하는지 개념 모델만으로 결정하거나 사후 재현할 수 없다. 이는 PLM 설계 형상과 MES 생산 형상을 연결하는 기준 문서의 핵심 목적을 약화한다. Source finding context: PartRevision 또는 ConfigurationBaseline을 도입하고 BomLine 및 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여한다. ECO가 변경 전후 형상과 해당 유효 구간을 명시적으로 연결하도록 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공 Source finding context: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우 Source finding context: 생산 시점의 유효 BOM/라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다. Source finding context: 온톨로지가 품목·BOM·라우팅을 현재값 중심으로 표현하고, 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않았다. Source finding context: BomLine과 Routing에 개정 식별자나 유효 시작·종료 구간이 없다. Source finding context: ECO의 단일 effective_date와 Part의 현재 rev만으로는 변경 전후 BOM·라우팅 형상을 식별할 수 없다.
+  - affected purpose: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공
+  - failure condition: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우
+  - impact: 생산 시점의 유효 BOM·라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다. Source finding context: 생산 시점의 유효 BOM/라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다.
+  - root hypothesis: 품목·BOM·라우팅을 현재값 중심으로 표현하고 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않아 시점별 구성을 식별할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `materialized-input.md:20-21`, `materialized-input.md:29-35`, `materialized-input.md:55-61`, `materialized-input.md:69-75`, `materialized-input.md:96`, `finding-ledger.yaml#finding-005`, `finding-005.cause-001`, `finding-005.cause-002`, `issue-stance-matrix.yaml#stances.issue-005.axiology`, `issue-stance-matrix.yaml#stances.issue-005.coverage`, `issue-ledger.yaml#issue-005`, `issue-stance-matrix.yaml#stances.issue-005.evolution`, `issue-stance-matrix.yaml#stances.issue-005.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-005`, `issue-stance-matrix.yaml#stances.issue-005.semantics`, `issue-stance-matrix.yaml#stances.issue-005.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되면, PLM 설계 형상과 MES 생산 형상을 공통 기준으로 연결할 수 없다. 그 결과 잘못된 부품이나 공정을 사용할 위험이 생겨 통합 기준 문서의 핵심 목적을 직접 약화한다.
+  - root cause: 품목·BOM·라우팅을 현재값 중심으로 표현하고 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않은 것이 출발점이다. 이 구조에서는 같은 품목에 속한 변경 전후 형상을 별개의 유효 구성으로 식별할 수 없다.
+  - causal path: BomLine과 Routing에 revision 식별자 및 유효 시작·종료 구간이 없고, ECO의 단일 effective_date와 Part의 현재 rev만 존재한다. 따라서 ECO 적용 전후의 BOM과 공정 순서를 구분할 수 없으며, 특정 생산일에 적용할 구성을 유일하게 선택하거나 사후 재현할 수 없다.
+  - action: 먼저 PartRevision 또는 ConfigurationBaseline을 제조 형상의 기준 개념으로 도입해야 한다. 이어 BomLine과 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여하고, ECO가 변경 전후 형상과 각 유효구간을 명시적으로 연결하도록 해야 한다. 그래야 생산 시점의 구성 선택과 과거 형상 재구성이 같은 기준선에서 가능해진다.
+
+- issue-007 (high): 차원화된 Quantity·UnitOfMeasure와 품목별 변환 모델이 없어 PLM BOM 수량과 MES 투입량·작업장 능력을 공통 계산 의미로 연결할 수 있는 계약이 부재한 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 수량별 단위 차원과 환산 모델 부재로 BOM 수량과 작업장 능력의 공통 계산 의미가 없다. Source finding context: 수량 단위·환산 및 설비능력 단위 모델 Source finding context: materialized-input.md:19, 34-35, 63-67, 98-100 Source finding context: BOM 수량과 작업장 능력을 계산 가능한 공통 단위로 해석할 단위 차원과 품목별 환산계수 마스터가 없다. Source finding context: PLM의 BOM 수량과 MES의 투입량·능력 값을 일관되게 변환하거나 검증할 수 없다. 특히 kg↔ea 환산이나 개수 기반·시간 기반 능력 비교가 사람의 현장 판단에 의존해 자재 소요량과 생산능력 계산 오류로 이어질 수 있다. Source finding context: Quantity와 UnitOfMeasure를 명시적으로 모델링하고 qty_per 및 capacity에 단위·분모·시간기준을 연결한다. 품목별 UomConversion에 factor, from_uom, to_uom, valid_from/to, 근거와 권위 시스템을 둔다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003 Source finding context: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합 Source finding context: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우 Source finding context: 필요 자재량과 작업장 부하를 결정적으로 계산할 수 없어 부족·과다 투입 및 잘못된 일정 산정 위험이 생긴다. Source finding context: 단위가 계산 대상 값의 속성이 아니라 품목의 제한된 코드로만 표현되고, 단위 간 변환 개념이 모델에서 제외되어 있다. Source finding context: qty_per와 capacity_per_shift에 단위 또는 단위 기준을 연결하는 속성이 없다. Source finding context: 품목별 환산계수 마스터가 없고 필요한 환산을 현장에서 수행한다고 명시한다.
+  - affected purpose: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합
+  - failure condition: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우
+  - impact: 필요 자재량과 작업장 부하를 결정적으로 계산할 수 없어 부족·과다 투입 및 잘못된 일정 산정 위험이 생긴다.
+  - root hypothesis: 단위를 계산 대상 값의 속성이 아닌 제한된 품목 코드로만 표현하고 단위 차원과 변환 개념을 제외하여 BOM과 설비능력을 결정적으로 계산할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003`, `materialized-input.md:19`, `materialized-input.md:34-35`, `materialized-input.md:63-67`, `materialized-input.md:100`, `finding-ledger.yaml#finding-007`, `finding-007.cause-001`, `materialized-input.md:66-67`, `finding-007.cause-002`, `issue-stance-matrix.yaml#stances.issue-007.axiology`, `issue-stance-matrix.yaml#stances.issue-007.coverage`, `issue-ledger.yaml#issue-007`, `issue-stance-matrix.yaml#stances.issue-007.evolution`, `issue-stance-matrix.yaml#stances.issue-007.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-007`, `issue-stance-matrix.yaml#stances.issue-007.semantics`, `issue-stance-matrix.yaml#stances.issue-007.structure`, `issue-ledger.yaml#dep-001`, `rel-007`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 상·하위 품목의 단위가 다르거나 작업장 능력이 개수·중량·시간 기준으로 혼재하면 필요 자재량과 작업장 부하를 결정적으로 산출하거나 검증할 수 없다. 그 결과 부족·과다 투입과 잘못된 생산 일정 위험이 발생하여 PLM BOM과 MES 계획·실적 간 수량 및 능력 의미 통합이라는 목적이 직접 약화된다.
+  - root cause: 단위를 각 계산값의 측정 차원으로 모델링하지 않고 제한된 품목 코드로만 표현했으며, 단위 변환 개념도 제외한 것이 출발점이다. 이 구조에서는 수치가 무엇을 측정하고 어떤 단위·분모·시간 기준을 갖는지 판정할 수 없으므로 이후 BOM 소요량과 설비능력 계산이 공통 계약을 가질 수 없다.
+  - causal path: 먼저 qty_per와 capacity_per_shift가 단위 또는 단위 기준을 참조하지 않아 값의 연산 적합성을 판정할 수 없다. 이어 품목별 환산계수 마스터가 없고 환산이 현장 판단에 맡겨지면서 kg↔ea 변환이나 개수 기반·시간 기반 능력 비교를 일관되게 수행하거나 검증할 수 없게 된다. 그 결과 BOM 소요량과 작업장 부하 계산이 비결정적이 된다. 참여 렌즈들은 이 인과와 high 심각도를 수용했으며 별도 숙의가 필요하지 않다고 확정했다.
+  - action: Quantity와 UnitOfMeasure를 명시적으로 도입하고 qty_per 및 capacity에 측정 차원, 단위, 분모와 시간 기준을 연결해야 한다. 품목별 UomConversion에는 factor, from_uom, to_uom, 유효기간, 근거와 권위 시스템을 두어 변환을 결정적이고 검증 가능하게 만들어야 한다. issue-003과 공유하는 원인 후보가 있으므로 개별 계산 경로를 보완하기 전에 공통 단위 변환의 권위·유효성 계약을 먼저 확립하고, 그 계약을 BOM과 MES 능력 계산 양쪽에서 사용해야 한다.
+
+- issue-011 (high): BOM과 라우팅에 불변 revision 및 유효구간이 없어 ECO 전후의 제조 형상을 별도 기준선으로 보존할 수 없는 high 결함이며, 변경 연속성 확보를 위해 즉시 수정해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: evolution
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: evolution
+  - issue statement: BOM·라우팅의 명시적 버전과 유효구간 부재가 설계변경 이후 제조 형상의 연속적 보존을 막는다. Source finding context: manufacturing-bom-ontology.yaml — Part, BomLine, Routing, ECO 및 변경 적용 규칙 Source finding context: entities.Part.attributes.rev/current_eco; entities.BomLine.attributes; entities.Routing.attributes; entities.ECO.attributes.effective_date/status; integrity_rules[2] Source finding context: BOM·라우팅의 개정과 유효구간이 모델링되지 않아 설계변경 후 구성 이력을 연속적으로 보존할 수 없다. Source finding context: ECO 적용 시점별 BOM과 라우팅을 식별할 구조가 없으므로 기존 객체를 덮어쓰거나 별도 관행으로 복제해야 한다. 그러면 과거 생산분의 적용 BOM·공정과 향후 변경분을 동일 모델에서 안정적으로 조회할 수 없고, 변경을 추가할수록 PLM/MES 간 기준선 연속성이 약해진다. Source finding context: PartRevision, BomRevision, RoutingRevision 같은 명시적 버전 개념을 두고 각 버전에 immutable 식별자, 상태, valid_from/valid_to 또는 effectivity 조건, 적용 ECO를 연결한다. 생산 오더는 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적 Source finding context: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때 Source finding context: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다. Source finding context: 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없다. Source finding context: ECO 규칙은 적용일 이후 신규 rev 사용을 요구하지만 BomLine과 Routing에는 개정 또는 유효구간 속성이 없다. Source finding context: 변경 전후 구성을 별개 기준선으로 식별할 수 없다는 현상은 Part의 현재 rev/current_eco만 보유하는 단일 현재상태 모델의 증상이다.
+  - affected purpose: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성 제공 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적
+  - failure condition: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때
+  - impact: 생산 시점의 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성 및 재작업 판단의 신뢰가 저하된다. Source finding context: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다.
+  - root hypothesis: 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없어 변경 전후 구성을 별개 식별자로 보존할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-001`, `entities.Part.attributes.rev/current_eco`, `entities.BomLine.attributes`, `entities.Routing.attributes`, `entities.ECO.attributes.effective_date/status`, `integrity_rules[2]`, `finding-ledger.yaml#finding-011`, `finding-011.cause-001`, `finding-011.cause-002`, `issue-stance-matrix.yaml#stances.issue-011.axiology`, `issue-stance-matrix.yaml#stances.issue-011.coverage`, `issue-ledger.yaml#issue-011`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-011.evolution`, `issue-stance-matrix.yaml#stances.issue-011.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-011`, `issue-stance-matrix.yaml#stances.issue-011.semantics`, `issue-stance-matrix.yaml#stances.issue-011.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: evolution
+  - action candidates: fix_now
+  - materiality: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지할 때 생산 시점의 설계·BOM·라우팅 기준선을 재현할 수 없다. 이는 PLM/MES 통합의 핵심 목적인 변경 연속성을 약화시키고 변경 적용, 추적성 및 재작업 판단의 신뢰를 크게 떨어뜨린다.
+  - root cause: 문제의 출발점은 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없다는 점이다. Part의 rev/current_eco는 현재값만 나타내므로 변경 전후 구성을 각각 불변 식별자로 보존할 권위 있는 구조가 없다.
+  - causal path: ECO 규칙은 적용일 이후 신규 rev 사용을 요구하지만 BomLine과 Routing에는 revision이나 유효구간이 없다. 따라서 적용 시점별 BOM·라우팅을 식별하지 못해 기존 객체를 덮어쓰거나 비표준 복제에 의존하게 되고, 결과적으로 과거 생산분과 향후 변경분의 기준선을 동일 모델에서 안정적으로 조회할 수 없게 된다.
+  - action: 먼저 PartRevision, BomRevision, RoutingRevision을 명시적 기준선 개념으로 도입하고 각 버전에 불변 식별자, 상태, valid_from/valid_to 또는 동등한 effectivity 조건, 적용 ECO를 연결해야 한다. 그다음 생산오더가 가변적인 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하도록 해야 생산 시점의 형상을 재현하고 변경 적용 및 추적성 판단을 안정화할 수 있다.
+
+- issue-004 (medium): BomLine.scrap_rate를 의미·산식·권위·생명주기가 없는 복사 스칼라로 둔 설계는 PLM/MES의 소요량 계산과 변경 재현을 불확정하게 만드는 medium 결함이며, 다음 단계 전에 수정해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: axiology, semantics
+  - remaining disagreement: 0/2 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology, semantics
+  - issue statement: BomLine.scrap_rate의 비추적 복사와 정의되지 않은 계산 의미가 자재계획의 일관성과 재현성을 약화한다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate의 복사본 관리 Source finding context: materialized-input.md:7; materialized-input.md:29-35; materialized-input.md:47-61; review-value-alignment-criteria.yaml:6-18 (value_type=principle, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…BOM·라우팅…정합성과 제조 운영 위험을 중심으로”) Source finding context: 공정 불량 계수를 BOM 줄의 엑셀 복사본으로 관리하면 BOM과 라우팅 간 권위 및 변경 정합성이 깨진다. Source finding context: 공정 조건이 변경되어도 BOM 복사본이 함께 갱신된다는 보장이 없으며 동일 부품도 공정별 불량률이 다를 수 있다. 이 절충은 편리한 수량 계산 대신 통합 기준의 추적성·재현성과 자재계획 정확도를 희생한다. Source finding context: scrap/yield를 해당 Operation과 자재 투입 관계에 귀속하고 Routing 또는 공정 리비전 및 유효기간과 연결한다. 외부 계획 시스템이 원본이라면 복사값 대신 source identifier, 동기화 상태, 갱신 규칙과 불일치 처리 정책을 모델링한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다. Source finding context: 공정 수율 개념의 권위와 생명주기를 공정/라우팅이 아니라 BomLine의 비추적 복사본에 배치했다. Source finding context: BomLine.scrap_rate가 생산계획팀 엑셀 값을 복사하여 보유한다. Source finding context: scrap_rate는 특정 Operation이나 Routing과 연결되지 않는다. Source finding context: 복사본의 원본 식별자, 유효기간, 동기화 상태 및 충돌 처리 규칙이 없다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate Source finding context: entities.BomLine.attributes.qty_per; entities.BomLine.attributes.scrap_rate Source finding context: scrap_rate가 비율인지 소요량 보정계수인지 정의되지 않은 채 독립 복사 값으로 모델링되었다. Source finding context: 같은 값이 불량 비율, 수율 손실률 또는 gross-up 계수 중 무엇인지에 따라 qty_per 보정식이 달라진다. 원천 엑셀과 복사본의 불일치까지 허용되어 시스템별 소요량 계산 결과가 갈릴 수 있다. Source finding context: 정규 의미를 하나로 선택해 이름, 값 범위, 단위 및 qty_per와의 계산식을 명시한다. 값의 원본을 하나로 정하고, 다른 시스템에는 원천값 또는 결정적 파생값만 전달한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다. Source finding context: 파생량의 정규 산식과 원천 권한을 정의하지 않았다. Source finding context: scrap_rate라는 이름과 '계수'라는 설명이 서로 다른 수량 의미를 허용한다. Source finding context: 값의 범위·단위·계산식 없이 외부 엑셀 값을 복사하도록 모델링했다.
+  - affected purpose: BOM·라우팅 및 소요량 계산을 PLM/MES가 일관되게 해석하는 통합 개념 기준 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준
+  - failure condition: 공정 불량률이 변경되거나 소비자가 scrap_rate를 손실 비율과 수량 배수 중 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때
+  - impact: 필요 수량과 자재 투입량이 시스템별로 달라지고 기준값의 권위와 계산 결과를 감사·재현하기 어렵다. Source finding context: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다. Source finding context: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다.
+  - root hypothesis: scrap_rate를 정규 의미·산식·원천 권한·생명주기가 없는 BomLine 복사 스칼라로 모델링하여 변경 정합성과 계산 의미가 함께 불확정적이다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-004`, `materialized-input.md:7`, `materialized-input.md:29-35`, `materialized-input.md:47-61`, `review-value-alignment-criteria.yaml:6-18`, `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-004`, `entities.BomLine.attributes.qty_per`, `entities.BomLine.attributes.scrap_rate`, `finding-ledger.yaml#finding-004`, `finding-ledger.yaml#finding-019`, `rel-011`, `finding-relation-graph.yaml#rel-011`, `finding-004.cause-001`, `finding-004.cause-002`, `materialized-input.md:29-61`, `finding-004.cause-003`, `finding-019.cause-001`, `finding-019.cause-002`, `entities.BomLine.attributes.scrap_rate.note`, `issue-stance-matrix.yaml#stances.issue-004.axiology`, `issue-stance-matrix.yaml#stances.issue-004.coverage`, `issue-ledger.yaml#issue-004`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004`, `issue-stance-matrix.yaml#stances.issue-004.evolution`, `issue-stance-matrix.yaml#stances.issue-004.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-004`, `issue-stance-matrix.yaml#stances.issue-004.semantics`, `issue-stance-matrix.yaml#stances.issue-004.structure`, `issue-ledger.yaml#dep-002`, `rel-010`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology, semantics
+  - action candidates: fix_before_release, fix_now
+  - materiality: 공정 불량률 변경, 공정별 수율 차이, 원본과 복사본의 불일치가 발생하거나 소비자가 값을 손실 비율과 수량 배수로 다르게 해석하면 동일 BOM에서도 필요 수량과 자재 투입량이 시스템별로 달라진다. 이는 BOM·라우팅 정합성과 일관된 소요량 해석이라는 통합 기준을 약화하고, 기준값과 계산 결과의 감사·재현을 어렵게 한다.
+  - root cause: 문제의 출발점은 scrap_rate를 정규 의미, 값 범위·단위, qty_per 적용 산식, 권위 원본, 유효기간과 변경 생명주기 없이 BomLine에 복사한 것이다. 이 모델에서는 계산 의미와 최신 기준값을 어느 시스템이 소유하는지 모두 결정할 수 없으므로 의미 불일치와 동기화 불일치가 같은 원인에서 발생한다.
+  - causal path: 생산계획 엑셀 값이 BomLine.scrap_rate로 복사되지만 특정 Operation이나 Routing에 연결되지 않고, 원본 식별자·유효기간·동기화 상태·충돌 처리 규칙도 없다. 동시에 이름과 설명은 손실률과 보정계수라는 복수 해석을 허용하며 qty_per 보정식도 정의하지 않는다. 그 결과 공정 조건이나 원천값이 바뀌거나 소비자 해석이 갈릴 때 각 시스템이 서로 다른 소요량을 계산한다. 참여 렌즈들은 이 결합된 루트 원인과 medium 판단을 모두 수용했으며 남은 이견은 없다.
+  - action: 다음 단계 전에 scrap/yield의 정규 의미, 값 범위·단위와 qty_per 계산식을 하나로 확정하고, 이를 해당 Operation 및 자재 투입 관계에 귀속시켜 Routing 또는 공정 리비전과 유효기간에 연결해야 한다. 권위 원본도 하나로 지정하고 다른 시스템에는 원천값이나 결정적으로 산출된 값만 전달해야 한다. 외부 계획 시스템이 원본이면 원본 식별자, 동기화 상태·갱신 규칙과 불일치 처리 정책을 함께 모델링해야 변경 정합성과 계산 재현성을 확보할 수 있다.
+
+- issue-006 (medium): ECO가 정상 상태(open→approved→applied)만 표현하고 승인·적용 증거와 예외·정정 이력을 보존하지 않아, PLM/MES 간 설계변경의 책임성과 재현성을 약화하는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: ECO lifecycle과 감사 증거가 정상 상태 경로에 한정되어 변경 통제의 책임성과 재현성이 부족하다. Source finding context: ECO 변경관리 lifecycle 및 감사 증거 Source finding context: materialized-input.md:69-75 Source finding context: ECO가 정상 적용 경로만 표현하며 승인·적용 행위의 행위자, 시각, 근거와 거절·취소·대체·정정 경로가 누락되어 있다. Source finding context: 누가 어떤 근거로 변경을 승인·적용했는지 추적할 수 없고, 철회되거나 잘못 적용된 ECO를 기존 상태 의미와 충돌 없이 처리할 수 없다. 변경 통제의 책임성과 재현성이 기준 모델 밖에 남는다. Source finding context: ECO 상태 전이 전체를 정의하고 ChangeEvent 또는 ApprovalDecision을 추가해 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 기록한다. 취소·거절·대체·정정/재발행 관계도 포함한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적 Source finding context: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우 Source finding context: 상태값만으로 변경의 정당성이나 실제 적용 경위를 입증할 수 없어 제조 변경 통제에 대한 신뢰가 약화된다. Source finding context: ECO가 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약되어 있다. Source finding context: ECO에 승인·적용 행위의 actor, timestamp, rationale 또는 evidence 속성이 없다. Source finding context: ECO 상태 열거형이 open, approved, applied만 포함하여 예외 종결 및 사후 정정 lifecycle을 수용하지 못한다.
+  - affected purpose: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적
+  - failure condition: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우
+  - impact: 상태값만으로 변경의 정당성이나 실제 적용 경위를 입증할 수 없어 제조 변경 통제에 대한 신뢰가 약화된다.
+  - root hypothesis: ECO를 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약하여 예외 lifecycle과 승인·적용 증거를 표현하지 못한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-002`, `materialized-input.md:69-75`, `finding-ledger.yaml#finding-006`, `finding-006.cause-001`, `finding-006.cause-002`, `materialized-input.md:75`, `issue-stance-matrix.yaml#stances.issue-006.axiology`, `issue-stance-matrix.yaml#stances.issue-006.coverage`, `issue-ledger.yaml#issue-006`, `issue-stance-matrix.yaml#stances.issue-006.evolution`, `issue-stance-matrix.yaml#stances.issue-006.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-006`, `issue-stance-matrix.yaml#stances.issue-006.semantics`, `issue-stance-matrix.yaml#stances.issue-006.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: follow_up
+  - materiality: ECO가 거절·취소·대체되거나 승인·적용 경위를 감사해야 할 때 현재 상태값만으로는 누가 언제 어떤 근거로 판단하고 적용했는지 입증할 수 없다. 따라서 통제된 변경 전달과 변경 이력 추적이라는 목적에 대한 신뢰가 실질적으로 약화된다.
+  - root cause: 출발점은 ECO를 시간에 따른 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약한 모델링이다. 이 축약 때문에 상태 전이와 결정 행위가 독립된 이력으로 남지 않아 예외 lifecycle과 감사 증거를 모두 표현할 수 없다.
+  - causal path: ECO에는 승인·적용 행위의 actor, timestamp, rationale 또는 evidence가 없고, 상태 열거형도 open, approved, applied에 한정된다. 그 결과 거절·취소·대체·정정 경로를 일관되게 기록할 수 없으며, 서로 다른 변경 이력이 같은 현재 상태로 수렴하면 실제 경위를 역산할 수 없다.
+  - action: 먼저 거절·취소·대체·정정·재발행을 포함한 ECO 상태 전이 전체와 허용 규칙을 정의해야 한다. 이어 ChangeEvent 또는 ApprovalDecision을 모델링해 각 전이의 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 불변 이력으로 기록하고, 취소·대체·정정 관계를 ECO에 연결해야 한다. 현재 상태는 이 이력에서 일관되게 도출하거나 이력과의 정합성을 검증해야 감사와 조사에서 변경 경위를 재현할 수 있다.
+
+- issue-008 (medium): 병행 관리되는 제조 기준값에 권위 원본, 복제 출처, 유효기간, 동기화 상태 및 대사 이력이 없어 계획·원가·실행에 사용할 값을 일관되게 선택하거나 재현할 수 없는 medium 결함이며, 다음 단계 전에 해소해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 복수 시스템의 제조 기준값에 단일 권위와 대사 이력이 없어 일관된 값 선택이 불가능하다. Source finding context: 병행 관리 제조 기준값의 권위와 대사 Source finding context: materialized-input.md:35, 53, 98-99 Source finding context: 복수 시스템에서 병행 관리되는 scrap_rate와 표준시간 계열 값에 단일 권위 및 대사 이력 개념이 없다. Source finding context: 서로 다른 값이 존재할 때 어느 값을 계획·원가·실행에 사용해야 하는지 온톨로지가 결정하지 못한다. 오래된 복사본이나 수기값이 사용되어도 그 차이와 조정 근거를 추적할 수 없다. Source finding context: 각 관리값에 authoritative_system, value_as_of, valid_from/to를 지정하고, 복제본은 원본 참조와 동기화 시각을 갖게 한다. ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석 Source finding context: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우 Source finding context: 기준값 선택이 시스템별 또는 사용자별로 달라져 계획·원가 결과를 신뢰하거나 재현하기 어렵다. Source finding context: 병행 관리 사실은 주석으로만 서술되고 권위·복제·대사를 나타내는 공통 개념이 정의되지 않았다. Source finding context: scrap_rate 복사본에 원본 권위, 동기화 시점, 유효기간이 없다. Source finding context: MES 계산값과 표준원가 수기값의 대사에 기준값과 대사 사건을 기록할 모델이 없다.
+  - affected purpose: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석
+  - failure condition: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우
+  - impact: 기준값 선택이 시스템별 또는 사용자별로 달라져 계획·원가 결과를 신뢰하거나 재현하기 어렵다.
+  - root hypothesis: 병행 관리되는 제조 기준값의 권위·복제·유효기간·대사를 공통 개념으로 정의하지 않아 기준값 선택과 조정 이력을 재현할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004`, `materialized-input.md:35`, `materialized-input.md:53`, `materialized-input.md:99`, `finding-ledger.yaml#finding-008`, `finding-008.cause-001`, `finding-008.cause-002`, `issue-stance-matrix.yaml#stances.issue-008.axiology`, `issue-stance-matrix.yaml#stances.issue-008.coverage`, `issue-ledger.yaml#issue-008`, `issue-stance-matrix.yaml#stances.issue-008.evolution`, `issue-stance-matrix.yaml#stances.issue-008.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-008`, `issue-stance-matrix.yaml#stances.issue-008.semantics`, `issue-stance-matrix.yaml#stances.issue-008.structure`, `issue-ledger.yaml#dep-002`, `rel-010`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - materiality: 엑셀·MES·표준원가 시스템의 값이 다르거나 동기화 사이에 변경되면 시스템이나 사용자마다 다른 기준값을 선택할 수 있다. 따라서 PLM/MES 및 연계 장부 사이의 일관된 해석이 깨지고 계획·원가 결과의 신뢰성, 재현성 및 감사 가능성이 약화된다.
+  - root cause: 병행 관리 사실이 서술에만 머물고 권위·복제·유효기간·대사를 나타내는 공통 개념이 정의되지 않은 것이 출발점이다. 이 모델 부재 때문에 소비자는 어떤 값을 어느 시점의 권위 있는 기준으로 보아야 하는지 결정할 수 없고, 이후 조정 근거도 재구성할 수 없다.
+  - causal path: scrap_rate 복사본에는 원본 권위, 동기화 시점과 유효기간이 없으며, MES 계산값과 표준원가 수기값을 비교·조정한 대사 사건도 기록할 수 없다. 그 결과 값이 충돌하거나 오래된 복사본이 남아 있을 때 선택 규칙과 변경 이력이 사라져 시스템별·사용자별 결과가 달라진다. 참여 렌즈들은 이 루트 원인과 medium 심각도를 수용했으며 별도 숙의가 필요하지 않다고 결론냈다.
+  - action: 다음 단계 전에 각 제조 기준값에 authoritative_system, value_as_of 및 valid_from/to를 지정하고, 복제본에는 원본 참조와 동기화 시각·상태를 연결해야 한다. 이어 ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록해 값 선택과 조정 이력을 재현 가능하게 해야 한다. issue-004와 공유 원인 후보가 있으므로 공통 권위·복제 모델을 먼저 정의해 중복 개념을 피해야 한다.
+
+- issue-009 (medium): 생산오더 규칙을 유지하려면 생산오더가 적용한 PartRevision·BOM·Routing 형상을 고정하는 접점을 제공해야 하며, 이를 제공하지 않을 경우 MES 실행 영역을 제외한다는 경계와 외부 실행 온톨로지와의 계약을 명시해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, logic, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 6/6 deliberation participants
+  - accepted lenses: axiology, coverage, evolution, logic, semantics, structure
+  - remaining disagreement: 0/6 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 생산오더 규칙은 있으나 적용 형상 스냅샷, 실행 실적 및 로트 계보 개념이 없어 PLM 마스터와 MES 실행의 접점이 단절된다. Source finding context: MES 생산 실행·실적·추적성 개념 범위 Source finding context: materialized-input.md:12-82, 93-96 Source finding context: 생산 오더 생성 규칙을 선언하면서도 생산 오더, 적용 형상 스냅샷, 실제 투입·공정 실적 및 로트 계보 개념이 전혀 정의되어 있지 않다. Source finding context: MES 통합에서 계획 마스터가 실제 제조 기록으로 이어지는 접점이 비어 있다. released 라우팅 검사는 표현되어도 생성된 오더가 그 형상을 고정했는지, 실제 자재·공정·검사 결과가 무엇인지 추적할 수 없어 변경 영향 분석과 제조 계보 확인이 불가능하다. Source finding context: 최소 범위로 ProductionOrder, OrderConfigurationSnapshot, MaterialConsumption, OperationExecution 및 Lot/SerialGenealogy를 추가하고 PartRevision·BOM·Routing 버전과 연결한다. 실행 영역을 의도적으로 제외한다면 생산 오더 규칙을 제거하거나 별도 실행 온톨로지와의 명시적 경계·계약을 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공 Source finding context: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우 Source finding context: 마스터 데이터에서 실행 기록으로 이어지는 통합 계약이 없어 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 수 없다. Source finding context: 온톨로지가 제조 마스터 구조에 집중하면서도 그 범위를 명시적으로 한정하지 않은 채 MES 실행 규칙까지 포함했다. Source finding context: 생산 오더 생성 조건이 integrity rule로 선언되어 있다. Source finding context: 정의된 엔티티에는 ProductionOrder나 실제 투입·공정 실행·계보 기록이 없다.
+  - affected purpose: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공
+  - failure condition: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우
+  - impact: 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 통합 계약이 없다. Source finding context: 마스터 데이터에서 실행 기록으로 이어지는 통합 계약이 없어 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 수 없다.
+  - root hypothesis: 온톨로지가 제조 마스터에 집중하면서 범위를 명시적으로 한정하지 않은 채 MES 생산오더 규칙을 포함하여 실행 계약의 필수 개념이 비어 있다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-005`, `materialized-input.md:12-82`, `materialized-input.md:95`, `finding-ledger.yaml#finding-009`, `finding-009.cause-001`, `finding-009.cause-002`, `issue-stance-matrix.yaml#stances.issue-009.axiology`, `issue-stance-matrix.yaml#stances.issue-009.coverage`, `issue-ledger.yaml#issue-009`, `issue-stance-matrix.yaml#stances.issue-009.evolution`, `issue-stance-matrix.yaml#stances.issue-009.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-009`, `issue-stance-matrix.yaml#stances.issue-009.semantics`, `issue-stance-matrix.yaml#stances.issue-009.structure`, `검토 대상이 MES 실행·실적·로트 계보까지 포함하는지 밝히는 명시적 목적 및 범위 선언`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, accept_risk
+  - materiality: 현재 구조로는 생산오더 생성 전제는 선언되지만 실제 생산분에 적용된 형상과 사용 자재·공정을 확인할 수 없다. 따라서 PLM 마스터와 MES 제조 실행 사이의 개념 기준이라는 목적이 약화되고, 형상 변경 영향 분석·실적 대조·추적성 검증을 수행할 통합 계약도 성립하지 않는다.
+  - root cause: 문제의 시작점은 제조 마스터 중심의 온톨로지에 MES 생산오더 규칙을 포함하면서도 적용 형상 참조나 실행 영역의 명시적 경계를 정의하지 않은 것이다. 이 범위 불일치 때문에 규칙이 요구하는 실행 객체와 연결 계약이 비어 있다.
+  - causal path: 생산오더 생성 조건이 무결성 규칙으로 선언되어 실행 영역을 전제하지만, ProductionOrder와 적용 형상 스냅샷 및 실제 투입·공정·계보 기록은 정의되어 있지 않다. 그 결과 규칙의 적용 대상과 생성 결과를 완결적으로 평가할 수 없고, 생산 시점의 형상 고정에서 실제 제조 기록으로 이어지는 경로가 단절된다.
+  - action: 다음 단계 전에 목적과 범위를 먼저 결정해야 한다. MES 실행을 포함한다면 최소한 ProductionOrder와 OrderConfigurationSnapshot을 추가해 PartRevision·BOM·Routing 버전에 연결하고, 선언된 목적에 따라 MaterialConsumption·OperationExecution·Lot/SerialGenealogy까지 확장한다. 실행을 제외한다면 생산오더 규칙을 제거하거나 별도 실행 온톨로지와의 경계 및 교환 계약을 명시해야 한다.
+
+- issue-010 (medium): AlternatePart는 적용 조건·방향·승인 근거를 가진 일급 대체 규칙으로 완결되지 않았고 명시적 관계 그래프에도 연결되지 않아, PLM과 MES가 실제 대체 허용 범위와 방향을 일관되게 판단할 수 없는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: coverage, structure
+  - remaining disagreement: 0/2 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage, structure
+  - issue statement: 대체부품 규칙의 적용 조건과 명시적 관계 그래프 연결이 모두 누락되어 실제 대체 가능 범위와 방향을 신뢰할 수 없다. Source finding context: 대체부품의 적용 조건과 승인 통제 Source finding context: materialized-input.md:37-45, 91 Source finding context: 대체부품 관계에 유효기간, 적용 대상 형상·공장·공정, 수량/단위 조건 및 승인 근거가 없어 실제 대체 가능 범위를 표현할 수 없다. Source finding context: 대체 가능성은 단순 품목 쌍보다 조건 의존적인 제조 결정인데, 현재 모델에서는 한 번 등록된 관계가 모든 생산 상황에 적용되는 것으로 해석될 수 있다. 이는 승인되지 않은 대체품 사용이나 품질·조달 조건 위반 위험을 만든다. Source finding context: AlternatePart에 applicable_revision/configuration, site 또는 work_center, quantity/uom constraint, effective_from/to, approval_ref 및 substitution_reason을 추가하고 생산 오더에서 실제 대체 사용 사건을 기록하도록 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 조건을 표현할 수 없어 MES가 과도하게 넓은 대체 권한으로 해석하거나 승인 근거를 확인하지 못할 수 있다. Source finding context: 대체부품이 조건과 통제를 가진 적용 규칙이 아니라 방향만 가진 정적 품목 관계로 모델링되어 있다. Source finding context: AlternatePart의 속성은 두 품목 참조와 방향뿐이다. Source finding context: 유효기간, 적용 범위, 승인 근거 또는 실제 대체 사건을 표현하는 개념이 없다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 및 relations Source finding context: entities.AlternatePart; relations의 Part→Part alternate_of 항목 Source finding context: AlternatePart가 명시적 관계 그래프에서 우회되어 direction을 포함한 대체품 관계 구조가 끊겨 있다. Source finding context: 다른 주요 참조 속성은 relations에 대응 관계가 있지만 AlternatePart만 우회된다. 따라서 relations를 소비하는 PLM/MES 통합 경로에서는 AlternatePart.direction과 관계 인스턴스를 도달하거나 추적할 수 없다. Source finding context: Part→AlternatePart와 AlternatePart→Part의 역할별 관계를 명시하고, Part→Part alternate_of는 이 구조에서 결정적으로 파생되는 투영으로 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때 Source finding context: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다. Source finding context: 대체품 관계를 AlternatePart 엔티티와 Part→Part 단축 관계로 이중 표현하면서 둘 사이의 구조적 연결 또는 파생 규칙을 선언하지 않았다. Source finding context: 명시적 relations 목록에서 AlternatePart를 from 또는 to로 사용하는 관계가 없다. Source finding context: 대체 관계는 Part→Part alternate_of로 직접 표현되고 AlternatePart 경유는 note에만 서술되어 있다.
+  - affected purpose: BOM 대체품의 조건과 방향을 PLM/MES가 동일하게 해석하는 기준 제공 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공
+  - failure condition: 대체 승인이 특정 개정·기간·공장·공정·수량에 한정되거나 relations 그래프로 대체 관계를 탐색할 때 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때
+  - impact: MES가 대체 권한을 과도하게 넓게 해석하거나 방향성과 승인 근거를 잃어 잘못된 자재 대체가 가능하다. Source finding context: 조건을 표현할 수 없어 MES가 과도하게 넓은 대체 권한으로 해석하거나 승인 근거를 확인하지 못할 수 있다. Source finding context: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다.
+  - root hypothesis: AlternatePart를 조건과 증거를 가진 일급 적용 규칙으로 완결하지 않고 정적 품목 관계와 단축 그래프로 이중 표현하여 적용 범위와 관계 추적이 모두 불완전하다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006`, `materialized-input.md:37-45`, `materialized-input.md:91`, `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-001`, `entities.AlternatePart.attributes.primary_ref`, `entities.AlternatePart.attributes.alternate_ref`, `entities.AlternatePart.attributes.direction`, `relations: Part→Part alternate_of note`, `finding-ledger.yaml#finding-010`, `finding-ledger.yaml#finding-021`, `rel-013`, `finding-relation-graph.yaml#rel-013`, `finding-010.cause-001`, `finding-010.cause-002`, `materialized-input.md:84-91`, `finding-021.cause-001`, `relations 전체 목록`, `entities.AlternatePart`, `finding-021.cause-002`, `issue-stance-matrix.yaml#stances.issue-010.axiology`, `issue-stance-matrix.yaml#stances.issue-010.coverage`, `issue-ledger.yaml#issue-010`, `issue-stance-matrix.yaml#stances.issue-010.evolution`, `issue-stance-matrix.yaml#stances.issue-010.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-010`, `issue-stance-matrix.yaml#stances.issue-010.semantics`, `issue-stance-matrix.yaml#stances.issue-010.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage, structure
+  - action candidates: fix_before_release, fix_now
+  - materiality: 대체 승인이 특정 개정·형상·기간·공장·공정·수량에 한정될 때 현재 모델은 그 범위를 표현하거나 승인 근거를 확인할 수 없다. 또한 relations 기반 통합 경로에서는 AlternatePart 인스턴스와 direction이 소실될 수 있어 MES가 대체 권한을 과도하게 적용하거나 잘못된 상호 대체를 허용할 위험이 있으므로, BOM 대체품을 PLM과 MES가 동일하게 해석한다는 목적을 약화한다.
+  - root cause: 문제의 시작점은 AlternatePart를 조건과 증거를 가진 일급 적용 규칙으로 정의하지 않은 채 정적 Part 간 관계와 단축 그래프로 이중 표현한 것이다. 이 모델링 선택 때문에 적용 범위를 담을 속성과 관계 인스턴스를 추적할 정규 그래프 경로가 동시에 마련되지 않았다.
+  - causal path: AlternatePart가 primary_ref, alternate_ref, direction만 가지므로 유효기간·적용 개정/형상·공장/공정·수량/단위·승인 근거와 실제 사용 사건을 표현할 수 없다. 동시에 명시적 relations에는 AlternatePart를 경유하는 역할별 관계가 없고 Part→Part alternate_of만 존재하므로, 그래프 소비자는 조건과 방향을 가진 관계 인스턴스에 도달할 수 없다. 그 결과 동일한 대체 관계의 허용 범위와 방향에 복수 해석이 생기고 잘못된 자재 대체로 이어질 수 있다.
+  - action: 다음 단계 전에 AlternatePart를 적용 조건과 승인 근거를 보유한 정규 관계 권위로 먼저 완결해야 한다. applicable revision/configuration, site/work center, quantity/UOM 조건, effective_from/to, approval_ref, substitution_reason을 모델링하고, Part→AlternatePart 및 AlternatePart→Part 역할별 관계를 명시한 뒤 Part→Part alternate_of를 그 구조에서 결정적으로 파생되는 투영으로 정의해야 한다. 마지막으로 생산 오더의 실제 대체 사용 사건을 해당 규칙에 연결해 승인 규칙과 실행 이력을 추적 가능하게 해야 한다.
+
+- issue-013 (medium): 재사용 가능한 공정 정의와 라우팅 문맥의 자원·시간 배정이 Operation 하나에 결합되어 있어, 동일 공정을 공장·작업장·대체설비·기간별로 다르게 운영하려면 Operation을 복제하거나 구조를 변경해야 하는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: evolution
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: evolution
+  - issue statement: Operation에 작업장과 표준시간을 직접 고정해 다공장·대체설비·시점별 배정을 확장하기 어렵다. Source finding context: manufacturing-bom-ontology.yaml — Operation과 WorkCenter 배정 Source finding context: entities.Operation.attributes.work_center/std_time_min; entities.Routing.attributes.operations; relations Routing→Operation and Operation→WorkCenter Source finding context: 공정 정의에 작업장과 표준시간이 직접 고정되어 다공장·대체설비·시점별 능력 변경을 확장하려면 Operation 복제나 기존 구조 변경이 필요하다. Source finding context: 동일 공정 단계가 공장, 설비, 제품 변형 또는 기간에 따라 다른 자원과 시간을 사용할 경우 하나의 Operation을 재사용할 수 없다. 확장 시 공정 의미와 실행 파라미터를 함께 복제하게 되어 변경 전파와 시스템 간 매핑이 취약해진다. Source finding context: OperationDefinition과 RoutingOperation을 분리한다. RoutingOperation에 순서, 사이트/자원 요구 또는 후보 WorkCenter, 표준시간, 유효구간을 두고 공통 공정 정의를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-003 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적 Source finding context: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때 Source finding context: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다. Source finding context: 재사용 가능한 공정 정의와 라우팅 문맥의 실행 배정을 하나의 Operation 객체에 결합했다. Source finding context: Operation 하나가 단일 WorkCenter와 표준시간을 직접 보유한다. Source finding context: 라우팅별 배정 차이를 표현할 수 없는 현상은 Routing이 Operation 참조 순서만 보유하고 배정 속성을 둘 중간 개념이 없는 구조의 증상이다.
+  - affected purpose: 라우팅 개념을 PLM 공정 정의와 MES 실행 자원 배정 사이의 확장 가능한 기준으로 사용하는 목적 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적
+  - failure condition: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때
+  - impact: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다.
+  - root hypothesis: 재사용 가능한 공정 정의와 라우팅 문맥의 자원·시간 배정을 하나의 Operation 객체에 결합하여 문맥별 변형을 표현하지 못한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-003`, `entities.Operation.attributes.work_center/std_time_min`, `entities.Routing.attributes.operations`, `relations Routing→Operation and Operation→WorkCenter`, `finding-ledger.yaml#finding-013`, `finding-013.cause-001`, `relations Operation→WorkCenter`, `finding-013.cause-002`, `relations Routing→Operation`, `issue-stance-matrix.yaml#stances.issue-013.axiology`, `issue-stance-matrix.yaml#stances.issue-013.coverage`, `issue-ledger.yaml#issue-013`, `issue-stance-matrix.yaml#stances.issue-013.evolution`, `issue-stance-matrix.yaml#stances.issue-013.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-013`, `issue-stance-matrix.yaml#stances.issue-013.semantics`, `issue-stance-matrix.yaml#stances.issue-013.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: evolution
+  - action candidates: follow_up
+  - materiality: 라우팅을 PLM 공정 정의와 MES 실행 자원 배정 사이의 확장 가능한 기준으로 사용하려면 공정의 동일성을 유지하면서 문맥별 배정을 표현할 수 있어야 한다. 현재 구조에서는 다공장·대체설비·서로 다른 표준시간을 수용할수록 Operation 복제와 예외 매핑이 늘어나므로 변경 전파와 시스템 간 매핑의 신뢰성이 약화된다.
+  - root cause: 문제의 시작점은 서로 역할과 변경 주기가 다른 재사용 공정 정의와 라우팅별 실행 배정을 단일 Operation 객체에 둔 것이다. 이 결합 때문에 공정 의미를 유지한 채 자원, 시간, 유효기간만 독립적으로 바꿀 수 없다.
+  - causal path: Operation이 단일 WorkCenter와 표준시간을 직접 보유하고, Routing은 Operation의 참조 순서만 가지며 배정 속성을 담을 중간 개념이 없다. 따라서 라우팅별 자원·시간 차이를 표현할 수 없고, 동일 공정의 문맥별 변형마다 Operation 복제나 예외 매핑이 필요해진다. 참여 렌즈들은 이 루트 원인과 medium 심각도에 동의했으며 남은 이견은 없다.
+  - action: OperationDefinition과 RoutingOperation을 분리해야 한다. 공통 공정 의미는 OperationDefinition에 유지하고, RoutingOperation이 이를 참조하면서 순서, 사이트 또는 자원 요구와 후보 WorkCenter, 표준시간, 유효구간을 보유하게 해야 한다. 이 분리를 먼저 확립해야 공정 정의를 복제하지 않고 라우팅 문맥별 배정을 확장할 수 있다.
+
+- issue-015 (medium): AlternatePart 계약은 무조건적 대칭성과 direction=one_way를 동시에 허용해 동일 인스턴스의 방향 의미를 모순되게 만든다. 이는 다음 단계 전에 수정해야 하는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: logic
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: logic
+  - issue statement: AlternatePart의 대칭성 계약과 one_way 상태가 논리적으로 충돌한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 계약 Source finding context: manufacturing-bom-ontology.yaml:33,37-40 Source finding context: AlternatePart의 대칭성 정의와 one_way 허용 상태는 동시에 만족될 수 없다. Source finding context: one_way 인스턴스 A→B는 B→A를 요구하지 않지만, 정의는 같은 인스턴스에 B→A를 의무화한다. 이는 inter-claim 충돌이며 possible 상태와 obligatory 대칭성 사이의 mixed modality 모순이다. Source finding context: direction을 유지한다면 정의를 'bidirectional일 때만 역방향이 성립한다'로 제한한다. 모든 대체가 대칭이어야 한다면 one_way를 enum과 기본값에서 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적 Source finding context: direction=one_way인 AlternatePart를 생성하거나 교환할 때 Source finding context: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을 약화한다. Source finding context: AlternatePart의 동일 계약 범위에 무조건적 대칭성 정의와 비대칭 허용 상태를 함께 선언했다. Source finding context: direction=one_way가 유효하며 기본값으로 선언되어 있지만, 엔티티 정의는 모든 대체 관계의 역관계를 요구한다. Source finding context: 대칭성 의무에 direction 조건이 없어 one_way 상태를 예외로 분리할 수 없다.
+  - affected purpose: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준 제공 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적
+  - failure condition: direction=one_way인 AlternatePart를 생성하거나 교환할 때
+  - impact: 동일 데이터가 시스템에 따라 단방향 또는 양방향 대체로 해석되어 통합 계약의 일관성과 실행 가능성이 약화된다. Source finding context: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을 약화한다.
+  - root hypothesis: AlternatePart 계약에 무조건적 대칭성 정의와 비대칭 one_way 허용 상태를 함께 선언하여 동일 인스턴스에 양립 불가능한 의무를 부여한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001`, `manufacturing-bom-ontology.yaml:33`, `manufacturing-bom-ontology.yaml:37-40`, `finding-ledger.yaml#finding-015`, `finding-015.cause-001`, `finding-015.cause-002`, `issue-stance-matrix.yaml#stances.issue-015.axiology`, `issue-stance-matrix.yaml#stances.issue-015.coverage`, `issue-ledger.yaml#issue-015`, `issue-stance-matrix.yaml#stances.issue-015.evolution`, `issue-stance-matrix.yaml#stances.issue-015.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-015`, `issue-stance-matrix.yaml#stances.issue-015.semantics`, `issue-stance-matrix.yaml#stances.issue-015.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: logic
+  - action candidates: fix_before_release, fix_now
+  - materiality: one_way 관계를 생성하거나 교환할 때 PLM과 MES가 동일 데이터를 각각 단방향 또는 양방향 대체로 해석할 수 있다. 따라서 대체 부품 관계의 단일 개념 기준을 제공하려는 통합 목적과 계약의 실행 가능성이 약화된다.
+  - root cause: 문제의 시작점은 같은 AlternatePart 계약 범위에 비대칭 상태인 one_way와 조건 없는 역방향 의무를 함께 선언한 것이다. 이 선언 자체가 동일 인스턴스에 양립할 수 없는 의무를 부여하므로 소비자별 해석 차이의 근본 원인이다.
+  - causal path: direction=one_way가 유효한 기본 상태로 허용되지만 엔티티 정의는 모든 대체 관계에 역관계를 요구한다. 대칭성 의무에 direction 조건이 없으므로 one_way를 예외로 분리할 수 없고, 그 결과 A→B 관계가 B→A를 요구하는지 여부를 계약만으로 일관되게 결정할 수 없다.
+  - action: 방향성을 유지하려면 역방향 의무를 direction=bidirectional인 경우로 제한해야 한다. 모든 대체 관계가 항상 대칭이어야 한다면 one_way를 enum과 기본값에서 제거해야 한다. 두 의미 중 하나를 정규 계약으로 확정하고 다음 단계 전에 스키마와 정의를 함께 정렬해야 한다.
+
+- issue-016 (medium): AlternatePart가 대칭 관계로 정의되면서 direction=one_way도 허용해, 동일한 대체 관계를 단방향 또는 양방향으로 해석할 수 있는 medium 결함이다. 다음 단계 전에 정규 관계 의미를 하나로 확정해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: AlternatePart의 대칭 관계 정의와 one_way 방향 모델이 서로 다른 의미를 부여한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart Source finding context: entities.AlternatePart.definition; entities.AlternatePart.attributes.direction Source finding context: 상호 대체 가능성과 단방향 대체 가능성은 동일한 관계가 아니다. 이 모순이 해소되지 않으면 PLM의 승인 대체 방향을 MES가 반대로 적용하는 등 부품 투입 판단이 달라질 수 있다. Source finding context: 대체 관계를 방향성 관계로 정의하고 bidirectional을 두 방향 관계의 축약으로 명시하거나, 항상 대칭인 관계가 의도라면 direction을 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준 Source finding context: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때 Source finding context: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다. Source finding context: 방향성 대체와 상호 대체를 하나의 관계 의미로 혼합했다. Source finding context: AlternatePart는 대칭 관계로 정의되면서 one_way 상태를 허용한다. Source finding context: 관계의 정규 의미가 방향성인지 대칭성인지 결정되지 않았다.
+  - affected purpose: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준
+  - failure condition: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때
+  - impact: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다.
+  - root hypothesis: 방향성 대체와 상호 대체를 하나의 관계 의미로 혼합하여 AlternatePart의 정규 의미가 결정되지 않았다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-001`, `entities.AlternatePart.definition`, `entities.AlternatePart.attributes.direction`, `finding-ledger.yaml#finding-016`, `finding-016.cause-001`, `entities.AlternatePart.attributes.direction.values`, `finding-016.cause-002`, `entities.AlternatePart.attributes.direction.note`, `issue-stance-matrix.yaml#stances.issue-016.axiology`, `issue-stance-matrix.yaml#stances.issue-016.coverage`, `issue-ledger.yaml#issue-016`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006`, `issue-stance-matrix.yaml#stances.issue-016.evolution`, `issue-stance-matrix.yaml#stances.issue-016.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-016`, `.onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001`, `issue-stance-matrix.yaml#stances.issue-016.semantics`, `issue-stance-matrix.yaml#stances.issue-016.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_before_release, fix_now
+  - materiality: PLM이 정의의 대칭성을 따르고 MES가 one_way 방향을 따르면 동일 데이터에 대해 서로 반대되는 부품 대체 허용 판단을 내릴 수 있다. 이는 PLM/MES 간 대체 부품 의미를 일관되게 전달하려는 목적과 제조 투입 결정의 신뢰를 약화한다.
+  - root cause: 출발점은 방향성 대체와 상호 대체를 하나의 AlternatePart 관계에 혼합한 것이다. 이 혼합 때문에 관계의 정규 의미가 방향성인지 대칭성인지 결정되지 않았고, 각 시스템이 서로 다른 규칙을 권위 있는 의미로 선택할 여지가 생겼다.
+  - causal path: AlternatePart의 정의는 상호 대체를 뜻하는 대칭성을 부여하지만 direction 값은 one_way 상태를 허용한다. 이 구조적 충돌이 관계의 정규 의미를 불명확하게 만들고, 결국 PLM과 MES가 같은 관계를 반대 방향으로 적용할 수 있게 한다. 참여 렌즈들은 이 루트 원인과 medium 심각도를 수용했으며 별도 숙의가 필요하지 않다고 판단했다.
+  - action: 다음 단계 및 릴리스 전에 대체 관계를 방향성 관계로 정규화하고 bidirectional을 두 방향 관계의 축약으로 명시해야 한다. 항상 대칭인 관계가 의도라면 대신 direction을 제거해야 한다. 어느 방식을 택하든 정의와 허용 값이 하나의 해석만 만들도록 먼저 의미 계약을 확정해야 PLM/MES 구현을 일관되게 맞출 수 있다.
+
+- issue-017 (medium): InspectionPlan을 Operation의 하위 유형으로 둔 현재 모델은 품질 계획 정보와 실행 검사 공정을 동일시하여 PLM과 MES의 개념 경계를 흐리는 material medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: InspectionPlan을 Operation 하위 유형으로 둔 모델이 품질 계획과 공정 단계의 의미를 혼동한다. Source finding context: manufacturing-bom-ontology.yaml — InspectionPlan inheritance Source finding context: entities.Operation.definition; entities.InspectionPlan.definition; entities.InspectionPlan.is_a Source finding context: InspectionPlan을 Operation의 하위 유형으로 둔 것은 계획 정보와 공정 단계를 존재론적으로 혼동한다. Source finding context: 계획·명세는 공정 단계가 수행될 때 참조되는 정보 객체이지 그 단계 자체와 동일하지 않다. 상속하면 InspectionPlan이 work_center와 std_time_min을 가진 라우팅 단계라는 의미까지 물려받아 PLM 품질계획과 MES 작업 단계의 식별이 흐려진다. Source finding context: 검사 공정은 Operation의 하위 유형(예: InspectionOperation)으로 두고, InspectionPlan은 별도 정보 객체로 모델링하여 검사 공정이 이를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-002 Source finding context: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다. Source finding context: 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급했다. Source finding context: InspectionPlan이 Operation을 상속하여 공정 단계의 속성과 역할을 획득한다. Source finding context: 계획 정보 객체와 라우팅 단계가 분리되지 않았다.
+  - affected purpose: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준
+  - failure condition: InspectionPlan을 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때
+  - impact: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다.
+  - root hypothesis: 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급하여 정보 객체와 실행 공정의 역할·수명주기를 혼합한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-002`, `entities.Operation.definition`, `entities.InspectionPlan.definition`, `entities.InspectionPlan.is_a`, `entities.Operation.attributes`, `finding-ledger.yaml#finding-017`, `finding-017.cause-001`, `finding-017.cause-002`, `issue-stance-matrix.yaml#stances.issue-017.axiology`, `issue-stance-matrix.yaml#stances.issue-017.coverage`, `issue-ledger.yaml#issue-017`, `issue-stance-matrix.yaml#stances.issue-017.evolution`, `issue-stance-matrix.yaml#stances.issue-017.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-017`, `issue-stance-matrix.yaml#stances.issue-017.semantics`, `issue-stance-matrix.yaml#stances.issue-017.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_before_release, fix_now
+  - materiality: InspectionPlan이 MES 라우팅 단계로 해석되면 계획의 버전·승인과 공정의 순서·표준시간·작업장이 같은 객체의 속성과 수명주기로 취급될 수 있다. 이는 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 개념을 정렬하려는 목적을 직접 약화한다.
+  - root cause: 출발점은 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급한 것이다. 이 모델링 결정이 정보 객체와 실행 공정의 서로 다른 역할, 권위, 변경 주기 및 수명주기를 분리하지 못하게 한다.
+  - causal path: InspectionPlan이 Operation을 상속하면서 작업장과 표준시간 등 공정 단계의 속성과 역할을 획득한다. 그 결과 계획 정보 객체와 라우팅 단계의 구분이 사라지고, 계획 자체가 MES에서 실행되는 공정 단계인 것처럼 해석될 수 있다. 모든 참여 렌즈는 이 루트 원인과 medium 심각도를 지지했으며 별도 숙의가 필요한 이견은 없었다.
+  - action: 다음 단계 전에 InspectionPlan을 Operation 상속 구조에서 분리하여 독립된 품질 계획 정보 객체로 모델링해야 한다. 실제 검사 단계는 Operation의 하위 유형인 InspectionOperation 등으로 두고, 해당 단계가 InspectionPlan을 참조하도록 관계를 정의해야 한다. 이렇게 해야 계획의 버전·승인과 공정의 순서·시간·작업장 계약을 독립적으로 관리하고 과거 참조 관계도 보존할 수 있다.
+
+- issue-018 (medium): Part의 ‘최소 관리 단위’ 표현은 관리 식별 역할과 구성상 원자성을 혼합해 Assembly 상속 및 BOM 대상 범위를 모호하게 한다. 우선 Part를 구성 여부와 무관한 관리 품목으로 명확히 정의해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 5/6 deliberation participants
+  - accepted lenses: axiology, coverage, evolution, logic, semantics
+  - remaining disagreement: 1/6 deliberation participants
+  - remaining disagreement lenses: structure
+  - raised by lenses: semantics
+  - issue statement: Part의 '최소 관리 단위' 정의가 하위 품목을 포함하는 Assembly 계층과 의미적으로 충돌한다. Source finding context: manufacturing-bom-ontology.yaml — Part and Assembly Source finding context: entities.Part.definition; entities.Assembly.definition; entities.Assembly.is_a Source finding context: Part의 '최소 관리 단위' 정의는 하위 Part를 포함하는 Assembly가 Part라는 계층과 의미적으로 충돌한다. Source finding context: '최소'를 구성상 최소로 읽으면 Assembly는 Part가 될 수 없고, 관리 식별 단위로 읽으면 최소라는 표현이 불필요하게 분해 불가능성을 암시한다. 양 시스템이 Part를 서로 다른 입도와 범위로 해석할 수 있다. Source finding context: Part를 '구매·제조·재고·변경관리의 식별 대상 품목'처럼 구성과 무관한 관리 품목으로 정의하고, Assembly를 하위 품목 구조를 가진 Part로 한정한다. 정말 최소 구성요소를 뜻한다면 별도 LeafPart 개념으로 분리한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: 품목과 BOM 계층의 공통 개념 기준 Source finding context: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때 Source finding context: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다. Source finding context: 관리 단위라는 역할 개념과 구성상 최소 단위라는 구조 개념을 Part 정의에서 구분하지 않았다. Source finding context: 분해 가능한 Assembly가 최소 단위인 Part를 상속한다. Source finding context: Part의 최소성이 관리 식별성인지 구성 원자성인지 정의되지 않았다.
+  - affected purpose: 품목과 BOM 계층의 공통 개념 기준
+  - failure condition: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때
+  - impact: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다.
+  - root hypothesis: 관리 식별 단위라는 역할 개념과 구성상 최소 단위라는 구조 개념을 Part 정의에서 구분하지 않아 Assembly 상속 의미가 모호하다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-003`, `entities.Part.definition`, `entities.Assembly.definition`, `entities.Assembly.is_a`, `finding-ledger.yaml#finding-018`, `finding-018.cause-001`, `finding-018.cause-002`, `issue-stance-matrix.yaml#stances.issue-018.axiology`, `issue-stance-matrix.yaml#stances.issue-018.coverage`, `issue-ledger.yaml#issue-018`, `issue-stance-matrix.yaml#stances.issue-018.evolution`, `issue-stance-matrix.yaml#stances.issue-018.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-018`, `issue-stance-matrix.yaml#stances.issue-018.semantics`, `issue-stance-matrix.yaml#stances.issue-018.structure`, `Part의 규범적 의미가 관리 식별 역할임을 확인하는 정의 결정`, `구성상 원자성을 별도 LeafPart 유형으로 요구하는 소비자 계약 또는 BOM 대상 규칙`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: follow_up, accept_risk
+  - materiality: 소비자가 ‘최소’를 서로 다르게 해석하면 Assembly를 Part에 포함할지와 어떤 품목을 BOM 대상으로 삼을지가 시스템마다 달라진다. 이로 인해 품목·BOM 계층의 공통 개념 기준과 시스템 간 매핑 안정성이 약화된다.
+  - root cause: 문제의 출발점은 Part 정의가 관리 식별 단위와 구성상 원자성을 구분하지 않은 데 있다. 이 의미 혼합 때문에 동일한 상속 구조가 관리 관점에서는 타당하지만 구성 관점에서는 모순으로 해석된다.
+  - causal path: 분해 가능한 Assembly가 ‘최소 단위’로 정의된 Part를 상속한다. Part의 최소성이 관리 식별성인지 구성 원자성인지 명시되지 않았으므로, 소비자별로 Assembly 포함 여부와 BOM 품목 범위가 달라지는 상충 해석으로 이어진다.
+  - action: 먼저 Part의 규범적 의미를 구성 여부와 무관한 관리 품목 역할로 결정하고 정의를 수정해야 한다. Assembly는 하위 품목 구조를 가진 Part로 한정한다. LeafPart 분리나 계층 재설계는 구성상 원자성을 요구하는 소비자 계약 또는 BOM 규칙이 확인된 뒤에만 도입해야 불필요한 개념 확장을 피할 수 있다.
+  - unresolved disagreement: 정의 명확화 필요성에는 합의했지만, structure 렌즈는 이를 낮은 심각도의 국소적 정의 모호성으로 보아 영향 수준에 이견이 남아 있다.
+
+- issue-020 (medium): ECO가 영향 품목별 이전·결과 revision 전이를 연결하지 않아, 적용 시점에 사용할 생산 revision을 구조적으로 결정할 수 없는 medium 결함이다.
+  - issue stance agreement: 4/6
+  - agreed or narrowed lenses: evolution, logic, semantics, structure
+  - issue stance disagreement: 2/6
+  - disagreeing stance lenses: coverage, axiology
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 4/6 deliberation participants
+  - accepted lenses: evolution, logic, semantics, structure
+  - remaining disagreement: 2/6 deliberation participants
+  - remaining disagreement lenses: axiology, coverage
+  - raised by lenses: structure
+  - issue statement: ECO가 적용할 정확한 신규 revision으로 이어지는 구조적 연결이 없다. Source finding context: manufacturing-bom-ontology.yaml — ECO와 Part revision 연결 Source finding context: entities.Part.attributes.rev/current_eco; entities.ECO.attributes.affected_parts/effective_date/status; 세 번째 integrity_rule Source finding context: 적용일 이후 신규 rev를 따라야 한다는 규칙을 평가하려면 ECO, 대상 품목, 결과 revision의 대응이 필요하지만 현재 구조에서는 그 결과 revision을 결정할 수 없다. current_eco도 '최신' ECO만 가리켜 변경 이력별 연결을 대신하지 못한다. Source finding context: 최소한 ECO의 영향 품목별 결과 revision을 연결하는 effectivity 항목을 추가한다. 지속적인 변경 이력이 필요하면 PartRevision을 별도 엔티티로 두고 ECO와 이전·신규 revision을 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공 Source finding context: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우 Source finding context: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나 외부 추정에 의존하게 된다. Source finding context: revision을 Part의 단일 가변 문자열로만 모델링하여 ECO별 revision 전이를 연결할 구조가 없다. Source finding context: ECO와 Part 사이에는 changes/affected_parts 연결만 있으며 결과 revision 연결이 없다. Source finding context: Part.rev는 단일 문자열이고 current_eco는 최신 ECO만 참조한다.
+  - affected purpose: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공
+  - failure condition: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우
+  - impact: 적용 대상은 알 수 있어도 적용할 revision은 결정할 수 없어 구 revision 생산이나 외부 추정에 의존하게 된다. Source finding context: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나 외부 추정에 의존하게 된다.
+  - root hypothesis: revision을 Part의 단일 가변 문자열로만 모델링하여 ECO별 이전·결과 revision 전이를 구조적으로 연결할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-002`, `entities.Part.attributes.rev`, `entities.Part.attributes.current_eco`, `entities.ECO.attributes.affected_parts`, `entities.ECO.attributes.effective_date`, `integrity_rules[2]`, `finding-ledger.yaml#finding-022`, `finding-022.cause-001`, `relations: ECO→Part changes`, `entities.ECO.attributes`, `finding-022.cause-002`, `issue-stance-matrix.yaml#stances.issue-020.axiology`, `issue-stance-matrix.yaml#stances.issue-020.coverage`, `issue-ledger.yaml#issue-020`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-020.evolution`, `issue-stance-matrix.yaml#stances.issue-020.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-020`, `issue-stance-matrix.yaml#stances.issue-020.semantics`, `issue-stance-matrix.yaml#stances.issue-020.structure`, `issue-020과 상위 revision·effectivity 기준선 결함 사이의 same-root 또는 dependency 근거`, `통합 시 심각도 재평가를 뒷받침할 영향 범위 증거`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_before_release, fix_now
+  - materiality: PLM의 설계변경을 MES 생산 적용시점의 정확한 revision 기준으로 전달해야 하지만, 여러 ECO가 존재하거나 Part.rev 동기화가 늦으면 적용 대상만 확인할 수 있고 적용할 revision은 판정할 수 없다. 그 결과 구 revision 생산 또는 외부 추정에 의존할 수 있어 목적의 정확성을 약화한다.
+  - root cause: revision의 권위를 Part.rev라는 단일 가변 문자열에 두고 current_eco도 최신 ECO만 가리키므로, ECO별 이전 revision과 결과 revision의 정체성 및 전이를 보존할 수 없다. 이 모델링 결손이 적용 시점 판정 실패의 출발점이다.
+  - causal path: ECO와 Part 사이의 changes/affected_parts 연결은 영향 품목만 식별하고 결과 revision을 연결하지 않는다. 여기에 Part.rev의 덮어쓰기와 최신 ECO만 나타내는 current_eco가 결합되어 변경별 이력이 소실되므로, effective_date 이후 선택해야 할 revision을 관계 구조에서 유일하게 도출할 수 없다.
+  - action: 다음 단계 전에 ECO의 영향 품목별 이전·결과 revision 전이를 명시적으로 연결해야 한다. 지속적인 변경 이력과 시점별 판정이 필요하므로 PartRevision을 별도 엔티티로 두고 ECO, 대상 품목, 이전 revision, 신규 revision 및 effectivity를 연결해 생산 revision의 구조적 결정 근거를 마련해야 한다.
+  - unresolved disagreement: axiology와 coverage는 이 결함을 더 넓은 revision·effectivity 형상 기준선 부재의 증상으로 본다. 다만 현재 근거에는 두 결함의 same-root 또는 dependency 관계와 통합 시 심각도 재평가를 뒷받침할 영향 범위가 없어, 독립 결함으로 유지하면서 이견을 보존한다.
+
+- issue-021 (medium): 제품 구성 BOM과 스크랩 회수·재투입 물질 흐름을 BomLine 하나로 표현해 허용된 재투입 자기참조와 오류 순환을 구조적으로 구별할 수 없다. 이 이슈는 더 근본적인 개념 혼합의 직접 증상이며, 심각도는 medium으로 유지된다.
+  - issue stance agreement: 2/6
+  - agreed or narrowed lenses: logic, structure
+  - issue stance disagreement: 4/6
+  - disagreeing stance lenses: axiology, coverage, evolution, semantics
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 5/6 deliberation participants
+  - accepted lenses: axiology, evolution, logic, semantics, structure
+  - remaining disagreement: 1/6 deliberation participants
+  - remaining disagreement lenses: coverage
+  - raised by lenses: structure
+  - issue statement: 스크랩 재투입 자기참조와 일반 BOM 순환을 구별할 구조적 표지가 누락되어 있다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 예외 구조 Source finding context: entities.BomLine.attributes; 첫 번째 integrity_rule Source finding context: 스크랩 재투입 자기참조를 일반 BOM 순환과 구별할 구조적 표지가 누락되어 있다. Source finding context: 동일한 Assembly 자기참조 구조가 허용된 재투입인지 잘못 생성된 순환인지 모델만으로 판별되지 않는다. 따라서 비순환 검증기가 예외를 안전하게 적용할 수 없다. Source finding context: BomLine에 명시적인 용도/edge_kind를 추가해 일반 구성과 scrap_reintroduction을 구분하고, 순환 예외는 해당 값과 자기참조 조건을 함께 만족할 때만 허용하도록 규칙을 구조화한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공 Source finding context: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때 Source finding context: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. Source finding context: 순환 예외의 의미가 무결성 규칙의 자연어에만 있고 BomLine 구조에는 투영되지 않았다. Source finding context: 규칙은 금지된 순환과 허용된 스크랩 재투입 자기참조를 구별해야 한다. Source finding context: BomLine에는 두 경우를 구별하는 속성이나 별도 관계가 없다.
+  - affected purpose: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공
+  - failure condition: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때
+  - impact: 정상 재투입이 거부되거나 임의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. Source finding context: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다.
+  - root hypothesis: 스크랩 재투입 순환 예외의 의미가 자연어 무결성 규칙에만 있고 BomLine 구조에 투영되지 않아 허용된 자기참조와 오류 순환을 구별할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-003`, `integrity_rules[0]`, `entities.BomLine.attributes.parent_ref`, `entities.BomLine.attributes.child_ref`, `entities.BomLine.attributes 전체`, `finding-ledger.yaml#finding-023`, `finding-023.cause-001`, `finding-023.cause-002`, `entities.BomLine.attributes`, `issue-stance-matrix.yaml#stances.issue-021.axiology`, `issue-stance-matrix.yaml#stances.issue-021.coverage`, `issue-ledger.yaml#issue-021`, `issue-stance-matrix.yaml#stances.issue-021.evolution`, `issue-stance-matrix.yaml#stances.issue-021.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-021`, `issue-stance-matrix.yaml#stances.issue-021.semantics`, `issue-stance-matrix.yaml#stances.issue-021.structure`, `별도 MaterialFlow의 끝점·허용 조건·종료 조건 및 BomLine 연계 규칙`, `일반 BOM 소비 경로가 현재 자기순환 때문에 실패하거나 잘못 계산되는지 보여 주는 실행 증거`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_before_release, follow_up
+  - materiality: Assembly 자기참조를 판정할 때 정상 재투입을 거부하거나 임의 자기순환을 허용할 수 있어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. 따라서 PLM/MES가 BOM 구조를 일관되게 검증하고 전개할 수 있는 개념 기준이라는 목적을 훼손한다.
+  - root cause: 출발점은 구조적 표지 하나의 누락이 아니라 제품 구성 관계와 스크랩 재투입 물질 흐름을 BomLine에 혼합한 것이다. 이 혼합 때문에 두 관계의 의미, 순환 규칙, 끝점과 종료 조건을 독립적으로 표현하고 강제할 수 없으며, edge_kind 부재는 그 결과로 나타난 직접 증상이다.
+  - causal path: 무결성 규칙은 금지된 일반 BOM 순환과 허용된 스크랩 재투입 자기참조를 구별해야 하지만, BomLine의 parent_ref와 child_ref를 포함한 현재 속성에는 이를 판별할 구조가 없다. 그 결과 동일한 자기참조가 두 의미를 모두 나타내어 비순환 검사기와 BOM 전개기가 예외를 안전하게 적용할 수 없다.
+  - action: 정규 해결은 재투입을 별도 MaterialFlow 개념으로 분리하고 그 끝점, 허용 조건, 종료 조건 및 BomLine 연계 규칙을 정의한 뒤, 일반 BomLine에는 비순환 규칙을 유지하는 것이다. edge_kind 추가만으로는 일반 BOM 소비자의 순환 위험과 향후 회수 유형별 예외 증가를 해소하지 못하므로 충분한 종결 조치가 아니다.
+  - unresolved disagreement: coverage 렌즈는 일반 BOM 경로의 직접 영향을 근거로 심각도 상향을 유지한다. 다만 현재 자기순환이 실제 소비 경로에서 실패나 오계산을 일으킨다는 실행 증거가 없어, 합의된 심각도는 medium이다.
+
+#### Non-Material Findings
+- issue-012 (medium)
+  - affected purpose: PLM/MES 간 BOM 수량과 제조 능력을 확장 가능한 공통 개념으로 교환하는 목적
+  - failure condition: ea·kg·m 이외 단위, 품목별 질량 환산 또는 서로 다른 능력 단위를 가진 작업장을 통합할 때
+  - impact: 확장마다 스키마와 변환 로직을 변경해야 하고 암묵적 단위가 계획·소요량 계산의 신뢰를 약화한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-002`, `entities.Part.attributes.uom`, `entities.BomLine.attributes.qty_per`, `entities.WorkCenter.attributes.capacity_per_shift`, `notes[1]`
+  - source lenses: evolution
+  - action candidates: needs_evidence
+  - problem definition: 폐쇄형 UOM 열거와 독립 환산 모델 부재가 새로운 단위 수용과 계산 의미 보존을 어렵게 한다.
+  - problem framing: root_cause / planned_follow_up / needs_evidence / may_close_during_next_stage / contested
+
+- issue-014 (medium)
+  - affected purpose: BOM과 제조 공정을 여러 PLM/MES 소비자가 안정적으로 확장·해석할 수 있는 공통 기준 제공
+  - failure condition: 스크랩 재투입 외에 재작업, 부산물 회수 또는 다단계 재순환을 추가하거나 일반 BOM 전개를 수행할 때
+  - impact: 소비자마다 순환 예외 로직이 필요해지고 신규 회수 유형마다 수정 범위가 커져 확장성과 계산 안전성이 저하된다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-004`, `integrity_rules[0]`, `entities.BomLine.attributes.parent_ref/child_ref`
+  - source lenses: evolution
+  - action candidates: needs_evidence
+  - problem definition: 제품 구성과 회수 흐름의 혼합이 신규 재작업·회수 유형마다 BOM 소비자 예외와 계산 위험을 확산시킨다.
+  - problem framing: symptom / planned_follow_up / needs_evidence / may_close_during_next_stage / contested
+
+- issue-019 (medium)
+  - affected purpose: 라우팅 작업장 능력을 PLM/MES가 동일한 수량 의미로 교환하는 기준
+  - failure condition: 여러 WorkCenter의 capacity_per_shift를 비교·집계하거나 공정 표준시간과 결합해 부하를 산출할 때
+  - impact: 차원이 다른 값을 같은 수치로 처리해 생산능력 및 일정 판단을 왜곡할 수 있다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-005`, `entities.WorkCenter.attributes.capacity_per_shift`
+  - source lenses: semantics
+  - action candidates: needs_evidence
+  - problem definition: 범용 Quantity/UOM 결손이 WorkCenter 능력에서 처리량과 가용시간의 차원 혼합으로 나타난다.
+  - problem framing: symptom / next_step_blocker / needs_evidence / must_close_before_next_stage / contested
+
+#### Action Candidates
+- issue-001: fix_now
+  - rationale: 직접 실패 조건과 high 영향이 다수 렌즈에서 지지되었다. 더 넓은 형상 기준선 결손과의 관계는 미확정이지만 독립 결함으로 해결되었다. Source finding context: manufacturing-bom-ontology.yaml — ECO 효력과 Part 리비전 적용 규칙 Source finding context: materialized-input.md:7; materialized-input.md:20-21; materialized-input.md:69-75; materialized-input.md:96; review-value-alignment-criteria.yaml:6-18 (value_type=purpose, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…변경관리 개념의 정합성과 제조 운영 위험을 중심으로”) Source finding context: ECO 효력일과 주간 리비전 동기화의 불일치가 통합 기준의 변경 적용 시점을 모호하게 만든다. Source finding context: 효력일 이후부터 다음 동기화까지 ECO와 Part.rev가 서로 다른 답을 줄 수 있다. 이 상태에서는 PLM과 MES가 동일 생산분에 서로 다른 설계 리비전을 적용할 수 있어 변경관리 정합성과 제조 실행 안전이라는 선언 목적을 직접 약화한다. Source finding context: 유효기간을 가진 PartRevision과 ECO 적용 관계를 모델링하고, 생산 오더가 생성 시점의 적용 리비전을 명시적으로 고정하도록 한다. 배치 동기화 상태와 무관하게 effective_date 기준 조회가 단일 결과를 반환하도록 우선순위와 실패 규칙도 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제 Source finding context: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우 Source finding context: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다. Source finding context: 변경 효력의 권위가 effective-dated revision 객체가 아니라 비동기 갱신되는 Part.rev와 ECO에 분산되어 있다. Source finding context: 효력일 이후 신규 rev 적용을 요구하지만 Part.rev 갱신은 주간 배치 이후에만 이루어진다. Source finding context: 생산 오더가 적용 리비전을 직접 참조하거나 고정하는 모델이 없다. Source finding context: 변경 효력과 현재 리비전의 권위가 별도 원본 및 비동기 필드에 분산되어 있다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-002: fix_now
+  - rationale: 일반 BOM 전개와 수량 계산의 안전성을 직접 훼손하는 high 결함이며 모든 참여 렌즈가 개념 혼합이라는 원인에 동의했다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 금지와 스크랩 재투입 예외 Source finding context: materialized-input.md:7; materialized-input.md:23-35; materialized-input.md:93-94; review-value-alignment-criteria.yaml:6-18 (value_type=tradeoff, alignment_direction=misaligned; authority excerpt: “BOM/공정 온톨로지가 PLM/MES 통합의 개념 기준 문서로 적절한지…BOM…정합성과 제조 운영 위험을 중심으로”) Source finding context: 재생 원료 흐름을 자기 참조 BOM으로 표현하는 국소 편의가 BOM 전개의 안전성과 의미를 훼손한다. Source finding context: 제품 구성 구조와 공정 중 회수·재투입 흐름은 목적과 계산 방식이 다르다. 이를 동일 BOM 계층에 넣으면 BOM 폭발, 소요량 계산, 원가 누적 또는 순환 검증이 예외별 동작에 의존하게 되어 통합 개념 기준의 예측 가능성을 잃는다. Source finding context: BOM은 비순환 제품 구성 구조로 유지하고, 스크랩 발생·회수·재투입은 Operation 또는 별도의 MaterialRecovery/MaterialFlow 관계로 분리한다. 재투입률과 질량수지 규칙을 해당 흐름에 배치한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준 Source finding context: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우 Source finding context: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다. Source finding context: 제품 구성과 공정 물질 흐름이라는 서로 다른 목적의 개념을 BomLine 하나로 통합했다. Source finding context: 비순환 BOM 원칙과 자기 포함 예외가 같은 무결성 규칙에 공존한다. Source finding context: 스크랩 재투입이 별도 흐름 관계가 아니라 Assembly의 child BomLine으로 표현된다. Source finding context: 제품 구성 구조와 공정 회수 흐름을 구분하는 개념이 모델에 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-003: fix_now
+  - rationale: 단위가 다른 지원 입력에서 환산 결과를 결정할 수 없는 high 결함으로 일관되게 확인되었다. Source finding context: manufacturing-bom-ontology.yaml — 품목 UOM과 현장 환산 Source finding context: materialized-input.md:7; materialized-input.md:19; materialized-input.md:29-35; materialized-input.md:100; review-value-alignment-criteria.yaml:6-18 (value_type=commitment, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…제조 운영 위험을 중심으로”) Source finding context: 환산계수 없이 현장 판단에 맡긴 단위 변환은 BOM 수량을 시스템 간 공통 의미로 만들지 못한다. Source finding context: 동일 qty_per가 어느 단위를 기준으로 해석되는지와 변환 근거가 통합 데이터로 재현되지 않는다. 특히 개수와 질량 간 환산은 품목별 물성에 의존하므로 현장별 계산 차이가 자재 소요량, 불출량 및 재고 정합성을 훼손할 수 있다. Source finding context: BomLine 수량에 명시적 UOM을 부여하고, 품목별 기준 UOM 및 유효기간·출처를 가진 변환 규칙을 권위 있는 마스터로 모델링한다. 필요한 변환이 없거나 차원이 맞지 않으면 생산 또는 인터페이스 처리를 실패시키도록 규정한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제 Source finding context: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우 Source finding context: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다. Source finding context: 수량 단위와 변환 규칙을 통합 모델의 권위 있는 개념으로 두지 않았다. Source finding context: 품목별 환산계수 마스터가 없고 변환을 현장에서 수행한다. Source finding context: BomLine.qty_per에는 자체 단위 또는 기준 단위 규칙이 없다. Source finding context: 모델은 Part.uom 열거만 제공하고 단위 변환의 권위·유효성·실패 규칙을 제공하지 않는다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-005: fix_now
+  - rationale: 시점별 제조 구성을 결정하지 못하는 high 결함으로 모든 렌즈가 합의했으며 통합 기준 문서의 핵심 목적을 직접 저해한다. Source finding context: BOM·라우팅 구성의 시점별 형상 관리 Source finding context: materialized-input.md:14-35, 55-61, 69-75, 93-96 Source finding context: BOM과 라우팅에 개정·유효기간·형상 기준선 개념이 없어 과거 또는 특정 생산일의 제조 구성을 재구성할 수 없다. Source finding context: ECO 적용 전후의 BOM 및 공정 순서를 같은 Part에서 구분할 수 없으므로, 주간 rev 동기화 지연 중 어느 구성을 생산에 사용해야 하는지 개념 모델만으로 결정하거나 사후 재현할 수 없다. 이는 PLM 설계 형상과 MES 생산 형상을 연결하는 기준 문서의 핵심 목적을 약화한다. Source finding context: PartRevision 또는 ConfigurationBaseline을 도입하고 BomLine 및 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여한다. ECO가 변경 전후 형상과 해당 유효 구간을 명시적으로 연결하도록 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공 Source finding context: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우 Source finding context: 생산 시점의 유효 BOM/라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다. Source finding context: 온톨로지가 품목·BOM·라우팅을 현재값 중심으로 표현하고, 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않았다. Source finding context: BomLine과 Routing에 개정 식별자나 유효 시작·종료 구간이 없다. Source finding context: ECO의 단일 effective_date와 Part의 현재 rev만으로는 변경 전후 BOM·라우팅 형상을 식별할 수 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-007: fix_now
+  - rationale: BOM과 설비능력의 지원 계산 경로 전반에 영향을 주는 high 결함이며 공통 Quantity/UOM 구조의 부재가 직접 확인되었다. Source finding context: 수량 단위·환산 및 설비능력 단위 모델 Source finding context: materialized-input.md:19, 34-35, 63-67, 98-100 Source finding context: BOM 수량과 작업장 능력을 계산 가능한 공통 단위로 해석할 단위 차원과 품목별 환산계수 마스터가 없다. Source finding context: PLM의 BOM 수량과 MES의 투입량·능력 값을 일관되게 변환하거나 검증할 수 없다. 특히 kg↔ea 환산이나 개수 기반·시간 기반 능력 비교가 사람의 현장 판단에 의존해 자재 소요량과 생산능력 계산 오류로 이어질 수 있다. Source finding context: Quantity와 UnitOfMeasure를 명시적으로 모델링하고 qty_per 및 capacity에 단위·분모·시간기준을 연결한다. 품목별 UomConversion에 factor, from_uom, to_uom, valid_from/to, 근거와 권위 시스템을 둔다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003 Source finding context: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합 Source finding context: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우 Source finding context: 필요 자재량과 작업장 부하를 결정적으로 계산할 수 없어 부족·과다 투입 및 잘못된 일정 산정 위험이 생긴다. Source finding context: 단위가 계산 대상 값의 속성이 아니라 품목의 제한된 코드로만 표현되고, 단위 간 변환 개념이 모델에서 제외되어 있다. Source finding context: qty_per와 capacity_per_shift에 단위 또는 단위 기준을 연결하는 속성이 없다. Source finding context: 품목별 환산계수 마스터가 없고 필요한 환산을 현장에서 수행한다고 명시한다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-011: fix_now
+  - rationale: issue-005와 중복 관계가 보존되어 있으나 현재 이슈 자체도 변경 연속성 실패의 high 원인을 직접 기술하며 공식 병합되지 않았다. Source finding context: manufacturing-bom-ontology.yaml — Part, BomLine, Routing, ECO 및 변경 적용 규칙 Source finding context: entities.Part.attributes.rev/current_eco; entities.BomLine.attributes; entities.Routing.attributes; entities.ECO.attributes.effective_date/status; integrity_rules[2] Source finding context: BOM·라우팅의 개정과 유효구간이 모델링되지 않아 설계변경 후 구성 이력을 연속적으로 보존할 수 없다. Source finding context: ECO 적용 시점별 BOM과 라우팅을 식별할 구조가 없으므로 기존 객체를 덮어쓰거나 별도 관행으로 복제해야 한다. 그러면 과거 생산분의 적용 BOM·공정과 향후 변경분을 동일 모델에서 안정적으로 조회할 수 없고, 변경을 추가할수록 PLM/MES 간 기준선 연속성이 약해진다. Source finding context: PartRevision, BomRevision, RoutingRevision 같은 명시적 버전 개념을 두고 각 버전에 immutable 식별자, 상태, valid_from/valid_to 또는 effectivity 조건, 적용 ECO를 연결한다. 생산 오더는 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적 Source finding context: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때 Source finding context: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다. Source finding context: 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없다. Source finding context: ECO 규칙은 적용일 이후 신규 rev 사용을 요구하지만 BomLine과 Routing에는 개정 또는 유효구간 속성이 없다. Source finding context: 변경 전후 구성을 별개 기준선으로 식별할 수 없다는 현상은 Part의 현재 rev/current_eco만 보유하는 단일 현재상태 모델의 증상이다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-004: fix_before_release, fix_now
+  - rationale: 두 표면 finding이 하나의 정규화되지 않은 값 모델에서 발생하며 계산 일관성과 감사 가능성을 의미 있게 약화한다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate의 복사본 관리 Source finding context: materialized-input.md:7; materialized-input.md:29-35; materialized-input.md:47-61; review-value-alignment-criteria.yaml:6-18 (value_type=principle, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…BOM·라우팅…정합성과 제조 운영 위험을 중심으로”) Source finding context: 공정 불량 계수를 BOM 줄의 엑셀 복사본으로 관리하면 BOM과 라우팅 간 권위 및 변경 정합성이 깨진다. Source finding context: 공정 조건이 변경되어도 BOM 복사본이 함께 갱신된다는 보장이 없으며 동일 부품도 공정별 불량률이 다를 수 있다. 이 절충은 편리한 수량 계산 대신 통합 기준의 추적성·재현성과 자재계획 정확도를 희생한다. Source finding context: scrap/yield를 해당 Operation과 자재 투입 관계에 귀속하고 Routing 또는 공정 리비전 및 유효기간과 연결한다. 외부 계획 시스템이 원본이라면 복사값 대신 source identifier, 동기화 상태, 갱신 규칙과 불일치 처리 정책을 모델링한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다. Source finding context: 공정 수율 개념의 권위와 생명주기를 공정/라우팅이 아니라 BomLine의 비추적 복사본에 배치했다. Source finding context: BomLine.scrap_rate가 생산계획팀 엑셀 값을 복사하여 보유한다. Source finding context: scrap_rate는 특정 Operation이나 Routing과 연결되지 않는다. Source finding context: 복사본의 원본 식별자, 유효기간, 동기화 상태 및 충돌 처리 규칙이 없다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate Source finding context: entities.BomLine.attributes.qty_per; entities.BomLine.attributes.scrap_rate Source finding context: scrap_rate가 비율인지 소요량 보정계수인지 정의되지 않은 채 독립 복사 값으로 모델링되었다. Source finding context: 같은 값이 불량 비율, 수율 손실률 또는 gross-up 계수 중 무엇인지에 따라 qty_per 보정식이 달라진다. 원천 엑셀과 복사본의 불일치까지 허용되어 시스템별 소요량 계산 결과가 갈릴 수 있다. Source finding context: 정규 의미를 하나로 선택해 이름, 값 범위, 단위 및 qty_per와의 계산식을 명시한다. 값의 원본을 하나로 정하고, 다른 시스템에는 원천값 또는 결정적 파생값만 전달한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다. Source finding context: 파생량의 정규 산식과 원천 권한을 정의하지 않았다. Source finding context: scrap_rate라는 이름과 '계수'라는 설명이 서로 다른 수량 의미를 허용한다. Source finding context: 값의 범위·단위·계산식 없이 외부 엑셀 값을 복사하도록 모델링했다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-006: follow_up
+  - rationale: 변경 통제의 책임성과 재현성을 약화하는 합의된 medium 결함이지만 핵심 형상 선택 자체를 즉시 차단하지는 않는다. Source finding context: ECO 변경관리 lifecycle 및 감사 증거 Source finding context: materialized-input.md:69-75 Source finding context: ECO가 정상 적용 경로만 표현하며 승인·적용 행위의 행위자, 시각, 근거와 거절·취소·대체·정정 경로가 누락되어 있다. Source finding context: 누가 어떤 근거로 변경을 승인·적용했는지 추적할 수 없고, 철회되거나 잘못 적용된 ECO를 기존 상태 의미와 충돌 없이 처리할 수 없다. 변경 통제의 책임성과 재현성이 기준 모델 밖에 남는다. Source finding context: ECO 상태 전이 전체를 정의하고 ChangeEvent 또는 ApprovalDecision을 추가해 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 기록한다. 취소·거절·대체·정정/재발행 관계도 포함한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적 Source finding context: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우 Source finding context: 상태값만으로 변경의 정당성이나 실제 적용 경위를 입증할 수 없어 제조 변경 통제에 대한 신뢰가 약화된다. Source finding context: ECO가 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약되어 있다. Source finding context: ECO에 승인·적용 행위의 actor, timestamp, rationale 또는 evidence 속성이 없다. Source finding context: ECO 상태 열거형이 open, approved, applied만 포함하여 예외 종결 및 사후 정정 lifecycle을 수용하지 못한다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-008: fix_before_release, follow_up
+  - rationale: 계획과 원가 결과의 재현 및 감사 계약을 약화하는 합의된 medium 결함이다. Source finding context: 병행 관리 제조 기준값의 권위와 대사 Source finding context: materialized-input.md:35, 53, 98-99 Source finding context: 복수 시스템에서 병행 관리되는 scrap_rate와 표준시간 계열 값에 단일 권위 및 대사 이력 개념이 없다. Source finding context: 서로 다른 값이 존재할 때 어느 값을 계획·원가·실행에 사용해야 하는지 온톨로지가 결정하지 못한다. 오래된 복사본이나 수기값이 사용되어도 그 차이와 조정 근거를 추적할 수 없다. Source finding context: 각 관리값에 authoritative_system, value_as_of, valid_from/to를 지정하고, 복제본은 원본 참조와 동기화 시각을 갖게 한다. ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석 Source finding context: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우 Source finding context: 기준값 선택이 시스템별 또는 사용자별로 달라져 계획·원가 결과를 신뢰하거나 재현하기 어렵다. Source finding context: 병행 관리 사실은 주석으로만 서술되고 권위·복제·대사를 나타내는 공통 개념이 정의되지 않았다. Source finding context: scrap_rate 복사본에 원본 권위, 동기화 시점, 유효기간이 없다. Source finding context: MES 계산값과 표준원가 수기값의 대사에 기준값과 대사 사건을 기록할 모델이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-009: fix_before_release, accept_risk
+  - rationale: 최소 형상 고정 접점 또는 명시적 제외 경계의 필요성에는 합의했지만 실적·로트 계보 전체의 포함 여부는 대상 목적 선언 없이는 결정할 수 없다. Source finding context: MES 생산 실행·실적·추적성 개념 범위 Source finding context: materialized-input.md:12-82, 93-96 Source finding context: 생산 오더 생성 규칙을 선언하면서도 생산 오더, 적용 형상 스냅샷, 실제 투입·공정 실적 및 로트 계보 개념이 전혀 정의되어 있지 않다. Source finding context: MES 통합에서 계획 마스터가 실제 제조 기록으로 이어지는 접점이 비어 있다. released 라우팅 검사는 표현되어도 생성된 오더가 그 형상을 고정했는지, 실제 자재·공정·검사 결과가 무엇인지 추적할 수 없어 변경 영향 분석과 제조 계보 확인이 불가능하다. Source finding context: 최소 범위로 ProductionOrder, OrderConfigurationSnapshot, MaterialConsumption, OperationExecution 및 Lot/SerialGenealogy를 추가하고 PartRevision·BOM·Routing 버전과 연결한다. 실행 영역을 의도적으로 제외한다면 생산 오더 규칙을 제거하거나 별도 실행 온톨로지와의 명시적 경계·계약을 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공 Source finding context: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우 Source finding context: 마스터 데이터에서 실행 기록으로 이어지는 통합 계약이 없어 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 수 없다. Source finding context: 온톨로지가 제조 마스터 구조에 집중하면서도 그 범위를 명시적으로 한정하지 않은 채 MES 실행 규칙까지 포함했다. Source finding context: 생산 오더 생성 조건이 integrity rule로 선언되어 있다. Source finding context: 정의된 엔티티에는 ProductionOrder나 실제 투입·공정 실행·계보 기록이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-010: fix_before_release, fix_now
+  - rationale: 잘못된 자재 대체를 허용할 수 있는 합의된 medium 결함이며 조건 모델과 관계 투영이 함께 필요하다. Source finding context: 대체부품의 적용 조건과 승인 통제 Source finding context: materialized-input.md:37-45, 91 Source finding context: 대체부품 관계에 유효기간, 적용 대상 형상·공장·공정, 수량/단위 조건 및 승인 근거가 없어 실제 대체 가능 범위를 표현할 수 없다. Source finding context: 대체 가능성은 단순 품목 쌍보다 조건 의존적인 제조 결정인데, 현재 모델에서는 한 번 등록된 관계가 모든 생산 상황에 적용되는 것으로 해석될 수 있다. 이는 승인되지 않은 대체품 사용이나 품질·조달 조건 위반 위험을 만든다. Source finding context: AlternatePart에 applicable_revision/configuration, site 또는 work_center, quantity/uom constraint, effective_from/to, approval_ref 및 substitution_reason을 추가하고 생산 오더에서 실제 대체 사용 사건을 기록하도록 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 조건을 표현할 수 없어 MES가 과도하게 넓은 대체 권한으로 해석하거나 승인 근거를 확인하지 못할 수 있다. Source finding context: 대체부품이 조건과 통제를 가진 적용 규칙이 아니라 방향만 가진 정적 품목 관계로 모델링되어 있다. Source finding context: AlternatePart의 속성은 두 품목 참조와 방향뿐이다. Source finding context: 유효기간, 적용 범위, 승인 근거 또는 실제 대체 사건을 표현하는 개념이 없다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 및 relations Source finding context: entities.AlternatePart; relations의 Part→Part alternate_of 항목 Source finding context: AlternatePart가 명시적 관계 그래프에서 우회되어 direction을 포함한 대체품 관계 구조가 끊겨 있다. Source finding context: 다른 주요 참조 속성은 relations에 대응 관계가 있지만 AlternatePart만 우회된다. 따라서 relations를 소비하는 PLM/MES 통합 경로에서는 AlternatePart.direction과 관계 인스턴스를 도달하거나 추적할 수 없다. Source finding context: Part→AlternatePart와 AlternatePart→Part의 역할별 관계를 명시하고, Part→Part alternate_of는 이 구조에서 결정적으로 파생되는 투영으로 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때 Source finding context: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다. Source finding context: 대체품 관계를 AlternatePart 엔티티와 Part→Part 단축 관계로 이중 표현하면서 둘 사이의 구조적 연결 또는 파생 규칙을 선언하지 않았다. Source finding context: 명시적 relations 목록에서 AlternatePart를 from 또는 to로 사용하는 관계가 없다. Source finding context: 대체 관계는 Part→Part alternate_of로 직접 표현되고 AlternatePart 경유는 note에만 서술되어 있다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-012: needs_evidence
+  - rationale: 결손과 개선 방향에는 합의했지만 현재 지원 경로도 실패하는지, 확장 시 주로 드러나는지는 실행 증거가 없어 심각도와 우선순위가 미해결이다. Source finding context: manufacturing-bom-ontology.yaml — 단위와 수량 모델 Source finding context: entities.Part.attributes.uom; entities.BomLine.attributes.qty_per; entities.WorkCenter.attributes.capacity_per_shift; notes[1] Source finding context: 폐쇄형 UOM 열거와 환산 모델 부재 때문에 새 단위·복합 단위·시스템별 단위를 수용할 때 기존 스키마와 소비 로직을 수정해야 한다. Source finding context: 새 품목 단위나 PLM/MES의 다른 단위 코드를 추가할 때 enum 변경이 필요하고, BOM 수량과 생산능력의 차원 및 환산 근거를 기계적으로 보존할 수 없다. 통합 범위가 넓어질수록 현장 환산과 시스템별 예외가 누적된다. Source finding context: UnitOfMeasure와 UnitConversion을 독립 기준 개념으로 만들고 코드 체계, 차원, 기준 단위, 품목별 환산계수, 유효기간을 모델링한다. qty_per와 capacity_per_shift가 자신의 단위 또는 측정량 객체를 명시적으로 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-002 Source finding context: PLM/MES 간 BOM 수량과 제조 능력을 확장 가능한 공통 개념으로 교환하는 목적 Source finding context: ea·kg·m 이외 단위, 품목별 질량 환산, 또는 서로 다른 능력 단위를 가진 작업장을 통합할 때 Source finding context: 확장마다 스키마와 변환 로직을 변경해야 하며, 단위가 암묵적인 수치의 오해가 계획·소요량 계산의 신뢰를 약화한다. Source finding context: 측정 단위와 환산을 독립적인 확장 가능 기준 개념으로 모델링하지 않았다. Source finding context: 허용 UOM이 세 enum 값으로 닫혀 있고 qty_per 및 capacity_per_shift의 단위 표현이 불완전하다. Source finding context: 새 단위 수용에 enum 수정과 현장 환산이 필요한 현상은 단위·환산 마스터 부재의 증상이다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-013: follow_up
+  - rationale: 다공장·대체설비 확장 시 복제와 변경 전파 위험을 만드는 합의된 medium 결함이다. Source finding context: manufacturing-bom-ontology.yaml — Operation과 WorkCenter 배정 Source finding context: entities.Operation.attributes.work_center/std_time_min; entities.Routing.attributes.operations; relations Routing→Operation and Operation→WorkCenter Source finding context: 공정 정의에 작업장과 표준시간이 직접 고정되어 다공장·대체설비·시점별 능력 변경을 확장하려면 Operation 복제나 기존 구조 변경이 필요하다. Source finding context: 동일 공정 단계가 공장, 설비, 제품 변형 또는 기간에 따라 다른 자원과 시간을 사용할 경우 하나의 Operation을 재사용할 수 없다. 확장 시 공정 의미와 실행 파라미터를 함께 복제하게 되어 변경 전파와 시스템 간 매핑이 취약해진다. Source finding context: OperationDefinition과 RoutingOperation을 분리한다. RoutingOperation에 순서, 사이트/자원 요구 또는 후보 WorkCenter, 표준시간, 유효구간을 두고 공통 공정 정의를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-003 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적 Source finding context: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때 Source finding context: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다. Source finding context: 재사용 가능한 공정 정의와 라우팅 문맥의 실행 배정을 하나의 Operation 객체에 결합했다. Source finding context: Operation 하나가 단일 WorkCenter와 표준시간을 직접 보유한다. Source finding context: 라우팅별 배정 차이를 표현할 수 없는 현상은 Routing이 Operation 참조 순서만 보유하고 배정 속성을 둘 중간 개념이 없는 구조의 증상이다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-014: needs_evidence
+  - rationale: issue-002와 같은 개념 혼합의 확장성 표면이며 분리 필요성은 합의되었지만 현재 일반 BOM 핵심 경로의 실패 정도는 실행 증거가 부족하다. Source finding context: manufacturing-bom-ontology.yaml — 스크랩 재투입 예외 규칙 Source finding context: integrity_rules[0]; entities.BomLine.attributes.parent_ref/child_ref Source finding context: 재생 원료 흐름을 BOM 자기순환으로 표현하면 향후 회수·재작업 유형을 추가할수록 비순환 BOM 소비자에 예외 수정이 확산된다. Source finding context: BOM 전개, 소요량 계산, 원가 누적 같은 소비자는 자기순환이 정상 재투입인지 잘못된 BOM인지 구조만으로 판별할 수 없다. 새로운 회수·재작업 패턴이 생기면 각 소비자가 별도 예외와 순환 종료 규칙을 추가해야 한다. Source finding context: 제품 구조 BOM은 비순환으로 유지하고, 스크랩 회수·재투입은 MaterialFlow, ByproductFlow 또는 ReworkLoop 같은 공정 흐름 개념으로 분리해 수율, 투입 지점, 최대 반복 또는 종료 조건을 명시한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-004 Source finding context: BOM과 제조 공정을 여러 PLM/MES 소비자가 안정적으로 확장·해석할 수 있는 공통 기준을 제공하는 목적 Source finding context: 스크랩 재투입 외에 재작업, 부산물 회수 또는 다단계 재순환을 추가하거나 일반 BOM 전개를 수행할 때 Source finding context: 모든 소비자에 순환 예외 로직이 퍼지고 신규 회수 유형마다 수정 범위가 커져 확장 내성과 계산 안전성이 저하된다. Source finding context: 제품 구성 관계와 제조 물질 순환이라는 서로 다른 수명주기 개념을 BomLine 하나로 표현했다. Source finding context: 동일 규칙이 BOM 비순환을 요구하면서 스크랩 재투입에는 자기 하위 포함을 허용한다. Source finding context: 순환의 의미와 종료 조건을 구조적으로 구분할 수 없는 현상은 재투입 흐름을 일반 parent-child BomLine으로 인코딩한 것의 증상이다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-015: fix_before_release, fix_now
+  - rationale: 명시된 계약 요소가 직접 양립하지 않는 합의된 medium 논리 결함으로, 소비자별 반대 대체 판단을 허용한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 계약 Source finding context: manufacturing-bom-ontology.yaml:33,37-40 Source finding context: AlternatePart의 대칭성 정의와 one_way 허용 상태는 동시에 만족될 수 없다. Source finding context: one_way 인스턴스 A→B는 B→A를 요구하지 않지만, 정의는 같은 인스턴스에 B→A를 의무화한다. 이는 inter-claim 충돌이며 possible 상태와 obligatory 대칭성 사이의 mixed modality 모순이다. Source finding context: direction을 유지한다면 정의를 'bidirectional일 때만 역방향이 성립한다'로 제한한다. 모든 대체가 대칭이어야 한다면 one_way를 enum과 기본값에서 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적 Source finding context: direction=one_way인 AlternatePart를 생성하거나 교환할 때 Source finding context: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을 약화한다. Source finding context: AlternatePart의 동일 계약 범위에 무조건적 대칭성 정의와 비대칭 허용 상태를 함께 선언했다. Source finding context: direction=one_way가 유효하며 기본값으로 선언되어 있지만, 엔티티 정의는 모든 대체 관계의 역관계를 요구한다. Source finding context: 대칭성 의무에 direction 조건이 없어 one_way 상태를 예외로 분리할 수 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-016: fix_before_release, fix_now
+  - rationale: issue-015와 중복되는 의미적 표면으로, 동일 데이터가 단방향 또는 양방향으로 해석되는 충돌을 명시한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart Source finding context: entities.AlternatePart.definition; entities.AlternatePart.attributes.direction Source finding context: AlternatePart의 대칭 관계 정의와 one_way 방향 모델이 서로 다른 의미를 부여한다. Source finding context: 상호 대체 가능성과 단방향 대체 가능성은 동일한 관계가 아니다. 이 모순이 해소되지 않으면 PLM의 승인 대체 방향을 MES가 반대로 적용하는 등 부품 투입 판단이 달라질 수 있다. Source finding context: 대체 관계를 방향성 관계로 정의하고 bidirectional을 두 방향 관계의 축약으로 명시하거나, 항상 대칭인 관계가 의도라면 direction을 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준 Source finding context: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때 Source finding context: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다. Source finding context: 방향성 대체와 상호 대체를 하나의 관계 의미로 혼합했다. Source finding context: AlternatePart는 대칭 관계로 정의되면서 one_way 상태를 허용한다. Source finding context: 관계의 정규 의미가 방향성인지 대칭성인지 결정되지 않았다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-017: fix_before_release, fix_now
+  - rationale: 계획의 버전·승인과 공정의 자원·시간 계약을 혼동시키는 합의된 medium 의미 결함이다. Source finding context: manufacturing-bom-ontology.yaml — InspectionPlan inheritance Source finding context: entities.Operation.definition; entities.InspectionPlan.definition; entities.InspectionPlan.is_a Source finding context: InspectionPlan을 Operation의 하위 유형으로 둔 것은 계획 정보와 공정 단계를 존재론적으로 혼동한다. Source finding context: 계획·명세는 공정 단계가 수행될 때 참조되는 정보 객체이지 그 단계 자체와 동일하지 않다. 상속하면 InspectionPlan이 work_center와 std_time_min을 가진 라우팅 단계라는 의미까지 물려받아 PLM 품질계획과 MES 작업 단계의 식별이 흐려진다. Source finding context: 검사 공정은 Operation의 하위 유형(예: InspectionOperation)으로 두고, InspectionPlan은 별도 정보 객체로 모델링하여 검사 공정이 이를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-002 Source finding context: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다. Source finding context: 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급했다. Source finding context: InspectionPlan이 Operation을 상속하여 공정 단계의 속성과 역할을 획득한다. Source finding context: 계획 정보 객체와 라우팅 단계가 분리되지 않았다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-018: follow_up, accept_risk
+  - rationale: 정의 명확화 필요성에는 합의했지만 구조 재설계 필요성과 영향 수준에는 이견이 남아 규범적 Part 의미 결정이 필요하다. Source finding context: manufacturing-bom-ontology.yaml — Part and Assembly Source finding context: entities.Part.definition; entities.Assembly.definition; entities.Assembly.is_a Source finding context: Part의 '최소 관리 단위' 정의는 하위 Part를 포함하는 Assembly가 Part라는 계층과 의미적으로 충돌한다. Source finding context: '최소'를 구성상 최소로 읽으면 Assembly는 Part가 될 수 없고, 관리 식별 단위로 읽으면 최소라는 표현이 불필요하게 분해 불가능성을 암시한다. 양 시스템이 Part를 서로 다른 입도와 범위로 해석할 수 있다. Source finding context: Part를 '구매·제조·재고·변경관리의 식별 대상 품목'처럼 구성과 무관한 관리 품목으로 정의하고, Assembly를 하위 품목 구조를 가진 Part로 한정한다. 정말 최소 구성요소를 뜻한다면 별도 LeafPart 개념으로 분리한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: 품목과 BOM 계층의 공통 개념 기준 Source finding context: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때 Source finding context: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다. Source finding context: 관리 단위라는 역할 개념과 구성상 최소 단위라는 구조 개념을 Part 정의에서 구분하지 않았다. Source finding context: 분해 가능한 Assembly가 최소 단위인 Part를 상속한다. Source finding context: Part의 최소성이 관리 식별성인지 구성 원자성인지 정의되지 않았다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-019: needs_evidence
+  - rationale: 능력 계산 영향은 구체적이지만 독립 루트인지 범용 수량 모델의 증상인지 이견이 남고 공식 의존 관계 근거도 부족하다. Source finding context: manufacturing-bom-ontology.yaml — WorkCenter.capacity_per_shift Source finding context: entities.WorkCenter.attributes.capacity_per_shift Source finding context: capacity_per_shift 하나에 개수와 시간이라는 서로 다른 차원의 값을 허용한다. Source finding context: 개수/교대와 시간/교대는 비교·합산·부하율 계산 방식이 다른 수량이다. 속성명만으로 소비자가 의미를 판별할 수 없어 작업장 능력과 부하 계산이 시스템마다 달라질 수 있다. Source finding context: 용량의 측정 종류와 UOM을 명시하는 구조로 바꾸거나 quantity_capacity_per_shift와 available_time_per_shift처럼 차원별 속성 또는 하위 유형으로 분리한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-005 Source finding context: 라우팅 작업장 능력을 PLM/MES가 동일한 수량 의미로 교환하는 기준 Source finding context: 여러 WorkCenter의 capacity_per_shift를 비교·집계하거나 공정 표준시간과 결합해 부하를 산출할 때 Source finding context: 차원이 다른 값을 같은 수치로 처리해 생산능력 및 일정 판단을 왜곡할 수 있다. Source finding context: 용량이라는 상위 용어 아래 처리량과 가용시간을 구분하지 않았다. Source finding context: capacity_per_shift가 개수 또는 시간일 수 있어 인스턴스별 의미가 달라진다. Source finding context: 측정 종류와 UOM이 데이터 구조에 표현되지 않았다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-020: fix_before_release, fix_now
+  - rationale: 독립적인 medium 결함으로 해결되었으나 상위 revision·effectivity 결손의 증상이라는 두 렌즈의 이견과 관계 증거 공백은 보존해야 한다. Source finding context: manufacturing-bom-ontology.yaml — ECO와 Part revision 연결 Source finding context: entities.Part.attributes.rev/current_eco; entities.ECO.attributes.affected_parts/effective_date/status; 세 번째 integrity_rule Source finding context: ECO가 적용할 정확한 신규 revision으로 이어지는 구조적 연결이 없다. Source finding context: 적용일 이후 신규 rev를 따라야 한다는 규칙을 평가하려면 ECO, 대상 품목, 결과 revision의 대응이 필요하지만 현재 구조에서는 그 결과 revision을 결정할 수 없다. current_eco도 '최신' ECO만 가리켜 변경 이력별 연결을 대신하지 못한다. Source finding context: 최소한 ECO의 영향 품목별 결과 revision을 연결하는 effectivity 항목을 추가한다. 지속적인 변경 이력이 필요하면 PartRevision을 별도 엔티티로 두고 ECO와 이전·신규 revision을 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공 Source finding context: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우 Source finding context: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나 외부 추정에 의존하게 된다. Source finding context: revision을 Part의 단일 가변 문자열로만 모델링하여 ECO별 revision 전이를 연결할 구조가 없다. Source finding context: ECO와 Part 사이에는 changes/affected_parts 연결만 있으며 결과 revision 연결이 없다. Source finding context: Part.rev는 단일 문자열이고 current_eco는 최신 ECO만 참조한다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-021: fix_before_release, follow_up
+  - rationale: 구조적 표지 부재는 issue-002 계열 개념 혼합의 직접 증상으로 수렴했다. 일반 BOM 경로의 실제 실패 범위는 추가 실행 증거가 필요하다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 예외 구조 Source finding context: entities.BomLine.attributes; 첫 번째 integrity_rule Source finding context: 스크랩 재투입 자기참조를 일반 BOM 순환과 구별할 구조적 표지가 누락되어 있다. Source finding context: 동일한 Assembly 자기참조 구조가 허용된 재투입인지 잘못 생성된 순환인지 모델만으로 판별되지 않는다. 따라서 비순환 검증기가 예외를 안전하게 적용할 수 없다. Source finding context: BomLine에 명시적인 용도/edge_kind를 추가해 일반 구성과 scrap_reintroduction을 구분하고, 순환 예외는 해당 값과 자기참조 조건을 함께 만족할 때만 허용하도록 규칙을 구조화한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공 Source finding context: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때 Source finding context: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. Source finding context: 순환 예외의 의미가 무결성 규칙의 자연어에만 있고 BomLine 구조에는 투영되지 않았다. Source finding context: 규칙은 금지된 순환과 허용된 스크랩 재투입 자기참조를 구별해야 한다. Source finding context: BomLine에는 두 경우를 구별하는 속성이나 별도 관계가 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+
+### Consensus (6/6, core-axis mode)
+- issue-001 (high): ECO effective_date와 비동기 갱신되는 Part.rev가 변경 효력의 권위를 나누고 있어, 주간 동기화 전에는 생산에 적용할 revision을 유일하게 결정할 수 없는 high 결함이다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, evolution, logic, semantics, structure
+  - issue stance disagreement: 1/6
+  - disagreeing stance lenses: coverage
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 5/6 deliberation participants
+  - accepted lenses: axiology, evolution, logic, semantics, structure
+  - remaining disagreement: 1/6 deliberation participants
+  - remaining disagreement lenses: coverage
+  - raised by lenses: axiology
+  - issue statement: ECO 효력과 Part 리비전 갱신의 권위가 분산되어 변경 적용 시점이 모호하다. Source finding context: manufacturing-bom-ontology.yaml — ECO 효력과 Part 리비전 적용 규칙 Source finding context: materialized-input.md:7; materialized-input.md:20-21; materialized-input.md:69-75; materialized-input.md:96; review-value-alignment-criteria.yaml:6-18 (value_type=purpose, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…변경관리 개념의 정합성과 제조 운영 위험을 중심으로”) Source finding context: ECO 효력일과 주간 리비전 동기화의 불일치가 통합 기준의 변경 적용 시점을 모호하게 만든다. Source finding context: 효력일 이후부터 다음 동기화까지 ECO와 Part.rev가 서로 다른 답을 줄 수 있다. 이 상태에서는 PLM과 MES가 동일 생산분에 서로 다른 설계 리비전을 적용할 수 있어 변경관리 정합성과 제조 실행 안전이라는 선언 목적을 직접 약화한다. Source finding context: 유효기간을 가진 PartRevision과 ECO 적용 관계를 모델링하고, 생산 오더가 생성 시점의 적용 리비전을 명시적으로 고정하도록 한다. 배치 동기화 상태와 무관하게 effective_date 기준 조회가 단일 결과를 반환하도록 우선순위와 실패 규칙도 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제 Source finding context: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우 Source finding context: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다. Source finding context: 변경 효력의 권위가 effective-dated revision 객체가 아니라 비동기 갱신되는 Part.rev와 ECO에 분산되어 있다. Source finding context: 효력일 이후 신규 rev 적용을 요구하지만 Part.rev 갱신은 주간 배치 이후에만 이루어진다. Source finding context: 생산 오더가 적용 리비전을 직접 참조하거나 고정하는 모델이 없다. Source finding context: 변경 효력과 현재 리비전의 권위가 별도 원본 및 비동기 필드에 분산되어 있다.
+  - affected purpose: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제
+  - failure condition: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우
+  - impact: 동일 생산분의 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다. Source finding context: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다.
+  - root hypothesis: 변경 효력의 권위가 effective-dated revision 객체가 아니라 비동기 갱신되는 Part.rev와 ECO에 분산되어 있어, 동기화 지연 구간에는 생산 적용 리비전이 단일하게 결정되지 않는다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-001`, `materialized-input.md:7`, `materialized-input.md:20-21`, `materialized-input.md:69-75`, `materialized-input.md:96`, `review-value-alignment-criteria.yaml:6-18`, `finding-ledger.yaml#finding-001`, `finding-001.cause-001`, `finding-001.cause-002`, `materialized-input.md:14-21`, `materialized-input.md:93-96`, `finding-001.cause-003`, `issue-stance-matrix.yaml#stances.issue-001.axiology`, `issue-stance-matrix.yaml#stances.issue-001.coverage`, `issue-ledger.yaml#issue-001`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-001.evolution`, `issue-stance-matrix.yaml#stances.issue-001.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-001`, `issue-stance-matrix.yaml#stances.issue-001.semantics`, `issue-stance-matrix.yaml#stances.issue-001.structure`, `issue-001과 제조 형상 기준선 결함 사이의 same-root 또는 상하위 관계 근거`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: ECO 효력일이 지났지만 Part.rev가 아직 갱신되지 않은 기간에 생산 오더가 생성되면 PLM과 MES가 동일 생산분에 서로 다른 설계 revision을 적용할 수 있다. 이는 구형 설계 생산, 추적성 상실, 재작업 판단 오류를 초래할 수 있어 PLM/MES 통합 기준의 변경관리 정합성과 제조 운영 위험 통제 목적을 직접 약화한다.
+  - root cause: 문제의 출발점은 변경 효력의 권위가 effective-dated PartRevision에 단일화되지 않고 ECO effective_date와 배치 갱신되는 Part.rev에 분산된 구조다. 이 권위 분산 때문에 동기화 상태에 따라 적용 revision의 답이 달라지며, 생산 오더에도 그 답을 확정해 보존할 참조가 없다.
+  - causal path: ECO는 effective_date 이후 신규 revision 적용을 요구하지만 Part.rev는 주간 배치 후에야 갱신된다. 그 사이 두 원본이 서로 다른 revision을 가리키고, 생산 오더가 생성 시점의 적용 revision을 직접 참조하거나 고정하지 않으므로 동일 생산분의 설계 기준이 시스템별로 갈릴 수 있다.
+  - action: 먼저 유효기간을 가진 PartRevision을 변경 효력의 단일 권위로 모델링하고 ECO와의 적용 관계, effective_date 기준 선택 우선순위, 중복·공백 시 실패 규칙을 정의해야 한다. 이어 생산 오더가 생성 시점에 결정된 PartRevision을 명시적으로 고정하도록 해야 한다. 이 순서로 구현해야 배치 동기화 상태와 무관하게 조회가 단일 결과를 반환하고 실행 이력도 보존된다.
+  - unresolved disagreement: coverage 렌즈는 더 포괄적인 원인을 Part·BOM·Routing 전체의 시점별 형상 기준선 부재로 본다. 심각도와 현재 결함의 존재에는 이견이 없지만, 두 결함의 same-root 또는 상하위 관계를 확정할 근거는 남아 있지 않다.
+
+- issue-002 (high): 제품 구성과 스크랩 회수·재투입을 같은 BomLine으로 표현한 개념 혼합은 비순환 BOM 계약과 자기참조 예외를 충돌시키는 high 결함이다. 재투입 흐름은 BOM에서 분리해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 제품 구성과 스크랩 재투입 흐름의 개념 혼합이 BOM 전개 안전성을 훼손한다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 금지와 스크랩 재투입 예외 Source finding context: materialized-input.md:7; materialized-input.md:23-35; materialized-input.md:93-94; review-value-alignment-criteria.yaml:6-18 (value_type=tradeoff, alignment_direction=misaligned; authority excerpt: “BOM/공정 온톨로지가 PLM/MES 통합의 개념 기준 문서로 적절한지…BOM…정합성과 제조 운영 위험을 중심으로”) Source finding context: 재생 원료 흐름을 자기 참조 BOM으로 표현하는 국소 편의가 BOM 전개의 안전성과 의미를 훼손한다. Source finding context: 제품 구성 구조와 공정 중 회수·재투입 흐름은 목적과 계산 방식이 다르다. 이를 동일 BOM 계층에 넣으면 BOM 폭발, 소요량 계산, 원가 누적 또는 순환 검증이 예외별 동작에 의존하게 되어 통합 개념 기준의 예측 가능성을 잃는다. Source finding context: BOM은 비순환 제품 구성 구조로 유지하고, 스크랩 발생·회수·재투입은 Operation 또는 별도의 MaterialRecovery/MaterialFlow 관계로 분리한다. 재투입률과 질량수지 규칙을 해당 흐름에 배치한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준 Source finding context: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우 Source finding context: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다. Source finding context: 제품 구성과 공정 물질 흐름이라는 서로 다른 목적의 개념을 BomLine 하나로 통합했다. Source finding context: 비순환 BOM 원칙과 자기 포함 예외가 같은 무결성 규칙에 공존한다. Source finding context: 스크랩 재투입이 별도 흐름 관계가 아니라 Assembly의 child BomLine으로 표현된다. Source finding context: 제품 구성 구조와 공정 회수 흐름을 구분하는 개념이 모델에 없다.
+  - affected purpose: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준
+  - failure condition: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우
+  - impact: 소비자가 무한 전개나 중복 계산을 수행하거나 예외를 서로 다르게 해석할 수 있다. Source finding context: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다.
+  - root hypothesis: 제품 구성 구조와 공정 회수·재투입 흐름을 BomLine 하나로 표현하여 비순환 BOM 규칙과 자기참조 예외가 충돌한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-002`, `materialized-input.md:7`, `materialized-input.md:23-35`, `materialized-input.md:93-94`, `review-value-alignment-criteria.yaml:6-18`, `finding-ledger.yaml#finding-002`, `finding-002.cause-001`, `finding-002.cause-002`, `finding-002.cause-003`, `materialized-input.md:12-100`, `issue-stance-matrix.yaml#stances.issue-002.axiology`, `issue-stance-matrix.yaml#stances.issue-002.coverage`, `issue-ledger.yaml#issue-002`, `issue-stance-matrix.yaml#stances.issue-002.evolution`, `issue-stance-matrix.yaml#stances.issue-002.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-002`, `issue-stance-matrix.yaml#stances.issue-002.semantics`, `issue-stance-matrix.yaml#stances.issue-002.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: 이 모델을 PLM/MES의 공통 개념 기준으로 사용할 때 스크랩 재투입이 포함된 Assembly를 일반 BOM처럼 전개하거나 소요량·원가를 계산하면 무한 전개, 중복 수량 계산 또는 시스템별 예외 해석이 발생할 수 있다. 따라서 공유 기준에 필요한 계산의 예측 가능성과 운영 안전성이 훼손된다.
+  - root cause: 출발점은 목적과 계산 규칙이 다른 제품 구성 구조와 공정 회수·재투입 흐름을 구분하는 개념이 없고 둘을 BomLine 하나로 통합한 것이다. 이 때문에 비순환이어야 하는 일반 구성 관계 안에 자기참조 재투입 예외가 들어가며, 이후의 전개 및 계산 문제를 구조적으로 발생시킨다.
+  - causal path: 모델이 BOM 비순환 원칙과 자기 포함 예외를 같은 무결성 규칙에 두고, 스크랩 재투입을 별도 흐름이 아닌 Assembly의 child BomLine으로 표현한다. 그 결과 일반 소비자는 구성 간선과 회수 간선을 구별할 수 없고, 종료 조건과 수량 계산을 개별 예외 처리에 의존하게 되어 무한 전개·중복 계산·소비자별 해석 불일치로 이어진다.
+  - action: 먼저 BOM을 비순환 제품 구성 구조로 한정하고, 스크랩 발생·회수·재투입을 별도의 MaterialFlow 계열 관계로 분리해야 한다. 그다음 재투입률, 질량수지 및 종료 규칙을 해당 흐름에 배치하여 BOM 전개·소요량·원가 소비자가 예외 없이 구성 관계를 처리하고 공정 흐름 소비자가 별도 규칙을 적용하도록 해야 한다. 이 조치는 현재 차단 결함으로서 대상 범위에서 반드시 완료되어야 한다.
+
+- issue-003 (high): 품목별 UOM 변환의 권위·유효성·실패 규칙이 통합 모델에 없어 BOM 수량의 공통 계산 의미를 보장할 수 없는 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 권위 있는 품목별 UOM 환산 모델이 없어 BOM 수량의 공통 의미를 보장하지 못한다. Source finding context: manufacturing-bom-ontology.yaml — 품목 UOM과 현장 환산 Source finding context: materialized-input.md:7; materialized-input.md:19; materialized-input.md:29-35; materialized-input.md:100; review-value-alignment-criteria.yaml:6-18 (value_type=commitment, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…제조 운영 위험을 중심으로”) Source finding context: 환산계수 없이 현장 판단에 맡긴 단위 변환은 BOM 수량을 시스템 간 공통 의미로 만들지 못한다. Source finding context: 동일 qty_per가 어느 단위를 기준으로 해석되는지와 변환 근거가 통합 데이터로 재현되지 않는다. 특히 개수와 질량 간 환산은 품목별 물성에 의존하므로 현장별 계산 차이가 자재 소요량, 불출량 및 재고 정합성을 훼손할 수 있다. Source finding context: BomLine 수량에 명시적 UOM을 부여하고, 품목별 기준 UOM 및 유효기간·출처를 가진 변환 규칙을 권위 있는 마스터로 모델링한다. 필요한 변환이 없거나 차원이 맞지 않으면 생산 또는 인터페이스 처리를 실패시키도록 규정한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제 Source finding context: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우 Source finding context: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다. Source finding context: 수량 단위와 변환 규칙을 통합 모델의 권위 있는 개념으로 두지 않았다. Source finding context: 품목별 환산계수 마스터가 없고 변환을 현장에서 수행한다. Source finding context: BomLine.qty_per에는 자체 단위 또는 기준 단위 규칙이 없다. Source finding context: 모델은 Part.uom 열거만 제공하고 단위 변환의 권위·유효성·실패 규칙을 제공하지 않는다.
+  - affected purpose: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제
+  - failure condition: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우
+  - impact: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치가 발생할 수 있다. Source finding context: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다.
+  - root hypothesis: 수량 단위와 품목별 변환 규칙을 권위 있는 통합 개념으로 두지 않아 BOM 수량 환산이 현장 판단에 의존한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-003`, `materialized-input.md:7`, `materialized-input.md:19`, `materialized-input.md:29-35`, `materialized-input.md:100`, `review-value-alignment-criteria.yaml:6-18`, `finding-ledger.yaml#finding-003`, `finding-003.cause-001`, `finding-003.cause-002`, `finding-003.cause-003`, `issue-stance-matrix.yaml#stances.issue-003.axiology`, `issue-stance-matrix.yaml#stances.issue-003.coverage`, `issue-ledger.yaml#issue-003`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003`, `issue-stance-matrix.yaml#stances.issue-003.evolution`, `issue-stance-matrix.yaml#stances.issue-003.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-003`, `issue-stance-matrix.yaml#stances.issue-003.semantics`, `issue-stance-matrix.yaml#stances.issue-003.structure`, `issue-ledger.yaml#dep-001`, `rel-007`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: BOM 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목 물성에 따른 환산이 필요할 때, 시스템과 작업자가 서로 다른 결과를 산출할 수 있다. 이는 과소·과다 불출, 계획 오차, 재고 불일치를 유발하여 PLM/MES 간 수량 의미의 일관성과 제조 운영 위험 통제를 직접 약화한다.
+  - root cause: 출발점은 수량 단위와 품목별 변환 규칙을 권위 있는 통합 개념으로 두지 않은 것이다. 이로 인해 변환계수의 출처와 유효기간, 적용 가능 차원, 실패 조건을 시스템이 결정하거나 추적할 수 없고 환산이 현장 판단에 의존한다.
+  - causal path: 모델은 Part.uom만 열거하며 권위 있는 품목별 환산 마스터를 제공하지 않고, BomLine.qty_per에도 자체 단위나 기준 단위 규칙이 없다. 따라서 동일한 qty_per의 단위와 변환 근거를 통합 데이터에서 재현할 수 없으며, 필요한 환산을 현장에서 수행하게 되어 시스템별 계산 차이와 BOM 수량 의미의 불일치로 이어진다. 참여 렌즈들은 이 루트 가설과 high 심각도에 동의했고 별도 숙의가 필요하지 않았다.
+  - action: 먼저 출처와 유효기간을 가진 품목별 기준 UOM 및 변환 규칙을 권위 있는 마스터로 정의하고, 그다음 BomLine 수량에 명시적 UOM을 연결해야 한다. 이후 변환 시점에 해당 규칙을 적용하고, 필요한 규칙이 없거나 단위 차원이 호환되지 않으면 생산 또는 인터페이스 처리를 실패시키는 검증 규칙을 두어 임의 환산을 차단해야 한다.
+
+- issue-005 (high): BOM·라우팅의 revision·effectivity 형상 기준선 부재는 생산 시점의 유효 제조 구성을 선택하거나 과거 구성을 재구성할 수 없게 하는 high 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: BOM·라우팅의 개정·유효기간·형상 기준선 부재로 생산 시점의 제조 구성을 재구성할 수 없다. Source finding context: BOM·라우팅 구성의 시점별 형상 관리 Source finding context: materialized-input.md:14-35, 55-61, 69-75, 93-96 Source finding context: BOM과 라우팅에 개정·유효기간·형상 기준선 개념이 없어 과거 또는 특정 생산일의 제조 구성을 재구성할 수 없다. Source finding context: ECO 적용 전후의 BOM 및 공정 순서를 같은 Part에서 구분할 수 없으므로, 주간 rev 동기화 지연 중 어느 구성을 생산에 사용해야 하는지 개념 모델만으로 결정하거나 사후 재현할 수 없다. 이는 PLM 설계 형상과 MES 생산 형상을 연결하는 기준 문서의 핵심 목적을 약화한다. Source finding context: PartRevision 또는 ConfigurationBaseline을 도입하고 BomLine 및 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여한다. ECO가 변경 전후 형상과 해당 유효 구간을 명시적으로 연결하도록 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공 Source finding context: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우 Source finding context: 생산 시점의 유효 BOM/라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다. Source finding context: 온톨로지가 품목·BOM·라우팅을 현재값 중심으로 표현하고, 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않았다. Source finding context: BomLine과 Routing에 개정 식별자나 유효 시작·종료 구간이 없다. Source finding context: ECO의 단일 effective_date와 Part의 현재 rev만으로는 변경 전후 BOM·라우팅 형상을 식별할 수 없다.
+  - affected purpose: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공
+  - failure condition: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우
+  - impact: 생산 시점의 유효 BOM·라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다. Source finding context: 생산 시점의 유효 BOM/라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다.
+  - root hypothesis: 품목·BOM·라우팅을 현재값 중심으로 표현하고 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않아 시점별 구성을 식별할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `materialized-input.md:20-21`, `materialized-input.md:29-35`, `materialized-input.md:55-61`, `materialized-input.md:69-75`, `materialized-input.md:96`, `finding-ledger.yaml#finding-005`, `finding-005.cause-001`, `finding-005.cause-002`, `issue-stance-matrix.yaml#stances.issue-005.axiology`, `issue-stance-matrix.yaml#stances.issue-005.coverage`, `issue-ledger.yaml#issue-005`, `issue-stance-matrix.yaml#stances.issue-005.evolution`, `issue-stance-matrix.yaml#stances.issue-005.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-005`, `issue-stance-matrix.yaml#stances.issue-005.semantics`, `issue-stance-matrix.yaml#stances.issue-005.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되면, PLM 설계 형상과 MES 생산 형상을 공통 기준으로 연결할 수 없다. 그 결과 잘못된 부품이나 공정을 사용할 위험이 생겨 통합 기준 문서의 핵심 목적을 직접 약화한다.
+  - root cause: 품목·BOM·라우팅을 현재값 중심으로 표현하고 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않은 것이 출발점이다. 이 구조에서는 같은 품목에 속한 변경 전후 형상을 별개의 유효 구성으로 식별할 수 없다.
+  - causal path: BomLine과 Routing에 revision 식별자 및 유효 시작·종료 구간이 없고, ECO의 단일 effective_date와 Part의 현재 rev만 존재한다. 따라서 ECO 적용 전후의 BOM과 공정 순서를 구분할 수 없으며, 특정 생산일에 적용할 구성을 유일하게 선택하거나 사후 재현할 수 없다.
+  - action: 먼저 PartRevision 또는 ConfigurationBaseline을 제조 형상의 기준 개념으로 도입해야 한다. 이어 BomLine과 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여하고, ECO가 변경 전후 형상과 각 유효구간을 명시적으로 연결하도록 해야 한다. 그래야 생산 시점의 구성 선택과 과거 형상 재구성이 같은 기준선에서 가능해진다.
+
+- issue-007 (high): 차원화된 Quantity·UnitOfMeasure와 품목별 변환 모델이 없어 PLM BOM 수량과 MES 투입량·작업장 능력을 공통 계산 의미로 연결할 수 있는 계약이 부재한 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 수량별 단위 차원과 환산 모델 부재로 BOM 수량과 작업장 능력의 공통 계산 의미가 없다. Source finding context: 수량 단위·환산 및 설비능력 단위 모델 Source finding context: materialized-input.md:19, 34-35, 63-67, 98-100 Source finding context: BOM 수량과 작업장 능력을 계산 가능한 공통 단위로 해석할 단위 차원과 품목별 환산계수 마스터가 없다. Source finding context: PLM의 BOM 수량과 MES의 투입량·능력 값을 일관되게 변환하거나 검증할 수 없다. 특히 kg↔ea 환산이나 개수 기반·시간 기반 능력 비교가 사람의 현장 판단에 의존해 자재 소요량과 생산능력 계산 오류로 이어질 수 있다. Source finding context: Quantity와 UnitOfMeasure를 명시적으로 모델링하고 qty_per 및 capacity에 단위·분모·시간기준을 연결한다. 품목별 UomConversion에 factor, from_uom, to_uom, valid_from/to, 근거와 권위 시스템을 둔다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003 Source finding context: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합 Source finding context: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우 Source finding context: 필요 자재량과 작업장 부하를 결정적으로 계산할 수 없어 부족·과다 투입 및 잘못된 일정 산정 위험이 생긴다. Source finding context: 단위가 계산 대상 값의 속성이 아니라 품목의 제한된 코드로만 표현되고, 단위 간 변환 개념이 모델에서 제외되어 있다. Source finding context: qty_per와 capacity_per_shift에 단위 또는 단위 기준을 연결하는 속성이 없다. Source finding context: 품목별 환산계수 마스터가 없고 필요한 환산을 현장에서 수행한다고 명시한다.
+  - affected purpose: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합
+  - failure condition: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우
+  - impact: 필요 자재량과 작업장 부하를 결정적으로 계산할 수 없어 부족·과다 투입 및 잘못된 일정 산정 위험이 생긴다.
+  - root hypothesis: 단위를 계산 대상 값의 속성이 아닌 제한된 품목 코드로만 표현하고 단위 차원과 변환 개념을 제외하여 BOM과 설비능력을 결정적으로 계산할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003`, `materialized-input.md:19`, `materialized-input.md:34-35`, `materialized-input.md:63-67`, `materialized-input.md:100`, `finding-ledger.yaml#finding-007`, `finding-007.cause-001`, `materialized-input.md:66-67`, `finding-007.cause-002`, `issue-stance-matrix.yaml#stances.issue-007.axiology`, `issue-stance-matrix.yaml#stances.issue-007.coverage`, `issue-ledger.yaml#issue-007`, `issue-stance-matrix.yaml#stances.issue-007.evolution`, `issue-stance-matrix.yaml#stances.issue-007.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-007`, `issue-stance-matrix.yaml#stances.issue-007.semantics`, `issue-stance-matrix.yaml#stances.issue-007.structure`, `issue-ledger.yaml#dep-001`, `rel-007`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 상·하위 품목의 단위가 다르거나 작업장 능력이 개수·중량·시간 기준으로 혼재하면 필요 자재량과 작업장 부하를 결정적으로 산출하거나 검증할 수 없다. 그 결과 부족·과다 투입과 잘못된 생산 일정 위험이 발생하여 PLM BOM과 MES 계획·실적 간 수량 및 능력 의미 통합이라는 목적이 직접 약화된다.
+  - root cause: 단위를 각 계산값의 측정 차원으로 모델링하지 않고 제한된 품목 코드로만 표현했으며, 단위 변환 개념도 제외한 것이 출발점이다. 이 구조에서는 수치가 무엇을 측정하고 어떤 단위·분모·시간 기준을 갖는지 판정할 수 없으므로 이후 BOM 소요량과 설비능력 계산이 공통 계약을 가질 수 없다.
+  - causal path: 먼저 qty_per와 capacity_per_shift가 단위 또는 단위 기준을 참조하지 않아 값의 연산 적합성을 판정할 수 없다. 이어 품목별 환산계수 마스터가 없고 환산이 현장 판단에 맡겨지면서 kg↔ea 변환이나 개수 기반·시간 기반 능력 비교를 일관되게 수행하거나 검증할 수 없게 된다. 그 결과 BOM 소요량과 작업장 부하 계산이 비결정적이 된다. 참여 렌즈들은 이 인과와 high 심각도를 수용했으며 별도 숙의가 필요하지 않다고 확정했다.
+  - action: Quantity와 UnitOfMeasure를 명시적으로 도입하고 qty_per 및 capacity에 측정 차원, 단위, 분모와 시간 기준을 연결해야 한다. 품목별 UomConversion에는 factor, from_uom, to_uom, 유효기간, 근거와 권위 시스템을 두어 변환을 결정적이고 검증 가능하게 만들어야 한다. issue-003과 공유하는 원인 후보가 있으므로 개별 계산 경로를 보완하기 전에 공통 단위 변환의 권위·유효성 계약을 먼저 확립하고, 그 계약을 BOM과 MES 능력 계산 양쪽에서 사용해야 한다.
+
+- issue-011 (high): BOM과 라우팅에 불변 revision 및 유효구간이 없어 ECO 전후의 제조 형상을 별도 기준선으로 보존할 수 없는 high 결함이며, 변경 연속성 확보를 위해 즉시 수정해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: evolution
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: evolution
+  - issue statement: BOM·라우팅의 명시적 버전과 유효구간 부재가 설계변경 이후 제조 형상의 연속적 보존을 막는다. Source finding context: manufacturing-bom-ontology.yaml — Part, BomLine, Routing, ECO 및 변경 적용 규칙 Source finding context: entities.Part.attributes.rev/current_eco; entities.BomLine.attributes; entities.Routing.attributes; entities.ECO.attributes.effective_date/status; integrity_rules[2] Source finding context: BOM·라우팅의 개정과 유효구간이 모델링되지 않아 설계변경 후 구성 이력을 연속적으로 보존할 수 없다. Source finding context: ECO 적용 시점별 BOM과 라우팅을 식별할 구조가 없으므로 기존 객체를 덮어쓰거나 별도 관행으로 복제해야 한다. 그러면 과거 생산분의 적용 BOM·공정과 향후 변경분을 동일 모델에서 안정적으로 조회할 수 없고, 변경을 추가할수록 PLM/MES 간 기준선 연속성이 약해진다. Source finding context: PartRevision, BomRevision, RoutingRevision 같은 명시적 버전 개념을 두고 각 버전에 immutable 식별자, 상태, valid_from/valid_to 또는 effectivity 조건, 적용 ECO를 연결한다. 생산 오더는 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적 Source finding context: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때 Source finding context: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다. Source finding context: 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없다. Source finding context: ECO 규칙은 적용일 이후 신규 rev 사용을 요구하지만 BomLine과 Routing에는 개정 또는 유효구간 속성이 없다. Source finding context: 변경 전후 구성을 별개 기준선으로 식별할 수 없다는 현상은 Part의 현재 rev/current_eco만 보유하는 단일 현재상태 모델의 증상이다.
+  - affected purpose: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성 제공 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적
+  - failure condition: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때
+  - impact: 생산 시점의 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성 및 재작업 판단의 신뢰가 저하된다. Source finding context: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다.
+  - root hypothesis: 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없어 변경 전후 구성을 별개 식별자로 보존할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-001`, `entities.Part.attributes.rev/current_eco`, `entities.BomLine.attributes`, `entities.Routing.attributes`, `entities.ECO.attributes.effective_date/status`, `integrity_rules[2]`, `finding-ledger.yaml#finding-011`, `finding-011.cause-001`, `finding-011.cause-002`, `issue-stance-matrix.yaml#stances.issue-011.axiology`, `issue-stance-matrix.yaml#stances.issue-011.coverage`, `issue-ledger.yaml#issue-011`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-011.evolution`, `issue-stance-matrix.yaml#stances.issue-011.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-011`, `issue-stance-matrix.yaml#stances.issue-011.semantics`, `issue-stance-matrix.yaml#stances.issue-011.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: evolution
+  - action candidates: fix_now
+  - materiality: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지할 때 생산 시점의 설계·BOM·라우팅 기준선을 재현할 수 없다. 이는 PLM/MES 통합의 핵심 목적인 변경 연속성을 약화시키고 변경 적용, 추적성 및 재작업 판단의 신뢰를 크게 떨어뜨린다.
+  - root cause: 문제의 출발점은 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없다는 점이다. Part의 rev/current_eco는 현재값만 나타내므로 변경 전후 구성을 각각 불변 식별자로 보존할 권위 있는 구조가 없다.
+  - causal path: ECO 규칙은 적용일 이후 신규 rev 사용을 요구하지만 BomLine과 Routing에는 revision이나 유효구간이 없다. 따라서 적용 시점별 BOM·라우팅을 식별하지 못해 기존 객체를 덮어쓰거나 비표준 복제에 의존하게 되고, 결과적으로 과거 생산분과 향후 변경분의 기준선을 동일 모델에서 안정적으로 조회할 수 없게 된다.
+  - action: 먼저 PartRevision, BomRevision, RoutingRevision을 명시적 기준선 개념으로 도입하고 각 버전에 불변 식별자, 상태, valid_from/valid_to 또는 동등한 effectivity 조건, 적용 ECO를 연결해야 한다. 그다음 생산오더가 가변적인 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하도록 해야 생산 시점의 형상을 재현하고 변경 적용 및 추적성 판단을 안정화할 수 있다.
+
+- issue-004 (medium): BomLine.scrap_rate를 의미·산식·권위·생명주기가 없는 복사 스칼라로 둔 설계는 PLM/MES의 소요량 계산과 변경 재현을 불확정하게 만드는 medium 결함이며, 다음 단계 전에 수정해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: axiology, semantics
+  - remaining disagreement: 0/2 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology, semantics
+  - issue statement: BomLine.scrap_rate의 비추적 복사와 정의되지 않은 계산 의미가 자재계획의 일관성과 재현성을 약화한다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate의 복사본 관리 Source finding context: materialized-input.md:7; materialized-input.md:29-35; materialized-input.md:47-61; review-value-alignment-criteria.yaml:6-18 (value_type=principle, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…BOM·라우팅…정합성과 제조 운영 위험을 중심으로”) Source finding context: 공정 불량 계수를 BOM 줄의 엑셀 복사본으로 관리하면 BOM과 라우팅 간 권위 및 변경 정합성이 깨진다. Source finding context: 공정 조건이 변경되어도 BOM 복사본이 함께 갱신된다는 보장이 없으며 동일 부품도 공정별 불량률이 다를 수 있다. 이 절충은 편리한 수량 계산 대신 통합 기준의 추적성·재현성과 자재계획 정확도를 희생한다. Source finding context: scrap/yield를 해당 Operation과 자재 투입 관계에 귀속하고 Routing 또는 공정 리비전 및 유효기간과 연결한다. 외부 계획 시스템이 원본이라면 복사값 대신 source identifier, 동기화 상태, 갱신 규칙과 불일치 처리 정책을 모델링한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다. Source finding context: 공정 수율 개념의 권위와 생명주기를 공정/라우팅이 아니라 BomLine의 비추적 복사본에 배치했다. Source finding context: BomLine.scrap_rate가 생산계획팀 엑셀 값을 복사하여 보유한다. Source finding context: scrap_rate는 특정 Operation이나 Routing과 연결되지 않는다. Source finding context: 복사본의 원본 식별자, 유효기간, 동기화 상태 및 충돌 처리 규칙이 없다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate Source finding context: entities.BomLine.attributes.qty_per; entities.BomLine.attributes.scrap_rate Source finding context: scrap_rate가 비율인지 소요량 보정계수인지 정의되지 않은 채 독립 복사 값으로 모델링되었다. Source finding context: 같은 값이 불량 비율, 수율 손실률 또는 gross-up 계수 중 무엇인지에 따라 qty_per 보정식이 달라진다. 원천 엑셀과 복사본의 불일치까지 허용되어 시스템별 소요량 계산 결과가 갈릴 수 있다. Source finding context: 정규 의미를 하나로 선택해 이름, 값 범위, 단위 및 qty_per와의 계산식을 명시한다. 값의 원본을 하나로 정하고, 다른 시스템에는 원천값 또는 결정적 파생값만 전달한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다. Source finding context: 파생량의 정규 산식과 원천 권한을 정의하지 않았다. Source finding context: scrap_rate라는 이름과 '계수'라는 설명이 서로 다른 수량 의미를 허용한다. Source finding context: 값의 범위·단위·계산식 없이 외부 엑셀 값을 복사하도록 모델링했다.
+  - affected purpose: BOM·라우팅 및 소요량 계산을 PLM/MES가 일관되게 해석하는 통합 개념 기준 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준
+  - failure condition: 공정 불량률이 변경되거나 소비자가 scrap_rate를 손실 비율과 수량 배수 중 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때
+  - impact: 필요 수량과 자재 투입량이 시스템별로 달라지고 기준값의 권위와 계산 결과를 감사·재현하기 어렵다. Source finding context: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다. Source finding context: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다.
+  - root hypothesis: scrap_rate를 정규 의미·산식·원천 권한·생명주기가 없는 BomLine 복사 스칼라로 모델링하여 변경 정합성과 계산 의미가 함께 불확정적이다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-004`, `materialized-input.md:7`, `materialized-input.md:29-35`, `materialized-input.md:47-61`, `review-value-alignment-criteria.yaml:6-18`, `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-004`, `entities.BomLine.attributes.qty_per`, `entities.BomLine.attributes.scrap_rate`, `finding-ledger.yaml#finding-004`, `finding-ledger.yaml#finding-019`, `rel-011`, `finding-relation-graph.yaml#rel-011`, `finding-004.cause-001`, `finding-004.cause-002`, `materialized-input.md:29-61`, `finding-004.cause-003`, `finding-019.cause-001`, `finding-019.cause-002`, `entities.BomLine.attributes.scrap_rate.note`, `issue-stance-matrix.yaml#stances.issue-004.axiology`, `issue-stance-matrix.yaml#stances.issue-004.coverage`, `issue-ledger.yaml#issue-004`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004`, `issue-stance-matrix.yaml#stances.issue-004.evolution`, `issue-stance-matrix.yaml#stances.issue-004.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-004`, `issue-stance-matrix.yaml#stances.issue-004.semantics`, `issue-stance-matrix.yaml#stances.issue-004.structure`, `issue-ledger.yaml#dep-002`, `rel-010`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: axiology, semantics
+  - action candidates: fix_before_release, fix_now
+  - materiality: 공정 불량률 변경, 공정별 수율 차이, 원본과 복사본의 불일치가 발생하거나 소비자가 값을 손실 비율과 수량 배수로 다르게 해석하면 동일 BOM에서도 필요 수량과 자재 투입량이 시스템별로 달라진다. 이는 BOM·라우팅 정합성과 일관된 소요량 해석이라는 통합 기준을 약화하고, 기준값과 계산 결과의 감사·재현을 어렵게 한다.
+  - root cause: 문제의 출발점은 scrap_rate를 정규 의미, 값 범위·단위, qty_per 적용 산식, 권위 원본, 유효기간과 변경 생명주기 없이 BomLine에 복사한 것이다. 이 모델에서는 계산 의미와 최신 기준값을 어느 시스템이 소유하는지 모두 결정할 수 없으므로 의미 불일치와 동기화 불일치가 같은 원인에서 발생한다.
+  - causal path: 생산계획 엑셀 값이 BomLine.scrap_rate로 복사되지만 특정 Operation이나 Routing에 연결되지 않고, 원본 식별자·유효기간·동기화 상태·충돌 처리 규칙도 없다. 동시에 이름과 설명은 손실률과 보정계수라는 복수 해석을 허용하며 qty_per 보정식도 정의하지 않는다. 그 결과 공정 조건이나 원천값이 바뀌거나 소비자 해석이 갈릴 때 각 시스템이 서로 다른 소요량을 계산한다. 참여 렌즈들은 이 결합된 루트 원인과 medium 판단을 모두 수용했으며 남은 이견은 없다.
+  - action: 다음 단계 전에 scrap/yield의 정규 의미, 값 범위·단위와 qty_per 계산식을 하나로 확정하고, 이를 해당 Operation 및 자재 투입 관계에 귀속시켜 Routing 또는 공정 리비전과 유효기간에 연결해야 한다. 권위 원본도 하나로 지정하고 다른 시스템에는 원천값이나 결정적으로 산출된 값만 전달해야 한다. 외부 계획 시스템이 원본이면 원본 식별자, 동기화 상태·갱신 규칙과 불일치 처리 정책을 함께 모델링해야 변경 정합성과 계산 재현성을 확보할 수 있다.
+
+- issue-006 (medium): ECO가 정상 상태(open→approved→applied)만 표현하고 승인·적용 증거와 예외·정정 이력을 보존하지 않아, PLM/MES 간 설계변경의 책임성과 재현성을 약화하는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: ECO lifecycle과 감사 증거가 정상 상태 경로에 한정되어 변경 통제의 책임성과 재현성이 부족하다. Source finding context: ECO 변경관리 lifecycle 및 감사 증거 Source finding context: materialized-input.md:69-75 Source finding context: ECO가 정상 적용 경로만 표현하며 승인·적용 행위의 행위자, 시각, 근거와 거절·취소·대체·정정 경로가 누락되어 있다. Source finding context: 누가 어떤 근거로 변경을 승인·적용했는지 추적할 수 없고, 철회되거나 잘못 적용된 ECO를 기존 상태 의미와 충돌 없이 처리할 수 없다. 변경 통제의 책임성과 재현성이 기준 모델 밖에 남는다. Source finding context: ECO 상태 전이 전체를 정의하고 ChangeEvent 또는 ApprovalDecision을 추가해 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 기록한다. 취소·거절·대체·정정/재발행 관계도 포함한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적 Source finding context: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우 Source finding context: 상태값만으로 변경의 정당성이나 실제 적용 경위를 입증할 수 없어 제조 변경 통제에 대한 신뢰가 약화된다. Source finding context: ECO가 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약되어 있다. Source finding context: ECO에 승인·적용 행위의 actor, timestamp, rationale 또는 evidence 속성이 없다. Source finding context: ECO 상태 열거형이 open, approved, applied만 포함하여 예외 종결 및 사후 정정 lifecycle을 수용하지 못한다.
+  - affected purpose: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적
+  - failure condition: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우
+  - impact: 상태값만으로 변경의 정당성이나 실제 적용 경위를 입증할 수 없어 제조 변경 통제에 대한 신뢰가 약화된다.
+  - root hypothesis: ECO를 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약하여 예외 lifecycle과 승인·적용 증거를 표현하지 못한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-002`, `materialized-input.md:69-75`, `finding-ledger.yaml#finding-006`, `finding-006.cause-001`, `finding-006.cause-002`, `materialized-input.md:75`, `issue-stance-matrix.yaml#stances.issue-006.axiology`, `issue-stance-matrix.yaml#stances.issue-006.coverage`, `issue-ledger.yaml#issue-006`, `issue-stance-matrix.yaml#stances.issue-006.evolution`, `issue-stance-matrix.yaml#stances.issue-006.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-006`, `issue-stance-matrix.yaml#stances.issue-006.semantics`, `issue-stance-matrix.yaml#stances.issue-006.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: follow_up
+  - materiality: ECO가 거절·취소·대체되거나 승인·적용 경위를 감사해야 할 때 현재 상태값만으로는 누가 언제 어떤 근거로 판단하고 적용했는지 입증할 수 없다. 따라서 통제된 변경 전달과 변경 이력 추적이라는 목적에 대한 신뢰가 실질적으로 약화된다.
+  - root cause: 출발점은 ECO를 시간에 따른 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약한 모델링이다. 이 축약 때문에 상태 전이와 결정 행위가 독립된 이력으로 남지 않아 예외 lifecycle과 감사 증거를 모두 표현할 수 없다.
+  - causal path: ECO에는 승인·적용 행위의 actor, timestamp, rationale 또는 evidence가 없고, 상태 열거형도 open, approved, applied에 한정된다. 그 결과 거절·취소·대체·정정 경로를 일관되게 기록할 수 없으며, 서로 다른 변경 이력이 같은 현재 상태로 수렴하면 실제 경위를 역산할 수 없다.
+  - action: 먼저 거절·취소·대체·정정·재발행을 포함한 ECO 상태 전이 전체와 허용 규칙을 정의해야 한다. 이어 ChangeEvent 또는 ApprovalDecision을 모델링해 각 전이의 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 불변 이력으로 기록하고, 취소·대체·정정 관계를 ECO에 연결해야 한다. 현재 상태는 이 이력에서 일관되게 도출하거나 이력과의 정합성을 검증해야 감사와 조사에서 변경 경위를 재현할 수 있다.
+
+- issue-008 (medium): 병행 관리되는 제조 기준값에 권위 원본, 복제 출처, 유효기간, 동기화 상태 및 대사 이력이 없어 계획·원가·실행에 사용할 값을 일관되게 선택하거나 재현할 수 없는 medium 결함이며, 다음 단계 전에 해소해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 복수 시스템의 제조 기준값에 단일 권위와 대사 이력이 없어 일관된 값 선택이 불가능하다. Source finding context: 병행 관리 제조 기준값의 권위와 대사 Source finding context: materialized-input.md:35, 53, 98-99 Source finding context: 복수 시스템에서 병행 관리되는 scrap_rate와 표준시간 계열 값에 단일 권위 및 대사 이력 개념이 없다. Source finding context: 서로 다른 값이 존재할 때 어느 값을 계획·원가·실행에 사용해야 하는지 온톨로지가 결정하지 못한다. 오래된 복사본이나 수기값이 사용되어도 그 차이와 조정 근거를 추적할 수 없다. Source finding context: 각 관리값에 authoritative_system, value_as_of, valid_from/to를 지정하고, 복제본은 원본 참조와 동기화 시각을 갖게 한다. ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석 Source finding context: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우 Source finding context: 기준값 선택이 시스템별 또는 사용자별로 달라져 계획·원가 결과를 신뢰하거나 재현하기 어렵다. Source finding context: 병행 관리 사실은 주석으로만 서술되고 권위·복제·대사를 나타내는 공통 개념이 정의되지 않았다. Source finding context: scrap_rate 복사본에 원본 권위, 동기화 시점, 유효기간이 없다. Source finding context: MES 계산값과 표준원가 수기값의 대사에 기준값과 대사 사건을 기록할 모델이 없다.
+  - affected purpose: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석
+  - failure condition: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우
+  - impact: 기준값 선택이 시스템별 또는 사용자별로 달라져 계획·원가 결과를 신뢰하거나 재현하기 어렵다.
+  - root hypothesis: 병행 관리되는 제조 기준값의 권위·복제·유효기간·대사를 공통 개념으로 정의하지 않아 기준값 선택과 조정 이력을 재현할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004`, `materialized-input.md:35`, `materialized-input.md:53`, `materialized-input.md:99`, `finding-ledger.yaml#finding-008`, `finding-008.cause-001`, `finding-008.cause-002`, `issue-stance-matrix.yaml#stances.issue-008.axiology`, `issue-stance-matrix.yaml#stances.issue-008.coverage`, `issue-ledger.yaml#issue-008`, `issue-stance-matrix.yaml#stances.issue-008.evolution`, `issue-stance-matrix.yaml#stances.issue-008.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-008`, `issue-stance-matrix.yaml#stances.issue-008.semantics`, `issue-stance-matrix.yaml#stances.issue-008.structure`, `issue-ledger.yaml#dep-002`, `rel-010`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - materiality: 엑셀·MES·표준원가 시스템의 값이 다르거나 동기화 사이에 변경되면 시스템이나 사용자마다 다른 기준값을 선택할 수 있다. 따라서 PLM/MES 및 연계 장부 사이의 일관된 해석이 깨지고 계획·원가 결과의 신뢰성, 재현성 및 감사 가능성이 약화된다.
+  - root cause: 병행 관리 사실이 서술에만 머물고 권위·복제·유효기간·대사를 나타내는 공통 개념이 정의되지 않은 것이 출발점이다. 이 모델 부재 때문에 소비자는 어떤 값을 어느 시점의 권위 있는 기준으로 보아야 하는지 결정할 수 없고, 이후 조정 근거도 재구성할 수 없다.
+  - causal path: scrap_rate 복사본에는 원본 권위, 동기화 시점과 유효기간이 없으며, MES 계산값과 표준원가 수기값을 비교·조정한 대사 사건도 기록할 수 없다. 그 결과 값이 충돌하거나 오래된 복사본이 남아 있을 때 선택 규칙과 변경 이력이 사라져 시스템별·사용자별 결과가 달라진다. 참여 렌즈들은 이 루트 원인과 medium 심각도를 수용했으며 별도 숙의가 필요하지 않다고 결론냈다.
+  - action: 다음 단계 전에 각 제조 기준값에 authoritative_system, value_as_of 및 valid_from/to를 지정하고, 복제본에는 원본 참조와 동기화 시각·상태를 연결해야 한다. 이어 ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록해 값 선택과 조정 이력을 재현 가능하게 해야 한다. issue-004와 공유 원인 후보가 있으므로 공통 권위·복제 모델을 먼저 정의해 중복 개념을 피해야 한다.
+
+- issue-009 (medium): 생산오더 규칙을 유지하려면 생산오더가 적용한 PartRevision·BOM·Routing 형상을 고정하는 접점을 제공해야 하며, 이를 제공하지 않을 경우 MES 실행 영역을 제외한다는 경계와 외부 실행 온톨로지와의 계약을 명시해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, logic, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 6/6 deliberation participants
+  - accepted lenses: axiology, coverage, evolution, logic, semantics, structure
+  - remaining disagreement: 0/6 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 생산오더 규칙은 있으나 적용 형상 스냅샷, 실행 실적 및 로트 계보 개념이 없어 PLM 마스터와 MES 실행의 접점이 단절된다. Source finding context: MES 생산 실행·실적·추적성 개념 범위 Source finding context: materialized-input.md:12-82, 93-96 Source finding context: 생산 오더 생성 규칙을 선언하면서도 생산 오더, 적용 형상 스냅샷, 실제 투입·공정 실적 및 로트 계보 개념이 전혀 정의되어 있지 않다. Source finding context: MES 통합에서 계획 마스터가 실제 제조 기록으로 이어지는 접점이 비어 있다. released 라우팅 검사는 표현되어도 생성된 오더가 그 형상을 고정했는지, 실제 자재·공정·검사 결과가 무엇인지 추적할 수 없어 변경 영향 분석과 제조 계보 확인이 불가능하다. Source finding context: 최소 범위로 ProductionOrder, OrderConfigurationSnapshot, MaterialConsumption, OperationExecution 및 Lot/SerialGenealogy를 추가하고 PartRevision·BOM·Routing 버전과 연결한다. 실행 영역을 의도적으로 제외한다면 생산 오더 규칙을 제거하거나 별도 실행 온톨로지와의 명시적 경계·계약을 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공 Source finding context: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우 Source finding context: 마스터 데이터에서 실행 기록으로 이어지는 통합 계약이 없어 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 수 없다. Source finding context: 온톨로지가 제조 마스터 구조에 집중하면서도 그 범위를 명시적으로 한정하지 않은 채 MES 실행 규칙까지 포함했다. Source finding context: 생산 오더 생성 조건이 integrity rule로 선언되어 있다. Source finding context: 정의된 엔티티에는 ProductionOrder나 실제 투입·공정 실행·계보 기록이 없다.
+  - affected purpose: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공
+  - failure condition: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우
+  - impact: 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 통합 계약이 없다. Source finding context: 마스터 데이터에서 실행 기록으로 이어지는 통합 계약이 없어 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 수 없다.
+  - root hypothesis: 온톨로지가 제조 마스터에 집중하면서 범위를 명시적으로 한정하지 않은 채 MES 생산오더 규칙을 포함하여 실행 계약의 필수 개념이 비어 있다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-005`, `materialized-input.md:12-82`, `materialized-input.md:95`, `finding-ledger.yaml#finding-009`, `finding-009.cause-001`, `finding-009.cause-002`, `issue-stance-matrix.yaml#stances.issue-009.axiology`, `issue-stance-matrix.yaml#stances.issue-009.coverage`, `issue-ledger.yaml#issue-009`, `issue-stance-matrix.yaml#stances.issue-009.evolution`, `issue-stance-matrix.yaml#stances.issue-009.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-009`, `issue-stance-matrix.yaml#stances.issue-009.semantics`, `issue-stance-matrix.yaml#stances.issue-009.structure`, `검토 대상이 MES 실행·실적·로트 계보까지 포함하는지 밝히는 명시적 목적 및 범위 선언`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, accept_risk
+  - materiality: 현재 구조로는 생산오더 생성 전제는 선언되지만 실제 생산분에 적용된 형상과 사용 자재·공정을 확인할 수 없다. 따라서 PLM 마스터와 MES 제조 실행 사이의 개념 기준이라는 목적이 약화되고, 형상 변경 영향 분석·실적 대조·추적성 검증을 수행할 통합 계약도 성립하지 않는다.
+  - root cause: 문제의 시작점은 제조 마스터 중심의 온톨로지에 MES 생산오더 규칙을 포함하면서도 적용 형상 참조나 실행 영역의 명시적 경계를 정의하지 않은 것이다. 이 범위 불일치 때문에 규칙이 요구하는 실행 객체와 연결 계약이 비어 있다.
+  - causal path: 생산오더 생성 조건이 무결성 규칙으로 선언되어 실행 영역을 전제하지만, ProductionOrder와 적용 형상 스냅샷 및 실제 투입·공정·계보 기록은 정의되어 있지 않다. 그 결과 규칙의 적용 대상과 생성 결과를 완결적으로 평가할 수 없고, 생산 시점의 형상 고정에서 실제 제조 기록으로 이어지는 경로가 단절된다.
+  - action: 다음 단계 전에 목적과 범위를 먼저 결정해야 한다. MES 실행을 포함한다면 최소한 ProductionOrder와 OrderConfigurationSnapshot을 추가해 PartRevision·BOM·Routing 버전에 연결하고, 선언된 목적에 따라 MaterialConsumption·OperationExecution·Lot/SerialGenealogy까지 확장한다. 실행을 제외한다면 생산오더 규칙을 제거하거나 별도 실행 온톨로지와의 경계 및 교환 계약을 명시해야 한다.
+
+- issue-010 (medium): AlternatePart는 적용 조건·방향·승인 근거를 가진 일급 대체 규칙으로 완결되지 않았고 명시적 관계 그래프에도 연결되지 않아, PLM과 MES가 실제 대체 허용 범위와 방향을 일관되게 판단할 수 없는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: coverage, structure
+  - remaining disagreement: 0/2 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage, structure
+  - issue statement: 대체부품 규칙의 적용 조건과 명시적 관계 그래프 연결이 모두 누락되어 실제 대체 가능 범위와 방향을 신뢰할 수 없다. Source finding context: 대체부품의 적용 조건과 승인 통제 Source finding context: materialized-input.md:37-45, 91 Source finding context: 대체부품 관계에 유효기간, 적용 대상 형상·공장·공정, 수량/단위 조건 및 승인 근거가 없어 실제 대체 가능 범위를 표현할 수 없다. Source finding context: 대체 가능성은 단순 품목 쌍보다 조건 의존적인 제조 결정인데, 현재 모델에서는 한 번 등록된 관계가 모든 생산 상황에 적용되는 것으로 해석될 수 있다. 이는 승인되지 않은 대체품 사용이나 품질·조달 조건 위반 위험을 만든다. Source finding context: AlternatePart에 applicable_revision/configuration, site 또는 work_center, quantity/uom constraint, effective_from/to, approval_ref 및 substitution_reason을 추가하고 생산 오더에서 실제 대체 사용 사건을 기록하도록 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 조건을 표현할 수 없어 MES가 과도하게 넓은 대체 권한으로 해석하거나 승인 근거를 확인하지 못할 수 있다. Source finding context: 대체부품이 조건과 통제를 가진 적용 규칙이 아니라 방향만 가진 정적 품목 관계로 모델링되어 있다. Source finding context: AlternatePart의 속성은 두 품목 참조와 방향뿐이다. Source finding context: 유효기간, 적용 범위, 승인 근거 또는 실제 대체 사건을 표현하는 개념이 없다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 및 relations Source finding context: entities.AlternatePart; relations의 Part→Part alternate_of 항목 Source finding context: AlternatePart가 명시적 관계 그래프에서 우회되어 direction을 포함한 대체품 관계 구조가 끊겨 있다. Source finding context: 다른 주요 참조 속성은 relations에 대응 관계가 있지만 AlternatePart만 우회된다. 따라서 relations를 소비하는 PLM/MES 통합 경로에서는 AlternatePart.direction과 관계 인스턴스를 도달하거나 추적할 수 없다. Source finding context: Part→AlternatePart와 AlternatePart→Part의 역할별 관계를 명시하고, Part→Part alternate_of는 이 구조에서 결정적으로 파생되는 투영으로 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때 Source finding context: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다. Source finding context: 대체품 관계를 AlternatePart 엔티티와 Part→Part 단축 관계로 이중 표현하면서 둘 사이의 구조적 연결 또는 파생 규칙을 선언하지 않았다. Source finding context: 명시적 relations 목록에서 AlternatePart를 from 또는 to로 사용하는 관계가 없다. Source finding context: 대체 관계는 Part→Part alternate_of로 직접 표현되고 AlternatePart 경유는 note에만 서술되어 있다.
+  - affected purpose: BOM 대체품의 조건과 방향을 PLM/MES가 동일하게 해석하는 기준 제공 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공
+  - failure condition: 대체 승인이 특정 개정·기간·공장·공정·수량에 한정되거나 relations 그래프로 대체 관계를 탐색할 때 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때
+  - impact: MES가 대체 권한을 과도하게 넓게 해석하거나 방향성과 승인 근거를 잃어 잘못된 자재 대체가 가능하다. Source finding context: 조건을 표현할 수 없어 MES가 과도하게 넓은 대체 권한으로 해석하거나 승인 근거를 확인하지 못할 수 있다. Source finding context: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다.
+  - root hypothesis: AlternatePart를 조건과 증거를 가진 일급 적용 규칙으로 완결하지 않고 정적 품목 관계와 단축 그래프로 이중 표현하여 적용 범위와 관계 추적이 모두 불완전하다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006`, `materialized-input.md:37-45`, `materialized-input.md:91`, `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-001`, `entities.AlternatePart.attributes.primary_ref`, `entities.AlternatePart.attributes.alternate_ref`, `entities.AlternatePart.attributes.direction`, `relations: Part→Part alternate_of note`, `finding-ledger.yaml#finding-010`, `finding-ledger.yaml#finding-021`, `rel-013`, `finding-relation-graph.yaml#rel-013`, `finding-010.cause-001`, `finding-010.cause-002`, `materialized-input.md:84-91`, `finding-021.cause-001`, `relations 전체 목록`, `entities.AlternatePart`, `finding-021.cause-002`, `issue-stance-matrix.yaml#stances.issue-010.axiology`, `issue-stance-matrix.yaml#stances.issue-010.coverage`, `issue-ledger.yaml#issue-010`, `issue-stance-matrix.yaml#stances.issue-010.evolution`, `issue-stance-matrix.yaml#stances.issue-010.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-010`, `issue-stance-matrix.yaml#stances.issue-010.semantics`, `issue-stance-matrix.yaml#stances.issue-010.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: coverage, structure
+  - action candidates: fix_before_release, fix_now
+  - materiality: 대체 승인이 특정 개정·형상·기간·공장·공정·수량에 한정될 때 현재 모델은 그 범위를 표현하거나 승인 근거를 확인할 수 없다. 또한 relations 기반 통합 경로에서는 AlternatePart 인스턴스와 direction이 소실될 수 있어 MES가 대체 권한을 과도하게 적용하거나 잘못된 상호 대체를 허용할 위험이 있으므로, BOM 대체품을 PLM과 MES가 동일하게 해석한다는 목적을 약화한다.
+  - root cause: 문제의 시작점은 AlternatePart를 조건과 증거를 가진 일급 적용 규칙으로 정의하지 않은 채 정적 Part 간 관계와 단축 그래프로 이중 표현한 것이다. 이 모델링 선택 때문에 적용 범위를 담을 속성과 관계 인스턴스를 추적할 정규 그래프 경로가 동시에 마련되지 않았다.
+  - causal path: AlternatePart가 primary_ref, alternate_ref, direction만 가지므로 유효기간·적용 개정/형상·공장/공정·수량/단위·승인 근거와 실제 사용 사건을 표현할 수 없다. 동시에 명시적 relations에는 AlternatePart를 경유하는 역할별 관계가 없고 Part→Part alternate_of만 존재하므로, 그래프 소비자는 조건과 방향을 가진 관계 인스턴스에 도달할 수 없다. 그 결과 동일한 대체 관계의 허용 범위와 방향에 복수 해석이 생기고 잘못된 자재 대체로 이어질 수 있다.
+  - action: 다음 단계 전에 AlternatePart를 적용 조건과 승인 근거를 보유한 정규 관계 권위로 먼저 완결해야 한다. applicable revision/configuration, site/work center, quantity/UOM 조건, effective_from/to, approval_ref, substitution_reason을 모델링하고, Part→AlternatePart 및 AlternatePart→Part 역할별 관계를 명시한 뒤 Part→Part alternate_of를 그 구조에서 결정적으로 파생되는 투영으로 정의해야 한다. 마지막으로 생산 오더의 실제 대체 사용 사건을 해당 규칙에 연결해 승인 규칙과 실행 이력을 추적 가능하게 해야 한다.
+
+- issue-013 (medium): 재사용 가능한 공정 정의와 라우팅 문맥의 자원·시간 배정이 Operation 하나에 결합되어 있어, 동일 공정을 공장·작업장·대체설비·기간별로 다르게 운영하려면 Operation을 복제하거나 구조를 변경해야 하는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: evolution
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: evolution
+  - issue statement: Operation에 작업장과 표준시간을 직접 고정해 다공장·대체설비·시점별 배정을 확장하기 어렵다. Source finding context: manufacturing-bom-ontology.yaml — Operation과 WorkCenter 배정 Source finding context: entities.Operation.attributes.work_center/std_time_min; entities.Routing.attributes.operations; relations Routing→Operation and Operation→WorkCenter Source finding context: 공정 정의에 작업장과 표준시간이 직접 고정되어 다공장·대체설비·시점별 능력 변경을 확장하려면 Operation 복제나 기존 구조 변경이 필요하다. Source finding context: 동일 공정 단계가 공장, 설비, 제품 변형 또는 기간에 따라 다른 자원과 시간을 사용할 경우 하나의 Operation을 재사용할 수 없다. 확장 시 공정 의미와 실행 파라미터를 함께 복제하게 되어 변경 전파와 시스템 간 매핑이 취약해진다. Source finding context: OperationDefinition과 RoutingOperation을 분리한다. RoutingOperation에 순서, 사이트/자원 요구 또는 후보 WorkCenter, 표준시간, 유효구간을 두고 공통 공정 정의를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-003 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적 Source finding context: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때 Source finding context: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다. Source finding context: 재사용 가능한 공정 정의와 라우팅 문맥의 실행 배정을 하나의 Operation 객체에 결합했다. Source finding context: Operation 하나가 단일 WorkCenter와 표준시간을 직접 보유한다. Source finding context: 라우팅별 배정 차이를 표현할 수 없는 현상은 Routing이 Operation 참조 순서만 보유하고 배정 속성을 둘 중간 개념이 없는 구조의 증상이다.
+  - affected purpose: 라우팅 개념을 PLM 공정 정의와 MES 실행 자원 배정 사이의 확장 가능한 기준으로 사용하는 목적 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적
+  - failure condition: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때
+  - impact: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다.
+  - root hypothesis: 재사용 가능한 공정 정의와 라우팅 문맥의 자원·시간 배정을 하나의 Operation 객체에 결합하여 문맥별 변형을 표현하지 못한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-003`, `entities.Operation.attributes.work_center/std_time_min`, `entities.Routing.attributes.operations`, `relations Routing→Operation and Operation→WorkCenter`, `finding-ledger.yaml#finding-013`, `finding-013.cause-001`, `relations Operation→WorkCenter`, `finding-013.cause-002`, `relations Routing→Operation`, `issue-stance-matrix.yaml#stances.issue-013.axiology`, `issue-stance-matrix.yaml#stances.issue-013.coverage`, `issue-ledger.yaml#issue-013`, `issue-stance-matrix.yaml#stances.issue-013.evolution`, `issue-stance-matrix.yaml#stances.issue-013.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-013`, `issue-stance-matrix.yaml#stances.issue-013.semantics`, `issue-stance-matrix.yaml#stances.issue-013.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: evolution
+  - action candidates: follow_up
+  - materiality: 라우팅을 PLM 공정 정의와 MES 실행 자원 배정 사이의 확장 가능한 기준으로 사용하려면 공정의 동일성을 유지하면서 문맥별 배정을 표현할 수 있어야 한다. 현재 구조에서는 다공장·대체설비·서로 다른 표준시간을 수용할수록 Operation 복제와 예외 매핑이 늘어나므로 변경 전파와 시스템 간 매핑의 신뢰성이 약화된다.
+  - root cause: 문제의 시작점은 서로 역할과 변경 주기가 다른 재사용 공정 정의와 라우팅별 실행 배정을 단일 Operation 객체에 둔 것이다. 이 결합 때문에 공정 의미를 유지한 채 자원, 시간, 유효기간만 독립적으로 바꿀 수 없다.
+  - causal path: Operation이 단일 WorkCenter와 표준시간을 직접 보유하고, Routing은 Operation의 참조 순서만 가지며 배정 속성을 담을 중간 개념이 없다. 따라서 라우팅별 자원·시간 차이를 표현할 수 없고, 동일 공정의 문맥별 변형마다 Operation 복제나 예외 매핑이 필요해진다. 참여 렌즈들은 이 루트 원인과 medium 심각도에 동의했으며 남은 이견은 없다.
+  - action: OperationDefinition과 RoutingOperation을 분리해야 한다. 공통 공정 의미는 OperationDefinition에 유지하고, RoutingOperation이 이를 참조하면서 순서, 사이트 또는 자원 요구와 후보 WorkCenter, 표준시간, 유효구간을 보유하게 해야 한다. 이 분리를 먼저 확립해야 공정 정의를 복제하지 않고 라우팅 문맥별 배정을 확장할 수 있다.
+
+- issue-015 (medium): AlternatePart 계약은 무조건적 대칭성과 direction=one_way를 동시에 허용해 동일 인스턴스의 방향 의미를 모순되게 만든다. 이는 다음 단계 전에 수정해야 하는 medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: logic
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: logic
+  - issue statement: AlternatePart의 대칭성 계약과 one_way 상태가 논리적으로 충돌한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 계약 Source finding context: manufacturing-bom-ontology.yaml:33,37-40 Source finding context: AlternatePart의 대칭성 정의와 one_way 허용 상태는 동시에 만족될 수 없다. Source finding context: one_way 인스턴스 A→B는 B→A를 요구하지 않지만, 정의는 같은 인스턴스에 B→A를 의무화한다. 이는 inter-claim 충돌이며 possible 상태와 obligatory 대칭성 사이의 mixed modality 모순이다. Source finding context: direction을 유지한다면 정의를 'bidirectional일 때만 역방향이 성립한다'로 제한한다. 모든 대체가 대칭이어야 한다면 one_way를 enum과 기본값에서 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적 Source finding context: direction=one_way인 AlternatePart를 생성하거나 교환할 때 Source finding context: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을 약화한다. Source finding context: AlternatePart의 동일 계약 범위에 무조건적 대칭성 정의와 비대칭 허용 상태를 함께 선언했다. Source finding context: direction=one_way가 유효하며 기본값으로 선언되어 있지만, 엔티티 정의는 모든 대체 관계의 역관계를 요구한다. Source finding context: 대칭성 의무에 direction 조건이 없어 one_way 상태를 예외로 분리할 수 없다.
+  - affected purpose: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준 제공 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적
+  - failure condition: direction=one_way인 AlternatePart를 생성하거나 교환할 때
+  - impact: 동일 데이터가 시스템에 따라 단방향 또는 양방향 대체로 해석되어 통합 계약의 일관성과 실행 가능성이 약화된다. Source finding context: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을 약화한다.
+  - root hypothesis: AlternatePart 계약에 무조건적 대칭성 정의와 비대칭 one_way 허용 상태를 함께 선언하여 동일 인스턴스에 양립 불가능한 의무를 부여한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001`, `manufacturing-bom-ontology.yaml:33`, `manufacturing-bom-ontology.yaml:37-40`, `finding-ledger.yaml#finding-015`, `finding-015.cause-001`, `finding-015.cause-002`, `issue-stance-matrix.yaml#stances.issue-015.axiology`, `issue-stance-matrix.yaml#stances.issue-015.coverage`, `issue-ledger.yaml#issue-015`, `issue-stance-matrix.yaml#stances.issue-015.evolution`, `issue-stance-matrix.yaml#stances.issue-015.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-015`, `issue-stance-matrix.yaml#stances.issue-015.semantics`, `issue-stance-matrix.yaml#stances.issue-015.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: logic
+  - action candidates: fix_before_release, fix_now
+  - materiality: one_way 관계를 생성하거나 교환할 때 PLM과 MES가 동일 데이터를 각각 단방향 또는 양방향 대체로 해석할 수 있다. 따라서 대체 부품 관계의 단일 개념 기준을 제공하려는 통합 목적과 계약의 실행 가능성이 약화된다.
+  - root cause: 문제의 시작점은 같은 AlternatePart 계약 범위에 비대칭 상태인 one_way와 조건 없는 역방향 의무를 함께 선언한 것이다. 이 선언 자체가 동일 인스턴스에 양립할 수 없는 의무를 부여하므로 소비자별 해석 차이의 근본 원인이다.
+  - causal path: direction=one_way가 유효한 기본 상태로 허용되지만 엔티티 정의는 모든 대체 관계에 역관계를 요구한다. 대칭성 의무에 direction 조건이 없으므로 one_way를 예외로 분리할 수 없고, 그 결과 A→B 관계가 B→A를 요구하는지 여부를 계약만으로 일관되게 결정할 수 없다.
+  - action: 방향성을 유지하려면 역방향 의무를 direction=bidirectional인 경우로 제한해야 한다. 모든 대체 관계가 항상 대칭이어야 한다면 one_way를 enum과 기본값에서 제거해야 한다. 두 의미 중 하나를 정규 계약으로 확정하고 다음 단계 전에 스키마와 정의를 함께 정렬해야 한다.
+
+- issue-016 (medium): AlternatePart가 대칭 관계로 정의되면서 direction=one_way도 허용해, 동일한 대체 관계를 단방향 또는 양방향으로 해석할 수 있는 medium 결함이다. 다음 단계 전에 정규 관계 의미를 하나로 확정해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: AlternatePart의 대칭 관계 정의와 one_way 방향 모델이 서로 다른 의미를 부여한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart Source finding context: entities.AlternatePart.definition; entities.AlternatePart.attributes.direction Source finding context: 상호 대체 가능성과 단방향 대체 가능성은 동일한 관계가 아니다. 이 모순이 해소되지 않으면 PLM의 승인 대체 방향을 MES가 반대로 적용하는 등 부품 투입 판단이 달라질 수 있다. Source finding context: 대체 관계를 방향성 관계로 정의하고 bidirectional을 두 방향 관계의 축약으로 명시하거나, 항상 대칭인 관계가 의도라면 direction을 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준 Source finding context: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때 Source finding context: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다. Source finding context: 방향성 대체와 상호 대체를 하나의 관계 의미로 혼합했다. Source finding context: AlternatePart는 대칭 관계로 정의되면서 one_way 상태를 허용한다. Source finding context: 관계의 정규 의미가 방향성인지 대칭성인지 결정되지 않았다.
+  - affected purpose: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준
+  - failure condition: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때
+  - impact: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다.
+  - root hypothesis: 방향성 대체와 상호 대체를 하나의 관계 의미로 혼합하여 AlternatePart의 정규 의미가 결정되지 않았다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-001`, `entities.AlternatePart.definition`, `entities.AlternatePart.attributes.direction`, `finding-ledger.yaml#finding-016`, `finding-016.cause-001`, `entities.AlternatePart.attributes.direction.values`, `finding-016.cause-002`, `entities.AlternatePart.attributes.direction.note`, `issue-stance-matrix.yaml#stances.issue-016.axiology`, `issue-stance-matrix.yaml#stances.issue-016.coverage`, `issue-ledger.yaml#issue-016`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006`, `issue-stance-matrix.yaml#stances.issue-016.evolution`, `issue-stance-matrix.yaml#stances.issue-016.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-016`, `.onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001`, `issue-stance-matrix.yaml#stances.issue-016.semantics`, `issue-stance-matrix.yaml#stances.issue-016.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_before_release, fix_now
+  - materiality: PLM이 정의의 대칭성을 따르고 MES가 one_way 방향을 따르면 동일 데이터에 대해 서로 반대되는 부품 대체 허용 판단을 내릴 수 있다. 이는 PLM/MES 간 대체 부품 의미를 일관되게 전달하려는 목적과 제조 투입 결정의 신뢰를 약화한다.
+  - root cause: 출발점은 방향성 대체와 상호 대체를 하나의 AlternatePart 관계에 혼합한 것이다. 이 혼합 때문에 관계의 정규 의미가 방향성인지 대칭성인지 결정되지 않았고, 각 시스템이 서로 다른 규칙을 권위 있는 의미로 선택할 여지가 생겼다.
+  - causal path: AlternatePart의 정의는 상호 대체를 뜻하는 대칭성을 부여하지만 direction 값은 one_way 상태를 허용한다. 이 구조적 충돌이 관계의 정규 의미를 불명확하게 만들고, 결국 PLM과 MES가 같은 관계를 반대 방향으로 적용할 수 있게 한다. 참여 렌즈들은 이 루트 원인과 medium 심각도를 수용했으며 별도 숙의가 필요하지 않다고 판단했다.
+  - action: 다음 단계 및 릴리스 전에 대체 관계를 방향성 관계로 정규화하고 bidirectional을 두 방향 관계의 축약으로 명시해야 한다. 항상 대칭인 관계가 의도라면 대신 direction을 제거해야 한다. 어느 방식을 택하든 정의와 허용 값이 하나의 해석만 만들도록 먼저 의미 계약을 확정해야 PLM/MES 구현을 일관되게 맞출 수 있다.
+
+- issue-017 (medium): InspectionPlan을 Operation의 하위 유형으로 둔 현재 모델은 품질 계획 정보와 실행 검사 공정을 동일시하여 PLM과 MES의 개념 경계를 흐리는 material medium 결함이다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: InspectionPlan을 Operation 하위 유형으로 둔 모델이 품질 계획과 공정 단계의 의미를 혼동한다. Source finding context: manufacturing-bom-ontology.yaml — InspectionPlan inheritance Source finding context: entities.Operation.definition; entities.InspectionPlan.definition; entities.InspectionPlan.is_a Source finding context: InspectionPlan을 Operation의 하위 유형으로 둔 것은 계획 정보와 공정 단계를 존재론적으로 혼동한다. Source finding context: 계획·명세는 공정 단계가 수행될 때 참조되는 정보 객체이지 그 단계 자체와 동일하지 않다. 상속하면 InspectionPlan이 work_center와 std_time_min을 가진 라우팅 단계라는 의미까지 물려받아 PLM 품질계획과 MES 작업 단계의 식별이 흐려진다. Source finding context: 검사 공정은 Operation의 하위 유형(예: InspectionOperation)으로 두고, InspectionPlan은 별도 정보 객체로 모델링하여 검사 공정이 이를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-002 Source finding context: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다. Source finding context: 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급했다. Source finding context: InspectionPlan이 Operation을 상속하여 공정 단계의 속성과 역할을 획득한다. Source finding context: 계획 정보 객체와 라우팅 단계가 분리되지 않았다.
+  - affected purpose: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준
+  - failure condition: InspectionPlan을 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때
+  - impact: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다.
+  - root hypothesis: 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급하여 정보 객체와 실행 공정의 역할·수명주기를 혼합한다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-002`, `entities.Operation.definition`, `entities.InspectionPlan.definition`, `entities.InspectionPlan.is_a`, `entities.Operation.attributes`, `finding-ledger.yaml#finding-017`, `finding-017.cause-001`, `finding-017.cause-002`, `issue-stance-matrix.yaml#stances.issue-017.axiology`, `issue-stance-matrix.yaml#stances.issue-017.coverage`, `issue-ledger.yaml#issue-017`, `issue-stance-matrix.yaml#stances.issue-017.evolution`, `issue-stance-matrix.yaml#stances.issue-017.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-017`, `issue-stance-matrix.yaml#stances.issue-017.semantics`, `issue-stance-matrix.yaml#stances.issue-017.structure`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_before_release, fix_now
+  - materiality: InspectionPlan이 MES 라우팅 단계로 해석되면 계획의 버전·승인과 공정의 순서·표준시간·작업장이 같은 객체의 속성과 수명주기로 취급될 수 있다. 이는 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 개념을 정렬하려는 목적을 직접 약화한다.
+  - root cause: 출발점은 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급한 것이다. 이 모델링 결정이 정보 객체와 실행 공정의 서로 다른 역할, 권위, 변경 주기 및 수명주기를 분리하지 못하게 한다.
+  - causal path: InspectionPlan이 Operation을 상속하면서 작업장과 표준시간 등 공정 단계의 속성과 역할을 획득한다. 그 결과 계획 정보 객체와 라우팅 단계의 구분이 사라지고, 계획 자체가 MES에서 실행되는 공정 단계인 것처럼 해석될 수 있다. 모든 참여 렌즈는 이 루트 원인과 medium 심각도를 지지했으며 별도 숙의가 필요한 이견은 없었다.
+  - action: 다음 단계 전에 InspectionPlan을 Operation 상속 구조에서 분리하여 독립된 품질 계획 정보 객체로 모델링해야 한다. 실제 검사 단계는 Operation의 하위 유형인 InspectionOperation 등으로 두고, 해당 단계가 InspectionPlan을 참조하도록 관계를 정의해야 한다. 이렇게 해야 계획의 버전·승인과 공정의 순서·시간·작업장 계약을 독립적으로 관리하고 과거 참조 관계도 보존할 수 있다.
+
+- issue-018 (medium): Part의 ‘최소 관리 단위’ 표현은 관리 식별 역할과 구성상 원자성을 혼합해 Assembly 상속 및 BOM 대상 범위를 모호하게 한다. 우선 Part를 구성 여부와 무관한 관리 품목으로 명확히 정의해야 한다.
+  - issue stance agreement: 6/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, logic, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 5/6 deliberation participants
+  - accepted lenses: axiology, coverage, evolution, logic, semantics
+  - remaining disagreement: 1/6 deliberation participants
+  - remaining disagreement lenses: structure
+  - raised by lenses: semantics
+  - issue statement: Part의 '최소 관리 단위' 정의가 하위 품목을 포함하는 Assembly 계층과 의미적으로 충돌한다. Source finding context: manufacturing-bom-ontology.yaml — Part and Assembly Source finding context: entities.Part.definition; entities.Assembly.definition; entities.Assembly.is_a Source finding context: Part의 '최소 관리 단위' 정의는 하위 Part를 포함하는 Assembly가 Part라는 계층과 의미적으로 충돌한다. Source finding context: '최소'를 구성상 최소로 읽으면 Assembly는 Part가 될 수 없고, 관리 식별 단위로 읽으면 최소라는 표현이 불필요하게 분해 불가능성을 암시한다. 양 시스템이 Part를 서로 다른 입도와 범위로 해석할 수 있다. Source finding context: Part를 '구매·제조·재고·변경관리의 식별 대상 품목'처럼 구성과 무관한 관리 품목으로 정의하고, Assembly를 하위 품목 구조를 가진 Part로 한정한다. 정말 최소 구성요소를 뜻한다면 별도 LeafPart 개념으로 분리한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: 품목과 BOM 계층의 공통 개념 기준 Source finding context: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때 Source finding context: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다. Source finding context: 관리 단위라는 역할 개념과 구성상 최소 단위라는 구조 개념을 Part 정의에서 구분하지 않았다. Source finding context: 분해 가능한 Assembly가 최소 단위인 Part를 상속한다. Source finding context: Part의 최소성이 관리 식별성인지 구성 원자성인지 정의되지 않았다.
+  - affected purpose: 품목과 BOM 계층의 공통 개념 기준
+  - failure condition: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때
+  - impact: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다.
+  - root hypothesis: 관리 식별 단위라는 역할 개념과 구성상 최소 단위라는 구조 개념을 Part 정의에서 구분하지 않아 Assembly 상속 의미가 모호하다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-003`, `entities.Part.definition`, `entities.Assembly.definition`, `entities.Assembly.is_a`, `finding-ledger.yaml#finding-018`, `finding-018.cause-001`, `finding-018.cause-002`, `issue-stance-matrix.yaml#stances.issue-018.axiology`, `issue-stance-matrix.yaml#stances.issue-018.coverage`, `issue-ledger.yaml#issue-018`, `issue-stance-matrix.yaml#stances.issue-018.evolution`, `issue-stance-matrix.yaml#stances.issue-018.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-018`, `issue-stance-matrix.yaml#stances.issue-018.semantics`, `issue-stance-matrix.yaml#stances.issue-018.structure`, `Part의 규범적 의미가 관리 식별 역할임을 확인하는 정의 결정`, `구성상 원자성을 별도 LeafPart 유형으로 요구하는 소비자 계약 또는 BOM 대상 규칙`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: follow_up, accept_risk
+  - materiality: 소비자가 ‘최소’를 서로 다르게 해석하면 Assembly를 Part에 포함할지와 어떤 품목을 BOM 대상으로 삼을지가 시스템마다 달라진다. 이로 인해 품목·BOM 계층의 공통 개념 기준과 시스템 간 매핑 안정성이 약화된다.
+  - root cause: 문제의 출발점은 Part 정의가 관리 식별 단위와 구성상 원자성을 구분하지 않은 데 있다. 이 의미 혼합 때문에 동일한 상속 구조가 관리 관점에서는 타당하지만 구성 관점에서는 모순으로 해석된다.
+  - causal path: 분해 가능한 Assembly가 ‘최소 단위’로 정의된 Part를 상속한다. Part의 최소성이 관리 식별성인지 구성 원자성인지 명시되지 않았으므로, 소비자별로 Assembly 포함 여부와 BOM 품목 범위가 달라지는 상충 해석으로 이어진다.
+  - action: 먼저 Part의 규범적 의미를 구성 여부와 무관한 관리 품목 역할로 결정하고 정의를 수정해야 한다. Assembly는 하위 품목 구조를 가진 Part로 한정한다. LeafPart 분리나 계층 재설계는 구성상 원자성을 요구하는 소비자 계약 또는 BOM 규칙이 확인된 뒤에만 도입해야 불필요한 개념 확장을 피할 수 있다.
+  - unresolved disagreement: 정의 명확화 필요성에는 합의했지만, structure 렌즈는 이를 낮은 심각도의 국소적 정의 모호성으로 보아 영향 수준에 이견이 남아 있다.
+
+- issue-020 (medium): ECO가 영향 품목별 이전·결과 revision 전이를 연결하지 않아, 적용 시점에 사용할 생산 revision을 구조적으로 결정할 수 없는 medium 결함이다.
+  - issue stance agreement: 4/6
+  - agreed or narrowed lenses: evolution, logic, semantics, structure
+  - issue stance disagreement: 2/6
+  - disagreeing stance lenses: coverage, axiology
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 4/6 deliberation participants
+  - accepted lenses: evolution, logic, semantics, structure
+  - remaining disagreement: 2/6 deliberation participants
+  - remaining disagreement lenses: axiology, coverage
+  - raised by lenses: structure
+  - issue statement: ECO가 적용할 정확한 신규 revision으로 이어지는 구조적 연결이 없다. Source finding context: manufacturing-bom-ontology.yaml — ECO와 Part revision 연결 Source finding context: entities.Part.attributes.rev/current_eco; entities.ECO.attributes.affected_parts/effective_date/status; 세 번째 integrity_rule Source finding context: 적용일 이후 신규 rev를 따라야 한다는 규칙을 평가하려면 ECO, 대상 품목, 결과 revision의 대응이 필요하지만 현재 구조에서는 그 결과 revision을 결정할 수 없다. current_eco도 '최신' ECO만 가리켜 변경 이력별 연결을 대신하지 못한다. Source finding context: 최소한 ECO의 영향 품목별 결과 revision을 연결하는 effectivity 항목을 추가한다. 지속적인 변경 이력이 필요하면 PartRevision을 별도 엔티티로 두고 ECO와 이전·신규 revision을 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공 Source finding context: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우 Source finding context: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나 외부 추정에 의존하게 된다. Source finding context: revision을 Part의 단일 가변 문자열로만 모델링하여 ECO별 revision 전이를 연결할 구조가 없다. Source finding context: ECO와 Part 사이에는 changes/affected_parts 연결만 있으며 결과 revision 연결이 없다. Source finding context: Part.rev는 단일 문자열이고 current_eco는 최신 ECO만 참조한다.
+  - affected purpose: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공
+  - failure condition: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우
+  - impact: 적용 대상은 알 수 있어도 적용할 revision은 결정할 수 없어 구 revision 생산이나 외부 추정에 의존하게 된다. Source finding context: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나 외부 추정에 의존하게 된다.
+  - root hypothesis: revision을 Part의 단일 가변 문자열로만 모델링하여 ECO별 이전·결과 revision 전이를 구조적으로 연결할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-002`, `entities.Part.attributes.rev`, `entities.Part.attributes.current_eco`, `entities.ECO.attributes.affected_parts`, `entities.ECO.attributes.effective_date`, `integrity_rules[2]`, `finding-ledger.yaml#finding-022`, `finding-022.cause-001`, `relations: ECO→Part changes`, `entities.ECO.attributes`, `finding-022.cause-002`, `issue-stance-matrix.yaml#stances.issue-020.axiology`, `issue-stance-matrix.yaml#stances.issue-020.coverage`, `issue-ledger.yaml#issue-020`, `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-020.evolution`, `issue-stance-matrix.yaml#stances.issue-020.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-020`, `issue-stance-matrix.yaml#stances.issue-020.semantics`, `issue-stance-matrix.yaml#stances.issue-020.structure`, `issue-020과 상위 revision·effectivity 기준선 결함 사이의 same-root 또는 dependency 근거`, `통합 시 심각도 재평가를 뒷받침할 영향 범위 증거`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_before_release, fix_now
+  - materiality: PLM의 설계변경을 MES 생산 적용시점의 정확한 revision 기준으로 전달해야 하지만, 여러 ECO가 존재하거나 Part.rev 동기화가 늦으면 적용 대상만 확인할 수 있고 적용할 revision은 판정할 수 없다. 그 결과 구 revision 생산 또는 외부 추정에 의존할 수 있어 목적의 정확성을 약화한다.
+  - root cause: revision의 권위를 Part.rev라는 단일 가변 문자열에 두고 current_eco도 최신 ECO만 가리키므로, ECO별 이전 revision과 결과 revision의 정체성 및 전이를 보존할 수 없다. 이 모델링 결손이 적용 시점 판정 실패의 출발점이다.
+  - causal path: ECO와 Part 사이의 changes/affected_parts 연결은 영향 품목만 식별하고 결과 revision을 연결하지 않는다. 여기에 Part.rev의 덮어쓰기와 최신 ECO만 나타내는 current_eco가 결합되어 변경별 이력이 소실되므로, effective_date 이후 선택해야 할 revision을 관계 구조에서 유일하게 도출할 수 없다.
+  - action: 다음 단계 전에 ECO의 영향 품목별 이전·결과 revision 전이를 명시적으로 연결해야 한다. 지속적인 변경 이력과 시점별 판정이 필요하므로 PartRevision을 별도 엔티티로 두고 ECO, 대상 품목, 이전 revision, 신규 revision 및 effectivity를 연결해 생산 revision의 구조적 결정 근거를 마련해야 한다.
+  - unresolved disagreement: axiology와 coverage는 이 결함을 더 넓은 revision·effectivity 형상 기준선 부재의 증상으로 본다. 다만 현재 근거에는 두 결함의 same-root 또는 dependency 관계와 통합 시 심각도 재평가를 뒷받침할 영향 범위가 없어, 독립 결함으로 유지하면서 이견을 보존한다.
+
+- issue-021 (medium): 제품 구성 BOM과 스크랩 회수·재투입 물질 흐름을 BomLine 하나로 표현해 허용된 재투입 자기참조와 오류 순환을 구조적으로 구별할 수 없다. 이 이슈는 더 근본적인 개념 혼합의 직접 증상이며, 심각도는 medium으로 유지된다.
+  - issue stance agreement: 2/6
+  - agreed or narrowed lenses: logic, structure
+  - issue stance disagreement: 4/6
+  - disagreeing stance lenses: axiology, coverage, evolution, semantics
+  - not applicable lenses: none
+  - insufficient evidence lenses: none
+  - resolution accepted by: 5/6 deliberation participants
+  - accepted lenses: axiology, evolution, logic, semantics, structure
+  - remaining disagreement: 1/6 deliberation participants
+  - remaining disagreement lenses: coverage
+  - raised by lenses: structure
+  - issue statement: 스크랩 재투입 자기참조와 일반 BOM 순환을 구별할 구조적 표지가 누락되어 있다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 예외 구조 Source finding context: entities.BomLine.attributes; 첫 번째 integrity_rule Source finding context: 스크랩 재투입 자기참조를 일반 BOM 순환과 구별할 구조적 표지가 누락되어 있다. Source finding context: 동일한 Assembly 자기참조 구조가 허용된 재투입인지 잘못 생성된 순환인지 모델만으로 판별되지 않는다. 따라서 비순환 검증기가 예외를 안전하게 적용할 수 없다. Source finding context: BomLine에 명시적인 용도/edge_kind를 추가해 일반 구성과 scrap_reintroduction을 구분하고, 순환 예외는 해당 값과 자기참조 조건을 함께 만족할 때만 허용하도록 규칙을 구조화한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공 Source finding context: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때 Source finding context: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. Source finding context: 순환 예외의 의미가 무결성 규칙의 자연어에만 있고 BomLine 구조에는 투영되지 않았다. Source finding context: 규칙은 금지된 순환과 허용된 스크랩 재투입 자기참조를 구별해야 한다. Source finding context: BomLine에는 두 경우를 구별하는 속성이나 별도 관계가 없다.
+  - affected purpose: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공
+  - failure condition: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때
+  - impact: 정상 재투입이 거부되거나 임의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. Source finding context: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다.
+  - root hypothesis: 스크랩 재투입 순환 예외의 의미가 자연어 무결성 규칙에만 있고 BomLine 구조에 투영되지 않아 허용된 자기참조와 오류 순환을 구별할 수 없다.
+  - evidence: `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-003`, `integrity_rules[0]`, `entities.BomLine.attributes.parent_ref`, `entities.BomLine.attributes.child_ref`, `entities.BomLine.attributes 전체`, `finding-ledger.yaml#finding-023`, `finding-023.cause-001`, `finding-023.cause-002`, `entities.BomLine.attributes`, `issue-stance-matrix.yaml#stances.issue-021.axiology`, `issue-stance-matrix.yaml#stances.issue-021.coverage`, `issue-ledger.yaml#issue-021`, `issue-stance-matrix.yaml#stances.issue-021.evolution`, `issue-stance-matrix.yaml#stances.issue-021.logic`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml#issue-021`, `issue-stance-matrix.yaml#stances.issue-021.semantics`, `issue-stance-matrix.yaml#stances.issue-021.structure`, `별도 MaterialFlow의 끝점·허용 조건·종료 조건 및 BomLine 연계 규칙`, `일반 BOM 소비 경로가 현재 자기순환 때문에 실패하거나 잘못 계산되는지 보여 주는 실행 증거`, `.onto/review/20260717-a8a687d8/issue-ledger.yaml`, `.onto/review/20260717-a8a687d8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_before_release, follow_up
+  - materiality: Assembly 자기참조를 판정할 때 정상 재투입을 거부하거나 임의 자기순환을 허용할 수 있어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. 따라서 PLM/MES가 BOM 구조를 일관되게 검증하고 전개할 수 있는 개념 기준이라는 목적을 훼손한다.
+  - root cause: 출발점은 구조적 표지 하나의 누락이 아니라 제품 구성 관계와 스크랩 재투입 물질 흐름을 BomLine에 혼합한 것이다. 이 혼합 때문에 두 관계의 의미, 순환 규칙, 끝점과 종료 조건을 독립적으로 표현하고 강제할 수 없으며, edge_kind 부재는 그 결과로 나타난 직접 증상이다.
+  - causal path: 무결성 규칙은 금지된 일반 BOM 순환과 허용된 스크랩 재투입 자기참조를 구별해야 하지만, BomLine의 parent_ref와 child_ref를 포함한 현재 속성에는 이를 판별할 구조가 없다. 그 결과 동일한 자기참조가 두 의미를 모두 나타내어 비순환 검사기와 BOM 전개기가 예외를 안전하게 적용할 수 없다.
+  - action: 정규 해결은 재투입을 별도 MaterialFlow 개념으로 분리하고 그 끝점, 허용 조건, 종료 조건 및 BomLine 연계 규칙을 정의한 뒤, 일반 BomLine에는 비순환 규칙을 유지하는 것이다. edge_kind 추가만으로는 일반 BOM 소비자의 순환 위험과 향후 회수 유형별 예외 증가를 해소하지 못하므로 충분한 종결 조치가 아니다.
+  - unresolved disagreement: coverage 렌즈는 일반 BOM 경로의 직접 영향을 근거로 심각도 상향을 유지한다. 다만 현재 자기순환이 실제 소비 경로에서 실패나 오계산을 일으킨다는 실행 증거가 없어, 합의된 심각도는 medium이다.
+
+### Conditional Consensus
+- issue-001 (resolved): ECO effective_date와 비동기 갱신되는 Part.rev가 변경 효력의 권위를 나누고 있어, 주간 동기화 전에는 생산에 적용할 revision을 유일하게 결정할 수 없는 high 결함이다.
+  - unresolved disagreement: coverage 렌즈는 더 포괄적인 원인을 Part·BOM·Routing 전체의 시점별 형상 기준선 부재로 본다. 심각도와 현재 결함의 존재에는 이견이 없지만, 두 결함의 same-root 또는 상하위 관계를 확정할 근거는 남아 있지 않다.
+- issue-002 (no-deliberation-needed): 제품 구성과 스크랩 회수·재투입을 같은 BomLine으로 표현한 개념 혼합은 비순환 BOM 계약과 자기참조 예외를 충돌시키는 high 결함이다. 재투입 흐름은 BOM에서 분리해야 한다.
+- issue-003 (no-deliberation-needed): 품목별 UOM 변환의 권위·유효성·실패 규칙이 통합 모델에 없어 BOM 수량의 공통 계산 의미를 보장할 수 없는 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+- issue-005 (no-deliberation-needed): BOM·라우팅의 revision·effectivity 형상 기준선 부재는 생산 시점의 유효 제조 구성을 선택하거나 과거 구성을 재구성할 수 없게 하는 high 결함이다.
+- issue-007 (no-deliberation-needed): 차원화된 Quantity·UnitOfMeasure와 품목별 변환 모델이 없어 PLM BOM 수량과 MES 투입량·작업장 능력을 공통 계산 의미로 연결할 수 있는 계약이 부재한 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+- issue-011 (no-deliberation-needed): BOM과 라우팅에 불변 revision 및 유효구간이 없어 ECO 전후의 제조 형상을 별도 기준선으로 보존할 수 없는 high 결함이며, 변경 연속성 확보를 위해 즉시 수정해야 한다.
+- issue-004 (no-deliberation-needed): BomLine.scrap_rate를 의미·산식·권위·생명주기가 없는 복사 스칼라로 둔 설계는 PLM/MES의 소요량 계산과 변경 재현을 불확정하게 만드는 medium 결함이며, 다음 단계 전에 수정해야 한다.
+- issue-006 (no-deliberation-needed): ECO가 정상 상태(open→approved→applied)만 표현하고 승인·적용 증거와 예외·정정 이력을 보존하지 않아, PLM/MES 간 설계변경의 책임성과 재현성을 약화하는 medium 결함이다.
+- issue-008 (no-deliberation-needed): 병행 관리되는 제조 기준값에 권위 원본, 복제 출처, 유효기간, 동기화 상태 및 대사 이력이 없어 계획·원가·실행에 사용할 값을 일관되게 선택하거나 재현할 수 없는 medium 결함이며, 다음 단계 전에 해소해야 한다.
+- issue-009 (narrowed): 생산오더 규칙을 유지하려면 생산오더가 적용한 PartRevision·BOM·Routing 형상을 고정하는 접점을 제공해야 하며, 이를 제공하지 않을 경우 MES 실행 영역을 제외한다는 경계와 외부 실행 온톨로지와의 계약을 명시해야 한다.
+- issue-010 (no-deliberation-needed): AlternatePart는 적용 조건·방향·승인 근거를 가진 일급 대체 규칙으로 완결되지 않았고 명시적 관계 그래프에도 연결되지 않아, PLM과 MES가 실제 대체 허용 범위와 방향을 일관되게 판단할 수 없는 medium 결함이다.
+- issue-013 (no-deliberation-needed): 재사용 가능한 공정 정의와 라우팅 문맥의 자원·시간 배정이 Operation 하나에 결합되어 있어, 동일 공정을 공장·작업장·대체설비·기간별로 다르게 운영하려면 Operation을 복제하거나 구조를 변경해야 하는 medium 결함이다.
+- issue-015 (no-deliberation-needed): AlternatePart 계약은 무조건적 대칭성과 direction=one_way를 동시에 허용해 동일 인스턴스의 방향 의미를 모순되게 만든다. 이는 다음 단계 전에 수정해야 하는 medium 결함이다.
+- issue-016 (no-deliberation-needed): AlternatePart가 대칭 관계로 정의되면서 direction=one_way도 허용해, 동일한 대체 관계를 단방향 또는 양방향으로 해석할 수 있는 medium 결함이다. 다음 단계 전에 정규 관계 의미를 하나로 확정해야 한다.
+- issue-017 (no-deliberation-needed): InspectionPlan을 Operation의 하위 유형으로 둔 현재 모델은 품질 계획 정보와 실행 검사 공정을 동일시하여 PLM과 MES의 개념 경계를 흐리는 material medium 결함이다.
+- issue-018 (narrowed): Part의 ‘최소 관리 단위’ 표현은 관리 식별 역할과 구성상 원자성을 혼합해 Assembly 상속 및 BOM 대상 범위를 모호하게 한다. 우선 Part를 구성 여부와 무관한 관리 품목으로 명확히 정의해야 한다.
+  - unresolved disagreement: 정의 명확화 필요성에는 합의했지만, structure 렌즈는 이를 낮은 심각도의 국소적 정의 모호성으로 보아 영향 수준에 이견이 남아 있다.
+- issue-020 (resolved): ECO가 영향 품목별 이전·결과 revision 전이를 연결하지 않아, 적용 시점에 사용할 생산 revision을 구조적으로 결정할 수 없는 medium 결함이다.
+  - unresolved disagreement: axiology와 coverage는 이 결함을 더 넓은 revision·effectivity 형상 기준선 부재의 증상으로 본다. 다만 현재 근거에는 두 결함의 same-root 또는 dependency 관계와 통합 시 심각도 재평가를 뒷받침할 영향 범위가 없어, 독립 결함으로 유지하면서 이견을 보존한다.
+- issue-021 (narrowed): 제품 구성 BOM과 스크랩 회수·재투입 물질 흐름을 BomLine 하나로 표현해 허용된 재투입 자기참조와 오류 순환을 구조적으로 구별할 수 없다. 이 이슈는 더 근본적인 개념 혼합의 직접 증상이며, 심각도는 medium으로 유지된다.
+  - unresolved disagreement: coverage 렌즈는 일반 BOM 경로의 직접 영향을 근거로 심각도 상향을 유지한다. 다만 현재 자기순환이 실제 소비 경로에서 실패나 오계산을 일으킨다는 실행 증거가 없어, 합의된 심각도는 medium이다.
+
+### Disagreement
+- issue-001: coverage 렌즈는 더 포괄적인 원인을 Part·BOM·Routing 전체의 시점별 형상 기준선 부재로 본다. 심각도와 현재 결함의 존재에는 이견이 없지만, 두 결함의 same-root 또는 상하위 관계를 확정할 근거는 남아 있지 않다.
+- issue-018: 정의 명확화 필요성에는 합의했지만, structure 렌즈는 이를 낮은 심각도의 국소적 정의 모호성으로 보아 영향 수준에 이견이 남아 있다.
+- issue-020: axiology와 coverage는 이 결함을 더 넓은 revision·effectivity 형상 기준선 부재의 증상으로 본다. 다만 현재 근거에는 두 결함의 same-root 또는 dependency 관계와 통합 시 심각도 재평가를 뒷받침할 영향 범위가 없어, 독립 결함으로 유지하면서 이견을 보존한다.
+- issue-021: coverage 렌즈는 일반 BOM 경로의 직접 영향을 근거로 심각도 상향을 유지한다. 다만 현재 자기순환이 실제 소비 경로에서 실패나 오계산을 일으킨다는 실행 증거가 없어, 합의된 심각도는 medium이다.
+
+### Axiology-Proposed Additional Perspectives
+- issue-001 (high): ECO effective_date와 비동기 갱신되는 Part.rev가 변경 효력의 권위를 나누고 있어, 주간 동기화 전에는 생산에 적용할 revision을 유일하게 결정할 수 없는 high 결함이다.
+- issue-002 (high): 제품 구성과 스크랩 회수·재투입을 같은 BomLine으로 표현한 개념 혼합은 비순환 BOM 계약과 자기참조 예외를 충돌시키는 high 결함이다. 재투입 흐름은 BOM에서 분리해야 한다.
+- issue-003 (high): 품목별 UOM 변환의 권위·유효성·실패 규칙이 통합 모델에 없어 BOM 수량의 공통 계산 의미를 보장할 수 없는 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+- issue-004 (medium): BomLine.scrap_rate를 의미·산식·권위·생명주기가 없는 복사 스칼라로 둔 설계는 PLM/MES의 소요량 계산과 변경 재현을 불확정하게 만드는 medium 결함이며, 다음 단계 전에 수정해야 한다.
+
+### Purpose Alignment Verification
+- issue-001: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제
+- issue-002: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준
+- issue-003: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제
+- issue-005: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공
+- issue-007: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합
+- issue-011: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성 제공 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적
+- issue-004: BOM·라우팅 및 소요량 계산을 PLM/MES가 일관되게 해석하는 통합 개념 기준 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준
+- issue-006: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적
+- issue-008: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석
+- issue-009: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공
+- issue-010: BOM 대체품의 조건과 방향을 PLM/MES가 동일하게 해석하는 기준 제공 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공
+- issue-013: 라우팅 개념을 PLM 공정 정의와 MES 실행 자원 배정 사이의 확장 가능한 기준으로 사용하는 목적 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적
+- issue-015: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준 제공 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적
+- issue-016: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준
+- issue-017: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준
+- issue-018: 품목과 BOM 계층의 공통 개념 기준
+- issue-020: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공
+- issue-021: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공
+
+### Boundary Notes
+- 실제 PLM/MES에 별도의 보완 통제가 존재하는지는 현재 검토 경계에서 확인되지 않았다.
+- 각 연계 시스템의 실제 순환 방지 구현은 이 검토 경계 밖이며, 현재 증거는 공유 모델에 종료 의미와 계산 규칙이 없음을 확정한다.
+- 실제 현장 환산표의 존재 여부는 경계 내 증거로 확인되지 않지만, 존재하더라도 현재 통합 개념에는 그 권위와 추적성이 표현되지 않는다.
+
+### Immediate Actions Required
+- issue-001 (high)
+  - issue: ECO effective_date와 비동기 갱신되는 Part.rev가 변경 효력의 권위를 나누고 있어, 주간 동기화 전에는 생산에 적용할 revision을 유일하게 결정할 수 없는 high 결함이다.
+  - target: ECO 효력과 Part 리비전 갱신의 권위가 분산되어 변경 적용 시점이 모호하다. Source finding context: manufacturing-bom-ontology.yaml — ECO 효력과 Part 리비전 적용 규칙 Source finding context: materialized-input.md:7; materialized-input.md:20-21; materialized-input.md:69-75; materialized-input.md:96; review-value-alignment-criteria.yaml:6-18 (value_type=purpose, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…변경관리 개념의 정합성과 제조 운영 위험을 중심으로”) Source finding context: ECO 효력일과 주간 리비전 동기화의 불일치가 통합 기준의 변경 적용 시점을 모호하게 만든다. Source finding context: 효력일 이후부터 다음 동기화까지 ECO와 Part.rev가 서로 다른 답을 줄 수 있다. 이 상태에서는 PLM과 MES가 동일 생산분에 서로 다른 설계 리비전을 적용할 수 있어 변경관리 정합성과 제조 실행 안전이라는 선언 목적을 직접 약화한다. Source finding context: 유효기간을 가진 PartRevision과 ECO 적용 관계를 모델링하고, 생산 오더가 생성 시점의 적용 리비전을 명시적으로 고정하도록 한다. 배치 동기화 상태와 무관하게 effective_date 기준 조회가 단일 결과를 반환하도록 우선순위와 실패 규칙도 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제 Source finding context: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우 Source finding context: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다. Source finding context: 변경 효력의 권위가 effective-dated revision 객체가 아니라 비동기 갱신되는 Part.rev와 ECO에 분산되어 있다. Source finding context: 효력일 이후 신규 rev 적용을 요구하지만 Part.rev 갱신은 주간 배치 이후에만 이루어진다. Source finding context: 생산 오더가 적용 리비전을 직접 참조하거나 고정하는 모델이 없다. Source finding context: 변경 효력과 현재 리비전의 권위가 별도 원본 및 비동기 필드에 분산되어 있다.
+  - failure condition: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우
+  - candidates: fix_now
+  - rationale: 먼저 유효기간을 가진 PartRevision을 변경 효력의 단일 권위로 모델링하고 ECO와의 적용 관계, effective_date 기준 선택 우선순위, 중복·공백 시 실패 규칙을 정의해야 한다. 이어 생산 오더가 생성 시점에 결정된 PartRevision을 명시적으로 고정하도록 해야 한다. 이 순서로 구현해야 배치 동기화 상태와 무관하게 조회가 단일 결과를 반환하고 실행 이력도 보존된다.
+  - remediation: 먼저 유효기간을 가진 PartRevision을 변경 효력의 단일 권위로 모델링하고 ECO와의 적용 관계, effective_date 기준 선택 우선순위, 중복·공백 시 실패 규칙을 정의해야 한다. 이어 생산 오더가 생성 시점에 결정된 PartRevision을 명시적으로 고정하도록 해야 한다. 이 순서로 구현해야 배치 동기화 상태와 무관하게 조회가 단일 결과를 반환하고 실행 이력도 보존된다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-002 (high)
+  - issue: 제품 구성과 스크랩 회수·재투입을 같은 BomLine으로 표현한 개념 혼합은 비순환 BOM 계약과 자기참조 예외를 충돌시키는 high 결함이다. 재투입 흐름은 BOM에서 분리해야 한다.
+  - target: 제품 구성과 스크랩 재투입 흐름의 개념 혼합이 BOM 전개 안전성을 훼손한다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 금지와 스크랩 재투입 예외 Source finding context: materialized-input.md:7; materialized-input.md:23-35; materialized-input.md:93-94; review-value-alignment-criteria.yaml:6-18 (value_type=tradeoff, alignment_direction=misaligned; authority excerpt: “BOM/공정 온톨로지가 PLM/MES 통합의 개념 기준 문서로 적절한지…BOM…정합성과 제조 운영 위험을 중심으로”) Source finding context: 재생 원료 흐름을 자기 참조 BOM으로 표현하는 국소 편의가 BOM 전개의 안전성과 의미를 훼손한다. Source finding context: 제품 구성 구조와 공정 중 회수·재투입 흐름은 목적과 계산 방식이 다르다. 이를 동일 BOM 계층에 넣으면 BOM 폭발, 소요량 계산, 원가 누적 또는 순환 검증이 예외별 동작에 의존하게 되어 통합 개념 기준의 예측 가능성을 잃는다. Source finding context: BOM은 비순환 제품 구성 구조로 유지하고, 스크랩 발생·회수·재투입은 Operation 또는 별도의 MaterialRecovery/MaterialFlow 관계로 분리한다. 재투입률과 질량수지 규칙을 해당 흐름에 배치한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준 Source finding context: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우 Source finding context: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다. Source finding context: 제품 구성과 공정 물질 흐름이라는 서로 다른 목적의 개념을 BomLine 하나로 통합했다. Source finding context: 비순환 BOM 원칙과 자기 포함 예외가 같은 무결성 규칙에 공존한다. Source finding context: 스크랩 재투입이 별도 흐름 관계가 아니라 Assembly의 child BomLine으로 표현된다. Source finding context: 제품 구성 구조와 공정 회수 흐름을 구분하는 개념이 모델에 없다.
+  - failure condition: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우
+  - candidates: fix_now
+  - rationale: 먼저 BOM을 비순환 제품 구성 구조로 한정하고, 스크랩 발생·회수·재투입을 별도의 MaterialFlow 계열 관계로 분리해야 한다. 그다음 재투입률, 질량수지 및 종료 규칙을 해당 흐름에 배치하여 BOM 전개·소요량·원가 소비자가 예외 없이 구성 관계를 처리하고 공정 흐름 소비자가 별도 규칙을 적용하도록 해야 한다. 이 조치는 현재 차단 결함으로서 대상 범위에서 반드시 완료되어야 한다.
+  - remediation: 먼저 BOM을 비순환 제품 구성 구조로 한정하고, 스크랩 발생·회수·재투입을 별도의 MaterialFlow 계열 관계로 분리해야 한다. 그다음 재투입률, 질량수지 및 종료 규칙을 해당 흐름에 배치하여 BOM 전개·소요량·원가 소비자가 예외 없이 구성 관계를 처리하고 공정 흐름 소비자가 별도 규칙을 적용하도록 해야 한다. 이 조치는 현재 차단 결함으로서 대상 범위에서 반드시 완료되어야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-003 (high)
+  - issue: 품목별 UOM 변환의 권위·유효성·실패 규칙이 통합 모델에 없어 BOM 수량의 공통 계산 의미를 보장할 수 없는 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+  - target: 권위 있는 품목별 UOM 환산 모델이 없어 BOM 수량의 공통 의미를 보장하지 못한다. Source finding context: manufacturing-bom-ontology.yaml — 품목 UOM과 현장 환산 Source finding context: materialized-input.md:7; materialized-input.md:19; materialized-input.md:29-35; materialized-input.md:100; review-value-alignment-criteria.yaml:6-18 (value_type=commitment, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…제조 운영 위험을 중심으로”) Source finding context: 환산계수 없이 현장 판단에 맡긴 단위 변환은 BOM 수량을 시스템 간 공통 의미로 만들지 못한다. Source finding context: 동일 qty_per가 어느 단위를 기준으로 해석되는지와 변환 근거가 통합 데이터로 재현되지 않는다. 특히 개수와 질량 간 환산은 품목별 물성에 의존하므로 현장별 계산 차이가 자재 소요량, 불출량 및 재고 정합성을 훼손할 수 있다. Source finding context: BomLine 수량에 명시적 UOM을 부여하고, 품목별 기준 UOM 및 유효기간·출처를 가진 변환 규칙을 권위 있는 마스터로 모델링한다. 필요한 변환이 없거나 차원이 맞지 않으면 생산 또는 인터페이스 처리를 실패시키도록 규정한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제 Source finding context: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우 Source finding context: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다. Source finding context: 수량 단위와 변환 규칙을 통합 모델의 권위 있는 개념으로 두지 않았다. Source finding context: 품목별 환산계수 마스터가 없고 변환을 현장에서 수행한다. Source finding context: BomLine.qty_per에는 자체 단위 또는 기준 단위 규칙이 없다. Source finding context: 모델은 Part.uom 열거만 제공하고 단위 변환의 권위·유효성·실패 규칙을 제공하지 않는다.
+  - failure condition: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우
+  - candidates: fix_now
+  - rationale: 먼저 출처와 유효기간을 가진 품목별 기준 UOM 및 변환 규칙을 권위 있는 마스터로 정의하고, 그다음 BomLine 수량에 명시적 UOM을 연결해야 한다. 이후 변환 시점에 해당 규칙을 적용하고, 필요한 규칙이 없거나 단위 차원이 호환되지 않으면 생산 또는 인터페이스 처리를 실패시키는 검증 규칙을 두어 임의 환산을 차단해야 한다.
+  - remediation: 먼저 출처와 유효기간을 가진 품목별 기준 UOM 및 변환 규칙을 권위 있는 마스터로 정의하고, 그다음 BomLine 수량에 명시적 UOM을 연결해야 한다. 이후 변환 시점에 해당 규칙을 적용하고, 필요한 규칙이 없거나 단위 차원이 호환되지 않으면 생산 또는 인터페이스 처리를 실패시키는 검증 규칙을 두어 임의 환산을 차단해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-005 (high)
+  - issue: BOM·라우팅의 revision·effectivity 형상 기준선 부재는 생산 시점의 유효 제조 구성을 선택하거나 과거 구성을 재구성할 수 없게 하는 high 결함이다.
+  - target: BOM·라우팅의 개정·유효기간·형상 기준선 부재로 생산 시점의 제조 구성을 재구성할 수 없다. Source finding context: BOM·라우팅 구성의 시점별 형상 관리 Source finding context: materialized-input.md:14-35, 55-61, 69-75, 93-96 Source finding context: BOM과 라우팅에 개정·유효기간·형상 기준선 개념이 없어 과거 또는 특정 생산일의 제조 구성을 재구성할 수 없다. Source finding context: ECO 적용 전후의 BOM 및 공정 순서를 같은 Part에서 구분할 수 없으므로, 주간 rev 동기화 지연 중 어느 구성을 생산에 사용해야 하는지 개념 모델만으로 결정하거나 사후 재현할 수 없다. 이는 PLM 설계 형상과 MES 생산 형상을 연결하는 기준 문서의 핵심 목적을 약화한다. Source finding context: PartRevision 또는 ConfigurationBaseline을 도입하고 BomLine 및 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여한다. ECO가 변경 전후 형상과 해당 유효 구간을 명시적으로 연결하도록 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: PLM/MES 통합에서 품목·BOM·라우팅·변경의 공통 형상 기준 제공 Source finding context: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우 Source finding context: 생산 시점의 유효 BOM/라우팅 선택과 과거 생산 형상 재구성이 불가능해 잘못된 부품 또는 공정 사용 위험이 생긴다. Source finding context: 온톨로지가 품목·BOM·라우팅을 현재값 중심으로 표현하고, 제조 형상의 버전과 시간 효력을 독립 개념으로 모델링하지 않았다. Source finding context: BomLine과 Routing에 개정 식별자나 유효 시작·종료 구간이 없다. Source finding context: ECO의 단일 effective_date와 Part의 현재 rev만으로는 변경 전후 BOM·라우팅 형상을 식별할 수 없다.
+  - failure condition: 동일 품목에 ECO 전후 구성이나 복수 라우팅 개정이 존재하거나 Part.rev 동기화가 지연되는 경우
+  - candidates: fix_now
+  - rationale: 먼저 PartRevision 또는 ConfigurationBaseline을 제조 형상의 기준 개념으로 도입해야 한다. 이어 BomLine과 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여하고, ECO가 변경 전후 형상과 각 유효구간을 명시적으로 연결하도록 해야 한다. 그래야 생산 시점의 구성 선택과 과거 형상 재구성이 같은 기준선에서 가능해진다.
+  - remediation: 먼저 PartRevision 또는 ConfigurationBaseline을 제조 형상의 기준 개념으로 도입해야 한다. 이어 BomLine과 Routing 버전에 effective_from/effective_to 또는 적용 일련·로트 범위를 부여하고, ECO가 변경 전후 형상과 각 유효구간을 명시적으로 연결하도록 해야 한다. 그래야 생산 시점의 구성 선택과 과거 형상 재구성이 같은 기준선에서 가능해진다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-007 (high)
+  - issue: 차원화된 Quantity·UnitOfMeasure와 품목별 변환 모델이 없어 PLM BOM 수량과 MES 투입량·작업장 능력을 공통 계산 의미로 연결할 수 있는 계약이 부재한 high 결함이며, 목표 범위에서 즉시 해소해야 한다.
+  - target: 수량별 단위 차원과 환산 모델 부재로 BOM 수량과 작업장 능력의 공통 계산 의미가 없다. Source finding context: 수량 단위·환산 및 설비능력 단위 모델 Source finding context: materialized-input.md:19, 34-35, 63-67, 98-100 Source finding context: BOM 수량과 작업장 능력을 계산 가능한 공통 단위로 해석할 단위 차원과 품목별 환산계수 마스터가 없다. Source finding context: PLM의 BOM 수량과 MES의 투입량·능력 값을 일관되게 변환하거나 검증할 수 없다. 특히 kg↔ea 환산이나 개수 기반·시간 기반 능력 비교가 사람의 현장 판단에 의존해 자재 소요량과 생산능력 계산 오류로 이어질 수 있다. Source finding context: Quantity와 UnitOfMeasure를 명시적으로 모델링하고 qty_per 및 capacity에 단위·분모·시간기준을 연결한다. 품목별 UomConversion에 factor, from_uom, to_uom, valid_from/to, 근거와 권위 시스템을 둔다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-003 Source finding context: PLM BOM과 MES 계획·실적 사이의 수량 및 생산능력 의미 통합 Source finding context: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우 Source finding context: 필요 자재량과 작업장 부하를 결정적으로 계산할 수 없어 부족·과다 투입 및 잘못된 일정 산정 위험이 생긴다. Source finding context: 단위가 계산 대상 값의 속성이 아니라 품목의 제한된 코드로만 표현되고, 단위 간 변환 개념이 모델에서 제외되어 있다. Source finding context: qty_per와 capacity_per_shift에 단위 또는 단위 기준을 연결하는 속성이 없다. Source finding context: 품목별 환산계수 마스터가 없고 필요한 환산을 현장에서 수행한다고 명시한다.
+  - failure condition: 상·하위 품목 단위가 다르거나 작업장별 능력 기준이 개수와 시간으로 혼재하는 경우
+  - candidates: fix_now
+  - rationale: Quantity와 UnitOfMeasure를 명시적으로 도입하고 qty_per 및 capacity에 측정 차원, 단위, 분모와 시간 기준을 연결해야 한다. 품목별 UomConversion에는 factor, from_uom, to_uom, 유효기간, 근거와 권위 시스템을 두어 변환을 결정적이고 검증 가능하게 만들어야 한다. issue-003과 공유하는 원인 후보가 있으므로 개별 계산 경로를 보완하기 전에 공통 단위 변환의 권위·유효성 계약을 먼저 확립하고, 그 계약을 BOM과 MES 능력 계산 양쪽에서 사용해야 한다.
+  - remediation: Quantity와 UnitOfMeasure를 명시적으로 도입하고 qty_per 및 capacity에 측정 차원, 단위, 분모와 시간 기준을 연결해야 한다. 품목별 UomConversion에는 factor, from_uom, to_uom, 유효기간, 근거와 권위 시스템을 두어 변환을 결정적이고 검증 가능하게 만들어야 한다. issue-003과 공유하는 원인 후보가 있으므로 개별 계산 경로를 보완하기 전에 공통 단위 변환의 권위·유효성 계약을 먼저 확립하고, 그 계약을 BOM과 MES 능력 계산 양쪽에서 사용해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-011 (high)
+  - issue: BOM과 라우팅에 불변 revision 및 유효구간이 없어 ECO 전후의 제조 형상을 별도 기준선으로 보존할 수 없는 high 결함이며, 변경 연속성 확보를 위해 즉시 수정해야 한다.
+  - target: BOM·라우팅의 명시적 버전과 유효구간 부재가 설계변경 이후 제조 형상의 연속적 보존을 막는다. Source finding context: manufacturing-bom-ontology.yaml — Part, BomLine, Routing, ECO 및 변경 적용 규칙 Source finding context: entities.Part.attributes.rev/current_eco; entities.BomLine.attributes; entities.Routing.attributes; entities.ECO.attributes.effective_date/status; integrity_rules[2] Source finding context: BOM·라우팅의 개정과 유효구간이 모델링되지 않아 설계변경 후 구성 이력을 연속적으로 보존할 수 없다. Source finding context: ECO 적용 시점별 BOM과 라우팅을 식별할 구조가 없으므로 기존 객체를 덮어쓰거나 별도 관행으로 복제해야 한다. 그러면 과거 생산분의 적용 BOM·공정과 향후 변경분을 동일 모델에서 안정적으로 조회할 수 없고, 변경을 추가할수록 PLM/MES 간 기준선 연속성이 약해진다. Source finding context: PartRevision, BomRevision, RoutingRevision 같은 명시적 버전 개념을 두고 각 버전에 immutable 식별자, 상태, valid_from/valid_to 또는 effectivity 조건, 적용 ECO를 연결한다. 생산 오더는 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적 Source finding context: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때 Source finding context: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다. Source finding context: 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없다. Source finding context: ECO 규칙은 적용일 이후 신규 rev 사용을 요구하지만 BomLine과 Routing에는 개정 또는 유효구간 속성이 없다. Source finding context: 변경 전후 구성을 별개 기준선으로 식별할 수 없다는 현상은 Part의 현재 rev/current_eco만 보유하는 단일 현재상태 모델의 증상이다.
+  - failure condition: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때
+  - candidates: fix_now
+  - rationale: 먼저 PartRevision, BomRevision, RoutingRevision을 명시적 기준선 개념으로 도입하고 각 버전에 불변 식별자, 상태, valid_from/valid_to 또는 동등한 effectivity 조건, 적용 ECO를 연결해야 한다. 그다음 생산오더가 가변적인 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하도록 해야 생산 시점의 형상을 재현하고 변경 적용 및 추적성 판단을 안정화할 수 있다.
+  - remediation: 먼저 PartRevision, BomRevision, RoutingRevision을 명시적 기준선 개념으로 도입하고 각 버전에 불변 식별자, 상태, valid_from/valid_to 또는 동등한 effectivity 조건, 적용 ECO를 연결해야 한다. 그다음 생산오더가 가변적인 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하도록 해야 생산 시점의 형상을 재현하고 변경 적용 및 추적성 판단을 안정화할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-004 (medium)
+  - issue: BomLine.scrap_rate를 의미·산식·권위·생명주기가 없는 복사 스칼라로 둔 설계는 PLM/MES의 소요량 계산과 변경 재현을 불확정하게 만드는 medium 결함이며, 다음 단계 전에 수정해야 한다.
+  - target: BomLine.scrap_rate의 비추적 복사와 정의되지 않은 계산 의미가 자재계획의 일관성과 재현성을 약화한다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate의 복사본 관리 Source finding context: materialized-input.md:7; materialized-input.md:29-35; materialized-input.md:47-61; review-value-alignment-criteria.yaml:6-18 (value_type=principle, alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준 문서…BOM·라우팅…정합성과 제조 운영 위험을 중심으로”) Source finding context: 공정 불량 계수를 BOM 줄의 엑셀 복사본으로 관리하면 BOM과 라우팅 간 권위 및 변경 정합성이 깨진다. Source finding context: 공정 조건이 변경되어도 BOM 복사본이 함께 갱신된다는 보장이 없으며 동일 부품도 공정별 불량률이 다를 수 있다. 이 절충은 편리한 수량 계산 대신 통합 기준의 추적성·재현성과 자재계획 정확도를 희생한다. Source finding context: scrap/yield를 해당 Operation과 자재 투입 관계에 귀속하고 Routing 또는 공정 리비전 및 유효기간과 연결한다. 외부 계획 시스템이 원본이라면 복사값 대신 source identifier, 동기화 상태, 갱신 규칙과 불일치 처리 정책을 모델링한다. Source finding context: .onto/review/20260717-a8a687d8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다. Source finding context: 공정 수율 개념의 권위와 생명주기를 공정/라우팅이 아니라 BomLine의 비추적 복사본에 배치했다. Source finding context: BomLine.scrap_rate가 생산계획팀 엑셀 값을 복사하여 보유한다. Source finding context: scrap_rate는 특정 Operation이나 Routing과 연결되지 않는다. Source finding context: 복사본의 원본 식별자, 유효기간, 동기화 상태 및 충돌 처리 규칙이 없다. Source finding context: manufacturing-bom-ontology.yaml — BomLine.scrap_rate Source finding context: entities.BomLine.attributes.qty_per; entities.BomLine.attributes.scrap_rate Source finding context: scrap_rate가 비율인지 소요량 보정계수인지 정의되지 않은 채 독립 복사 값으로 모델링되었다. Source finding context: 같은 값이 불량 비율, 수율 손실률 또는 gross-up 계수 중 무엇인지에 따라 qty_per 보정식이 달라진다. 원천 엑셀과 복사본의 불일치까지 허용되어 시스템별 소요량 계산 결과가 갈릴 수 있다. Source finding context: 정규 의미를 하나로 선택해 이름, 값 범위, 단위 및 qty_per와의 계산식을 명시한다. 값의 원본을 하나로 정하고, 다른 시스템에는 원천값 또는 결정적 파생값만 전달한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: BOM 소요량과 제조 계획을 PLM/MES에서 동일하게 해석하는 기준 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 동일 BOM에서 계획 소요량과 자재 투입량이 달라질 수 있다. Source finding context: 파생량의 정규 산식과 원천 권한을 정의하지 않았다. Source finding context: scrap_rate라는 이름과 '계수'라는 설명이 서로 다른 수량 의미를 허용한다. Source finding context: 값의 범위·단위·계산식 없이 외부 엑셀 값을 복사하도록 모델링했다.
+  - failure condition: 공정 불량률이 변경되거나 소비자가 scrap_rate를 손실 비율과 수량 배수 중 다르게 해석하거나 복사본이 원천값과 달라질 때 Source finding context: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우 Source finding context: 소비자가 scrap_rate를 손실 비율과 수량 배수 중 서로 다르게 해석하거나 복사본이 원천값과 달라질 때
+  - candidates: fix_before_release, fix_now
+  - rationale: 다음 단계 전에 scrap/yield의 정규 의미, 값 범위·단위와 qty_per 계산식을 하나로 확정하고, 이를 해당 Operation 및 자재 투입 관계에 귀속시켜 Routing 또는 공정 리비전과 유효기간에 연결해야 한다. 권위 원본도 하나로 지정하고 다른 시스템에는 원천값이나 결정적으로 산출된 값만 전달해야 한다. 외부 계획 시스템이 원본이면 원본 식별자, 동기화 상태·갱신 규칙과 불일치 처리 정책을 함께 모델링해야 변경 정합성과 계산 재현성을 확보할 수 있다.
+  - remediation: 다음 단계 전에 scrap/yield의 정규 의미, 값 범위·단위와 qty_per 계산식을 하나로 확정하고, 이를 해당 Operation 및 자재 투입 관계에 귀속시켜 Routing 또는 공정 리비전과 유효기간에 연결해야 한다. 권위 원본도 하나로 지정하고 다른 시스템에는 원천값이나 결정적으로 산출된 값만 전달해야 한다. 외부 계획 시스템이 원본이면 원본 식별자, 동기화 상태·갱신 규칙과 불일치 처리 정책을 함께 모델링해야 변경 정합성과 계산 재현성을 확보할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-006 (medium)
+  - issue: ECO가 정상 상태(open→approved→applied)만 표현하고 승인·적용 증거와 예외·정정 이력을 보존하지 않아, PLM/MES 간 설계변경의 책임성과 재현성을 약화하는 medium 결함이다.
+  - target: ECO lifecycle과 감사 증거가 정상 상태 경로에 한정되어 변경 통제의 책임성과 재현성이 부족하다. Source finding context: ECO 변경관리 lifecycle 및 감사 증거 Source finding context: materialized-input.md:69-75 Source finding context: ECO가 정상 적용 경로만 표현하며 승인·적용 행위의 행위자, 시각, 근거와 거절·취소·대체·정정 경로가 누락되어 있다. Source finding context: 누가 어떤 근거로 변경을 승인·적용했는지 추적할 수 없고, 철회되거나 잘못 적용된 ECO를 기존 상태 의미와 충돌 없이 처리할 수 없다. 변경 통제의 책임성과 재현성이 기준 모델 밖에 남는다. Source finding context: ECO 상태 전이 전체를 정의하고 ChangeEvent 또는 ApprovalDecision을 추가해 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 기록한다. 취소·거절·대체·정정/재발행 관계도 포함한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: PLM/MES 간 설계변경의 통제된 전달과 변경 이력 추적 Source finding context: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우 Source finding context: 상태값만으로 변경의 정당성이나 실제 적용 경위를 입증할 수 없어 제조 변경 통제에 대한 신뢰가 약화된다. Source finding context: ECO가 변경 통제 과정이 아니라 현재 상태를 가진 단순 지시 객체로 축약되어 있다. Source finding context: ECO에 승인·적용 행위의 actor, timestamp, rationale 또는 evidence 속성이 없다. Source finding context: ECO 상태 열거형이 open, approved, applied만 포함하여 예외 종결 및 사후 정정 lifecycle을 수용하지 못한다.
+  - failure condition: ECO가 거절·취소·대체되거나 승인 및 적용 근거를 감사·조사해야 하는 경우
+  - candidates: follow_up
+  - rationale: 먼저 거절·취소·대체·정정·재발행을 포함한 ECO 상태 전이 전체와 허용 규칙을 정의해야 한다. 이어 ChangeEvent 또는 ApprovalDecision을 모델링해 각 전이의 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 불변 이력으로 기록하고, 취소·대체·정정 관계를 ECO에 연결해야 한다. 현재 상태는 이 이력에서 일관되게 도출하거나 이력과의 정합성을 검증해야 감사와 조사에서 변경 경위를 재현할 수 있다.
+  - remediation: 먼저 거절·취소·대체·정정·재발행을 포함한 ECO 상태 전이 전체와 허용 규칙을 정의해야 한다. 이어 ChangeEvent 또는 ApprovalDecision을 모델링해 각 전이의 actor, occurred_at, rationale/evidence_ref, from_status, to_status를 불변 이력으로 기록하고, 취소·대체·정정 관계를 ECO에 연결해야 한다. 현재 상태는 이 이력에서 일관되게 도출하거나 이력과의 정합성을 검증해야 감사와 조사에서 변경 경위를 재현할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-008 (medium)
+  - issue: 병행 관리되는 제조 기준값에 권위 원본, 복제 출처, 유효기간, 동기화 상태 및 대사 이력이 없어 계획·원가·실행에 사용할 값을 일관되게 선택하거나 재현할 수 없는 medium 결함이며, 다음 단계 전에 해소해야 한다.
+  - target: 복수 시스템의 제조 기준값에 단일 권위와 대사 이력이 없어 일관된 값 선택이 불가능하다. Source finding context: 병행 관리 제조 기준값의 권위와 대사 Source finding context: materialized-input.md:35, 53, 98-99 Source finding context: 복수 시스템에서 병행 관리되는 scrap_rate와 표준시간 계열 값에 단일 권위 및 대사 이력 개념이 없다. Source finding context: 서로 다른 값이 존재할 때 어느 값을 계획·원가·실행에 사용해야 하는지 온톨로지가 결정하지 못한다. 오래된 복사본이나 수기값이 사용되어도 그 차이와 조정 근거를 추적할 수 없다. Source finding context: 각 관리값에 authoritative_system, value_as_of, valid_from/to를 지정하고, 복제본은 원본 참조와 동기화 시각을 갖게 한다. ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: PLM/MES 및 연계 장부 사이 제조 기준값의 일관된 해석 Source finding context: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우 Source finding context: 기준값 선택이 시스템별 또는 사용자별로 달라져 계획·원가 결과를 신뢰하거나 재현하기 어렵다. Source finding context: 병행 관리 사실은 주석으로만 서술되고 권위·복제·대사를 나타내는 공통 개념이 정의되지 않았다. Source finding context: scrap_rate 복사본에 원본 권위, 동기화 시점, 유효기간이 없다. Source finding context: MES 계산값과 표준원가 수기값의 대사에 기준값과 대사 사건을 기록할 모델이 없다.
+  - failure condition: 엑셀·MES·표준원가 시스템 값이 다르거나 동기화·대사 주기 사이에 값이 변경되는 경우
+  - candidates: fix_before_release, follow_up
+  - rationale: 다음 단계 전에 각 제조 기준값에 authoritative_system, value_as_of 및 valid_from/to를 지정하고, 복제본에는 원본 참조와 동기화 시각·상태를 연결해야 한다. 이어 ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록해 값 선택과 조정 이력을 재현 가능하게 해야 한다. issue-004와 공유 원인 후보가 있으므로 공통 권위·복제 모델을 먼저 정의해 중복 개념을 피해야 한다.
+  - remediation: 다음 단계 전에 각 제조 기준값에 authoritative_system, value_as_of 및 valid_from/to를 지정하고, 복제본에는 원본 참조와 동기화 시각·상태를 연결해야 한다. 이어 ReconciliationEvent로 비교값, 차이, 조정 주체·시각·근거를 기록해 값 선택과 조정 이력을 재현 가능하게 해야 한다. issue-004와 공유 원인 후보가 있으므로 공통 권위·복제 모델을 먼저 정의해 중복 개념을 피해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-009 (medium)
+  - issue: 생산오더 규칙을 유지하려면 생산오더가 적용한 PartRevision·BOM·Routing 형상을 고정하는 접점을 제공해야 하며, 이를 제공하지 않을 경우 MES 실행 영역을 제외한다는 경계와 외부 실행 온톨로지와의 계약을 명시해야 한다.
+  - target: 생산오더 규칙은 있으나 적용 형상 스냅샷, 실행 실적 및 로트 계보 개념이 없어 PLM 마스터와 MES 실행의 접점이 단절된다. Source finding context: MES 생산 실행·실적·추적성 개념 범위 Source finding context: materialized-input.md:12-82, 93-96 Source finding context: 생산 오더 생성 규칙을 선언하면서도 생산 오더, 적용 형상 스냅샷, 실제 투입·공정 실적 및 로트 계보 개념이 전혀 정의되어 있지 않다. Source finding context: MES 통합에서 계획 마스터가 실제 제조 기록으로 이어지는 접점이 비어 있다. released 라우팅 검사는 표현되어도 생성된 오더가 그 형상을 고정했는지, 실제 자재·공정·검사 결과가 무엇인지 추적할 수 없어 변경 영향 분석과 제조 계보 확인이 불가능하다. Source finding context: 최소 범위로 ProductionOrder, OrderConfigurationSnapshot, MaterialConsumption, OperationExecution 및 Lot/SerialGenealogy를 추가하고 PartRevision·BOM·Routing 버전과 연결한다. 실행 영역을 의도적으로 제외한다면 생산 오더 규칙을 제거하거나 별도 실행 온톨로지와의 명시적 경계·계약을 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: PLM 마스터와 MES 제조 실행 사이의 개념 기준 제공 Source finding context: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우 Source finding context: 마스터 데이터에서 실행 기록으로 이어지는 통합 계약이 없어 생산 형상 고정, 실적 대조 및 추적성 검증을 수행할 수 없다. Source finding context: 온톨로지가 제조 마스터 구조에 집중하면서도 그 범위를 명시적으로 한정하지 않은 채 MES 실행 규칙까지 포함했다. Source finding context: 생산 오더 생성 조건이 integrity rule로 선언되어 있다. Source finding context: 정의된 엔티티에는 ProductionOrder나 실제 투입·공정 실행·계보 기록이 없다.
+  - failure condition: 생산 오더를 생성하거나 변경 전후 생산분의 실제 사용 자재·공정을 확인해야 하는 경우
+  - candidates: fix_before_release, accept_risk
+  - rationale: 다음 단계 전에 목적과 범위를 먼저 결정해야 한다. MES 실행을 포함한다면 최소한 ProductionOrder와 OrderConfigurationSnapshot을 추가해 PartRevision·BOM·Routing 버전에 연결하고, 선언된 목적에 따라 MaterialConsumption·OperationExecution·Lot/SerialGenealogy까지 확장한다. 실행을 제외한다면 생산오더 규칙을 제거하거나 별도 실행 온톨로지와의 경계 및 교환 계약을 명시해야 한다.
+  - remediation: 다음 단계 전에 목적과 범위를 먼저 결정해야 한다. MES 실행을 포함한다면 최소한 ProductionOrder와 OrderConfigurationSnapshot을 추가해 PartRevision·BOM·Routing 버전에 연결하고, 선언된 목적에 따라 MaterialConsumption·OperationExecution·Lot/SerialGenealogy까지 확장한다. 실행을 제외한다면 생산오더 규칙을 제거하거나 별도 실행 온톨로지와의 경계 및 교환 계약을 명시해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-010 (medium)
+  - issue: AlternatePart는 적용 조건·방향·승인 근거를 가진 일급 대체 규칙으로 완결되지 않았고 명시적 관계 그래프에도 연결되지 않아, PLM과 MES가 실제 대체 허용 범위와 방향을 일관되게 판단할 수 없는 medium 결함이다.
+  - target: 대체부품 규칙의 적용 조건과 명시적 관계 그래프 연결이 모두 누락되어 실제 대체 가능 범위와 방향을 신뢰할 수 없다. Source finding context: 대체부품의 적용 조건과 승인 통제 Source finding context: materialized-input.md:37-45, 91 Source finding context: 대체부품 관계에 유효기간, 적용 대상 형상·공장·공정, 수량/단위 조건 및 승인 근거가 없어 실제 대체 가능 범위를 표현할 수 없다. Source finding context: 대체 가능성은 단순 품목 쌍보다 조건 의존적인 제조 결정인데, 현재 모델에서는 한 번 등록된 관계가 모든 생산 상황에 적용되는 것으로 해석될 수 있다. 이는 승인되지 않은 대체품 사용이나 품질·조달 조건 위반 위험을 만든다. Source finding context: AlternatePart에 applicable_revision/configuration, site 또는 work_center, quantity/uom constraint, effective_from/to, approval_ref 및 substitution_reason을 추가하고 생산 오더에서 실제 대체 사용 사건을 기록하도록 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: BOM 대체품을 PLM과 MES가 동일한 조건으로 해석하는 기준 제공 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 조건을 표현할 수 없어 MES가 과도하게 넓은 대체 권한으로 해석하거나 승인 근거를 확인하지 못할 수 있다. Source finding context: 대체부품이 조건과 통제를 가진 적용 규칙이 아니라 방향만 가진 정적 품목 관계로 모델링되어 있다. Source finding context: AlternatePart의 속성은 두 품목 참조와 방향뿐이다. Source finding context: 유효기간, 적용 범위, 승인 근거 또는 실제 대체 사건을 표현하는 개념이 없다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 및 relations Source finding context: entities.AlternatePart; relations의 Part→Part alternate_of 항목 Source finding context: AlternatePart가 명시적 관계 그래프에서 우회되어 direction을 포함한 대체품 관계 구조가 끊겨 있다. Source finding context: 다른 주요 참조 속성은 relations에 대응 관계가 있지만 AlternatePart만 우회된다. 따라서 relations를 소비하는 PLM/MES 통합 경로에서는 AlternatePart.direction과 관계 인스턴스를 도달하거나 추적할 수 없다. Source finding context: Part→AlternatePart와 AlternatePart→Part의 역할별 관계를 명시하고, Part→Part alternate_of는 이 구조에서 결정적으로 파생되는 투영으로 정의한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때 Source finding context: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다. Source finding context: 대체품 관계를 AlternatePart 엔티티와 Part→Part 단축 관계로 이중 표현하면서 둘 사이의 구조적 연결 또는 파생 규칙을 선언하지 않았다. Source finding context: 명시적 relations 목록에서 AlternatePart를 from 또는 to로 사용하는 관계가 없다. Source finding context: 대체 관계는 Part→Part alternate_of로 직접 표현되고 AlternatePart 경유는 note에만 서술되어 있다.
+  - failure condition: 대체 승인이 특정 개정·기간·공장·공정·수량에 한정되거나 relations 그래프로 대체 관계를 탐색할 때 Source finding context: 대체품 승인이 특정 개정, 기간, 공장, 공정 또는 수량 조건에 한정되는 경우 Source finding context: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때
+  - candidates: fix_before_release, fix_now
+  - rationale: 다음 단계 전에 AlternatePart를 적용 조건과 승인 근거를 보유한 정규 관계 권위로 먼저 완결해야 한다. applicable revision/configuration, site/work center, quantity/UOM 조건, effective_from/to, approval_ref, substitution_reason을 모델링하고, Part→AlternatePart 및 AlternatePart→Part 역할별 관계를 명시한 뒤 Part→Part alternate_of를 그 구조에서 결정적으로 파생되는 투영으로 정의해야 한다. 마지막으로 생산 오더의 실제 대체 사용 사건을 해당 규칙에 연결해 승인 규칙과 실행 이력을 추적 가능하게 해야 한다.
+  - remediation: 다음 단계 전에 AlternatePart를 적용 조건과 승인 근거를 보유한 정규 관계 권위로 먼저 완결해야 한다. applicable revision/configuration, site/work center, quantity/UOM 조건, effective_from/to, approval_ref, substitution_reason을 모델링하고, Part→AlternatePart 및 AlternatePart→Part 역할별 관계를 명시한 뒤 Part→Part alternate_of를 그 구조에서 결정적으로 파생되는 투영으로 정의해야 한다. 마지막으로 생산 오더의 실제 대체 사용 사건을 해당 규칙에 연결해 승인 규칙과 실행 이력을 추적 가능하게 해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-013 (medium)
+  - issue: 재사용 가능한 공정 정의와 라우팅 문맥의 자원·시간 배정이 Operation 하나에 결합되어 있어, 동일 공정을 공장·작업장·대체설비·기간별로 다르게 운영하려면 Operation을 복제하거나 구조를 변경해야 하는 medium 결함이다.
+  - target: Operation에 작업장과 표준시간을 직접 고정해 다공장·대체설비·시점별 배정을 확장하기 어렵다. Source finding context: manufacturing-bom-ontology.yaml — Operation과 WorkCenter 배정 Source finding context: entities.Operation.attributes.work_center/std_time_min; entities.Routing.attributes.operations; relations Routing→Operation and Operation→WorkCenter Source finding context: 공정 정의에 작업장과 표준시간이 직접 고정되어 다공장·대체설비·시점별 능력 변경을 확장하려면 Operation 복제나 기존 구조 변경이 필요하다. Source finding context: 동일 공정 단계가 공장, 설비, 제품 변형 또는 기간에 따라 다른 자원과 시간을 사용할 경우 하나의 Operation을 재사용할 수 없다. 확장 시 공정 의미와 실행 파라미터를 함께 복제하게 되어 변경 전파와 시스템 간 매핑이 취약해진다. Source finding context: OperationDefinition과 RoutingOperation을 분리한다. RoutingOperation에 순서, 사이트/자원 요구 또는 후보 WorkCenter, 표준시간, 유효구간을 두고 공통 공정 정의를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-003 Source finding context: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적 Source finding context: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때 Source finding context: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다. Source finding context: 재사용 가능한 공정 정의와 라우팅 문맥의 실행 배정을 하나의 Operation 객체에 결합했다. Source finding context: Operation 하나가 단일 WorkCenter와 표준시간을 직접 보유한다. Source finding context: 라우팅별 배정 차이를 표현할 수 없는 현상은 Routing이 Operation 참조 순서만 보유하고 배정 속성을 둘 중간 개념이 없는 구조의 증상이다.
+  - failure condition: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때
+  - candidates: follow_up
+  - rationale: OperationDefinition과 RoutingOperation을 분리해야 한다. 공통 공정 의미는 OperationDefinition에 유지하고, RoutingOperation이 이를 참조하면서 순서, 사이트 또는 자원 요구와 후보 WorkCenter, 표준시간, 유효구간을 보유하게 해야 한다. 이 분리를 먼저 확립해야 공정 정의를 복제하지 않고 라우팅 문맥별 배정을 확장할 수 있다.
+  - remediation: OperationDefinition과 RoutingOperation을 분리해야 한다. 공통 공정 의미는 OperationDefinition에 유지하고, RoutingOperation이 이를 참조하면서 순서, 사이트 또는 자원 요구와 후보 WorkCenter, 표준시간, 유효구간을 보유하게 해야 한다. 이 분리를 먼저 확립해야 공정 정의를 복제하지 않고 라우팅 문맥별 배정을 확장할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-015 (medium)
+  - issue: AlternatePart 계약은 무조건적 대칭성과 direction=one_way를 동시에 허용해 동일 인스턴스의 방향 의미를 모순되게 만든다. 이는 다음 단계 전에 수정해야 하는 medium 결함이다.
+  - target: AlternatePart의 대칭성 계약과 one_way 상태가 논리적으로 충돌한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart 계약 Source finding context: manufacturing-bom-ontology.yaml:33,37-40 Source finding context: AlternatePart의 대칭성 정의와 one_way 허용 상태는 동시에 만족될 수 없다. Source finding context: one_way 인스턴스 A→B는 B→A를 요구하지 않지만, 정의는 같은 인스턴스에 B→A를 의무화한다. 이는 inter-claim 충돌이며 possible 상태와 obligatory 대칭성 사이의 mixed modality 모순이다. Source finding context: direction을 유지한다면 정의를 'bidirectional일 때만 역방향이 성립한다'로 제한한다. 모든 대체가 대칭이어야 한다면 one_way를 enum과 기본값에서 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/logic.findings.yaml#logic-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적 Source finding context: direction=one_way인 AlternatePart를 생성하거나 교환할 때 Source finding context: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을 약화한다. Source finding context: AlternatePart의 동일 계약 범위에 무조건적 대칭성 정의와 비대칭 허용 상태를 함께 선언했다. Source finding context: direction=one_way가 유효하며 기본값으로 선언되어 있지만, 엔티티 정의는 모든 대체 관계의 역관계를 요구한다. Source finding context: 대칭성 의무에 direction 조건이 없어 one_way 상태를 예외로 분리할 수 없다.
+  - failure condition: direction=one_way인 AlternatePart를 생성하거나 교환할 때
+  - candidates: fix_before_release, fix_now
+  - rationale: 방향성을 유지하려면 역방향 의무를 direction=bidirectional인 경우로 제한해야 한다. 모든 대체 관계가 항상 대칭이어야 한다면 one_way를 enum과 기본값에서 제거해야 한다. 두 의미 중 하나를 정규 계약으로 확정하고 다음 단계 전에 스키마와 정의를 함께 정렬해야 한다.
+  - remediation: 방향성을 유지하려면 역방향 의무를 direction=bidirectional인 경우로 제한해야 한다. 모든 대체 관계가 항상 대칭이어야 한다면 one_way를 enum과 기본값에서 제거해야 한다. 두 의미 중 하나를 정규 계약으로 확정하고 다음 단계 전에 스키마와 정의를 함께 정렬해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-016 (medium)
+  - issue: AlternatePart가 대칭 관계로 정의되면서 direction=one_way도 허용해, 동일한 대체 관계를 단방향 또는 양방향으로 해석할 수 있는 medium 결함이다. 다음 단계 전에 정규 관계 의미를 하나로 확정해야 한다.
+  - target: AlternatePart의 대칭 관계 정의와 one_way 방향 모델이 서로 다른 의미를 부여한다. Source finding context: manufacturing-bom-ontology.yaml — AlternatePart Source finding context: entities.AlternatePart.definition; entities.AlternatePart.attributes.direction Source finding context: 상호 대체 가능성과 단방향 대체 가능성은 동일한 관계가 아니다. 이 모순이 해소되지 않으면 PLM의 승인 대체 방향을 MES가 반대로 적용하는 등 부품 투입 판단이 달라질 수 있다. Source finding context: 대체 관계를 방향성 관계로 정의하고 bidirectional을 두 방향 관계의 축약으로 명시하거나, 항상 대칭인 관계가 의도라면 direction을 제거한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: PLM/MES 통합에서 대체 부품 의미를 일관되게 전달하는 개념 기준 Source finding context: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때 Source finding context: 동일 데이터로 서로 반대되는 대체 허용 판단이 가능해 제조 투입 결정의 신뢰가 약화된다. Source finding context: 방향성 대체와 상호 대체를 하나의 관계 의미로 혼합했다. Source finding context: AlternatePart는 대칭 관계로 정의되면서 one_way 상태를 허용한다. Source finding context: 관계의 정규 의미가 방향성인지 대칭성인지 결정되지 않았다.
+  - failure condition: 한 시스템이 정의의 대칭성을 따르고 다른 시스템이 direction=one_way를 따를 때
+  - candidates: fix_before_release, fix_now
+  - rationale: 다음 단계 및 릴리스 전에 대체 관계를 방향성 관계로 정규화하고 bidirectional을 두 방향 관계의 축약으로 명시해야 한다. 항상 대칭인 관계가 의도라면 대신 direction을 제거해야 한다. 어느 방식을 택하든 정의와 허용 값이 하나의 해석만 만들도록 먼저 의미 계약을 확정해야 PLM/MES 구현을 일관되게 맞출 수 있다.
+  - remediation: 다음 단계 및 릴리스 전에 대체 관계를 방향성 관계로 정규화하고 bidirectional을 두 방향 관계의 축약으로 명시해야 한다. 항상 대칭인 관계가 의도라면 대신 direction을 제거해야 한다. 어느 방식을 택하든 정의와 허용 값이 하나의 해석만 만들도록 먼저 의미 계약을 확정해야 PLM/MES 구현을 일관되게 맞출 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-017 (medium)
+  - issue: InspectionPlan을 Operation의 하위 유형으로 둔 현재 모델은 품질 계획 정보와 실행 검사 공정을 동일시하여 PLM과 MES의 개념 경계를 흐리는 material medium 결함이다.
+  - target: InspectionPlan을 Operation 하위 유형으로 둔 모델이 품질 계획과 공정 단계의 의미를 혼동한다. Source finding context: manufacturing-bom-ontology.yaml — InspectionPlan inheritance Source finding context: entities.Operation.definition; entities.InspectionPlan.definition; entities.InspectionPlan.is_a Source finding context: InspectionPlan을 Operation의 하위 유형으로 둔 것은 계획 정보와 공정 단계를 존재론적으로 혼동한다. Source finding context: 계획·명세는 공정 단계가 수행될 때 참조되는 정보 객체이지 그 단계 자체와 동일하지 않다. 상속하면 InspectionPlan이 work_center와 std_time_min을 가진 라우팅 단계라는 의미까지 물려받아 PLM 품질계획과 MES 작업 단계의 식별이 흐려진다. Source finding context: 검사 공정은 Operation의 하위 유형(예: InspectionOperation)으로 두고, InspectionPlan은 별도 정보 객체로 모델링하여 검사 공정이 이를 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-002 Source finding context: 품질 계획과 제조 공정의 의미를 구분해 PLM/MES 간 개념을 정렬하는 기준 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: 계획 문서의 버전·승인과 실행 공정의 순서·시간·작업장이 같은 객체 수명주기로 취급될 수 있다. Source finding context: 검사 단계와 그 단계가 참조하는 검사 계획을 동일한 존재론적 유형으로 취급했다. Source finding context: InspectionPlan이 Operation을 상속하여 공정 단계의 속성과 역할을 획득한다. Source finding context: 계획 정보 객체와 라우팅 단계가 분리되지 않았다.
+  - failure condition: InspectionPlan을 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때 Source finding context: InspectionPlan 인스턴스를 MES 라우팅 Operation으로 처리하거나 Operation 속성을 계획 자체의 속성으로 해석할 때
+  - candidates: fix_before_release, fix_now
+  - rationale: 다음 단계 전에 InspectionPlan을 Operation 상속 구조에서 분리하여 독립된 품질 계획 정보 객체로 모델링해야 한다. 실제 검사 단계는 Operation의 하위 유형인 InspectionOperation 등으로 두고, 해당 단계가 InspectionPlan을 참조하도록 관계를 정의해야 한다. 이렇게 해야 계획의 버전·승인과 공정의 순서·시간·작업장 계약을 독립적으로 관리하고 과거 참조 관계도 보존할 수 있다.
+  - remediation: 다음 단계 전에 InspectionPlan을 Operation 상속 구조에서 분리하여 독립된 품질 계획 정보 객체로 모델링해야 한다. 실제 검사 단계는 Operation의 하위 유형인 InspectionOperation 등으로 두고, 해당 단계가 InspectionPlan을 참조하도록 관계를 정의해야 한다. 이렇게 해야 계획의 버전·승인과 공정의 순서·시간·작업장 계약을 독립적으로 관리하고 과거 참조 관계도 보존할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-018 (medium)
+  - issue: Part의 ‘최소 관리 단위’ 표현은 관리 식별 역할과 구성상 원자성을 혼합해 Assembly 상속 및 BOM 대상 범위를 모호하게 한다. 우선 Part를 구성 여부와 무관한 관리 품목으로 명확히 정의해야 한다.
+  - target: Part의 '최소 관리 단위' 정의가 하위 품목을 포함하는 Assembly 계층과 의미적으로 충돌한다. Source finding context: manufacturing-bom-ontology.yaml — Part and Assembly Source finding context: entities.Part.definition; entities.Assembly.definition; entities.Assembly.is_a Source finding context: Part의 '최소 관리 단위' 정의는 하위 Part를 포함하는 Assembly가 Part라는 계층과 의미적으로 충돌한다. Source finding context: '최소'를 구성상 최소로 읽으면 Assembly는 Part가 될 수 없고, 관리 식별 단위로 읽으면 최소라는 표현이 불필요하게 분해 불가능성을 암시한다. 양 시스템이 Part를 서로 다른 입도와 범위로 해석할 수 있다. Source finding context: Part를 '구매·제조·재고·변경관리의 식별 대상 품목'처럼 구성과 무관한 관리 품목으로 정의하고, Assembly를 하위 품목 구조를 가진 Part로 한정한다. 정말 최소 구성요소를 뜻한다면 별도 LeafPart 개념으로 분리한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: 품목과 BOM 계층의 공통 개념 기준 Source finding context: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때 Source finding context: Assembly 포함 여부와 BOM 대상 품목 범위가 시스템마다 달라져 매핑 기준이 불안정해진다. Source finding context: 관리 단위라는 역할 개념과 구성상 최소 단위라는 구조 개념을 Part 정의에서 구분하지 않았다. Source finding context: 분해 가능한 Assembly가 최소 단위인 Part를 상속한다. Source finding context: Part의 최소성이 관리 식별성인지 구성 원자성인지 정의되지 않았다.
+  - failure condition: Part의 최소성을 구성상 원자성으로 해석하는 소비자와 관리 식별 단위로 해석하는 소비자가 함께 통합될 때
+  - candidates: follow_up, accept_risk
+  - rationale: 먼저 Part의 규범적 의미를 구성 여부와 무관한 관리 품목 역할로 결정하고 정의를 수정해야 한다. Assembly는 하위 품목 구조를 가진 Part로 한정한다. LeafPart 분리나 계층 재설계는 구성상 원자성을 요구하는 소비자 계약 또는 BOM 규칙이 확인된 뒤에만 도입해야 불필요한 개념 확장을 피할 수 있다.
+  - remediation: 먼저 Part의 규범적 의미를 구성 여부와 무관한 관리 품목 역할로 결정하고 정의를 수정해야 한다. Assembly는 하위 품목 구조를 가진 Part로 한정한다. LeafPart 분리나 계층 재설계는 구성상 원자성을 요구하는 소비자 계약 또는 BOM 규칙이 확인된 뒤에만 도입해야 불필요한 개념 확장을 피할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-020 (medium)
+  - issue: ECO가 영향 품목별 이전·결과 revision 전이를 연결하지 않아, 적용 시점에 사용할 생산 revision을 구조적으로 결정할 수 없는 medium 결함이다.
+  - target: ECO가 적용할 정확한 신규 revision으로 이어지는 구조적 연결이 없다. Source finding context: manufacturing-bom-ontology.yaml — ECO와 Part revision 연결 Source finding context: entities.Part.attributes.rev/current_eco; entities.ECO.attributes.affected_parts/effective_date/status; 세 번째 integrity_rule Source finding context: 적용일 이후 신규 rev를 따라야 한다는 규칙을 평가하려면 ECO, 대상 품목, 결과 revision의 대응이 필요하지만 현재 구조에서는 그 결과 revision을 결정할 수 없다. current_eco도 '최신' ECO만 가리켜 변경 이력별 연결을 대신하지 못한다. Source finding context: 최소한 ECO의 영향 품목별 결과 revision을 연결하는 effectivity 항목을 추가한다. 지속적인 변경 이력이 필요하면 PartRevision을 별도 엔티티로 두고 ECO와 이전·신규 revision을 연결한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공 Source finding context: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우 Source finding context: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나 외부 추정에 의존하게 된다. Source finding context: revision을 Part의 단일 가변 문자열로만 모델링하여 ECO별 revision 전이를 연결할 구조가 없다. Source finding context: ECO와 Part 사이에는 changes/affected_parts 연결만 있으며 결과 revision 연결이 없다. Source finding context: Part.rev는 단일 문자열이고 current_eco는 최신 ECO만 참조한다.
+  - failure condition: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산 revision을 판정하는 경우
+  - candidates: fix_before_release, fix_now
+  - rationale: 다음 단계 전에 ECO의 영향 품목별 이전·결과 revision 전이를 명시적으로 연결해야 한다. 지속적인 변경 이력과 시점별 판정이 필요하므로 PartRevision을 별도 엔티티로 두고 ECO, 대상 품목, 이전 revision, 신규 revision 및 effectivity를 연결해 생산 revision의 구조적 결정 근거를 마련해야 한다.
+  - remediation: 다음 단계 전에 ECO의 영향 품목별 이전·결과 revision 전이를 명시적으로 연결해야 한다. 지속적인 변경 이력과 시점별 판정이 필요하므로 PartRevision을 별도 엔티티로 두고 ECO, 대상 품목, 이전 revision, 신규 revision 및 effectivity를 연결해 생산 revision의 구조적 결정 근거를 마련해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-021 (medium)
+  - issue: 제품 구성 BOM과 스크랩 회수·재투입 물질 흐름을 BomLine 하나로 표현해 허용된 재투입 자기참조와 오류 순환을 구조적으로 구별할 수 없다. 이 이슈는 더 근본적인 개념 혼합의 직접 증상이며, 심각도는 medium으로 유지된다.
+  - target: 스크랩 재투입 자기참조와 일반 BOM 순환을 구별할 구조적 표지가 누락되어 있다. Source finding context: manufacturing-bom-ontology.yaml — BOM 순환 예외 구조 Source finding context: entities.BomLine.attributes; 첫 번째 integrity_rule Source finding context: 스크랩 재투입 자기참조를 일반 BOM 순환과 구별할 구조적 표지가 누락되어 있다. Source finding context: 동일한 Assembly 자기참조 구조가 허용된 재투입인지 잘못 생성된 순환인지 모델만으로 판별되지 않는다. 따라서 비순환 검증기가 예외를 안전하게 적용할 수 없다. Source finding context: BomLine에 명시적인 용도/edge_kind를 추가해 일반 구성과 scrap_reintroduction을 구분하고, 순환 예외는 해당 값과 자기참조 조건을 함께 만족할 때만 허용하도록 규칙을 구조화한다. Source finding context: .onto/review/20260717-a8a687d8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공 Source finding context: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때 Source finding context: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다. Source finding context: 순환 예외의 의미가 무결성 규칙의 자연어에만 있고 BomLine 구조에는 투영되지 않았다. Source finding context: 규칙은 금지된 순환과 허용된 스크랩 재투입 자기참조를 구별해야 한다. Source finding context: BomLine에는 두 경우를 구별하는 속성이나 별도 관계가 없다.
+  - failure condition: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때
+  - candidates: fix_before_release, follow_up
+  - rationale: 정규 해결은 재투입을 별도 MaterialFlow 개념으로 분리하고 그 끝점, 허용 조건, 종료 조건 및 BomLine 연계 규칙을 정의한 뒤, 일반 BomLine에는 비순환 규칙을 유지하는 것이다. edge_kind 추가만으로는 일반 BOM 소비자의 순환 위험과 향후 회수 유형별 예외 증가를 해소하지 못하므로 충분한 종결 조치가 아니다.
+  - remediation: 정규 해결은 재투입을 별도 MaterialFlow 개념으로 분리하고 그 끝점, 허용 조건, 종료 조건 및 BomLine 연계 규칙을 정의한 뒤, 일반 BomLine에는 비순환 규칙을 유지하는 것이다. edge_kind 추가만으로는 일반 BOM 소비자의 순환 위험과 향후 회수 유형별 예외 증가를 해소하지 못하므로 충분한 종결 조치가 아니다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+
+### Recommendations
+- issue-012 (medium): 폐쇄형 UOM 열거와 환산 모델 부재가 단위 체계의 확장성과 계산 의미 보존을 약화한다. Source finding context: manufacturing-bom-ontology.yaml — 단위와 수량 모델 Source finding context: entities.Part.attributes.uom; entities.BomLine.attributes.qty_per; entities.WorkCenter.attributes.capacity_per_shift; notes[1] Source finding context: 폐쇄형 UOM 열거와 환산 모델 부재 때문에 새 단위·복합 단위·시스템별 단위를 수용할 때 기존 스키마와 소비 로직을 수정해야 한다. Source finding context: 새 품목 단위나 PLM/MES의 다른 단위 코드를 추가할 때 enum 변경이 필요하고, BOM 수량과 생산능력의 차원 및 환산 근거를 기계적으로 보존할 수 없다. 통합 범위가 넓어질수록 현장 환산과 시스템별 예외가 누적된다. Source finding context: UnitOfMeasure와 UnitConversion을 독립 기준 개념으로 만들고 코드 체계, 차원, 기준 단위, 품목별 환산계수, 유효기간을 모델링한다. qty_per와 capacity_per_shift가 자신의 단위 또는 측정량 객체를 명시적으로 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-002 Source finding context: PLM/MES 간 BOM 수량과 제조 능력을 확장 가능한 공통 개념으로 교환하는 목적 Source finding context: ea·kg·m 이외 단위, 품목별 질량 환산, 또는 서로 다른 능력 단위를 가진 작업장을 통합할 때 Source finding context: 확장마다 스키마와 변환 로직을 변경해야 하며, 단위가 암묵적인 수치의 오해가 계획·소요량 계산의 신뢰를 약화한다. Source finding context: 측정 단위와 환산을 독립적인 확장 가능 기준 개념으로 모델링하지 않았다. Source finding context: 허용 UOM이 세 enum 값으로 닫혀 있고 qty_per 및 capacity_per_shift의 단위 표현이 불완전하다. Source finding context: 새 단위 수용에 enum 수정과 현장 환산이 필요한 현상은 단위·환산 마스터 부재의 증상이다.
+- issue-014 (medium): 스크랩 재투입을 BOM 자기순환으로 표현해 회수·재작업 확장 시 소비자별 예외 비용과 계산 위험이 증가한다. Source finding context: manufacturing-bom-ontology.yaml — 스크랩 재투입 예외 규칙 Source finding context: integrity_rules[0]; entities.BomLine.attributes.parent_ref/child_ref Source finding context: 재생 원료 흐름을 BOM 자기순환으로 표현하면 향후 회수·재작업 유형을 추가할수록 비순환 BOM 소비자에 예외 수정이 확산된다. Source finding context: BOM 전개, 소요량 계산, 원가 누적 같은 소비자는 자기순환이 정상 재투입인지 잘못된 BOM인지 구조만으로 판별할 수 없다. 새로운 회수·재작업 패턴이 생기면 각 소비자가 별도 예외와 순환 종료 규칙을 추가해야 한다. Source finding context: 제품 구조 BOM은 비순환으로 유지하고, 스크랩 회수·재투입은 MaterialFlow, ByproductFlow 또는 ReworkLoop 같은 공정 흐름 개념으로 분리해 수율, 투입 지점, 최대 반복 또는 종료 조건을 명시한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-004 Source finding context: BOM과 제조 공정을 여러 PLM/MES 소비자가 안정적으로 확장·해석할 수 있는 공통 기준을 제공하는 목적 Source finding context: 스크랩 재투입 외에 재작업, 부산물 회수 또는 다단계 재순환을 추가하거나 일반 BOM 전개를 수행할 때 Source finding context: 모든 소비자에 순환 예외 로직이 퍼지고 신규 회수 유형마다 수정 범위가 커져 확장 내성과 계산 안전성이 저하된다. Source finding context: 제품 구성 관계와 제조 물질 순환이라는 서로 다른 수명주기 개념을 BomLine 하나로 표현했다. Source finding context: 동일 규칙이 BOM 비순환을 요구하면서 스크랩 재투입에는 자기 하위 포함을 허용한다. Source finding context: 순환의 의미와 종료 조건을 구조적으로 구분할 수 없는 현상은 재투입 흐름을 일반 parent-child BomLine으로 인코딩한 것의 증상이다.
+- issue-019 (medium): WorkCenter.capacity_per_shift가 개수와 시간이라는 서로 다른 차원을 허용해 능력 계산 의미가 불명확하다. Source finding context: manufacturing-bom-ontology.yaml — WorkCenter.capacity_per_shift Source finding context: entities.WorkCenter.attributes.capacity_per_shift Source finding context: capacity_per_shift 하나에 개수와 시간이라는 서로 다른 차원의 값을 허용한다. Source finding context: 개수/교대와 시간/교대는 비교·합산·부하율 계산 방식이 다른 수량이다. 속성명만으로 소비자가 의미를 판별할 수 없어 작업장 능력과 부하 계산이 시스템마다 달라질 수 있다. Source finding context: 용량의 측정 종류와 UOM을 명시하는 구조로 바꾸거나 quantity_capacity_per_shift와 available_time_per_shift처럼 차원별 속성 또는 하위 유형으로 분리한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-005 Source finding context: 라우팅 작업장 능력을 PLM/MES가 동일한 수량 의미로 교환하는 기준 Source finding context: 여러 WorkCenter의 capacity_per_shift를 비교·집계하거나 공정 표준시간과 결합해 부하를 산출할 때 Source finding context: 차원이 다른 값을 같은 수치로 처리해 생산능력 및 일정 판단을 왜곡할 수 있다. Source finding context: 용량이라는 상위 용어 아래 처리량과 가용시간을 구분하지 않았다. Source finding context: capacity_per_shift가 개수 또는 시간일 수 있어 인스턴스별 의미가 달라진다. Source finding context: 측정 종류와 UOM이 데이터 구조에 표현되지 않았다.
+
+### Unique Finding Tagging
+- issue-012 (medium): 폐쇄형 UOM 열거와 환산 모델 부재가 단위 체계의 확장성과 계산 의미 보존을 약화한다. Source finding context: manufacturing-bom-ontology.yaml — 단위와 수량 모델 Source finding context: entities.Part.attributes.uom; entities.BomLine.attributes.qty_per; entities.WorkCenter.attributes.capacity_per_shift; notes[1] Source finding context: 폐쇄형 UOM 열거와 환산 모델 부재 때문에 새 단위·복합 단위·시스템별 단위를 수용할 때 기존 스키마와 소비 로직을 수정해야 한다. Source finding context: 새 품목 단위나 PLM/MES의 다른 단위 코드를 추가할 때 enum 변경이 필요하고, BOM 수량과 생산능력의 차원 및 환산 근거를 기계적으로 보존할 수 없다. 통합 범위가 넓어질수록 현장 환산과 시스템별 예외가 누적된다. Source finding context: UnitOfMeasure와 UnitConversion을 독립 기준 개념으로 만들고 코드 체계, 차원, 기준 단위, 품목별 환산계수, 유효기간을 모델링한다. qty_per와 capacity_per_shift가 자신의 단위 또는 측정량 객체를 명시적으로 참조하게 한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-002 Source finding context: PLM/MES 간 BOM 수량과 제조 능력을 확장 가능한 공통 개념으로 교환하는 목적 Source finding context: ea·kg·m 이외 단위, 품목별 질량 환산, 또는 서로 다른 능력 단위를 가진 작업장을 통합할 때 Source finding context: 확장마다 스키마와 변환 로직을 변경해야 하며, 단위가 암묵적인 수치의 오해가 계획·소요량 계산의 신뢰를 약화한다. Source finding context: 측정 단위와 환산을 독립적인 확장 가능 기준 개념으로 모델링하지 않았다. Source finding context: 허용 UOM이 세 enum 값으로 닫혀 있고 qty_per 및 capacity_per_shift의 단위 표현이 불완전하다. Source finding context: 새 단위 수용에 enum 수정과 현장 환산이 필요한 현상은 단위·환산 마스터 부재의 증상이다.
+- issue-014 (medium): 스크랩 재투입을 BOM 자기순환으로 표현해 회수·재작업 확장 시 소비자별 예외 비용과 계산 위험이 증가한다. Source finding context: manufacturing-bom-ontology.yaml — 스크랩 재투입 예외 규칙 Source finding context: integrity_rules[0]; entities.BomLine.attributes.parent_ref/child_ref Source finding context: 재생 원료 흐름을 BOM 자기순환으로 표현하면 향후 회수·재작업 유형을 추가할수록 비순환 BOM 소비자에 예외 수정이 확산된다. Source finding context: BOM 전개, 소요량 계산, 원가 누적 같은 소비자는 자기순환이 정상 재투입인지 잘못된 BOM인지 구조만으로 판별할 수 없다. 새로운 회수·재작업 패턴이 생기면 각 소비자가 별도 예외와 순환 종료 규칙을 추가해야 한다. Source finding context: 제품 구조 BOM은 비순환으로 유지하고, 스크랩 회수·재투입은 MaterialFlow, ByproductFlow 또는 ReworkLoop 같은 공정 흐름 개념으로 분리해 수율, 투입 지점, 최대 반복 또는 종료 조건을 명시한다. Source finding context: .onto/review/20260717-a8a687d8/round1/evolution.findings.yaml#evolution-candidate-004 Source finding context: BOM과 제조 공정을 여러 PLM/MES 소비자가 안정적으로 확장·해석할 수 있는 공통 기준을 제공하는 목적 Source finding context: 스크랩 재투입 외에 재작업, 부산물 회수 또는 다단계 재순환을 추가하거나 일반 BOM 전개를 수행할 때 Source finding context: 모든 소비자에 순환 예외 로직이 퍼지고 신규 회수 유형마다 수정 범위가 커져 확장 내성과 계산 안전성이 저하된다. Source finding context: 제품 구성 관계와 제조 물질 순환이라는 서로 다른 수명주기 개념을 BomLine 하나로 표현했다. Source finding context: 동일 규칙이 BOM 비순환을 요구하면서 스크랩 재투입에는 자기 하위 포함을 허용한다. Source finding context: 순환의 의미와 종료 조건을 구조적으로 구분할 수 없는 현상은 재투입 흐름을 일반 parent-child BomLine으로 인코딩한 것의 증상이다.
+- issue-019 (medium): WorkCenter.capacity_per_shift가 개수와 시간이라는 서로 다른 차원을 허용해 능력 계산 의미가 불명확하다. Source finding context: manufacturing-bom-ontology.yaml — WorkCenter.capacity_per_shift Source finding context: entities.WorkCenter.attributes.capacity_per_shift Source finding context: capacity_per_shift 하나에 개수와 시간이라는 서로 다른 차원의 값을 허용한다. Source finding context: 개수/교대와 시간/교대는 비교·합산·부하율 계산 방식이 다른 수량이다. 속성명만으로 소비자가 의미를 판별할 수 없어 작업장 능력과 부하 계산이 시스템마다 달라질 수 있다. Source finding context: 용량의 측정 종류와 UOM을 명시하는 구조로 바꾸거나 quantity_capacity_per_shift와 available_time_per_shift처럼 차원별 속성 또는 하위 유형으로 분리한다. Source finding context: .onto/review/20260717-a8a687d8/round1/semantics.findings.yaml#semantics-candidate-005 Source finding context: 라우팅 작업장 능력을 PLM/MES가 동일한 수량 의미로 교환하는 기준 Source finding context: 여러 WorkCenter의 capacity_per_shift를 비교·집계하거나 공정 표준시간과 결합해 부하를 산출할 때 Source finding context: 차원이 다른 값을 같은 수치로 처리해 생산능력 및 일정 판단을 왜곡할 수 있다. Source finding context: 용량이라는 상위 용어 아래 처리량과 가용시간을 구분하지 않았다. Source finding context: capacity_per_shift가 개수 또는 시간일 수 있어 인스턴스별 의미가 달라진다. Source finding context: 측정 종류와 UOM이 데이터 구조에 표현되지 않았다.
+
+### Individual Lens Findings
+- axiology: `.onto/review/20260717-a8a687d8/round1/axiology.findings.yaml`
+- coverage: `.onto/review/20260717-a8a687d8/round1/coverage.findings.yaml`
+- evolution: `.onto/review/20260717-a8a687d8/round1/evolution.findings.yaml`
+- logic: `.onto/review/20260717-a8a687d8/round1/logic.findings.yaml`
+- semantics: `.onto/review/20260717-a8a687d8/round1/semantics.findings.yaml`
+- structure: `.onto/review/20260717-a8a687d8/round1/structure.findings.yaml`

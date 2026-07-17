@@ -1,0 +1,72 @@
+schema_version: 1
+session_id: 20260718-6dc79b44
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml의 PLM/MES 통합 목적 및 운영 트레이드오프에 대한 가치 정렬 판단
+    evidence_anchor: .onto/review/20260718-6dc79b44/prompt-packets/axiology.prompt.md:46-68
+      — authority ranks 1–3 must be bound, and missing authority requires
+      `insufficient evidence` with upstream evidence;
+      .onto/review/20260718-6dc79b44/execution-preparation/review-context-manifest.yaml:72-91
+      — axiology receives only the invocation-derived alignment criterion among
+      value inputs;
+      .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:35,94-100
+      — copied scrap rates, delayed revision synchronization, manual cost
+      reconciliation, and field UOM conversion expose purpose-critical
+      tradeoffs. value_type=purpose/tradeoff; alignment_direction=indeterminate
+    claim: 필수 canonical value authority가 바인딩되지 않아, 이 온톨로지가 PLM/MES 통합의 개념 기준이라는 목적에
+      정렬되는지 유효하게 판단할 수 없다.
+    what: 대상은 복제 값, 주간 지연 동기화, 수기 대사, 현장 환산을 통합 기준의 일부로 수용하지만, 이를 정당화하거나 제한할 제품
+      목적·원칙 authority가 제공되지 않았다. 제공된 가치 기준은 사용자의 검토 의도뿐이다.
+    why: axiology 계약은 core lexicon, 제품화 및 ontology-as-code 원칙, active review
+      contracts를 항상 바인딩하도록 요구하며, 누락 시 개인적 가치판단 대신 insufficient evidence를 제출하도록
+      명시한다. 따라서 관찰된 운영 트레이드오프가 허용 가능한 경계인지 목적 drift인지 결정할 근거가 없고, 이 렌즈의 적합성 결론을
+      신뢰할 수 없다.
+    how_to_fix: execution preparation에서 prompt packet에 명시된 rank 1–3 authority 문서를
+      axiology의 허용 컨텍스트로 실제 바인딩·주입한 뒤 이 렌즈를 다시 실행한다. 재실행 시 각 판단에 정확한 authority
+      anchor, value type, alignment direction을 보존한다.
+    upstream_evidence_required: true
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 이 온톨로지가 PLM/MES 통합의 개념 기준 문서로 적절한지 가치·목적 관점에서 검증하는 것
+      failure_condition: 복제 데이터와 지연·수기 처리 같은 운영 트레이드오프가 존재하지만 이를 평가할 의무적 canonical
+        authority ranks 1–3가 axiology 컨텍스트에 없을 때
+      impact: 목적 부합 또는 목적 drift라는 핵심 결론이 계약상 생성될 수 없어, 제조 운영 위험을 감수할지에 대한 리뷰의 의사결정 근거가
+        비어 있게 된다.
+      evidence_refs:
+        - .onto/review/20260718-6dc79b44/prompt-packets/axiology.prompt.md:46-68
+        - .onto/review/20260718-6dc79b44/execution-preparation/review-context-manifest.yaml:72-91
+        - .onto/review/20260718-6dc79b44/execution-preparation/review-value-alignment-criteria.yaml:5-20
+        - .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:35,94-100
+    causal_path:
+      root_cause_candidate: execution preparation이 axiology 계약상 필수인 canonical
+        authority ranks 1–3를 렌즈 컨텍스트에 바인딩하지 않았다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 대상에는 PLM/MES 기준 문서의 목적에 영향을 줄 수 있는 복제 값, 지연 동기화, 수기 대사 및 현장 환산이 명시되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:35,94-100
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 이 트레이드오프의 가치 정렬을 판정할 입력은 invocation-derived 사용자 의도 하나뿐이며 canonical
+            제품·온톨로지 원칙은 제공되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-6dc79b44/execution-preparation/review-value-alignment-criteria.yaml:5-20
+            - .onto/review/20260718-6dc79b44/execution-preparation/review-context-manifest.yaml:72-91
+        - cause_id: axiology-candidate-001.cause-003
+          claim: axiology 계약은 ranks 1–3의 상시 바인딩과 누락 시 insufficient-evidence 처리를 요구한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-6dc79b44/prompt-packets/axiology.prompt.md:46-68
+      unresolved_beyond_evidence: 누락된 canonical authority가 제공되기 전에는 관찰된 트레이드오프가 정당화된
+        통합 경계인지 목적 위반인지 결정할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain은 none이며 제조 분야의 별도 규정은 사용하지 않았다.
+  - 대상과 확인된 사용자 요청에 명시된 ‘PLM/MES 통합의 개념 기준’만 검토 목적의 문맥으로 사용했으며, 이를 canonical 제품
+    가치 authority로 대체하지 않았다.
+validation:
+  unaddressable_candidates: []

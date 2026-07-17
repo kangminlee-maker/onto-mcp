@@ -1,0 +1,167 @@
+schema_version: 1
+session_id: 20260718-958e001f
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml — Test/Assay 카탈로그 모델
+    evidence_anchor: materialized-input.md:46-60,108-119,126-127
+    claim: 검사 카탈로그 변경 시 Test와 Assay를 함께 수정해야 하며 두 버전 사이의 연속성을 보존할 구조가 없다.
+    what: 주문 단위인 Test와 수행 단위인 Assay가 별도 코드와 속성으로 정의되지만 둘을 연결하는 관계, 매핑 버전, 유효기간 또는 대체
+      이력이 없다. 문서는 신규 항목을 양쪽에 등록하도록 요구한다.
+    why: 신규 분석법 추가, 장비 교체, 검사 통합·분할 시 이중 등록과 별도 정합화가 필요하다. 어느 Assay가 어떤 Test를 어느 기간에
+      구현했는지 표현할 수 없어 기존 주문·결과의 역사적 해석과 EMR/LIS 간 매핑이 변경 후 끊길 수 있다.
+    how_to_fix: Test를 주문 카탈로그의 권위 개념으로 유지하고 Test–Assay 간 명시적 구현 관계를 추가하되, 매핑의
+      유효기간·버전·대체 관계를 모델링한다. 신규 항목의 이중 등록 규칙은 이 관계를 통한 단일 등록 및 매핑 절차로 교체한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계에서 검사 주문과 실제 수행 항목을 장기간 일관되게 연결하는 개념 권위 문서 역할
+      failure_condition: 신규 분석법 도입, 분석기 교체, 검사 항목 통합·분할 또는 코드 개정이 발생할 때
+      impact: 두 카탈로그의 수동 동기화가 필요하고 과거 주문·결과가 당시 수행 Assay와 연결되지 않아 통합 규칙과 감사 가능성에 대한
+        신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: Test와 Assay가 독립 카탈로그로 정의됐지만 양자를 연결하고 변경 이력을 보존하는 관계가 모델에 없다.
+      root_cause_step_id: evolution-candidate-001.cause-002
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 문서는 신규 검사 항목을 Test와 Assay 양쪽에 등록하도록 명시한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:126-127
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 이중 등록 요구는 별도 코드 체계를 가진 Test와 Assay 사이에 명시적 관계가 없는 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+      unresolved_beyond_evidence: 실제 LIS에 별도 매핑 테이블이 존재하는지는 경계 내 자료로 확인할 수 없지만, 개념 권위
+        문서 자체에는 그 권위나 계약이 표현되지 않는다.
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml — 검체 유형 분류
+    evidence_anchor: materialized-input.md:37-60
+    claim: 새 검체 유형을 수용하려면 중복 enum 수정과 별도 문자열 매핑이 필요하다.
+    what: Specimen.specimen_type과 Test.requires_specimen_type은 동일한 폐쇄형 enum을 각각
+      보유하지만, Assay.specimen_kind는 자유 문자열이며 예시로 enum에 없는 'WB', 'Serum',
+      'Urine-random'을 사용한다.
+    why: 새 용기·분획·채취 방식이나 외부 LIS 검체 코드가 추가될 때 두 enum과 Assay 매핑을 함께 변경해야 한다. 현재 구조에는
+      상위 유형, 세부 유형, 동의어, 외부 코드 및 버전을 연결할 공통 분류 권위가 없어 확장할수록 변환 규칙이 분산된다.
+    how_to_fix: 검체 유형을 독립적인 버전 가능 코드 개념으로 승격하고 Specimen, Test, Assay가 이를 참조하게 한다.
+      상위/세부 유형, 동의어·외부 코드 매핑, 유효기간과 폐기·대체 관계를 그 코드 개념에 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 사이에서 검체 요구사항과 실제 검체를 확장 가능한 공통 개념으로 교환하는 계약
+      failure_condition: 현재 네 범주 밖의 검체, 분획 또는 외부 시스템의 세분화된 검체 코드가 도입될 때
+      impact: 기존 스키마와 여러 변환 규칙을 동시 수정해야 하며 동일 검체가 서로 다른 문자열로 축적되어 장기 데이터 연속성과 통합 신뢰가
+        약화된다.
+      evidence_refs:
+        - materialized-input.md:37-44
+        - materialized-input.md:46-60
+    causal_path:
+      root_cause_candidate: 하나의 검체 분류 개념이 두 개의 폐쇄형 enum과 하나의 자유 문자열로 중복 표현된다.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Assay의 예시 검체 값은 Specimen과 Test의 허용 enum 값에 직접 대응하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:42
+            - materialized-input.md:52
+            - materialized-input.md:60
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 이 불일치는 공유 코드 체계 대신 각 엔티티가 검체 분류를 독립적으로 표현한 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-60
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml — Result/Report 상태 모델
+    evidence_anchor: materialized-input.md:62-84,121-124
+    claim: 결과 상태 확장이나 표준 변경은 두 enum과 동기화 규칙을 동시에 바꾸게 하며 과거 상태 의미를 보존할 버전 경계가 없다.
+    what: Result.status와 Report.result_status가 같은 정보를 서로 다른 값 집합으로 중복 저장하고,
+      corrected에서 amended로의 변환은 야간 배치 규칙에 의존한다. 두 상태 집합 사이의 전체 매핑이나 버전이 정의되지
+      않는다.
+    why: 새 상태가 추가되거나 외부 표준의 상태 의미가 바뀌면 양쪽 enum, 매핑 및 배치를 함께 수정해야 한다. 변경 전후 상태 의미를
+      구분할 수 없어 과거 데이터의 재해석이 불안정해지고, 새 상태가 한쪽에만 반영될 가능성도 커진다.
+    how_to_fix: 임상 결과 상태의 단일 권위 개념과 버전 가능한 전이·매핑 표를 정의한다. Report에는 필요 시 그 상태의 명시적
+      투영값과 원본 상태 참조를 두고, 변환의 유효 버전과 시점을 기록한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: LIS 결과 상태를 EMR 임상의에게 일관되고 변경 내성 있게 전달하는 개념 권위 계약
+      failure_condition: 상태 추가, 명칭 변경, 외부 표준 매핑 변경 또는 corrected 이후 처리 방식 변경이 발생할 때
+      impact: 임상의가 신뢰한다고 명시된 Report 상태가 소스 상태와 다른 변화 속도로 진화하고, 과거 기록의 의미와 동기화 규칙을
+        안정적으로 재현할 수 없다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: 동일한 상태 의미를 Result와 Report에 서로 다른 폐쇄형 어휘로 복제하고 동기화 배치로 결합했다.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Result와 Report는 동일 정보라고 설명된 상태를 각각 다른 enum 값으로 저장하며 corrected/amended 변환을
+            야간 배치가 수행한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:123
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 다중 수정과 변경 연속성 위험은 단일 상태 권위 및 버전 매핑이 없는 중복 상태 모델의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: 야간 배치의 구현과 추가 상태 매핑은 대상 밖이므로 실제 보완 여부는 확인할 수 없다.
+  - candidate_id: evolution-candidate-004
+    target: clinical-lab-ontology.yaml — 교차 시스템 식별자와 코드 수명주기
+    evidence_anchor: materialized-input.md:10-11,31-35,46-60,86-98
+    claim: 코드와 식별자가 무자격 문자열이라 기관·시스템 추가 및 코드 개정 시 충돌과 역사 단절을 표현할 수 없다.
+    what: mrn, test_code, assay_code, dept_code, staff_id 등이 문자열로만 정의되어 발급 기관·코드
+      시스템·버전·유효기간·대체 식별자를 포함하지 않는다. 온톨로지 자체 버전만 있고 개별 코드 개념의 수명주기는 없다.
+    why: 여러 병원이나 EMR/LIS가 연결되거나 카탈로그 코드가 재사용·변경되면 동일 문자열의 출처와 적용 시점을 구분할 수 없다. 기존
+      데이터를 새 코드로 연결하거나 과거 의미를 유지하려면 온톨로지 밖의 임시 규칙이 필요해진다.
+    how_to_fix: 공통 Identifier/CodeAssignment 개념을 재사용해 값, namespace 또는 발급자, 코드 시스템
+      버전, 유효기간, 상태와 replaces/same-as 매핑을 표현한다. 엔티티의 문자열 코드는 이 개념을 참조하도록 단계적으로
+      전환한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 서로 다른 EMR/LIS의 환자·검사·조직·인력 개념을 충돌 없이 연결하고 변경 후에도 추적하는 권위 문서 역할
+      failure_condition: 두 개 이상의 기관·시스템을 통합하거나 코드가 개정, 재사용, 병합 또는 폐기될 때
+      impact: 동일 문자열을 다른 개념으로 오인하거나 변경 전후 레코드를 연결하지 못해 통합 데이터의 정체성과 장기 추적 가능성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:10-11
+        - materialized-input.md:31-35
+        - materialized-input.md:46-60
+        - materialized-input.md:86-98
+    causal_path:
+      root_cause_candidate: 엔티티 식별자와 업무 코드를 출처 및 시간 범위가 없는 단순 문자열로 모델링했다.
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 환자, 검사, Assay, 부서 및 직원의 식별 필드는 모두 문자열이며 발급자·namespace·유효기간 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:31-35
+            - materialized-input.md:46-60
+            - materialized-input.md:86-98
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 교차 시스템 충돌과 변경 이력 단절은 문자열 값만으로 코드 정체성과 수명주기를 대표한 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:31-35
+            - materialized-input.md:46-60
+            - materialized-input.md:86-98
+      unresolved_beyond_evidence: 실제 기관 수와 외부 코드 체계는 경계 내 자료에 없으므로 위험은 다기관 또는 다중 시스템 통합 시나리오에 한정한 조건부 판단이다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검사 카탈로그, 검체 분류 및 결과 상태 어휘는 장비·기관·외부 표준 변화에 따라 추가되거나 개정될 수 있다.
+  - EMR/LIS 통합 범위가 확장되면 서로 독립적으로 관리되는 식별자 또는 코드 namespace를 구분해야 할 수 있다.
+validation:
+  unaddressable_candidates: []

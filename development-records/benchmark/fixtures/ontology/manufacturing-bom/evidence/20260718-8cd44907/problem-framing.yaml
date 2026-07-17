@@ -1,0 +1,258 @@
+schema_version: 1
+session_id: 20260718-8cd44907
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: ECO 발효 권위와 지연 복제된 Part 리비전 사이에 안전한 단일 적용 판정 계약이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 high 영향과 원인에 합의했으며, 발효 후 구 리비전 생산을 허용할 수 있어 통합 기준으로 사용하기 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 복제·파생 운영값의 canonical source, 동기화 상태 및 충돌 해결 계약이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 권위 없는 복제값이 시스템별 계획·원가 차이를 만들 수 있다는 medium 이슈에 모든 렌즈가 합의했다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 수량값에 단위 차원과 환산 권위가 결합되지 않아 계산 의미가 결정되지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 단위 없는 BOM 수량과 생산능력은 과소투입·과대계획을 유발할 수 있는 합의된 high 결함이다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 제품구조와 공정 재투입 흐름을 BomLine 하나로 표현하여 관계 유형 경계를 훼손한다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 유형 경계 결함은 확정됐지만 실제 전개·MRP 오처리와 high 영향은 입증되지 않아 medium으로 좁혀졌고 심각도 이견이
+      남아 있다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 대체부품 관계가 대칭 호환성인지 방향성 승인인지 canonical 의미가 결정되지 않았다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 계약 불결정성은 확정됐으며 실제 무권한 역대체 증거가 없어 medium으로 한정됐지만, 기준 문서에는 하나의 의미 결정을
+      반영해야 한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: BOM과 Routing이 버전·효력 기반 릴리스 구성 없이 현재 참조 목록으로만 존재한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 시점별 유효 구성 선택과 과거 구성 재현을 모두 막는 합의된 high 범위 결함이다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: PLM/MES 전체 통합을 선언하면서 생산 실행·실적·계보 축을 모델 범위에서 누락했다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 선언 범위를 유지하면 high 완결성 결함이지만 logic과 structure는 직접 확인된 ProductionOrder
+      경로까지만 인정하므로 범위 축소 또는 모델 확장 결정이 필요하다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: UOM을 확장 가능한 참조 데이터와 유효 변환 관계로 분리하지 않고 폐쇄형 문자열과 현장 환산으로 처리한다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: UOM 완전성과 확장성 결함은 확정됐지만 실제 운영 피해가 입증되지 않아 medium으로 제한되었고 high 영향에는 이견이 남는다.
+    related_surface_finding_ids:
+      - finding-009
+      - finding-013
+  - issue_id: issue-009
+    problem_definition: 복제·파생 제조 기준값에 권위 주체와 동기화·대사 이력이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 기준값과 책임 주체를 판별하거나 차이를 감사할 수 없는 medium 결함에 모든 렌즈가 합의했다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-010
+    problem_definition: 시간에 따라 변하는 제조 정의와 통제 행위를 버전·전이·이벤트가 아닌 현재 상태 필드로 축약했다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 변경 전후 구성을 선택·재현하고 승인 근거를 감사할 수 없게 하는 합의된 high 수명주기 모델링 결함이다.
+    related_surface_finding_ids:
+      - finding-011
+      - finding-008
+  - issue_id: issue-011
+    problem_definition: 단일 current_eco가 변경 이력과 복수·조건부 effectivity의 권위로 과적재되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 다가 effectivity와 충돌 해소 계약의 부재에 수렴했으며, 현재 포인터는 권위가 아니라 파생 조회값이어야 한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: Operation이 공정 정의·라우팅 실행 사양과 검사 계획·검사 실행이라는 서로 다른 유형을 과적재한다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 두 high 유형 경계 결함은 확인됐지만 둘이 하나의 인과적 근원인지에는 이견이 있으므로 하위 결함을 각각 보존해 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-017
+  - issue_id: issue-013
+    problem_definition: AlternatePart에 필수 대칭성과 one_way 허용을 동시에 선언해 동일 인스턴스의 역관계 계약이 모순된다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 직접 논리 모순은 확정됐고 운영상 high 피해만 미입증이므로, 기준 문서에서 관계 양상을 결정해야 한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: AlternatePart를 속성과 방향성의 canonical 관계로 정의하지 않아 관계 의미와 그래프 권위가 함께 불명확하다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 다수 렌즈는 결합된 high 이슈로 판단했지만 logic과 structure는 각 구성요소만 직접 입증했다고 보아 결합
+      인과에는 이견이 남는다.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-024
+  - issue_id: issue-015
+    problem_definition: 공정 재투입 흐름을 제품 구성 관계인 자기참조 BomLine으로 표현한다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 유형 경계 위반은 확정됐으나 실제 소비자 오처리가 확인되지 않아 medium으로 좁혀졌고 high 평가에는 이견이 남는다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-016
+    problem_definition: capacity_per_shift가 처리량과 가용시간이라는 서로 다른 물리 차원을 단위 없는 숫자로 혼합한다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 차원 혼합은 확정된 medium 계약 결함이며 실제 계획 사용 범위와 오산 규모가 없어 high 평가는 보류되었다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-017
+    problem_definition: 시간상 최신 ECO, 승인·적용된 ECO 및 현재 유효 리비전이 current_eco와 지연 갱신 rev에 혼재한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 조기 또는 지연 생산 적용을 일으킬 수 있는 high 변경관리 결함에 모든 렌즈가 합의했다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-018
+    problem_definition: scrap_rate의 범위·분모·적용식과 권위 원천이 정의되지 않았다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 동일 값에 비율·승수 등 서로 다른 산식을 적용할 수 있는 medium 결함이며 구조 렌즈의 제한은 상호보완적 증거 범위로 정리됐다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-019
+    problem_definition: ECO에서 적용 Part revision과 해당 BOM·Routing 구성으로 이어지는 탐색 가능한 effectivity 경로가 없다.
+    issue_role: independent_issue
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 다섯 렌즈는 자체 실패 조건을 가진 독립 high 구조 결함으로 인정했지만 coverage는 issue-006의 표면으로
+      보아 독립성 이견을 보존한다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-020
+    problem_definition: ProductionOrder를 통제 규칙에서 참조하면서 엔티티와 생산 Part·선택 Routing 관계를 정의하지 않았다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: released-routing 제약을 모델 내부에서 해석·검증할 수 없는 독립 medium 계약 결함으로 최종 수렴했다.
+    related_surface_finding_ids:
+      - finding-023

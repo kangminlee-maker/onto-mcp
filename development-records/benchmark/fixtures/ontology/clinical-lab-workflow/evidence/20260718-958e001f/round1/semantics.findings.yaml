@@ -1,0 +1,305 @@
+schema_version: 1
+session_id: 20260718-958e001f
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: Result.status, Report.result_status, and their synchronization rule
+    evidence_anchor: .onto/review/20260718-958e001f/execution-preparation/materialized-input.md:69-83,121-123
+    claim: The ontology assigns two incompatible representations and competing
+      authority semantics to the same result-status fact.
+    what: Result.status uses preliminary/final/corrected and says the same
+      information is also kept in Report.result_status, while Report uses
+      prelim/finalized/amended and calls itself the authoritative value trusted
+      by clinicians. Corrections are propagated only by a nightly batch.
+    why: The ontology neither defines a lossless mapping nor distinguishes result
+      verification status from report lifecycle status. Consequently, corrected
+      LIS results can coexist with a still-finalized report, and EMR/LIS
+      consumers cannot determine which representation is authoritative.
+    how_to_fix: Define Result status and Report lifecycle status as distinct
+      concepts if they have different meanings. Otherwise retain one canonical
+      status authority and derive the other through an explicit, timely,
+      versioned mapping; remove the claim that both independently carry the same
+      authoritative fact.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use as the conceptual authority document for EMR/LIS
+        integration and clinician-facing result interpretation.
+      failure_condition: A Result changes to corrected while Report.result_status
+        remains finalized until the nightly synchronization, or a consumer must
+        map the incompatible enums without a declared mapping.
+      impact: Integrated systems can expose stale or contradictory result finality to
+        clinicians, undermining the document's authority and the trustworthiness
+        of reported results.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: The model does not separate result verification state from
+        report publication/amendment state or assign one source of authority for
+        each concept.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: The same status information is stored in Result and Report with different
+            vocabularies and delayed synchronization.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:123
+        - cause_id: semantics-candidate-001.cause-002
+          claim: Both representations are described as authoritative or clinician-relevant
+            without a semantic mapping.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:72-83
+        - cause_id: semantics-candidate-001.cause-003
+          claim: Result state and report lifecycle state have not been modeled as distinct
+            concepts with distinct authorities.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:123
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: CriticalValue entity
+    evidence_anchor: .onto/review/20260718-958e001f/execution-preparation/materialized-input.md:100-106
+    claim: CriticalValue conflates a reusable threshold rule with a patient-specific
+      critical-result occurrence and its notification state.
+    what: The entity is defined as a hazardous value range and contains test-level
+      bounds, but also contains notified, an occurrence-level completion flag.
+      It has no Result reference identifying which result triggered
+      notification.
+    why: A threshold definition can apply to many results, whereas notification
+      completion belongs to a particular critical-result occurrence and
+      recipient interaction. A single boolean on the threshold cannot truthfully
+      represent notification obligations for multiple results.
+    how_to_fix: Split the concept into a versioned CriticalValueRule linked to Test
+      or Assay and a CriticalResultOccurrence linked to the triggering Result.
+      Represent notification as an event or record with time, recipient, method,
+      and status rather than a rule-level boolean.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Provide a conceptually valid operational model for immediate
+        critical-result notification across EMR/LIS.
+      failure_condition: More than one result matches a CriticalValue range, or
+        consumers interpret the rule-level notified flag as evidence that a
+        particular result was communicated.
+      impact: The model cannot establish which critical result was notified, creating
+        unsafe false-positive completion semantics for an explicitly
+        immediate-notification concept.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: The ontology collapses type-level critical-value criteria
+        and occurrence-level communication workflow into one entity.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: CriticalValue combines range bounds with a notified completion flag and
+            lacks a Result reference.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: semantics-candidate-002.cause-002
+          claim: The completion flag therefore has no patient-result occurrence to which
+            it can apply.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:101-106
+        - cause_id: semantics-candidate-002.cause-003
+          claim: Rule definition and event occurrence are not distinguished ontologically.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: The referenced telephone log may contain occurrence
+        details, but it is outside the bounded artifact and does not repair the
+        ontology's missing identity and relation semantics.
+  - candidate_id: semantics-candidate-003
+    target: StatOrder subtype and Order priority attributes
+    evidence_anchor: .onto/review/20260718-958e001f/execution-preparation/materialized-input.md:15-29
+    claim: STAT is modeled simultaneously as a subtype, an enum value, and a
+      boolean, although it denotes a contingent order priority.
+    what: Order has priority=stat and is_stat, while StatOrder is also declared as
+      an Order subtype with stat_reason. No equivalence or invariant connects
+      these three representations.
+    why: An order can acquire or lose urgency without changing what kind of entity
+      it is. Treating that contingent classification as a subtype creates
+      ambiguous identity and permits StatOrder, priority, and is_stat to
+      disagree.
+    how_to_fix: Use Order.priority as the canonical classification and make
+      stat_reason conditionally required when priority=stat. If StatOrder must
+      remain as a projection, declare exact equivalence and consistency
+      constraints rather than treating it as an independent subtype identity.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide unambiguous order semantics for EMR/LIS integration.
+      failure_condition: An integrated record sets only one or two of StatOrder
+        membership, priority=stat, and is_stat=true, or priority changes after
+        placement.
+      impact: Systems can route or prioritize the same order differently because the
+        conceptual authority permits contradictory STAT classifications.
+      evidence_refs:
+        - materialized-input.md:15-29
+    causal_path:
+      root_cause_candidate: A mutable priority role has been promoted to an
+        ontological subtype while duplicate projections remain independently
+        writable.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: STAT classification appears as subtype membership, an enum value, and a
+            boolean without declared equivalence.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:21-29
+        - cause_id: semantics-candidate-003.cause-002
+          claim: These independent representations allow contradictory classifications of
+            one Order.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:21-29
+        - cause_id: semantics-candidate-003.cause-003
+          claim: The model does not distinguish an identity-essential subtype from a
+            contingent operational priority.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:15-29
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: Test, Assay, Result, and specimen-to-result production semantics
+    evidence_anchor: .onto/review/20260718-958e001f/execution-preparation/materialized-input.md:46-66,108-119,126-127
+    claim: The ontology does not resolve the semantic boundary between an orderable
+      Test and an executable Assay, yet attributes results directly to Test and
+      says a Specimen produces them.
+    what: Test is the orderable catalog unit and Assay is the analyzer execution
+      unit, but no relation maps them. Result references only Test, Assay is
+      absent from workflow relations, new items are registered in both catalogs,
+      and Specimen is named as the producer of Result.
+    why: Ordering, analytical execution, source material, and resulting observation
+      are different roles. Without an explicit Test-to-Assay realization and
+      execution provenance, identical dual registration cannot state whether the
+      concepts are synonymous, one-to-many mappings, or different abstraction
+      levels. A specimen is input material rather than the performing process.
+    how_to_fix: Define the concepts explicitly, such as OrderableTest realized_by
+      one or more Assays, and introduce an AssayExecution or equivalent event
+      that uses Specimen and produces Result. Link Result to that execution and
+      retain specimen provenance as derived_from; replace dual registration with
+      an explicit mapping or declared synonym policy.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Serve as the concept authority for translating EMR orders into
+        LIS execution and results.
+      failure_condition: An orderable catalog item maps to multiple analyzer
+        procedures, an assay changes independently, or consumers need to
+        identify which procedure produced a result.
+      impact: EMR/LIS mappings can incorrectly equate catalog items, procedures,
+        specimens, and observations, losing execution provenance and making
+        result interpretation ambiguous.
+      evidence_refs:
+        - materialized-input.md:46-66
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: The ontology has not chosen whether Test and Assay are
+        synonyms or distinct abstraction levels and therefore lacks a canonical
+        realization relation.
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: Result references Test, Assay has no workflow relation, and Specimen is
+            declared to produce Result.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-66
+            - materialized-input.md:108-119
+        - cause_id: semantics-candidate-004.cause-002
+          claim: New catalog items are duplicated in Test and Assay despite their
+            different definitions.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:127
+        - cause_id: semantics-candidate-004.cause-003
+          claim: The semantic distinction and mapping between orderable service and
+            executable analytical procedure remain unresolved.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:127
+      unresolved_beyond_evidence: The intended cardinality between orderable tests and
+        assays is not stated in the bounded artifact.
+  - candidate_id: semantics-candidate-005
+    target: Order completion rule and Result status semantics
+    evidence_anchor: .onto/review/20260718-958e001f/execution-preparation/materialized-input.md:69-72,121-123
+    claim: The completion rule treats final as the only qualifying result state even
+      though corrected is modeled as a later reportable state.
+    what: Order becomes completed only when every Result is literally final, but
+      Result can subsequently be corrected and that correction requires an
+      amended report. No finality hierarchy or terminal-state predicate says
+      that corrected remains final for completion purposes.
+    why: The labels imply corrected is a revision of a previously final result, not
+      a return to a non-final state. Literal equality to final therefore makes
+      completion semantics unstable or prevents corrected results from
+      satisfying completion.
+    how_to_fix: Define an explicit result-state transition model and a finality
+      predicate, for example is_reportable_final for final and corrected. Base
+      Order completion on that semantic predicate or on completion of all
+      required result versions, rather than equality to one enum label.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide coherent lifecycle semantics for orders, results, and
+        reports across integrated systems.
+      failure_condition: A final Result is corrected before or after Order completion
+        and the completion rule is evaluated literally.
+      impact: Different consumers may reopen, block, or retain completion for the same
+        corrected result, so lifecycle behavior is not determined by the
+        authority document.
+      evidence_refs:
+        - materialized-input.md:69-72
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: Result.status is modeled as a flat enum without defining
+        transition order or the semantic property of finality.
+      root_cause_step_id: semantics-candidate-005.cause-003
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: Order completion requires every Result to equal final, while corrected is
+            a separate Result status that triggers report amendment.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:121-123
+        - cause_id: semantics-candidate-005.cause-002
+          claim: The model provides no rule stating whether corrected is final for
+            completion purposes.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:121-123
+        - cause_id: semantics-candidate-005.cause-003
+          claim: A flat status vocabulary is being used where lifecycle transition and
+            finality semantics are required.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - STAT denotes a mutable operational priority of an order rather than an
+    identity-essential entity type.
+  - A corrected laboratory result is a revision of a previously final result and
+    remains clinically reportable as a final-version result.
+  - Critical-value bounds define reusable criteria, while notification
+    completion applies to a particular result occurrence.
+  - An orderable catalog item, an analytical procedure, the specimen it
+    consumes, and the observation it produces are semantically distinct roles
+    unless an explicit identity mapping states otherwise.
+validation:
+  unaddressable_candidates: []

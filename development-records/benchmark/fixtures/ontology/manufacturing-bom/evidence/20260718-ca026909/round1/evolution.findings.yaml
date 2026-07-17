@@ -1,0 +1,143 @@
+schema_version: 1
+session_id: 20260718-ca026909
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: BOM·라우팅·변경관리의 버전 및 효력 모델
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:20-35,55-75,93-96
+    claim: 두 번째 설계·BOM·라우팅 변경부터 과거 구성의 연속성을 보존하거나 생산 시점에 맞는 구성을 결정할 수 없다.
+    what: Part에는 현재 rev와 최신 ECO만 있고, Assembly는 현재 bom_lines를 직접 보유하며, Routing과
+      Operation에는 revision이나 효력 구간이 없다. ECO도 단일 effective_date와 affected_parts만
+      제공한다.
+    why: 새 ECO가 적용되거나 BOM·공정·표준시간이 바뀌면 이전 구성과 새 구성을 동시에 식별할 불변 버전이 없다. 특히 released
+      Routing이 참조하는 Operation 변경을 동결할 장치도 없어, 과거 생산 오더가 사용한 BOM과 공정을 재현하거나 PLM
+      변경 효력과 MES 실행 구성을 안정적으로 연결할 수 없다.
+    how_to_fix: "불변 ConfigurationVersion 계열(예: PartRevision, BomRevision,
+      RoutingRevision)을 도입하고 valid_from/valid_to, lifecycle status, ECO
+      provenance를 부여한다. 생산 오더는 정확한 released 버전을 참조하게 하고 current rev/current ECO는
+      버전 이력에서 계산되는 projection으로 한정한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 품목·BOM·라우팅·변경관리의 공통 개념 기준을 제공하는 목적
+      failure_condition: 동일 품목에 두 건 이상의 변경이 존재하거나 변경 전후 생산분을 함께 추적해야 하는 경우
+      impact: 시점별 유효 구성을 결정하거나 과거 생산 구성을 재현할 수 없어 잘못된 BOM·라우팅 적용과 변경 추적 단절 위험이 생긴다.
+      evidence_refs:
+        - materialized-input.md:20-35
+        - materialized-input.md:55-75
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: 변경 가능한 현재 상태 필드가 버전 이력과 효력의 원본 역할을 대신한다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 과거 시점의 BOM 및 라우팅 버전을 선택하는 식별자나 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:23-35
+            - materialized-input.md:55-61
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Part는 단일 rev/current_eco만 보유하고 ECO는 단일 효력일만 보유한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:69-75
+        - cause_id: evolution-candidate-001.cause-003
+          claim: BOM, Routing, Operation을 불변 revision과 효력 구간으로 분리한 구성 버전 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12-82
+      unresolved_beyond_evidence: 실제 PLM/MES가 별도 버전 스냅샷을 보유하는지는 경계 밖이지만, 이 문서 자체는 그 연결 계약을 정의하지 않는다.
+  - candidate_id: evolution-candidate-002
+    target: 수량 단위 및 작업장 capacity 모델
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:19,63-67,98-100
+    claim: 새 단위나 capacity 산정 방식을 추가하면 기존 스키마 수정 또는 현장별 재해석이 필요하다.
+    what: Part.uom은 ea, kg, m의 닫힌 enum이고 품목별 환산계수 원본이 없다.
+      WorkCenter.capacity_per_shift는 단위가 개수 또는 시간일 수 있지만 단위와 산정 기준을 속성으로 표현하지
+      않는다.
+    why: PLM이나 MES가 다른 단위, 포장 단위, 복합 단위 또는 시간·수량 외 capacity 기준을 도입하면 enum 수정과 소비자 로직
+      변경이 필요하다. 기존 숫자의 차원도 명시되지 않아 새 체계로 이관할 때 의미를 안정적으로 보존할 수 없다.
+    how_to_fix: Unit과 Quantity를 확장 가능한 참조 개념으로 만들고 값과 단위를 함께 저장한다. 품목·효력 구간별
+      ConversionRule을 원본화하며, capacity에는 unit, period/shift basis와 산정 방식 참조를
+      명시한다. 변환 불가 시 수동 환산 대신 검증 실패로 처리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 서로 다른 PLM/MES의 품목 수량과 생산능력 의미를 지속적으로 정렬하는 통합 기준
+      failure_condition: 현재 enum에 없는 단위 또는 작업장별로 다른 capacity 차원을 교환하는 경우
+      impact: 기존 구조와 소비자 코드를 수정해야 하며, 단위 없는 숫자가 오해되어 계획 수량이나 생산능력이 잘못 계산될 수 있다.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:63-67
+        - materialized-input.md:98-100
+    causal_path:
+      root_cause_candidate: 측정값의 차원과 변환 규칙이 독립적이고 확장 가능한 개념으로 모델링되지 않았다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 단위와 capacity 유형을 기존 속성만으로 명확히 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:67
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 단위는 닫힌 enum이고 capacity 숫자의 단위는 주석 속 선택지로만 존재한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:67
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 품목별 환산계수 마스터가 없고 현장 환산에 의존한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100
+      unresolved_beyond_evidence: 필요한 전체 단위 집합과 변환 정밀도는 실제 연계 시스템 계약이 없어 확정할 수 없다.
+  - candidate_id: evolution-candidate-003
+    target: AlternatePart 확장 모델
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:37-45,84-91
+    claim: 날짜·사업장·수량·승인 상태에 따라 달라지는 대체 규칙을 추가하면 현재 단순 쌍 관계를 재구축해야 한다.
+    what: 대체품은 두 Part 참조와 one_way/bidirectional 방향만 가진다. 적용 기간, 사업장, 우선순위, 수량 조건, 승인
+      근거 또는 변경 출처를 담을 확장 지점이 없다.
+    why: 조건부 대체가 도입되면 동일 부품 쌍에 여러 규칙이 필요하지만 현재 모델은 규칙 간 적용 범위와 이력을 구분하지 못한다. 단축
+      alternate_of 관계까지 병존해 향후 확장 시 어느 표현이 권위인지도 소비자별로 갈릴 수 있다.
+    how_to_fix: AlternatePart를 버전 가능한 SubstitutionRule로 확장해 effectivity,
+      site/context, priority, quantity constraint, approval/ECO provenance를 보유하게
+      한다. alternate_of와 direction은 규칙에서 계산되는 bounded projection으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM의 승인된 대체 정의를 MES의 실제 자재 선택 규칙으로 지속적으로 전달하는 통합 기준
+      failure_condition: 대체 가능성이 시점, 사업장, 수량 또는 승인 상태에 따라 달라지는 경우
+      impact: 기존 관계 구조를 변경하거나 비정형 외부 규칙을 추가해야 하며, 과거와 현재의 대체 적격성을 일관되게 판정할 수 없다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: 대체 가능성이 독립적인 적용 맥락과 수명주기를 가진 규칙이 아니라 고정된 부품 쌍으로 모델링되었다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 동일 부품 쌍에 대한 조건별·시점별 대체 적격성을 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 대체 모델의 유일한 한정자는 고정 direction enum이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:42-45
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 대체 관계에 효력, 적용 맥락, 승인 및 변경 출처 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: 실제 조직이 조건부 대체를 사용하는지는 경계 안에서 확인되지 않았으나, 해당 확장 시나리오를 현재 스키마가 수용하지 못한다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 생산 오더가 사용한 품목·BOM·라우팅 구성을 사후 재현할 수 있어야 한다.
+  - 품목 단위와 대체 가능성은 연계 시스템, 사업장 또는 효력 시점에 따라 확장될 수 있다.
+  - 명시적인 불변성 또는 버전 관계가 없는 엔티티 속성은 현재 상태로 갱신될 수 있다고 가정했다.
+validation:
+  unaddressable_candidates: []

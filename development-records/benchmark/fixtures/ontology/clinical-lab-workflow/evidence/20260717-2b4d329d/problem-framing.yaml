@@ -1,0 +1,267 @@
+schema_version: 1
+session_id: 20260717-2b4d329d
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result와 Report의 상태 의미·권위·전이 관계가 명시되지 않은 채 지연 동기화되는 복수의 현재 권위로 운용된다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상태 충돌과 무버전 매핑의 문제는 관찰되었으나 두 상태를 통합할지 독립 lifecycle로 분리할지는 숙의 후에도 확정되지
+      않았다. 공유 개념 권위 문서로 사용하려면 의미와 권위 계약은 대상 안에서 결정되어야 한다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-014
+  - issue_id: issue-002
+    problem_definition: 재사용 임계 정책과 환자별 위험 결과·통보 사건이 하나의 엔티티와 불리언에 결합되어 사건별 책임과 증적을 표현할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 정체성·수명주기·다중성이 다른 정책과 사건의 결합이 통보 판정 및 감사 불가능성의 공통 원인으로 모든 입장에서 지지되었다.
+      환자안전 통제의 권위 표현을 직접 훼손한다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-020
+  - issue_id: issue-003
+    problem_definition: Test와 Assay의 명시적 매핑 및 소유권 계약 부재가 이중 등록 운영으로 드러나며 구현자에게 의미 결정을 전가한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 이중 등록은 더 근본적인 Test–Assay 권위·다중성·매핑 부재의 운영상 표면이다. 현재 문서가 개념 권위로서 결정을
+      제공하지 못한다는 점은 확인되었으며 통합 설계 단계 전에 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: TAT 의미 정의와 소비자 계산 구현 사이에 우선순위·버전·적합성 계약이 없어 동일 명칭의 지표가 서로 다르게 진화할 수 있다.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 현재 확인된 것은 참조·검증 계약의 부재이며 실제 계산식 분기 정도는 제한적으로만 입증되었다. 그래도 공유 지표 의미의
+      권위를 소비자가 구현하기 전 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 필수 canonical 가치 권위 자료가 검토 컨텍스트에 바인딩되지 않아 사용자 요청 범위를 넘는 가치 정렬을 판단할 근거가 없다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 대상 온톨로지 자체의 결함이 아니라 axiology 검토 범위의 증거 공백이다. 완전한 가치 정렬 또는 clean 결론을
+      내리기 전 필수 권위 자료를 확보해야 한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 부분 상태 목록과 산발적 규칙만 존재해 검체 예외·종료 상태와 허용 전이를 공통으로 표현하고 검증할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 전이 구조와 검체 예외·종료 경로의 부재가 직접 확인되었고 모든 렌즈가 이를 lifecycle 불완전성의 공통 원인으로
+      수용했다. 상태 모델을 개념 권위로 쓰기 위한 핵심 계약이므로 대상에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-024
+  - issue_id: issue-007
+    problem_definition: 검증·발행·정정이 독립 사건과 버전 계보가 아닌 현재 상태 갱신으로 축약되어 책임 행위와 사용 이력을 복원할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 현재 상태 중심 모델이 행위자·시각·사유·이전 버전·전달 이력 부재를 함께 만든다는 인과 설명에 합의가 있다. 감사 가능한
+      Result/Report 권위의 핵심 결함이다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: 중요 결과 통보가 요약 불리언과 외부 기록으로 축약되어 실패·재시도·확인·에스컬레이션 lifecycle을 나타내지 못한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 정책과 결과별 통보 사건을 결합한 상위 원인이 통보 workflow의 누락으로 표면화된 문제다. 환자안전 통제의 수행 상태와
+      증거를 판정할 수 없으므로 현재 권위 문서의 사용을 막는다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 변경 가능한 카탈로그·임계 규칙·검체 유형이 식별자·버전·유효기간을 가진 참조 권위가 아니라 현재 속성값에 내장되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 버전 가능한 참조 개념의 구조적 부재가 확인되었고 확장성 및 과거 구성 재현 문제의 공통 원인으로 합의되었다. 배포·연동
+      설계에 들어가기 전에 권위와 시점 의미를 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-009
+      - finding-013
+  - issue_id: issue-010
+    problem_definition: Result가 임상 관찰 및 수행 provenance가 아닌 최소 문자열 표시값으로 축약되어 핵심 결과
+      의미와 실패 맥락을 보존하지 못한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 자료형, 관찰 시각, 기준구간, 해석, 수행 맥락과 측정 불가 표현의 부재가 직접 확인되었다. 임상 결과 의미를 안전하게
+      교환한다는 선언 목적을 지원하지 못하는 핵심 모델 결함이다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: Test와 Assay의 역할별 권위, 의미 경계, 다중성 및 시점별 매핑이 정의되지 않아 주문과 수행을 신뢰성 있게 연결할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 두 카탈로그 사이의 canonical authority와 cardinality-aware mapping 부재가 여러
+      주문–수행 문제의 공통 원인으로 모든 렌즈에서 확인되었다. EMR/LIS 통합의 중심 개념 계약이므로 대상에서 해결해야 한다.
+    related_surface_finding_ids:
+      - finding-011
+      - finding-018
+  - issue_id: issue-012
+    problem_definition: 버전된 Test–Assay 권위와 매핑 없이 이중 등록으로 카탈로그를 변경해 시점별 대응과 기존 데이터 해석이 깨질 수 있다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Test–Assay 권위·매핑·버전 모델 부재가 카탈로그 변경 시 나타나는 진화 실패다. 신규·대체 수행법 도입 시 지원
+      경로가 실패하므로 상위 매핑 계약과 함께 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-013
+    problem_definition: CriticalValue 임계 정책이 버전·유효기간·단위·검사방법 맥락 없는 현재값으로 표현되어 변경 전후 판정을 재현할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 변경 가능한 참조 권위를 현재 속성값에 내장한 상위 문제의 CriticalValue 특화 표면이다. 과거 판정과 병행 기준을
+      보존하려면 운영 규칙 적용 전 해결되어야 한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: Result 상태와 Report 문서 상태의 의미 경계·매핑·정합성 시점이 없어 정정 구간에 양립할 수 없는 권위 상태가 발생한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 두 상태를 동일 정보처럼 취급하면서 즉시 정합성 계약을 두지 않은 구조와 정정 후 충돌 경로가 확인되었다. 최종 통합 또는
+      분리 방식과 별개로 이 의미·권위 충돌은 현재 대상에서 제거해야 한다.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-019
+  - issue_id: issue-015
+    problem_definition: Order.completed가 현재 상태인지 역사적 마일스톤인지 정의되지 않아 Result 정정 후 주문
+      완료 상태를 일관되게 판정할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 불완전한 전이 모델이 완료 이후 정정 경로에서 구체적으로 드러난 문제다. completed의 시간적 의미 선택에 따라 상태
+      계약이 달라지므로 명시적 결정이 필요하며 그 의미 자체는 대상 문서에 포함되어야 한다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-016
+    problem_definition: 실제 검사 수행 개념이 없어 수동적 입력 물질인 Specimen에 Result 생산 역할이 배정되고 수행
+      provenance가 소실된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Specimen–Result 직접 생산 관계와 독립 수행 노드의 부재가 확인되었다. 재검사·분주·복수 assay에서
+      provenance 의미가 달라지므로 개념 모델 자체에서 역할을 바로잡아야 한다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-017
+    problem_definition: STAT 긴급도가 subtype·enum·boolean의 독립 권위로 중복되어 동일 주문에 모순된 긴급도 해석을 허용한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 세 표현 사이에 단일 권위, 파생 규칙 또는 불변조건이 없다는 점이 직접 확인되었고 모든 렌즈가 중복 권위를 원인으로
+      수용했다. 주문 우선순위의 의미 계약은 대상 모델에서 닫을 수 있는 국소적 결함이다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-018
+    problem_definition: 주문 Test에서 수행 Assay와 Result로 이어지는 선언된 관계가 없어 핵심 EMR-to-LIS 실행
+      인계가 구조적으로 단절되어 있다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Test–Assay 권위 및 매핑 부재가 실제 Order-to-Result 경로 단절로 나타난 문제다. 선언된 목적의 핵심
+      happy path가 로컬 매핑 없이는 성립하지 않으므로 현재 사용을 막는다.
+    related_surface_finding_ids:
+      - finding-023
+  - issue_id: issue-019
+    problem_definition: CriticalValue.notified가 특정 Result와 통보 참여자·시각·통신 증거에 연결되지 않아
+      결과별 통보 사실을 판정하거나 조정할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 정책과 결과별 통보 사건의 결합이 canonical 관계 경로 부재로 표면화된 문제다. 특정 위험 결과의 통보 완료를 증명할
+      수 없어 안전 통제의 권위성이 훼손되므로 상위 통보 모델과 함께 즉시 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-025

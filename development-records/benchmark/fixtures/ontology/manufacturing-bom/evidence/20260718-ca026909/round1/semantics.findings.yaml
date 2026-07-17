@@ -1,0 +1,203 @@
+schema_version: 1
+session_id: 20260718-ca026909
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: InspectionPlan의 존재론적 유형과 Operation 상속
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:47-53,77-82
+    claim: 검사 계획을 공정 단계의 하위 유형으로 둔 것은 계획·규격과 실행 활동을 의미적으로 혼동한다.
+    what: "InspectionPlan은 sampling_rule과 acceptance_criteria를 담는 정보성 규격인데 `is_a:
+      Operation`으로 선언되어 작업장과 표준시간을 가진 공정 단계처럼 취급된다."
+    why: 계획은 공정을 규정하는 정보 객체이고 Operation은 수행되는 활동 유형이다. 둘을 상속으로 결합하면 라우팅에서 실행 단계와 검사
+      규격을 같은 대상으로 식별하여 PLM의 품질 계획과 MES의 실행 공정을 잘못 대응시킬 수 있다.
+    how_to_fix: InspectionPlan을 독립된 규격 엔티티로 두고, 검사 Operation이 `uses_inspection_plan`
+      같은 관계로 이를 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준으로서 품질 계획과 제조 실행 공정을 정확히 구분하는 목적
+      failure_condition: 상속 관계를 따라 InspectionPlan이 Routing.operations에 직접 포함되거나
+        Operation 속성으로 실행·스케줄링될 때
+      impact: 규격 버전, 실행 실적, 작업장 배정의 대상이 뒤섞여 품질 계획과 실제 검사 작업 간 추적성이 훼손된다.
+      evidence_refs:
+        - materialized-input.md:47-53
+        - materialized-input.md:77-82
+    causal_path:
+      root_cause_candidate: 정보성 검사 규격과 수행 활동인 검사 공정을 하나의 존재론적 유형으로 모델링했다.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: InspectionPlan이 Operation을 상속하면서 공정 단계의 속성을 물려받는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:47-53
+            - materialized-input.md:77-82
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 검사 계획과 검사 실행을 상속 관계로 동일시한 유형 분류가 이 표면 문제의 원인이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:77-82
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: BOM 비순환 규칙의 스크랩 재투입 예외
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:29-35,93-96
+    claim: 스크랩 재투입 흐름을 Assembly의 자기 포함 BOM으로 표현하는 것은 제품 구성과 공정 물질 흐름을 의미적으로 혼동한다.
+    what: BomLine은 상위 조립품이 하위 품목을 사용하는 제품 구조로 정의되지만, 무결성 규칙은 재생 원료 회수를 Assembly가 자기
+      자신을 하위에 포함하는 방식으로 모델링하도록 한다.
+    why: 자기 포함 BomLine은 완성 대상 Assembly 자체가 자신의 투입 부품이라는 뜻이 된다. 이는 회수 스크랩이나 재생 원료가 특정
+      공정으로 되돌아가는 의미와 다르며, BOM 전개·자재소요 계산에서 자기 의존으로 해석될 수 있다.
+    how_to_fix: 제품 BOM은 비순환으로 유지하고, 회수 스크랩·재생 원료·재투입 공정을 별도 물질 흐름 또는 부산물/회수 관계로 모델링해
+      수율과 투입 위치를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM 제품구조와 MES 공정·자재 흐름을 공유하는 개념 기준의 정확성
+      failure_condition: 스크랩 재투입이 허용된 품목의 BOM을 전개하거나 자재소요·원가·생산계획 계산에 사용할 때
+      impact: 제품 구성과 순환 공정 흐름이 같은 관계로 전달되어 무한 전개, 잘못된 소요량 또는 통합 시스템별 상이한 예외 해석을 유발할 수
+        있다.
+      evidence_refs:
+        - materialized-input.md:29-35
+        - materialized-input.md:93-94
+    causal_path:
+      root_cause_candidate: 제품 구조 관계인 BomLine을 공정 중 회수 물질 흐름까지 표현하는 범용 관계로 사용했다.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: 비순환 BOM에 Assembly 자기 포함 예외가 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-94
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 재투입 물질 흐름을 제품 구성 관계로 대신 표현한 의미 범주 혼동의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:93-94
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: AlternatePart의 대체 방향 의미
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart 정의의 무조건 대칭성은 one_way 방향 및 기본값과 모순된다.
+    what: 정의는 A의 대체가 B이면 B의 대체도 A라고 단정하지만, 같은 엔티티는 `one_way`와 `bidirectional`을 구분하고
+      기본을 one_way로 설명한다.
+    why: 동일 인스턴스가 정의상 대칭이면서 속성상 단방향일 수 있어 소비자가 정의와 direction 중 어느 의미를 따라야 하는지 결정할 수
+      없다. 역대체가 허용되지 않은 부품을 자동 대체하면 제조 적합성 위험이 생긴다.
+    how_to_fix: "정의를 방향성 대체 승인 관계로 바꾸고 `primary_ref → alternate_ref`를 기본 의미로 명시하며,
+      역방향 허용은 `direction: bidirectional`일 때만 성립한다고 규정한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM의 대체 승인 정보를 MES 자재 대체 판단에 일관되게 전달하는 목적
+      failure_condition: direction이 one_way인 AlternatePart를 정의의 대칭성에 따라 역방향으로 해석할 때
+      impact: 승인되지 않은 역대체가 가능해져 잘못된 자재 투입이나 시스템 간 대체 가능성 불일치가 발생한다.
+      evidence_refs:
+        - materialized-input.md:37-45
+    causal_path:
+      root_cause_candidate: 대체 가능성을 본질적으로 대칭인 관계로 정의하면서 같은 개념에 방향성 승인 속성을 추가했다.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: 정의는 대체 관계를 항상 대칭이라고 서술하지만 direction은 one_way를 허용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: semantics-candidate-003.cause-002
+          claim: 대칭적 동등 대체와 방향성 대체 승인을 하나의 의미로 혼합한 결과다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: Part.rev와 ECO 효과 적용 의미
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:14-21,69-75,93-96
+    claim: Part의 품목 개정과 도면 문서 개정을 `rev` 하나로 혼용한다.
+    what: "`Part.rev`의 주석은 이를 도면 리비전이라고 정의하지만, ECO 규칙은 생산분이 신규 `rev`를 따른다고 하여 품목·생산
+      효과 개정처럼 사용한다."
+    why: 도면 문서의 버전과 제조 품목의 적용 개정은 서로 다른 식별·효력 대상을 가질 수 있다. 하나의 필드가 두 의미를 가지면 PLM 도면
+      변경과 MES 생산 적용 시점이 동일하다고 잘못 해석되고, 주간 동기화 지연 중 어느 개정이 생산 권위인지 불명확해진다.
+    how_to_fix: 품목의 `item_revision`과 도면의 `document_revision`을 분리하고 둘의 대응 관계를 명시한다.
+      ECO에는 대상 품목 개정과 효력 조건을 연결해 MES가 생산 적용 개정을 직접 판정하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM 변경관리 결과를 MES 생산 개정에 의미 손실 없이 연결하는 목적
+      failure_condition: 도면 리비전과 품목 생산 개정이 다르거나 주간 동기화 사이에 ECO 효력이 발생할 때
+      impact: 생산 오더가 참조해야 할 개정과 도면 원본의 개정을 구분하지 못해 구개정 또는 미승인 개정으로 생산할 위험이 있다.
+      evidence_refs:
+        - materialized-input.md:14-21
+        - materialized-input.md:69-75
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: 문서 개정과 품목 효과 개정을 단일 `Part.rev` 개념으로 축약했다.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: Part.rev는 도면 리비전으로 설명되지만 생산 효과 규칙의 신규 rev로도 사용된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:96
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 서로 다른 개정 대상과 권위를 하나의 필드에 부여한 의미 중첩의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+      unresolved_beyond_evidence: 문서 밖 실제 PLM에서 품목 개정과 도면 개정이 항상 일치하는지는 확인할 수 없으나, 현재
+        기준 문서는 그 동일성 조건을 선언하지 않는다.
+  - candidate_id: semantics-candidate-005
+    target: WorkCenter.capacity_per_shift의 측정 의미
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:63-67
+    claim: 하나의 capacity_per_shift 속성이 산출 수량과 가용 시간을 함께 뜻해 측정 차원을 구분하지 못한다.
+    what: 동일한 number 필드의 단위가 작업장마다 개수 또는 시간이라고 정의되어 있다.
+    why: 수량 처리능력과 시간 가용량은 서로 다른 물리량이며 같은 숫자 속성만으로는 비교, 합산, 부하율 계산 또는 단위 변환이 불가능하다.
+      MES마다 필드 의미를 다르게 해석할 수 있다.
+    how_to_fix: 용량 값에 측정 차원과 UOM을 명시하거나 `output_capacity_per_shift`와
+      `available_time_per_shift`로 분리하고, 각각의 기준 품목·시간 단위를 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 작업장 능력과 공정 부하를 일관된 의미로 교환하는 목적
+      failure_condition: 개수 기반 작업장과 시간 기반 작업장의 capacity_per_shift를 동일 필드로 스케줄링·비교·집계할 때
+      impact: 차원이 다른 값이 동일 측정치로 처리되어 과부하 판단과 생산 일정 계산의 신뢰성이 훼손된다.
+      evidence_refs:
+        - materialized-input.md:63-67
+    causal_path:
+      root_cause_candidate: 서로 다른 측정 차원인 산출량과 가용 시간을 단위 없는 단일 용량 개념으로 모델링했다.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: capacity_per_shift의 단위가 개수 또는 시간으로 작업장별로 달라진다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63-67
+        - cause_id: semantics-candidate-005.cause-002
+          claim: 상이한 물리량을 하나의 속성명과 number 형식으로 중첩한 데서 발생한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:63-67
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-006
+    target: Part와 Routing 사이 manufactured_by 관계명
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:55-61,84-88
+    claim: "`Part manufactured_by Routing`은 라우팅 계획을 제조 수행 주체로 표현한다."
+    what: Routing은 제조 공정 순서로 정의되지만 Part에서 Routing으로 향하는 관계가 `manufactured_by`로 명명되어
+      있다.
+    why: "`manufactured_by`는 대상이 제조 행위자나 실행 공정에 의해 생산된다는 의미를 암시한다. Routing은 실행 주체가
+      아니라 준거가 되는 공정 계획이므로, 관계명이 그대로 통합 매핑되면 계획과 실행을 혼동한다."
+    how_to_fix: 관계를 `has_manufacturing_routing` 또는 `manufactured_according_to`로 바꾸고,
+      실제 제조 실행이 필요하면 별도 생산 오더·공정 실행 개념과 연결한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 제품 BOM은 제품을 구성하거나 소모되는 품목 구조를 나타내고, 공정 중 스크랩 회수·재투입 흐름과는 의미적으로 구분된다고 가정했다.
+  - 검사 계획은 검사 활동을 규정하는 정보 객체이고 Operation은 수행되는 제조 활동 유형이라고 가정했다.
+  - PLM 통합에서는 품목 개정과 도면 문서 개정이 별도 식별·효력 대상을 가질 수 있다고 가정했다.
+  - 작업장 산출 수량과 가용 시간은 서로 다른 측정 차원이며 명시적 단위 없이 동일 값으로 비교할 수 없다고 가정했다.
+validation:
+  unaddressable_candidates: []

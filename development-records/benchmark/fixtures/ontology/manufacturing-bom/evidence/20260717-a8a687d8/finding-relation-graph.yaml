@@ -1,0 +1,153 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: 두 finding은 모두 BOM·라우팅의 독립적인 revision/effectivity 기준선 부재가 변경 전후
+      제조 형상 재구성을 불가능하게 한다는 동일 결함을 기술한다.
+    shared_cause: null
+    rationale: coverage와 evolution 렌즈의 관점만 다를 뿐, 증거 대상과 실패 조건, 영향, 제안된
+      Part/BOM/Routing revision 모델이 실질적으로 일치한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: ECO 효력일과 주간 Part.rev 동기화 사이의 적용 모호성은 시간 효력을 가진 제조 형상 기준선이 없을 때
+      발생하며, 명시적 revision/effectivity 모델을 추가하면 모호성이 제거되어야 한다.
+    shared_cause: null
+    rationale: finding-001의 운영상 시간 불일치는 finding-005가 지적한 BOM·라우팅 revision 및 유효구간 부재의
+      구체적인 실패 사례다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-022
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: ECO에서 정확한 결과 revision으로 이어지는 연결 부재는 revision을 독립된 형상 객체로 모델링하지
+      않은 결함의 구조적 증상이며, 명시적 PartRevision과 ECO 전이 관계를 추가하면 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-022의 단일 Part.rev와 최신 current_eco 구조는 finding-005의 시점별 형상 관리
+      부재를 직접 드러내는 좁은 구조적 표현이다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-009
+    to_finding_id: finding-001
+    relation: enables
+    root_hypothesis: 생산 오더와 적용 형상 스냅샷이 없으면 ECO/Part 리비전 해석 차이가 생산분별로 고정되지 않아 시스템 간
+      적용 모호성이 실제 제조 기록까지 전파된다.
+    shared_cause: null
+    rationale: finding-001은 생산 오더가 적용 revision을 직접 참조하거나 고정하지 않는 점을 원인 단계로 들고 있으며,
+      finding-009는 바로 그 오더·스냅샷 개념의 전면 부재를 식별한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 두 finding은 제품 구성과 공정 회수·재투입 흐름을 BomLine 하나로 합친 동일 모델링 결함이 BOM
+      순환 예외와 소비자별 확장 비용을 만든다고 기술한다.
+    shared_cause: null
+    rationale: axiology와 evolution의 평가 초점만 다르고, 자기참조 BOM 표현, 비순환 소비자 위험, 별도
+      MaterialFlow 계열 개념으로의 분리라는 근거와 조치가 일치한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-023
+    to_finding_id: finding-002
+    relation: symptom_of
+    root_hypothesis: 스크랩 재투입과 제품 구성을 같은 BomLine으로 표현했기 때문에 허용된 재투입과 잘못된 순환을 구별할 구조적
+      표지가 존재하지 않으며, 흐름 개념을 분리하면 이 판별 결함도 사라져야 한다.
+    shared_cause: null
+    rationale: finding-023의 edge-kind 표지 부재는 finding-002가 지적한 제품 구조와 공정 물질 흐름의 개념
+      혼합이 구조 층에 나타난 결과다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-003
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: BOM 수량의 현장별 환산 불일치와 BOM·능력 값의 계산 불가능성은 권위 있는 측정 단위·품목별 환산 모델
+      부재라는 공통 원인에서 발생한다.
+    shared_cause:
+      cause_claim: 품목별 환산계수와 단위 변환의 권위·유효성·실패 규칙이 통합 모델에 없다.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-007.cause-002
+    rationale: 두 causal path 모두 현장 환산에 의존하는 이유를 단위 변환 마스터 부재로 귀속한다. finding-007은 여기에
+      작업장 능력 단위까지 범위를 확장한다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-007
+    to_finding_id: finding-012
+    relation: duplicates
+    root_hypothesis: 두 finding은 UOM이 폐쇄형 품목 코드에 머물고 수량별 차원·환산 개념이 없어 BOM과 생산능력을 확장
+      가능하게 계산할 수 없다는 동일 결함을 기술한다.
+    shared_cause: null
+    rationale: coverage와 evolution 관점의 차이에도 불구하고 qty_per, capacity_per_shift, 제한된
+      UOM, 현장 환산을 같은 증거로 사용하며 제안 모델도 UnitOfMeasure와 UnitConversion으로 일치한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-020
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: capacity_per_shift에서 개수와 시간을 혼용하는 현상은 측정값 자체에 단위 차원과 측정 종류를
+      연결하지 않은 모델의 구체적 증상이며, 차원화된 Quantity/UOM 모델을 적용하면 혼용이 구조적으로 불가능해져야 한다.
+    shared_cause: null
+    rationale: finding-007의 범용 단위·능력 모델 부재가 finding-020에서 하나의 속성에 상이한 차원이 들어가는 의미
+      오류로 나타난다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: scrap_rate 정합성 실패와 복수 시스템 제조 기준값의 재현 불가능성은 복제값에 원본 권위, 유효기간,
+      동기화 및 대사 이력을 부여하지 않은 공통 원인에서 발생한다.
+    shared_cause:
+      cause_claim: scrap_rate 복제본에 원본 식별자·권위, 유효기간, 동기화 상태와 충돌 처리 규칙이 없다.
+      from_cause_ref: finding-004.cause-003
+      to_cause_ref: finding-008.cause-001
+    rationale: finding-004는 BomLine scrap_rate 복사본의 구체적 문제이고, finding-008은 같은 권위·대사
+      결함을 scrap_rate와 표준시간 계열 전반으로 일반화한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-004
+    to_finding_id: finding-019
+    relation: same_root_candidate
+    root_hypothesis: scrap_rate를 정규 산식과 원천 권한이 없는 BomLine 복사 스칼라로 취급한 것이 변경 정합성 결함과
+      의미·계산식 모호성을 함께 만든다.
+    shared_cause: null
+    rationale: finding-004는 값의 권위와 생명주기를, finding-019는 값의 의미·범위·계산식을 문제 삼지만 둘 다 외부
+      엑셀 값을 정의되지 않은 BomLine 속성으로 복사한 동일 설계 선택에 의존한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-015
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: 두 finding은 AlternatePart가 무조건 대칭으로 정의되면서 one_way 상태를 허용하여 동일
+      관계에 양립할 수 없는 의미를 부여한다는 동일 결함을 기술한다.
+    shared_cause: null
+    rationale: logic과 semantics 렌즈의 표현만 다르며, 같은 정의와 direction 속성, 같은 실패 조건 및 같은 수정
+      대안을 제시한다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-010
+    to_finding_id: finding-021
+    relation: same_root_candidate
+    root_hypothesis: AlternatePart를 조건과 증거를 가진 독립 적용 규칙으로 완결하지 않고 정적 품목 관계 및 단축 그래프로
+      취급한 것이 적용 범위 누락과 관계 그래프 단절을 함께 만든다.
+    shared_cause: null
+    rationale: finding-010은 reified 대체 규칙 내부의 적용 조건 부재를, finding-021은 그 규칙이 명시적
+      relations 그래프에 연결되지 않은 구조 부재를 식별한다. 둘 다 AlternatePart가 통합 계약의 일급 관계로 완결되지
+      않았다는 가설로 함께 설명된다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-006
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-013
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-017
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-018
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

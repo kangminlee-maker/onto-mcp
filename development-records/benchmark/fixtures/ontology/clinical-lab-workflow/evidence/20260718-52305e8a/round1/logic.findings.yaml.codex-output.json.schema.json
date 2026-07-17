@@ -1,0 +1,217 @@
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "description": "Every finding candidate produced by this lens. Use an empty list only when no contract-affecting finding exists.",
+      "items": {
+        "type": "object",
+        "description": "One semantic finding candidate.",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "evidence_anchor",
+          "claim",
+          "what",
+          "why",
+          "how_to_fix",
+          "upstream_evidence_required",
+          "severity_hint",
+          "materiality_basis",
+          "causal_path"
+        ],
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "The artifact, file, section, or behavior being criticized."
+          },
+          "evidence_anchor": {
+            "type": "string",
+            "description": "The concrete evidence location supporting the claim."
+          },
+          "claim": {
+            "type": "string",
+            "description": "Compact surface-finding claim."
+          },
+          "what": {
+            "type": "string",
+            "description": "Plain description of the observed problem."
+          },
+          "why": {
+            "type": "string",
+            "description": "Why the evidence supports the claim and why it matters."
+          },
+          "how_to_fix": {
+            "type": "string",
+            "description": "Smallest useful correction or mitigation."
+          },
+          "upstream_evidence_required": {
+            "type": "boolean",
+            "description": "True when the finding needs evidence outside the current allowed boundary."
+          },
+          "severity_hint": {
+            "type": "string",
+            "description": "Non-authoritative lens severity hint. Use blocker/high/medium only when materiality_basis and causal_path are evidence-backed.",
+            "enum": [
+              "blocker",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ]
+          },
+          "materiality_basis": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Required object for blocker/high/medium candidates; null for clear low/info surface findings.",
+            "additionalProperties": false,
+            "required": [
+              "affected_purpose",
+              "failure_condition",
+              "impact",
+              "evidence_refs"
+            ],
+            "properties": {
+              "affected_purpose": {
+                "type": "string",
+                "description": "The declared purpose or contract weakened by this finding."
+              },
+              "failure_condition": {
+                "type": "string",
+                "description": "The bounded condition where the declared purpose fails or trust is weakened."
+              },
+              "impact": {
+                "type": "string",
+                "description": "Why this changes review trust or actionability for the declared purpose."
+              },
+              "evidence_refs": {
+                "type": "array",
+                "description": "Concrete refs supporting materiality.",
+                "items": {
+                  "type": "string",
+                  "description": "One evidence ref."
+                }
+              }
+            }
+          },
+          "causal_path": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Required object for blocker/high/medium candidates; null for clear low/info surface findings.",
+            "additionalProperties": false,
+            "required": [
+              "root_cause_candidate",
+              "steps",
+              "unresolved_beyond_evidence"
+            ],
+            "properties": {
+              "root_cause_candidate": {
+                "type": "string",
+                "description": "Evidence-backed starting cause candidate, not a severity label."
+              },
+              "steps": {
+                "type": "array",
+                "description": "Causal chain from observed surface finding toward the starting cause.",
+                "items": {
+                  "type": "object",
+                  "description": "One causal step.",
+                  "additionalProperties": false,
+                  "required": [
+                    "claim",
+                    "relation_to_previous",
+                    "evidence_refs"
+                  ],
+                  "properties": {
+                    "claim": {
+                      "type": "string",
+                      "description": "Evidence-backed cause or symptom claim."
+                    },
+                    "relation_to_previous": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "null for the first surface step; otherwise how this step relates to the prior step.",
+                      "enum": [
+                        "causes",
+                        "symptom_of",
+                        "enables",
+                        null
+                      ]
+                    },
+                    "evidence_refs": {
+                      "type": "array",
+                      "description": "Concrete refs supporting this causal step.",
+                      "items": {
+                        "type": "string",
+                        "description": "One evidence ref."
+                      }
+                    }
+                  }
+                }
+              },
+              "unresolved_beyond_evidence": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Boundary-limited uncertainty beyond the evidence, or null when closed enough."
+              }
+            }
+          }
+        }
+      }
+    },
+    "domain_constraints_used": {
+      "type": "array",
+      "description": "Domain rule provenance actually used by this lens. Use [] when session_domain is none or no domain rule was used.",
+      "items": {
+        "type": "object",
+        "description": "One domain constraint provenance entry.",
+        "additionalProperties": false,
+        "required": [
+          "source_doc",
+          "source_version_or_snapshot_id",
+          "anchor"
+        ],
+        "properties": {
+          "source_doc": {
+            "type": "string",
+            "description": "Domain document path."
+          },
+          "source_version_or_snapshot_id": {
+            "type": "string",
+            "description": "Version or snapshot id for the source document."
+          },
+          "anchor": {
+            "type": "string",
+            "description": "Stable section anchor within the source document."
+          }
+        }
+      }
+    },
+    "domain_context_assumptions": {
+      "type": "array",
+      "description": "Informal domain/context assumptions used by this lens. Use [] when none were used.",
+      "items": {
+        "type": "string",
+        "description": "One assumption."
+      }
+    },
+    "no_findings_rationale": {
+      "type": "string",
+      "description": "Always submit this field. Use an empty string when findings is non-empty; when findings is empty, explain why this lens produced no finding."
+    }
+  },
+  "required": [
+    "findings",
+    "domain_constraints_used",
+    "domain_context_assumptions",
+    "no_findings_rationale"
+  ],
+  "additionalProperties": false
+}

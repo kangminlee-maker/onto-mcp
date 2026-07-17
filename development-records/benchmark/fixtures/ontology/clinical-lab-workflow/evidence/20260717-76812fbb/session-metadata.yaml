@@ -1,0 +1,27 @@
+session_id: 20260717-76812fbb
+entrypoint: review
+execution_realization: worker
+host_runtime: codex
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+review_mode: core-axis
+orchestration: runtime
+created_at: 2026-07-17T23:49:35+09:00
+project_root: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-UU8ANs
+requested_target: clinical-lab-ontology.yaml
+requested_domain_token: "@-"
+onto_home: /Users/kangmin/Documents/onto-mcp
+resolved_llm_plan:
+  model: gpt-5.6-sol
+  reasoning_effort: medium
+  service_tier: fast
+  provider: codex
+  execution_route: external_oauth_worker
+  execution_adapter: codex_cli
+  model_provider: openai
+  auth_mode: oauth
+  billing_mode: subscription

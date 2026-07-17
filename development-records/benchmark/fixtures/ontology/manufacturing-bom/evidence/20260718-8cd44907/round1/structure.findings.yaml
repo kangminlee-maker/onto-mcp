@@ -1,0 +1,163 @@
+schema_version: 1
+session_id: 20260718-8cd44907
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — ECO effectivity structure
+    evidence_anchor: materialized-input.md:20-21, 55-61, 69-75, 84-96
+    claim: ECO effectivity is not connected to the revisioned BOM and routing
+      configuration it is supposed to activate.
+    what: ECO references affected Part objects and an effective date, while Part.rev
+      is only a scalar. No relationship identifies the new revision or the BOM
+      and Routing versions governed by the ECO.
+    why: The integrity rule requires post-effective-date production to follow a new
+      revision, but the ontology provides no traversable path from ECO to that
+      revision's BOM and Routing. A PLM/MES consumer therefore cannot determine
+      the effective manufacturing configuration from this model.
+    how_to_fix: Introduce a revision/configuration entity, or equivalent explicit
+      version references, and connect ECO to the resulting Part revision, BOM,
+      and Routing with effectivity. Make the integrity rule traversable through
+      those relationships.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES integration baseline for consistent change-controlled
+        BOM and routing selection.
+      failure_condition: When an ECO becomes effective and production must select the
+        new revision's BOM and routing.
+      impact: The model cannot identify the effective manufacturing configuration,
+        weakening trust that PLM changes will drive the correct MES execution
+        data.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:84-96
+    causal_path:
+      root_cause_candidate: The ontology models revision as an unlinked scalar and
+        omits configuration-level relationships from ECO to revisioned BOM and
+        Routing.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: The effectivity rule requires production after ECO.effective_date to
+            follow a new revision, but no path identifies that revision's BOM or
+            Routing.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+            - materialized-input.md:93-96
+        - cause_id: structure-candidate-001.cause-002
+          claim: ECO is connected only to Part, while Part.rev is a scalar and BOM/Router
+            structures have no revision or ECO link.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+            - materialized-input.md:84-90
+      unresolved_beyond_evidence: External systems may retain the missing mapping, but
+        the bounded ontology does not declare it.
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml — released-routing production-order rule
+    evidence_anchor: materialized-input.md:12-82, 84-95
+    claim: ProductionOrder is referenced by an integrity rule but has no entity or
+      relationship in the ontology.
+    what: The rule says only items with a released Routing may create a production
+      order, yet the entity set contains no ProductionOrder and the relation
+      graph has no order-to-Part or order-to-Routing connection.
+    why: The release gate cannot be represented or validated structurally. MES
+      integration cannot trace an order to the exact routing whose released
+      status authorizes execution.
+    how_to_fix: Add a ProductionOrder concept with explicit references to the
+      manufactured Part and selected Routing, then express the released-status
+      constraint over that relationship.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A self-contained conceptual baseline connecting routing
+        release state to MES execution authorization.
+      failure_condition: When a production order is created or validated against the
+        released-routing rule.
+      impact: A declared operational control has no structural subject or path, so
+        implementations can interpret or enforce it inconsistently.
+      evidence_refs:
+        - materialized-input.md:12-82
+        - materialized-input.md:84-95
+    causal_path:
+      root_cause_candidate: The operational subject named by the integrity rule was
+        not modeled as an entity with routing and part relationships.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: The released-routing rule refers to production-order creation, but no
+            ProductionOrder appears in the entity or relation declarations.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:12-82
+            - materialized-input.md:84-95
+        - cause_id: structure-candidate-002.cause-002
+          claim: Routing connects to Part and Operation only, leaving no relationship on
+            which the production-order gate can operate.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:84-89
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: manufacturing-bom-ontology.yaml — AlternatePart relation structure
+    evidence_anchor: materialized-input.md:37-45, 84-91
+    claim: AlternatePart is absent from the declared relation graph despite being
+      named as the carrier of alternate-part relationships.
+    what: AlternatePart contains primary_ref, alternate_ref, and direction, but the
+      relations section declares only a direct Part-to-Part alternate_of edge
+      and no edge involving AlternatePart.
+    why: Relation-graph consumers cannot traverse from Parts to the relationship
+      entity that carries its properties. The declared shortcut therefore has no
+      structural connection to the entity it says realizes the relationship.
+    how_to_fix: Declare explicit Part-to-AlternatePart role relationships, or make
+      AlternatePart the canonical associative relation and derive the
+      Part-to-Part shortcut from it.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A structurally consistent integration model for alternate-part
+        relationships and their relationship-level properties.
+      failure_condition: When an integration traverses the declared relations graph to
+        obtain alternate-part relationship records.
+      impact: The graph can expose an alternate pair without a path to the
+        relationship entity carrying its attributes, producing incomplete or
+        incompatible projections.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: The relation catalog models only the derived Part-to-Part
+        shortcut and omits edges to the associative AlternatePart entity.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: No declared relation has AlternatePart as its source or target.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-003.cause-002
+          claim: AlternatePart nevertheless owns both Part references and the
+            relationship-level direction attribute.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+      unresolved_beyond_evidence: Attribute-reference-aware consumers may reconstruct
+        the association, but the explicit relations graph does not provide that
+        path.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The ontology is intended to be sufficiently self-contained for its declared
+    integrity rules to be represented as traversable structural paths.
+  - The top-level relations section is an integration-facing relation graph, not
+    merely illustrative documentation.
+validation:
+  unaddressable_candidates: []

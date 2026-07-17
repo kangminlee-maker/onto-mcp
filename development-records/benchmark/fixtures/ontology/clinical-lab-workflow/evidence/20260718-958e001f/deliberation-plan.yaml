@@ -1,0 +1,105 @@
+schema_version: 1
+session_id: 20260718-958e001f
+planned_issues:
+  - issue_id: issue-004
+    priority: 10
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - logic
+      - evolution
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+    conflict_summary: logic은 외부 대시보드 공식이 경계 안에 없어 실제 불일치와 심각도를 판단할 증거가 부족하다고 보지만,
+      evolution은 공식·우선순위·버전 계약의 부재만으로도 medium 이슈를 지지하고 axiology와 coverage는 실제
+      불일치가 아닌 조건부 계약 결함으로 범위를 좁히면서도 medium을 유지한다.
+    resolution_question: 외부 공식의 실제 내용이 확인되지 않은 현재 경계에서 입증된 material issue는 정규 TAT
+      공식·예외·버전·검증 계약의 부재만으로 성립하는가, 성립한다면 실제 공식 불일치 주장과 분리하여 medium 심각도를 유지할 근거는
+      무엇인가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: logic의 범위 축소는 현재 일관성 결함에 초점을 둔 렌즈별 한정이며, 모든 참여 렌즈가 중복 권위와 지연 동기화라는 원인,
+      high 심각도 및 조치 방향에 동의한다.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: coverage와 semantics는 확인되지 않은 외부 대장 세부를 배제해 원인을 안정적 참조·권위 계약 부재로 한정할 뿐이며,
+      적용 가능한 렌즈들은 medium 심각도와 조치에 합의한다.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: evolution의 시간적 매핑 요구는 기존 원인과 조치를 보완하는 범위 확장으로, Test–Assay 역할·매핑 부재와
+      medium 심각도에 대한 실질적 반대가 아니다.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: structure의 축소는 필수 lifecycle 범주의 판단을 coverage에 맡기는 렌즈 경계이며, 예외·종결 표현 부재와
+      medium 심각도에는 모두 동의한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: logic은 CriticalValue의 다중 Result 불일치 사례만 직접 판정하지만 전반적 사건 모델 부재를 부정하지 않으며,
+      모든 적용 가능한 렌즈가 high 심각도와 사건 분리 조치를 지지한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 버전·유효기간·적용 버전 부재라는 원인, medium 심각도 및 제안 조치를 일관되게 지지한다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: logic의 상태 계약 한정은 직접 증거 범위에 따른 부분 적용이며, 복수 projection의 권위·조정 lifecycle
+      부재와 high 심각도에 대한 반대가 아니다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 실행 occurrence와 주문-결과 provenance 부재, medium 심각도 및 제안 조치를
+      일관되게 지지한다.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: structure는 표현 구조에 한정하고 coverage·semantics가 임상 유형 범위를 판단하도록 구분할 뿐, Result
+      평탄화 원인과 medium 심각도에는 합의한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 Test–Assay 변경 이력 구조 부재, medium 심각도 및 버전된 구현 관계 조치를 일관되게 지지한다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: structure의 범위 축소는 중복 표현 구조에 초점을 둔 보완적 관점이며, 공통 코드 권위 부재와 medium 심각도에 대한
+      실질적 충돌이 없다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 무자격 문자열 식별자의 namespace·수명주기 부재, medium 심각도 및 공통
+      Identifier/CodeAssignment 조치를 일관되게 지지한다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: logic은 서로소 enum의 충족 불가능성을 직접 판정하고 다른 렌즈들은 각자의 범위에서 매핑·의미·구조 부재를 한정해
+      설명하지만, high 심각도와 정규 enum 또는 명시적 매핑 조치에는 모두 동의한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: coverage와 structure가 형식적 충돌 판정을 logic에 맡긴 것은 렌즈 역할 분담이며,
+      corrected/release 우선순위·종결 불변식 부재와 high 심각도에는 합의한다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: coverage와 logic의 조건부 한정은 두 상태가 동일 사실인지 별도 lifecycle 사실인지 결정해야 한다는 핵심 원인을
+      구체화하며, high 심각도와 개념 분리 또는 canonical 매핑 조치에 반대하지 않는다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 STAT의 독립적으로 쓰기 가능한 중복 표현, medium 심각도 및 canonical priority 조치를
+      일관되게 지지한다.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 Test·Assay·execution의 역할 및 provenance 경계 부재, medium 심각도와
+      제안 조치를 일관되게 지지한다.
+  - issue_id: issue-019
+    reason_code: no_material_conflict
+    reason: coverage·logic·structure의 한정은 corrected의 정확한 임상 의미를 semantics에 맡기면서 명시적
+      finality 부재를 공통 원인으로 유지하므로 material conflict가 아니다.
+  - issue_id: issue-020
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 Test–Assay realization 관계 부재, high 심각도 및 매핑 또는 통합 조치를 일관되게
+      지지한다.
+  - issue_id: issue-021
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 CriticalValue 규칙과 Result별 통보 occurrence 혼합, medium 심각도 및 규칙·사건 분리
+      조치를 일관되게 지지한다.
+  - issue_id: issue-022
+    reason_code: non_material_issue
+    reason: severity가 low이고 material_issue가 false이며, 여러 렌즈도 실제 소비 실패와 material
+      failure를 입증할 증거가 부족하다고 판단했다.

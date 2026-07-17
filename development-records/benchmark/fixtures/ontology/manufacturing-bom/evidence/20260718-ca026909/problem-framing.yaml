@@ -1,0 +1,224 @@
+schema_version: 1
+session_id: 20260718-ca026909
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 변경 효력과 품목 리비전의 시간·권한 모델이 분리되어 동기화 지연 중 생산 적용 리비전과 차단 여부를 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: PLM/MES 간 생산 리비전 권위가 충돌하는 직접적인 통합 기준 결함이며, 모든 렌즈가 high severity와 핵심
+      원인에 합의했다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 병행 관리되는 운영값에 권위·파생·효력·동기화 계보가 없어 신뢰할 값과 계산 근거를 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 값 충돌과 계산 비재현성을 함께 유발하는 공유 모델 결손으로 전 렌즈가 medium severity에 합의했으며, 실제 통합
+      계산 전에 해소해야 한다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-008
+  - issue_id: issue-003
+    problem_definition: 공정 재순환 물질흐름을 BOM 구성으로 표현하여 비순환 제품구조와 스크랩 재투입을 구분할 수 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 별도 물질흐름 개념 부재와 수정 필요성은 확정됐지만 medium 초과 여부는 전개 실패 범위와 기존 순환 통제 증거 부족으로
+      남아 있다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 불변 revision·효력구간과 ECO 전후 연결이 없어 특정 시점의 유효 구성과 적용 리비전을 결정하거나 재현할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 시점별 구성 선택, 과거 감사, 생산 적용 통제를 동시에 막는 기반 결함이며 모든 렌즈가 high severity로 합의했다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-021
+  - issue_id: issue-005
+    problem_definition: 제조 마스터 revision과 생산 오더·실행·소비·생산 계보를 잇는 명시적 경계 계약이 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: PLM/MES 통합 목적상 실행 추적 연결은 필수지만, 실행 개념을 내부에 포함할지 별도 온톨로지와 계약할지는 범위 결정이 필요하다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 상태 전이와 승인·복사·동기화 행위를 시간·행위자·근거가 있는 사건으로 보존하지 않아 철회·정정과 감사 증거를 표현할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 현재 상태 중심 모델이 lifecycle 재현과 통제 감사성을 함께 약화시키는 원인이라는 데 합의했으며 운영 단계 진입 전
+      계약이 필요하다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-007
+  - issue_id: issue-007
+    problem_definition: 수량과 capacity에 측정 차원·단위·환산 규칙이 연결되지 않아 이종 단위 계산의 적합성과 결과를 보장할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 자재 소요량과 생산능력 계산의 의미를 직접 결정하는 공통 기준 결손이며 모든 렌즈가 medium severity로 일관되게 지지했다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-008
+    problem_definition: 가변 현재 상태가 불변 구성 이력을 대신하여 반복 변경 후 과거 구성 연속성과 생산 시점별 구성을 재현할 수 없다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: high severity 실패는 확인됐지만 issue-004의 시간·버전 모델 결함에서 파생된 양상인지 독립 이슈인지 판정할
+      동일근거 관계가 부족하다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-009
+    problem_definition: 측정 개념이 확장 가능하게 원본화되지 않아 새 단위나 capacity 산정 방식 추가 시 스키마·소비자 변경이 필요하다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 독립 근본 결함이 아니라 issue-007의 단위·환산 모델 부재가 장기 변화에서 드러나는 결과로 좁혀졌으며 구조적 병합만 보류됐다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: 대체 가능성이 적용 맥락·효력·승인을 가진 권위 있는 규칙으로 연결되지 않아 조건부 적격성과 탐색 경로를 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 대체 엔티티와 단축 관계 사이의 권위 불명확성이 MES 자재 선택 규칙의 판정을 약화시키며 모든 렌즈의 결론이 수렴했다.
+    related_surface_finding_ids:
+      - finding-012
+      - finding-020
+  - issue_id: issue-011
+    problem_definition: 동일한 AlternatePart 개념에 필수 대칭성과 one_way 방향을 함께 부여해 역관계 성립 여부가 모순된다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 동일 인스턴스에 상반된 진리조건을 부여하는 직접적인 형식 모순이며 적용 가능한 렌즈들이 medium severity에 합의했다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-012
+    problem_definition: 정보성 검사 규격인 InspectionPlan을 실행 활동인 Operation의 하위 유형으로 두어 계획과 수행 대상을 혼동한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 유형 혼동이 규격 버전, 스케줄링, 실행 실적의 대상을 뒤섞는 high severity 결함이며 고위험 영향의 실행 조건도 명시됐다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-013
+    problem_definition: Assembly 자기 포함 BOM은 스크랩 재투입을 제품구조 관계로 표현한 동일 결함의 의미론적 표면이다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-003과 공유 원인·조치에 수렴해 독립 high 문제에서 medium 표현으로 좁혀졌지만, 구조적 병합을 확정할
+      동일근거 관계는 아직 없다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: 무조건 대칭인 대체 의미와 방향성 one_way 승인을 혼합하여 승인되지 않은 역대체 해석 가능성을 만든다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-011과 같은 모순을 의미·운영 해석 측면에서 드러내며, 적용 가능한 렌즈들은 원인과 medium
+      severity에 합의했다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-015
+    problem_definition: 문서 revision과 제조 품목 revision을 단일 Part.rev로 축약하여 서로 다른 개정 대상·권위·효력을 구분할 수 없다.
+    issue_role: enabler
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 자체적인 medium 결함이면서 issue-001의 생산 리비전 권위 충돌을 가능하게 하는 직접 기여 원인으로 보존됐다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-016
+    problem_definition: capacity_per_shift가 산출 수량과 가용 시간이라는 서로 다른 측정 차원을 단위 없이 중첩한다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 차원이 다른 값을 동일 측정치로 처리하게 하는 구체적 의미 결함이며 issue-007의 단위 모델 결손과 원인 맥락을 공유한다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-017
+    problem_definition: Part manufactured_by Routing이라는 관계명이 공정 계획을 제조 수행 주체처럼 읽히게 한다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: 명명상의 의미 혼동 가능성은 확인됐지만 현재 경계에서 물질적 실패 조건이 입증되지 않은 low severity 표면 관찰이다.
+    related_surface_finding_ids:
+      - finding-019

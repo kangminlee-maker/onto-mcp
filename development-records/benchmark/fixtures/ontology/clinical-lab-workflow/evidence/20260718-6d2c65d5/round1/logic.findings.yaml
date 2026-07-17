@@ -1,0 +1,114 @@
+schema_version: 1
+session_id: 20260718-6d2c65d5
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml의 Report 상태 규칙
+    evidence_anchor: materialized-input.md:80-84,121-123
+    claim: released_at이 존재하고 이후 Result.status가 corrected인 Report에는 finalized와
+      amended가 동시에 요구되어 단일 result_status 제약과 양립할 수 없다.
+    what: Report.result_status는 단일 enum 값인데, 상태 규칙은 released_at 기록 시 finalized를 요구하고
+      Result 정정 시 amended를 요구하면서 우선순위나 finalized 해제 조건을 정의하지 않는다.
+    why: "정정된 결과가 이미 배포된 보고서에 속하면 두 조건이 동시에 참이다. 따라서 같은 Report.result_status에 서로 다른
+      값을 동시에 부과한다. Conflict pair: materialized-input.md:123의
+      released_at→finalized 절과 같은 줄의 corrected→amended 절. Satisfiability:
+      inter-claim; 두 조건의 적용 구간이 겹친다. Modality: mixed necessary/obligatory.
+      Report 상태는 임상의가 신뢰하는 권위 값으로 선언되어 있어 이 모순은 EMR/LIS가 서로 다른 상태를 정당하게 산출하도록
+      만든다. Boundary handoff: finalized가 별도 상태를 뜻한다면 의미 정의가 필요하므로
+      semantics/structure 검토 대상이지만, 현재 선언된 유일한 Report 상태 속성인 result_status로 해석하면
+      논리 충돌이 남는다."
+    how_to_fix: "상태 규칙을 상호 배타적인 시간 규칙으로 바꾼다. 예: released_at이 기록되고 정정이 없으면 finalized,
+      이후 정정이 발생하면 amended가 finalized를 대체한다. 전이표에 finalized→amended를 명시하고 동기화 지연
+      중 표시할 상태도 별도로 정의한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 이 온톨로지를 EMR/LIS 통합에서 Report 상태의 개념 권위 문서로 사용하는 목적
+      failure_condition: released_at이 기록된 Report에 속한 Result가 corrected로 변경되는 경우
+      impact: 두 시스템이 동일 보고서를 finalized 또는 amended로 각각 표현해도 문서상 모두 정당화되므로, 임상의가 신뢰하도록
+        선언된 권위 상태가 결정되지 않는다.
+      evidence_refs:
+        - materialized-input.md:80-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 서로 겹칠 수 있는 released_at 조건과 corrected 조건에 각각 다른 단일 상태값을
+        부여하면서 대체 우선순위와 시간 범위를 정의하지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 동일 Report가 finalized와 amended를 동시에 충족해야 하는 실행 경로가 존재한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-002
+          claim: Report.result_status는 동시에 하나만 가질 수 있는 enum 속성이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: logic-candidate-001.cause-003
+          claim: 두 조건의 중첩을 해소할 전이 우선순위나 finalized 해제 조건이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: ‘Report는 finalized 상태가 된다’가 result_status 이외의 별도 미선언
+        상태를 뜻하는지는 현재 경계에서 확정할 수 없다.
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml의 Order 완료 전이 규칙
+    evidence_anchor: materialized-input.md:23,69-72,121-123
+    claim: Order 완료 판정이 이후 corrected로 바뀔 수 있는 Result.status에 의존하지만 정정 후 Order 상태 전이를
+      정의하지 않아 시간 경로상 완료 의미가 유지되지 않는다.
+    what: 모든 Result가 final이면 Order가 completed로 전이하지만, 모델은 이후 Result.status가
+      corrected로 바뀌는 사건도 허용한다. completed를 유지할지, 재개할지, 정정 결과도 완료로 간주할지 정해져 있지 않다.
+    why: "완료 시점에는 조건이 참이었다가 허용된 후속 사건으로 거짓이 될 수 있다. 그런데 Order lifecycle과 상태 규칙에는
+      completed 이후의 재평가 또는 전이가 없다. 따라서 completed를 현재 불변조건으로 읽으면 정정 후 위반되고, 일회성
+      사건으로 읽으면 현재 결과 상태와 무관한 완료가 된다. Conflict pair: materialized-input.md:122의
+      all-final→completed 규칙과 materialized-input.md:123의 final→corrected 후속 사건.
+      Satisfiability: inter-claim temporal conflict under
+      completion-as-invariant interpretation. Modality: mixed
+      necessary/possible. Boundary handoff: completed의 종결성 및 전이 구조가 명시되지 않은 부분은
+      structure에도 해당한다."
+    how_to_fix: 완료의 시간 의미를 명시한다. 권장안은 corrected를 완료 가능한 종결 결과 상태에 포함하고, 정정이 진행 중인 별도
+      상태가 필요하면 completed→in_progress 또는 completed→amended 같은 전이를 전이표에 정의하는 것이다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order부터 Report까지 일관된 상태 모델을 EMR/LIS 통합 계약으로 제공하는 목적
+      failure_condition: 모든 결과가 final이어서 Order가 completed가 된 뒤 하나 이상의 Result가 corrected로 변경되는 경우
+      impact: 통합 구현마다 completed 유지, 재개, 재완료를 다르게 선택할 수 있어 Order 상태의 권위성과 후속 처리 기준이
+        약화된다.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:69-72
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 완료 전이 조건을 가역적인 현재 Result.status에 연결하면서 허용된 정정 사건 이후의 Order
+        전이 또는 완료 불변조건을 정의하지 않았다.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 정정 후 completed Order의 모든 Result가 final이라는 완료 조건이 더 이상 성립하지 않을 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:122-123
+        - cause_id: logic-candidate-002.cause-002
+          claim: Result.status는 final에서 corrected로 바뀔 수 있도록 선언되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:123
+        - cause_id: logic-candidate-002.cause-003
+          claim: Order lifecycle에는 completed가 있지만 정정 후 재개·재완료 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: completed가 지속 불변조건인지 과거 전이 사건인지 문서가 형식화하지 않아, 어느 해석을
+        채택할지는 현재 경계에서 확정할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Report에 선언된 유일한 상태 속성이 result_status이므로 상태 규칙의 ‘finalized 상태’를
+    Report.result_status=finalized로 해석했다.
+  - Order.completed가 통합 소비자에게 현재 워크플로 완료 상태로 노출된다고 해석했다.
+validation:
+  unaddressable_candidates: []

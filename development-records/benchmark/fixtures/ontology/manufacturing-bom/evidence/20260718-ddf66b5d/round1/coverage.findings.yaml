@@ -1,0 +1,280 @@
+schema_version: 1
+session_id: 20260718-ddf66b5d
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: PLM/MES integration concept coverage
+    evidence_anchor: materialized-input.md:7,12-82,95
+    claim: MES execution and traceability concepts are absent despite the declared
+      PLM/MES integration purpose.
+    what: The ontology models product definitions and routings but has no production
+      order, operation execution, material issue/consumption, lot or serial,
+      genealogy, actual result, deviation, or nonconformance concepts. A
+      production order appears only in an integrity rule.
+    why: A reference model cannot define the PLM-to-MES handoff or relate released
+      engineering data to what was actually produced. Implementations must
+      invent incompatible execution and traceability semantics outside the
+      shared ontology.
+    how_to_fix: Add a minimal execution model covering ManufacturingOrder,
+      OperationExecution, MaterialConsumption, produced/consumed Lot or Serial,
+      actual results, and deviation/nonconformance links. Alternatively,
+      explicitly narrow the document's declared purpose and identify the
+      separate authoritative MES model.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serving as the conceptual baseline for PLM/MES integration.
+      failure_condition: When released BOM and routing data must be handed to MES or
+        reconciled with actual production.
+      impact: The shared model ends before the MES execution boundary, so integration
+        mappings and traceability cannot be derived from the baseline.
+      evidence_refs:
+        - materialized-input.md:7
+        - materialized-input.md:12-82
+        - materialized-input.md:95
+    causal_path:
+      root_cause_candidate: The ontology scope covers engineering definitions but does
+        not model the manufacturing-execution half of its declared integration
+        purpose.
+      root_cause_step_id: coverage-candidate-001.cause-002
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: Production orders and execution are referenced or implied, but no
+            execution or traceability entities exist.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:12-82
+            - materialized-input.md:95
+        - cause_id: coverage-candidate-001.cause-002
+          claim: This absence is a symptom of an engineering-definition-centered scope
+            that does not close the declared PLM/MES boundary.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:7
+            - materialized-input.md:12-82
+      unresolved_beyond_evidence: The bounded artifact does not identify a separate
+        MES ontology that could close this gap.
+  - candidate_id: coverage-candidate-002
+    target: Part, BOM, routing, and ECO temporal configuration model
+    evidence_anchor: materialized-input.md:20-21,29-35,55-61,69-75,96
+    claim: The model lacks versioned BOM/routing baselines and interval-based
+      effectivity needed to reconstruct historical configurations.
+    what: Part exposes only a current revision and current ECO; BomLine, Routing,
+      and Operation have no revision identity, valid-from/valid-to interval,
+      supersession link, or configuration-baseline concept. ECO supplies one
+      effective date but does not bind exact before-and-after BOM and routing
+      versions.
+    why: The rule selecting a new revision after an ECO date cannot determine the
+      complete effective product/process configuration, especially during the
+      stated weekly synchronization lag. Past production cannot reliably be
+      evaluated against the BOM and routing effective at its manufacturing time.
+    how_to_fix: Introduce explicit PartRevision, BomRevision, and RoutingRevision
+      concepts or a common versioned-definition pattern; add effectivity
+      intervals and supersession; and have ECO applicability bind exact old and
+      new configuration baselines.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Providing a consistent item, BOM, routing, and
+        change-management baseline across PLM and MES.
+      failure_condition: When systems need an as-of configuration, an ECO overlaps the
+        synchronization lag, or historical production must be reconstructed.
+      impact: Different systems can resolve different BOM or routing content for the
+        same effective date, weakening configuration control and manufacturing
+        traceability.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:29-35
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: Revision and effectivity are represented as current-value
+        attributes rather than as first-class temporal configuration concepts.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: BOM lines and routings lack revisions and validity intervals, while ECO
+            has only a single effective date.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+        - cause_id: coverage-candidate-002.cause-002
+          claim: The missing historical configuration is a symptom of modeling
+            revision/effectivity as current scalar state instead of versioned
+            baselines.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:96
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: Routing and ECO lifecycle and control evidence
+    evidence_anchor: materialized-input.md:61,69-75,96
+    claim: Routing and ECO lifecycles omit terminal/correction paths and auditable
+      approval evidence.
+    what: Routing stops at draft/released, while ECO stops at open/approved/applied.
+      There are no rejected, cancelled, superseded, obsolete, archived, or
+      corrected/reissued states or events, and approval has no actor, timestamp,
+      rationale, or evidence record.
+    why: Released or applied records cannot be retired, superseded, or corrected
+      without overwriting or inventing out-of-model behavior. Approval and
+      application decisions also cannot be audited from the conceptual baseline.
+    how_to_fix: Define lifecycle transitions through retirement and
+      correction/reissue, and add immutable ChangeEvent and Approval records
+      containing actor, timestamp, decision, rationale/evidence, and affected
+      configuration versions.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Consistent routing release and engineering change control for
+        manufacturing operations.
+      failure_condition: When a release is rejected, cancelled, superseded, retired,
+        or corrected after approval/application, or when approval evidence is
+        required.
+      impact: Lifecycle meaning diverges between systems and controlled changes become
+        unauditable or require destructive state overwrites.
+      evidence_refs:
+        - materialized-input.md:61
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: Stateful controlled objects are modeled with short status
+        enums but without lifecycle-event and audit-evidence concepts.
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Routing and ECO expose only partial status sequences and no approval
+            evidence attributes or entities.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:61
+            - materialized-input.md:69-75
+        - cause_id: coverage-candidate-003.cause-002
+          claim: The missing terminal and correction behavior is a symptom of status-only
+            modeling without lifecycle events and audit records.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:61
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: Units of measure and conversion coverage
+    evidence_anchor: materialized-input.md:19,34,67,100
+    claim: The ontology lacks governed units and conversion factors for BOM
+      quantities and work-center capacity.
+    what: Part has a small UOM enum, BomLine quantity has no independent unit,
+      capacity uses locally varying implicit units, and the notes explicitly
+      state that no item conversion-factor master exists and conversion is
+      performed on site.
+    why: Quantity, scrap, capacity, and planning calculations cannot be interpreted
+      consistently across PLM and MES. Manual conversion prevents repeatable
+      reconstruction and creates material-planning and execution risk.
+    how_to_fix: Add Quantity and Unit concepts, assign units to every measured
+      value, and introduce authoritative item-specific conversions with
+      numerator/denominator, rounding rules, validity intervals, and source
+      ownership.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Consistent interpretation of BOM and routing quantities across
+        PLM and MES.
+      failure_condition: When a component, production quantity, or capacity must be
+        converted between count, mass, length, or time units.
+      impact: Systems and operators may calculate different requirements or capacities
+        from the same ontology data.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:34
+        - materialized-input.md:67
+        - materialized-input.md:100
+    causal_path:
+      root_cause_candidate: Measurement semantics are represented as isolated numeric
+        fields and a limited enum rather than a governed quantity/conversion
+        subdomain.
+      root_cause_step_id: coverage-candidate-004.cause-002
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: BOM quantity and capacity lack explicit, consistently governed units, and
+            conversions are manual.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:34
+            - materialized-input.md:67
+            - materialized-input.md:100
+        - cause_id: coverage-candidate-004.cause-002
+          claim: This is a symptom of the absence of a shared quantity, unit, and
+            conversion-factor model.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: Authority and reconciliation for duplicated manufacturing values
+    evidence_anchor: materialized-input.md:35,53,99
+    claim: Duplicated scrap-rate and standard-time-derived values have no single
+      authoritative source or governed reconciliation record.
+    what: BomLine.scrap_rate copies a planning spreadsheet value without naming
+      which copy is authoritative. Routing standard time is accumulated by MES
+      while a manually entered standard-cost value is reconciled only quarterly,
+      again without an authority designation, discrepancy state, owner, or
+      reconciliation evidence.
+    why: Concurrent values can diverge while each consuming system treats its own
+      copy as correct. The ontology cannot tell integrators which value wins or
+      explain when and why a discrepancy was accepted.
+    how_to_fix: Assign one authoritative source per shared value and model replicas
+      as projections. Add synchronization and reconciliation metadata covering
+      source version, observed timestamp, owner, discrepancy, resolution, and
+      evidence.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Acting as a consistent conceptual authority for shared PLM/MES
+        manufacturing data.
+      failure_condition: When spreadsheet, MES, and costing-system copies disagree
+        between synchronization or reconciliation events.
+      impact: Planning, execution, and costing can use different values with no
+        ontology-defined resolution rule or audit trail.
+      evidence_refs:
+        - materialized-input.md:35
+        - materialized-input.md:53
+        - materialized-input.md:99
+    causal_path:
+      root_cause_candidate: Replicated operational values are documented, but
+        provenance, authority, and reconciliation are not modeled as concepts.
+      root_cause_step_id: coverage-candidate-005.cause-002
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: Scrap rate and accumulated standard time are maintained in multiple
+            locations without a declared winning source or reconciliation
+            evidence.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:99
+        - cause_id: coverage-candidate-005.cause-002
+          claim: This ambiguity is a symptom of omitting source-authority and
+            replica/reconciliation concepts from the integration baseline.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:53
+            - materialized-input.md:99
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The declared role as a PLM/MES integration conceptual baseline places both
+    controlled engineering definitions and core manufacturing-execution handoff
+    concepts within scope.
+  - Because the artifact defines ECO effectivity and a delayed revision
+    synchronization process, reconstructing the effective BOM and routing at a
+    historical production time is operationally required.
+  - Quantities and capacities shared across PLM and MES require governed units
+    and conversions to retain consistent meaning.
+validation:
+  unaddressable_candidates: []

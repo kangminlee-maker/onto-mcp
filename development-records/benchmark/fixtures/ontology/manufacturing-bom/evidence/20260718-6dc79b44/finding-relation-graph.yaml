@@ -1,0 +1,143 @@
+schema_version: 1
+session_id: 20260718-6dc79b44
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: BOM과 Routing이 독립적인 버전 식별자와 유효기간을 가진 불변 구성으로 모델링되면 두 finding의 과거
+      구성 재현 실패가 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-002는 버전·유효기간 개념의 부재를 coverage 관점에서, finding-008은 같은 부재로 인해 기존
+      구성을 보존하며 새 버전을 추가할 수 없다는 evolution 관점에서 기술한다. 대상 구조, 실패 조건, 제안 조치가 실질적으로
+      동일하다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-008
+    to_finding_id: finding-019
+    relation: same_root_candidate
+    root_hypothesis: 변경 결과인 BOM·Routing 구성을 버전된 독립 구조로 만들고 ECO에서 그 구조로 가는 전후 버전 연결을
+      추가하면, 변경 시 구성 보존 문제와 ECO 적용 경로 단절이 동시에 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-008은 버전 없는 직접 참조 때문에 변경 전후 구성을 병존시킬 수 없다고 보고하고, finding-019는
+      같은 구조 때문에 ECO에서 유효 제조 구성으로 도달할 수 없다고 보고한다. 하나는 진화 가능성, 다른 하나는 그래프 연결성에 나타난
+      증상이다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-003
+    to_finding_id: finding-019
+    relation: same_root_candidate
+    root_hypothesis: ECO를 변경 전·후 버전과 구체 변경 항목을 연결하는 명시적 변경 트랜잭션으로 모델링하면, 변경 내용 부재와
+      유효 구성 연결 경로 부재가 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-003의 ECOChangeItem 부재와 finding-019의 ECO→신규
+      revision→BOM·Routing 경로 부재는 모두 ECO가 affected_parts와 effective_date만 가진 얕은
+      변경 표현이라는 공통 구조를 가리킨다. 다만 변경 항목과 구성 버전 경로는 서로 구별되는 필수 요소다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-018
+    to_finding_id: finding-019
+    relation: same_root_candidate
+    root_hypothesis: 최신 변경, 적용된 변경, 생산 시점의 유효 revision과 제조 구성을 별도 관계 및 선택 규칙으로 모델링하면
+      current_eco의 의미 불확정과 ECO 적용 경로 단절이 동시에 사라져야 한다.
+    shared_cause: null
+    rationale: finding-018은 최신성과 현재 효력을 단일 current_eco로 축약한 의미 문제이고, finding-019는
+      ECO에서 유효 revision 및 구성으로 가는 구조가 없다는 문제다. 둘 다 시간에 따른 유효 변경 구성을 일급 개념으로 표현하지
+      않은 데서 발생하지만, 명칭 규칙과 연결 구조가 각각 추가로 필요하므로 중복은 아니다.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-004
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: Routing과 ECO의 lifecycle을 현재 enum 값이 아니라 행위자·시각·근거를 가진 상태 전이 사건과
+      명시적 종결·정정 전이로 모델링하면 두 finding이 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-004는 승인·적용 사건 증거가 없어 현재 상태를 감사할 수 없다고 하고, finding-007은 활성 경로
+      상태만 있어 철회·정정·대체를 표현할 수 없다고 한다. 두 문제 모두 lifecycle을 현재 상태값으로만 축약하고 전이 사건을
+      모델링하지 않은 공통 원인을 지시한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-005
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: 외부 또는 병행 관리 값을 source system, source version, 유효기간, 동기화 상태 및 충돌
+      해결 규칙을 가진 공통 provenance 계약으로 모델링하면 권위 선택 실패와 변경 추적 단절이 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-005는 복제 값 충돌 시 어느 값을 채택할지 결정할 권위 계약의 부재를, finding-010은 복제 값이
+      어느 원본 버전과 시점에서 왔는지 추적할 구조의 부재를 지적한다. 둘은 외부 권위 데이터를 메타데이터 없는 현재 스칼라 값으로만
+      보존한 동일한 모델링 결손의 상보적 결과다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-005
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: scrap_rate를 외부에서 복사한 독립 숫자 속성이 아니라 명시적 계산 의미, 원본 권위, 유효기간 및 산식을
+      가진 관리 값으로 바꾸면 값 충돌 문제와 계산 의미 불확정이 모두 감소해야 한다.
+    shared_cause:
+      cause_claim: 외부에서 관리되는 scrap_rate를 권위·출처·계산 계약 없이 독립 숫자 속성으로 복사했다.
+      from_cause_ref: finding-005.cause-002
+      to_cause_ref: finding-016.cause-003
+    rationale: finding-005는 scrap_rate의 원본 권위와 충돌 해결 계약 부재를 포함하고, finding-016은 같은 복사
+      값이 비율인지 승수인지 구분되지 않는다고 지적한다. 권위 문제와 의미 문제는 동일하지 않지만 bare scalar 복제라는 공통
+      원인이 두 결함을 만든다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-006
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Uom을 확장 가능한 기준 엔티티로 만들고 품목별 변환계수에 유효기간·출처를 부여하면 현재 환산 불능과 미래 단위
+      확장 시 스키마 변경 요구가 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-006은 품목별 환산계수와 유효성 개념의 직접 부재를, finding-009는 폐쇄 enum과 동일한 환산
+      마스터 부재가 만드는 진화성 문제를 다룬다. 두 finding은 단위를 폐쇄 속성으로만 모델링하고 변환 규칙을 기준정보로 승격하지
+      않은 공통 원인을 공유한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-011
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: AlternatePart를 적용 범위·버전·유효성을 가진 정식 관계 엔티티로 두고 Part→Part 관계를 그
+      엔티티에서 결정적으로 파생되는 projection으로 제한하면 문맥 확장성 결손과 방향 경로 단절이 함께 해소되어야 한다.
+    shared_cause:
+      cause_claim: 속성을 가진 AlternatePart 정책을 정식 관계 경로로 유지하지 않고 문맥 없는 Part→Part 축약 관계로 표현했다.
+      from_cause_ref: finding-011.cause-002
+      to_cause_ref: finding-020.cause-002
+    rationale: finding-011은 대체 정책이 품목 쌍과 방향에 고정되어 버전·BOM·사업장·기간 문맥을 담지 못한다고 하고,
+      finding-020은 공식 관계 목록이 AlternatePart를 우회해 기존 direction조차 전달하지 못한다고 한다. 둘은
+      속성 있는 관계와 축약 projection의 권위·파생 규칙이 정의되지 않은 공통 원인을 공유한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-012
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: AlternatePart의 정의와 direction 스키마를 하나의 방향성 규칙으로 통일하면 논리적 불만족성과
+      의미적 해석 분기가 동일하게 사라져야 한다.
+    shared_cause: null
+    rationale: 두 finding 모두 AlternatePart 정의가 대칭성을 의무화하면서 direction은 one_way를 허용하고
+      기본값으로 둔 동일한 충돌을 인용한다. finding-012는 논리적 양립 불가능성, finding-013은 소비자별 의미 분기를
+      강조하지만 근거와 교정 선택은 동일하다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-013
+    to_finding_id: finding-020
+    relation: same_root_candidate
+    root_hypothesis: 대체 관계의 방향성과 상호 호환성을 정식 AlternatePart 관계 하나에서 정의하고 모든 축약 관계를 그
+      정의에서 파생시키면, 의미 충돌과 관계 그래프의 방향 정보 손실이 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-013은 AlternatePart 내부에서 대칭성과 단방향성이 혼합된 의미 충돌을 지적하고,
+      finding-020은 관계 목록이 해당 엔티티를 우회해 direction을 잃는 구조 문제를 지적한다. 두 증상은 대체 관계의 단일
+      권위 표현이 없다는 더 넓은 설계 결손을 지시하지만 각각 내부 규칙 통일과 그래프 연결 수정이 필요하다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-001
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-014
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-015
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-017
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

@@ -1,0 +1,129 @@
+schema_version: 1
+session_id: 20260717-177daf18
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — Assay entity and workflow relations
+    evidence_anchor: materialized-input.md lines 54-60, 108-119, 126-127
+    claim: Assay is operationally disconnected from the Order–Test–Specimen–Result
+      workflow.
+    what: Assay has only a Department reference; no relation connects it to the
+      ordered Test, the analyzed Specimen, or the produced Result.
+    why: Assay is declared as the analyzer execution unit, while Test is the
+      orderable catalog unit. The note requires new items to be registered in
+      both catalogs but supplies no structural mapping between them.
+      Consequently, an EMR/LIS integration cannot traverse the ontology from an
+      ordered Test to the Assay that executes it or verify which Assay produced
+      a Result.
+    how_to_fix: Add a canonical Test–Assay mapping with explicit cardinality and
+      connect assay execution to the relevant Specimen and/or Result. If Assay
+      is not authoritative yet, remove it from the active workflow ontology and
+      isolate it as a planned extension instead of requiring dual registration.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        integration from Order through Report.
+      failure_condition: Whenever an ordered Test must be translated to an analyzer
+        execution unit or an analyzer-produced result must be traced back to its
+        ordered catalog item.
+      impact: The integration graph has no executable path across the Test/Assay
+        boundary, forcing implementers to invent an external mapping and
+        weakening the ontology's authority and traceability.
+      evidence_refs:
+        - materialized-input.md:54-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: Test–Assay consolidation was deferred while dual
+        registration was retained without a bridging relationship.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay participates in no declared workflow relation and is connected only
+            to Department by an attribute reference.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-60
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-002
+          claim: The missing workflow connections reflect the absence of a canonical
+            mapping between the orderable Test catalog and executable Assay
+            catalog.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-127
+        - cause_id: structure-candidate-001.cause-003
+          claim: The artifact explicitly defers deciding whether Test and Assay will be
+            unified while requiring both registrations now.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: The bounded artifact does not establish the intended
+        Test-to-Assay cardinality or whether an external catalog mapping
+        currently exists.
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — CriticalValue notification structure
+    evidence_anchor: materialized-input.md lines 100-106 and 108-119
+    claim: CriticalValue notification state lacks the relationships needed to
+      identify the triggering result and notification participants.
+    what: CriticalValue contains a notified boolean and a Test reference, but it has
+      no connection to a specific Result, Order, Patient, notifying Staff
+      member, recipient, or notification record. The referenced telephone log is
+      not represented in the ontology graph.
+    why: A threshold-level Test reference can identify which catalog item a range
+      applies to, but it cannot identify which concrete result triggered
+      notification or who was notified. Thus the declared notified state cannot
+      be traced through the EMR/LIS workflow and may be interpreted as a shared
+      property of the threshold rather than an event tied to one result.
+    how_to_fix: Separate the threshold definition from a result-specific
+      critical-notification record. Relate that record at minimum to the
+      triggering Result and notification recipient, and model time/status and
+      responsible Staff as attributes or references; alternatively, add an
+      explicit authoritative relation to the external notification-log concept.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of the ontology as an operationally reliable conceptual
+        authority for EMR/LIS workflow integration.
+      failure_condition: When a concrete critical result is detected and systems must
+        exchange or reconcile whether its required notification occurred.
+      impact: The ontology cannot structurally associate notification completion with
+        the triggering result or participants, so integrations may update or
+        interpret the boolean against the wrong scope.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - materialized-input.md:108-119
+    causal_path:
+      root_cause_candidate: A result-specific notification event is represented only
+        as a boolean on the threshold entity, with its detailed record left
+        outside the ontology graph.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue.notified has no reference or relation to a concrete Result
+            or notification participant.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-002.cause-002
+          claim: The missing links are a symptom of notification details being delegated
+            to a prose-only telephone-log reference that is not modeled as an
+            entity or relation.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:106
+      unresolved_beyond_evidence: The bounded artifact does not specify the structure
+        or authority of the external telephone log, so its ability to supply
+        these links cannot be verified.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Reference-typed attributes and is_a declarations are treated as structural
+    connections in addition to entries under relations.
+  - The workflow backbone is inferred solely from the artifact's declared
+    Order-to-Report purpose, entity definitions, references, and relations.
+validation:
+  unaddressable_candidates: []

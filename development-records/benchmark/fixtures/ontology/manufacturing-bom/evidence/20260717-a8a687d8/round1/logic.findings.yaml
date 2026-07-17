@@ -1,0 +1,47 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart 계약
+    evidence_anchor: manufacturing-bom-ontology.yaml:33,37-40
+    claim: AlternatePart의 대칭성 정의와 one_way 허용 상태는 동시에 만족될 수 없다.
+    what: 정의는 모든 대체 관계의 역방향도 성립한다고 요구하지만, direction은 비대칭인 one_way를 유효값이자 기본값으로 허용한다.
+    why: one_way 인스턴스 A→B는 B→A를 요구하지 않지만, 정의는 같은 인스턴스에 B→A를 의무화한다. 이는 inter-claim
+      충돌이며 possible 상태와 obligatory 대칭성 사이의 mixed modality 모순이다.
+    how_to_fix: direction을 유지한다면 정의를 'bidirectional일 때만 역방향이 성립한다'로 제한한다. 모든 대체가
+      대칭이어야 한다면 one_way를 enum과 기본값에서 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체 부품 관계의 단일 개념 기준을 제공하는 목적
+      failure_condition: direction=one_way인 AlternatePart를 생성하거나 교환할 때
+      impact: 동일 데이터가 한 시스템에서는 단방향, 다른 시스템에서는 양방향 대체로 해석될 수 있어 통합 계약의 일관성과 실행 가능성을
+        약화한다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:33
+        - manufacturing-bom-ontology.yaml:37-40
+    causal_path:
+      root_cause_candidate: AlternatePart의 동일 계약 범위에 무조건적 대칭성 정의와 비대칭 허용 상태를 함께 선언했다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: direction=one_way가 유효하며 기본값으로 선언되어 있지만, 엔티티 정의는 모든 대체 관계의 역관계를 요구한다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:33
+            - manufacturing-bom-ontology.yaml:37-40
+        - cause_id: logic-candidate-001.cause-002
+          claim: 대칭성 의무에 direction 조건이 없어 one_way 상태를 예외로 분리할 수 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:33
+            - manufacturing-bom-ontology.yaml:37-40
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 엔티티 definition은 해당 엔티티의 모든 인스턴스에 적용되는 규범적 정의로 해석했다.
+  - enum values와 기본값은 유효한 모델 상태를 허용하는 선언으로 해석했다.
+validation:
+  unaddressable_candidates: []

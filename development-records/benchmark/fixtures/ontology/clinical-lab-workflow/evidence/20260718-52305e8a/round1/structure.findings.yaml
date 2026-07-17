@@ -1,0 +1,98 @@
+schema_version: 1
+session_id: 20260718-52305e8a
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — Assay의 워크플로 연결
+    evidence_anchor: materialized-input.md:54-60,108-119,126-127
+    claim: Assay가 핵심 주문·검체·결과 경로와 연결되지 않았다.
+    what: Assay는 Department 참조만 가지며 Test, Order, Specimen 또는 Result와 연결되는 속성이나 관계가
+      없다.
+    why: Order는 Test를 주문하지만 실제 수행 단위로 정의된 Assay로 이어지는 경로가 없다. Test와 Assay를 동시에 등록한다는
+      운영 방침 아래에서는 EMR의 주문 코드가 LIS의 수행 코드와 어떻게 대응하는지 이 문서만으로 결정할 수 없다.
+    how_to_fix: "Test와 Assay 사이에 명시적인 수행 매핑 관계(예: Test realized_by Assay)를 추가하고 필요한
+      cardinality 및 유효기간을 선언한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Order부터 Report까지의 임상검사 파이프라인을 정의하여 EMR/LIS 연동의 개념 권위 문서로 사용하는 목적
+      failure_condition: EMR이 Test로 주문하고 LIS가 별도 Assay 카탈로그 코드로 수행하는 경우
+      impact: 주문 항목에서 실제 수행 항목으로의 권위 있는 변환 경로가 없어 시스템별 임의 매핑이나 이중 등록 불일치가 발생할 수 있다.
+      evidence_refs:
+        - materialized-input.md:20
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:127
+    causal_path:
+      root_cause_candidate: Test와 Assay의 통합 결정을 미룬 채 두 카탈로그를 병행 등록하도록 했지만 둘 사이의 매핑 관계를 모델링하지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay는 Department 이외의 엔티티와 연결되지 않아 주문-수행-결과 경로에 진입하지 못한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-60
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-002
+          claim: Order는 Test만 참조하고 Result도 Test만 참조하므로 Assay를 경유하는 수행 경로가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:62-73
+        - cause_id: structure-candidate-001.cause-003
+          claim: 문서는 Test와 Assay를 두 곳에 모두 등록하면서 통합 여부를 이후로 유보한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:127
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — CriticalValue와 실제 Result의 연결
+    evidence_anchor: materialized-input.md:62-73,100-106,108-119
+    claim: CriticalValue의 통보 상태를 발생시킨 Result에 연결할 관계가 누락되었다.
+    what: CriticalValue는 Test만 참조하면서 인스턴스별 상태로 보이는 notified를 보유하지만, 어떤 Result가 위험
+      범위에 해당하여 통보되었는지 연결할 수 없다.
+    why: 같은 Test에서 여러 Result가 발생할 수 있으므로 Test 참조만으로는 통보 완료 상태를 특정 결과에 귀속할 수 없다. 이
+      구조로는 결과별 통보 추적과 중복·누락 판별이 불가능하다.
+    how_to_fix: CriticalValue가 통보 발생 기록이라면 Result에 대한 필수 참조를 추가한다. 임계치 정의라면
+      notified를 분리된 통보 사건 엔티티로 옮기고 그 사건을 Result에 연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 결과 및 즉시 통보 상태를 EMR/LIS 통합에서 일관되게 식별하는 개념 권위 제공
+      failure_condition: 동일 Test에 둘 이상의 Result가 존재하거나 결과별 통보 완료 여부를 교환·감사하는 경우
+      impact: notified 값의 대상 결과를 결정할 수 없어 통보 누락 또는 잘못된 완료 처리 위험이 생긴다.
+      evidence_refs:
+        - materialized-input.md:62-73
+        - materialized-input.md:100-106
+        - materialized-input.md:111-119
+    causal_path:
+      root_cause_candidate: 검사별 임계치 정의와 결과별 통보 상태를 CriticalValue 하나에 배치하면서 Result 연결을 두지 않았다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue에는 notified가 있지만 Result 참조나 Result와의 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-002.cause-002
+          claim: CriticalValue는 Test에만 연결되며 하나의 Test는 여러 Result를 가질 수 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:103
+            - materialized-input.md:111
+        - cause_id: structure-candidate-002.cause-003
+          claim: 임계 범위 속성과 통보 완료 상태가 동일 구조에 함께 선언되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: CriticalValue가 임계치 설정인지 실제 통보 발생 기록인지 문서가 명시하지 않는다.
+        어느 해석에서도 현재 notified와 Result 사이의 연결 근거는 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 참조형 속성과 is_a도 명시적 relations 항목과 함께 구조적 연결로 간주했다.
+  - CriticalValue.notified는 실제 위험 결과에 대한 통보 완료 여부를 나타내는 것으로 해석했으며, 다른 해석 가능성은
+    causal_path의 불확실성에 보존했다.
+validation:
+  unaddressable_candidates: []

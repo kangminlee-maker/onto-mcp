@@ -1,0 +1,306 @@
+schema_version: 1
+session_id: 20260718-41d4c6bb
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 결과 상태의 이중 권위와 야간 동기화가 현재 상태를 일시적으로 분기시킨다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 정정된 Result와 아직 finalized인 Report가 병존하는 경로가 명시되어 있으며, 임상 사용자가 신뢰하는 현재
+      상태를 다르게 표시할 수 있는 고위험 표면이다. 근본 원인은 issue-008 및 issue-016의 중복 권위 모델이다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: Test와 Assay의 개념 경계·관계·카디널리티를 정하지 않은 이중 등록 정책이 카탈로그 권위를 분기시킨다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 주문 단위와 수행 단위를 구별할지 통합할지에 대한 권위 결정과 명시적 대응 관계가 모두 빠져 있다. 통합 구현 전에 개념
+      경계를 결정해야 한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 즉시 통보 증거가 boolean과 연결되지 않은 외부 기록으로 분산되어 결과별 통보를 재구성할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 수신자·시각·근거와 Result를 잇는 경로가 없다는 관찰된 누락이다. 독립 통보 사건 부재라는 issue-006 및
+      issue-023의 근본 결함이 운영 권위 경계에서 드러난 표면이다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: TAT의 입력·예외·시간대·소유권을 포함한 canonical 계산 계약이 없다.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: 계산 계약의 누락은 확인되지만 실제 소비자별 값 분기는 입증되지 않았고 영향도 low로 유지되었다. 권위 문서의 파생 지표
+      계약을 후속으로 명문화할 사안이다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: Specimen 수명주기가 정상 분석 경로에 한정되어 예외와 최종 처분을 표현하지 못한다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 거부·분실·재채취·보관·폐기 상태 또는 사건의 부재가 직접 확인되며, 결과 부재 원인과 검체 최종 상태의 교환을 막는다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 검증과 긴급 통보를 감사 가능한 사건이 아닌 정적 속성으로 축약해 수행 증거와 책임을 보존하지 못한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 행위자·시각·근거·수신·실패·재시도를 가진 사건 모델이 없다는 점에 적용 가능한 렌즈가 수렴했다. 환자 안전 통제의 감사와
+      책임 추적을 막는 high-severity 근본 결함이다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 카탈로그와 위험 기준의 시간별 적용 의미를 과거 결과에서 재구성할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 버전·유효기간·결과별 적용 버전 참조의 부재가 관찰되며, issue-012의 항목별 시간 의존 모델 부재가 과거 결과 해석
+      실패로 나타난다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: Result와 Report에 병렬 상태 권위를 두고 완전한 파생·불일치 처리 규칙을 정의하지 않았다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 두 상태 필드가 별도 권위 후보로 존재하고 전체 매핑과 불일치 처리 경로가 없다는 구조적 결함이다. issue-001과
+      issue-016에서 나타나는 상태 분기의 직접 원인이다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 독립 분석 실행 개념이 없어 주문과 결과 사이의 장비·작업자·재검·QC provenance가 사라진다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Specimen에서 Result로 직접 연결되고 분석 실행 노드가 없다는 관찰된 모델 공백이다. 결과 수행 경로와 예외를
+      공통 구조로 추적할 수 없다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: 병렬 Test·Assay 카탈로그의 권위 소유자와 버전된 대응 관계가 없어 변경 시 드리프트가 발생한다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 독립 변경 가능한 이중 카탈로그와 대응 관계 부재가 직접 확인된다. issue-002 및 issue-017의 미결 개념
+      경계를 지속적인 운영 드리프트로 확대하는 high-severity 조건이다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: 공유 검체 분류를 여러 enum과 자유 문자열에 내장해 단일 어휘 권위를 잃었다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 동일 영역의 분류가 독립 자료형과 값 공간으로 분산된 사실이 확인된다. 신규 유형과 외부 코드 수용 때 여러 스키마와 변환
+      규칙을 함께 변경하게 하는 근본 원인이다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: 변경 가능한 카탈로그 항목과 임계 규칙을 항목별 시간 의존 개념으로 모델링하지 않았다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 문서 버전만 있고 항목별 코드체계·버전·유효기간·대체 관계와 적용 버전 참조가 없다. 변경 전후 데이터의 의미 보존 실패를
+      만드는 직접 원인이다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-013
+    problem_definition: 긴급도 정책 변경 시 priority·is_stat·StatOrder를 동시에 수정해야 하는 중복 구조가 존재한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: STAT의 삼중 표현이 확인되며, issue-020의 분산된 개념 정체성이 확장 비용과 불일치 가능성으로 드러난다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-014
+    problem_definition: completed의 종결 의미와 Result correction 이후 Order 전이 계약이 정의되지 않았다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 실제 모순 여부는 completed를 종결 불변상태로 볼지 이력 표지로 볼지에 따라 달라지지만, 그 의미와 후속 전이 계약의
+      누락 자체에는 심의가 수렴했다. 권위 의미를 결정해야 닫을 수 있다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-015
+    problem_definition: release와 correction의 사건 순서 및 override 우선순위가 없어 단일 Report 상태에 상충 의무가 생긴다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 중첩 조건에서 finalized와 amended가 동시에 요구되는 구체적 충돌이 확인된다. issue-022의 불완전한 전이
+      그래프가 단일 상태의 만족 불가능 조건으로 표면화된 사례다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-016
+    problem_definition: 동일 결과 상태를 서로 다른 어휘와 권위 규칙으로 표현해 공통 의미 권위를 확정할 수 없다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상태 어휘와 파생 규칙이 분리되어 어느 표현이 동일 결과의 최종성과 정정을 지배하는지 결정할 수 없다. issue-008의
+      구조적 이중 권위가 의미 해석 충돌로 나타난 high-severity 문제다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-017
+    problem_definition: Test와 Assay가 주문 개념과 수행 개념인지 동의어인지 결정되지 않아 의미 경계가 불명확하다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 정체성, 역할, cardinality에 대한 복수 해석이 현재 모델에서 모두 가능하다. 주문·수행·결과 관계를 구현하기 전에
+      권위 있는 개념 선택이 필요하다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-018
+    problem_definition: 검체 상위 유형과 분석용 세부 물질이 계층·매핑 없이 다른 자료형으로 표현된다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 상이한 분류 수준과 자료형이 직접 확인되며, issue-011의 분산 어휘 설계가 검체 적합성 비교와 시스템 간 변환의 의미
+      불일치로 나타난다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-019
+    problem_definition: 재사용 임계 판정 규칙과 결과별 통보 사건을 하나의 CriticalValue 유형에 혼합했다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 정체성과 생명주기가 다른 정책과 사건이 한 유형에 결합되어 특정 Result와 적용 규칙 버전을 함께 추적할 수 없다. 통보
+      추적성 결함과 별개로 독립적인 유형 모델링 원인이다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-020
+    problem_definition: STAT를 값·불리언·하위 타입으로 중복 승격해 단일 개념 정체성과 권위를 두지 않았다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 세 표현 사이의 권위·파생·강제 동치 규칙이 없다는 사실이 확인된다. STAT가 일시적 우선순위인지 본질적 주문 유형인지
+      결정해야 issue-013의 확장·불일치 문제를 해소할 수 있다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-021
+    problem_definition: 수행 단위인 Assay가 Test·Specimen·Result와 연결되지 않아 주문-수행-결과 경로가 끊겼다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Assay의 구조적 고립은 직접 관찰된 high-severity 경로 단절이다. Test–Assay 관계 부재와 분석 실행
+      모델 부재가 핵심 워크플로에서 드러난 결과다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-022
+    problem_definition: 상태 집합만 있고 시작·허용·금지·종결 전이를 잇는 권위 있는 상태 그래프가 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Order·Specimen·Result·Report 전이 규칙의 광범위한 부재가 직접 확인된다. 구현 적합성을 판정하지
+      못하게 하며 issue-014와 issue-015의 시간 경로 불확정성을 가능하게 하는 공통 원인이다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-023
+    problem_definition: CriticalValue에서 실제 Result와 통보 사건·수신자로 이어지는 필수 추적 경로가 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: CriticalValue가 Test에만 연결되고 notified의 결과·시각·수신자 근거가 없다는 구조적 누락이다.
+      issue-006의 사건 축약과 issue-019의 규칙·사건 혼합이 결과별 안전 통보 검증 실패로 나타난다.
+    related_surface_finding_ids:
+      - finding-023

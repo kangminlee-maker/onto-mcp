@@ -1,0 +1,53 @@
+schema_version: 1
+session_id: 20260718-ca026909
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart definition and direction
+      attribute
+    evidence_anchor: .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart의 필수 대칭성 정의와 one_way 방향 기본값은 동시에 만족될 수 없다.
+    what: 정의는 모든 대체 관계가 양방향이라고 선언하지만, direction은 one_way를 허용하고 이를 기본값으로 지정한다.
+    why: "conflict_pair: materialized-input.md:38 ↔ materialized-input.md:42-45.
+      satisfiability_note: inter-claim — 기본 one_way 관계는 역방향 대체도 성립해야 한다는 정의와
+      충돌한다. modality_note: mixed — 정의의 necessary 대칭성과 enum/default의
+      possible·default 비대칭성이 충돌한다. boundary_handoff_note: one_way가 단순 저장 방향을
+      뜻한다면 의미 명확화가 필요하지만, 현재 명시된 '대체 방향' 설명대로라면 형식 모순이 남는다."
+    how_to_fix: 방향성을 의도했다면 정의를 'bidirectional일 때만 역관계가 성립한다'로 수정한다. 항상 대칭이어야 한다면
+      one_way 값과 기본값을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체 부품 관계의 공통 개념 기준을 제공하는 목적
+      failure_condition: direction이 누락되어 one_way 기본값이 적용되거나 one_way가 명시된 AlternatePart를 해석할 때
+      impact: 동일한 관계가 한 시스템에서는 양방향, 다른 시스템에서는 단방향으로 해석될 수 있어 대체품 승인과 자재 선택 기준의 신뢰성이
+        약화된다.
+      evidence_refs:
+        - .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:37-45
+    causal_path:
+      root_cause_candidate: 대체 관계의 대칭성이라는 하나의 개념에 상반된 필수 정의와 방향성 옵션이 함께 부여되었다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: AlternatePart 정의는 A의 대체가 B이면 B의 대체도 A라고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:38
+        - cause_id: logic-candidate-001.cause-002
+          claim: 같은 엔티티가 one_way와 bidirectional을 모두 허용하고 one_way를 기본 방향으로 둔다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-003
+          claim: 대칭성 규칙과 방향성 옵션의 적용 조건이 분리되지 않은 것이 두 선언의 충돌 원인이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:38
+            - .onto/review/20260718-ca026909/execution-preparation/materialized-input.md:42-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - direction의 one_way는 note의 '대체 방향'이라는 명시대로 역방향 대체를 보장하지 않는 상태를 뜻한다고 해석했다.
+validation:
+  unaddressable_candidates: []

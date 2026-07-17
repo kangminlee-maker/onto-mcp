@@ -1,0 +1,1070 @@
+session_id: 20260718-ddf66b5d
+session_root: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d
+execution_realization: worker
+host_runtime: codex
+review_mode: core-axis
+execution_status: completed
+execution_started_at: 2026-07-18T01:26:19+09:00
+execution_completed_at: 2026-07-18T01:39:07+09:00
+total_duration_ms: 767362
+max_concurrent_lenses: 4
+observed_dispatch_width: 4
+planned_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 6
+synthesis_executed: true
+deliberation_status: performed
+halt_reason: null
+error_log_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/error-log.md
+lens_completion_barrier_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/lens-completion-barrier.yaml
+lens_execution_results:
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/round1/axiology.findings.yaml
+    status: completed
+    started_at: 2026-07-18T01:26:19+09:00
+    completed_at: 2026-07-18T01:27:40+09:00
+    duration_ms: 81230
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 24392
+    output_bytes: 12379
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/round1/coverage.findings.yaml
+    status: completed
+    started_at: 2026-07-18T01:26:21+09:00
+    completed_at: 2026-07-18T01:27:32+09:00
+    duration_ms: 71631
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 20646
+    output_bytes: 14716
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/round1/evolution.findings.yaml
+    status: completed
+    started_at: 2026-07-18T01:26:22+09:00
+    completed_at: 2026-07-18T01:27:37+09:00
+    duration_ms: 74535
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19575
+    output_bytes: 11138
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/round1/logic.findings.yaml
+    status: completed
+    started_at: 2026-07-18T01:26:24+09:00
+    completed_at: 2026-07-18T01:27:22+09:00
+    duration_ms: 58683
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 24779
+    output_bytes: 5492
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/round1/semantics.findings.yaml
+    status: completed
+    started_at: 2026-07-18T01:27:22+09:00
+    completed_at: 2026-07-18T01:28:43+09:00
+    duration_ms: 80738
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 20252
+    output_bytes: 15824
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/round1/structure.findings.yaml
+    status: completed
+    started_at: 2026-07-18T01:27:32+09:00
+    completed_at: 2026-07-18T01:28:24+09:00
+    duration_ms: 51384
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19116
+    output_bytes: 2996
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/finding-ledger.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/finding-ledger.yaml
+    status: completed
+    started_at: 2026-07-18T01:28:43+09:00
+    completed_at: 2026-07-18T01:28:43+09:00
+    duration_ms: 15
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 854
+    output_bytes: 68155
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-07-18T01:28:43+09:00
+    completed_at: 2026-07-18T01:29:53+09:00
+    duration_ms: 69745
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 82888
+    output_bytes: 8349
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-ledger.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/issue-ledger.yaml
+    status: completed
+    started_at: 2026-07-18T01:29:53+09:00
+    completed_at: 2026-07-18T01:32:07+09:00
+    duration_ms: 134103
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15243
+    output_bytes: 27385
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/issue-stance-matrix.yaml
+    status: completed
+    started_at: 2026-07-18T01:32:07+09:00
+    completed_at: 2026-07-18T01:34:00+09:00
+    duration_ms: 112505
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 726
+    output_bytes: 56528
+    child_result_count: 6
+    child_results:
+      - unit_id: issue-stance:axiology
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-stance/axiology.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/stance-responses/axiology.yaml
+        status: completed
+        started_at: 2026-07-18T01:32:07+09:00
+        completed_at: 2026-07-18T01:33:03+09:00
+        duration_ms: 56314
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 70851
+        output_bytes: 9202
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:coverage
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-stance/coverage.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/stance-responses/coverage.yaml
+        status: completed
+        started_at: 2026-07-18T01:32:07+09:00
+        completed_at: 2026-07-18T01:32:55+09:00
+        duration_ms: 47773
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 70851
+        output_bytes: 8869
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:evolution
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-stance/evolution.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/stance-responses/evolution.yaml
+        status: completed
+        started_at: 2026-07-18T01:32:07+09:00
+        completed_at: 2026-07-18T01:32:50+09:00
+        duration_ms: 42525
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 70865
+        output_bytes: 7251
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:logic
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-stance/logic.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/stance-responses/logic.yaml
+        status: completed
+        started_at: 2026-07-18T01:32:07+09:00
+        completed_at: 2026-07-18T01:33:30+09:00
+        duration_ms: 82614
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 70809
+        output_bytes: 8970
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:semantics
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-stance/semantics.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/stance-responses/semantics.yaml
+        status: completed
+        started_at: 2026-07-18T01:32:50+09:00
+        completed_at: 2026-07-18T01:33:39+09:00
+        duration_ms: 49322
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 70865
+        output_bytes: 10183
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:structure
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/issue-stance/structure.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/stance-responses/structure.yaml
+        status: completed
+        started_at: 2026-07-18T01:32:55+09:00
+        completed_at: 2026-07-18T01:34:00+09:00
+        duration_ms: 64638
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 70865
+        output_bytes: 8437
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation-plan
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation-plan.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation-plan.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:00+09:00
+    completed_at: 2026-07-18T01:34:39+09:00
+    duration_ms: 39850
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 108599
+    output_bytes: 6753
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: problem-framing
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/problem-framing.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/problem-framing.yaml
+    status: completed
+    started_at: 2026-07-18T01:36:36+09:00
+    completed_at: 2026-07-18T01:37:33+09:00
+    duration_ms: 56291
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 119374
+    output_bytes: 13627
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+deliberation_execution_results:
+  - unit_id: deliberation:issue-012:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-012/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-012/logic.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:40+09:00
+    completed_at: 2026-07-18T01:35:01+09:00
+    duration_ms: 21374
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14296
+    output_bytes: 1867
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-012:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-012/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-012/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:40+09:00
+    completed_at: 2026-07-18T01:34:55+09:00
+    duration_ms: 15463
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14330
+    output_bytes: 1592
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-013:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-013/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-013/logic.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:40+09:00
+    completed_at: 2026-07-18T01:34:59+09:00
+    duration_ms: 19623
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15006
+    output_bytes: 2418
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-013:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-013/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-013/coverage.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:40+09:00
+    completed_at: 2026-07-18T01:34:57+09:00
+    duration_ms: 17116
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15032
+    output_bytes: 2037
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-013:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-013/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-013/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:55+09:00
+    completed_at: 2026-07-18T01:35:18+09:00
+    duration_ms: 22755
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15036
+    output_bytes: 1715
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-003:axiology
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-003/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-003/axiology.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:57+09:00
+    completed_at: 2026-07-18T01:35:12+09:00
+    duration_ms: 15340
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15492
+    output_bytes: 1636
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-003:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-003/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-003/logic.yaml
+    status: completed
+    started_at: 2026-07-18T01:34:59+09:00
+    completed_at: 2026-07-18T01:35:12+09:00
+    duration_ms: 13204
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15470
+    output_bytes: 1558
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-003:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-003/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-003/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T01:35:01+09:00
+    completed_at: 2026-07-18T01:35:14+09:00
+    duration_ms: 13505
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15500
+    output_bytes: 1568
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-003:structure
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-003/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-003/structure.yaml
+    status: completed
+    started_at: 2026-07-18T01:35:12+09:00
+    completed_at: 2026-07-18T01:35:25+09:00
+    duration_ms: 13305
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15502
+    output_bytes: 1671
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-014:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-014/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-014/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T01:35:12+09:00
+    completed_at: 2026-07-18T01:35:26+09:00
+    duration_ms: 13870
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14580
+    output_bytes: 1827
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-014:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/deliberation/issue-014/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation/responses/issue-014/logic.yaml
+    status: completed
+    started_at: 2026-07-18T01:35:14+09:00
+    completed_at: 2026-07-18T01:35:31+09:00
+    duration_ms: 16171
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14550
+    output_bytes: 1877
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: controlled-deliberation
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/teamlead.deliberation.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/deliberation-resolution.yaml
+    status: completed
+    started_at: 2026-07-18T01:35:31+09:00
+    completed_at: 2026-07-18T01:36:36+09:00
+    duration_ms: 65563
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 68641
+    output_bytes: 14563
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+synthesize_execution_result:
+  unit_id: synthesize
+  unit_kind: synthesize
+  packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis-work-items.yaml
+  output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis-ledger.yaml
+  status: completed
+  started_at: 2026-07-18T01:37:33+09:00
+  completed_at: 2026-07-18T01:39:06+09:00
+  duration_ms: 93792
+  timestamp_provenance: runner_wallclock
+  failure_message: null
+  failure_kind: null
+  attempt_count: 1
+  packet_bytes: 235117
+  output_bytes: 164048
+  executor_host_runtime: codex
+  child_result_count: 17
+  child_results:
+    - unit_id: synthesis:issue-001
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-001.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-001.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:33+09:00
+      completed_at: 2026-07-18T01:37:55+09:00
+      duration_ms: 22593
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 25316
+      output_bytes: 2830
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-004
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-004.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-004.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:33+09:00
+      completed_at: 2026-07-18T01:37:55+09:00
+      duration_ms: 21965
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23393
+      output_bytes: 2780
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-005
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-005.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-005.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:33+09:00
+      completed_at: 2026-07-18T01:37:58+09:00
+      duration_ms: 25102
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 29725
+      output_bytes: 2952
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-009
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-009.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-009.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:33+09:00
+      completed_at: 2026-07-18T01:37:52+09:00
+      duration_ms: 19413
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 25149
+      output_bytes: 2634
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-012
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-012.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-012.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:52+09:00
+      completed_at: 2026-07-18T01:38:10+09:00
+      duration_ms: 17837
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23547
+      output_bytes: 2682
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-015
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-015.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-015.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:55+09:00
+      completed_at: 2026-07-18T01:38:12+09:00
+      duration_ms: 16973
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22899
+      output_bytes: 2389
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-016
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-016.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-016.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:55+09:00
+      completed_at: 2026-07-18T01:38:10+09:00
+      duration_ms: 15114
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22869
+      output_bytes: 2336
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-002
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-002.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-002.yaml
+      status: completed
+      started_at: 2026-07-18T01:37:58+09:00
+      completed_at: 2026-07-18T01:38:18+09:00
+      duration_ms: 19707
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 29664
+      output_bytes: 3349
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-003
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-003.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-003.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:10+09:00
+      completed_at: 2026-07-18T01:38:25+09:00
+      duration_ms: 15001
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24840
+      output_bytes: 2429
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-006
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-006.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-006.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:10+09:00
+      completed_at: 2026-07-18T01:38:26+09:00
+      duration_ms: 15868
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23765
+      output_bytes: 2729
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-007
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-007.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-007.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:12+09:00
+      completed_at: 2026-07-18T01:38:29+09:00
+      duration_ms: 16979
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22956
+      output_bytes: 2401
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-008
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-008.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-008.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:18+09:00
+      completed_at: 2026-07-18T01:38:37+09:00
+      duration_ms: 19349
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23132
+      output_bytes: 2414
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-010
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-010.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-010.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:25+09:00
+      completed_at: 2026-07-18T01:38:42+09:00
+      duration_ms: 16883
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24276
+      output_bytes: 2855
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-011
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-011.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-011.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:26+09:00
+      completed_at: 2026-07-18T01:38:46+09:00
+      duration_ms: 19992
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24319
+      output_bytes: 2889
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-013
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-013.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-013.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:29+09:00
+      completed_at: 2026-07-18T01:38:46+09:00
+      duration_ms: 17728
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24329
+      output_bytes: 2864
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-017
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-017.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-017.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:37+09:00
+      completed_at: 2026-07-18T01:39:06+09:00
+      duration_ms: 29508
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22204
+      output_bytes: 2322
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-018
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/prompt-packets/synthesis/issue-018.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-YDxgXz/.onto/review/20260718-ddf66b5d/synthesis/responses/issue-018.yaml
+      status: completed
+      started_at: 2026-07-18T01:38:42+09:00
+      completed_at: 2026-07-18T01:38:59+09:00
+      duration_ms: 17279
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23720
+      output_bytes: 2852
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+  artifact_generation_realization: live
+  semantic_quality_evidence:
+    status: not_evaluated
+    applicability: real_semantic_path_only
+    reason: live semantic path output requires a separate semantic quality gate
+      before quality is claimed
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000
+  salvage:
+    enabled: true
+    delta_completion: unit_llm
+  resubmit:
+    enabled: true
+  dispatch_breaker:
+    enabled: true
+    systemic_threshold: 3
+    per_call_max_attempts: 3
+    backoff_initial_ms: 3000
+    backoff_cap_ms: 30000

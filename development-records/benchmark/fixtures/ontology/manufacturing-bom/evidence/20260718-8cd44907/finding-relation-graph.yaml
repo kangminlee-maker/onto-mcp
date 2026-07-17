@@ -1,0 +1,178 @@
+schema_version: 1
+session_id: 20260718-8cd44907
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-020
+    relation: duplicates
+    root_hypothesis: ECO의 최신성·승인·발효와 생산에 유효한 Part 리비전을 별도 권위로 모델링하지 않아 동기화 지연 구간의 생산
+      리비전을 결정할 수 없다.
+    shared_cause: null
+    rationale: 두 finding 모두 current_eco, ECO 상태·effective_date, 주간 배치되는 Part.rev 사이의
+      불일치 때문에 발효 후에도 구 리비전 생산이 가능하다는 동일한 계약 공백을 지적한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-006
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: BOM과 Routing을 시점별 불변 버전·효력 객체가 아닌 현재 상태 참조로만 모델링해 변경 전후 구성을 선택하거나 재현할 수 없다.
+    shared_cause: null
+    rationale: 두 finding은 ECO 전후의 유효 BOM·라우팅 선택과 과거 구성 재현이 불가능하다는 같은 결함, 실패 조건, 개선
+      방향을 서로 다른 coverage/evolution 관점에서 기술한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-006
+    to_finding_id: finding-022
+    relation: duplicates
+    root_hypothesis: ECO에서 적용 Part revision과 그 revision의 BOM·Routing으로 이어지는 탐색 가능한 구성 경로가 없다.
+    shared_cause: null
+    rationale: finding-006의 버전·유효성 모델 부재와 finding-022의
+      ECO-to-revisioned-configuration 경로 부재는 동일한 구조적 공백을 가리킨다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: 변경 효력을 revisioned manufacturing configuration으로 표현하지 않고 지연 갱신되는
+      현재값으로 축약한 것이 생산 판정 지연과 구성 재현 불가를 함께 만든다.
+    shared_cause:
+      cause_claim: ECO 발효와 연결된 불변 Part/BOM/Routing 버전 및 원자적 선택 계약이 없고 Part.rev는 지연
+        갱신되는 현재값으로만 존재한다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-006.cause-002
+    rationale: 원자적 리비전 판정 부재는 현재 생산의 잘못된 선택을 만들고, 지연되는 단일 Part.rev는 과거·미래 BOM 및
+      Routing 구성의 식별도 막는다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-012
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: 변경 효력을 독립 관계가 아니라 단일 current_eco 포인터로 표현해 복수·조건부 변경과 현재 유효
+      revision 판정을 모두 손상시킨다.
+    shared_cause:
+      cause_claim: Part의 단일 current_eco가 변경 이력, 적용 조건, 승인·발효 상태 및 현재 유효 revision을
+        대신하도록 과도하게 사용된다.
+      from_cause_ref: finding-012.cause-003
+      to_cause_ref: finding-020.cause-002
+    rationale: 두 causal path 모두 current_eco가 서로 다른 시간·적용 의미를 수용하는 단일 포인터라는 점을 직접
+      원인으로 제시한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-008
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 시간에 따라 변하는 제조 정의와 통제 행위를 버전·전이·이벤트가 아닌 현재 상태 필드로만 축약했다.
+    shared_cause: null
+    rationale: finding-008은 lifecycle 전이와 행위 증거 부재를, finding-011은 BOM·Routing 버전 계보
+      부재를 지적한다. 둘 다 현재값만 남기고 시간적 정체성과 이력을 모델링하지 않은 설계에서 발생한다.
+    confidence: medium
+  - relation_id: rel-007
+    from_finding_id: finding-002
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: scrap_rate와 표준시간의 복제·파생값에 system of record, 동기화 상태, 충돌 해결 및 대사
+      이력을 부여하지 않았다.
+    shared_cause: null
+    rationale: 두 finding은 동일한 Excel scrap_rate 복사와 MES·표준원가 시간 이중 관리를 근거로 같은 권위·동기화
+      계약 부재를 지적한다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-002
+    to_finding_id: finding-021
+    relation: shared_cause_candidate
+    root_hypothesis: scrap_rate를 권위 원천과 결정적 산식이 있는 개념이 아니라 의미가 불명확한 복제 숫자로 취급했다.
+    shared_cause:
+      cause_claim: scrap_rate가 canonical source, 유효성 및 rate-to-requirement 산식 없이 외부
+        저장소에서 복사되는 독립 스칼라로 모델링된다.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-021.cause-002
+    rationale: 복제·대사 중심의 권위 공백과 rate/multiplier 의미 혼합은 모두 scrap_rate를 출처와 산식에 연결하지
+      않은 같은 모델링 선택에서 발생한다.
+    confidence: medium
+  - relation_id: rel-009
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: duplicates
+    root_hypothesis: 수량과 용량을 측정 단위·차원·변환 문맥이 결합된 개념이 아닌 단순 숫자로 모델링했다.
+    shared_cause: null
+    rationale: 두 finding은 qty_per 및 capacity_per_shift의 단위 결여와 품목별 변환 마스터 부재를 같은 증거로
+      들며 동일한 계획 오류를 설명한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-009
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: 단위를 확장 가능한 UOM 참조 데이터와 유효한 변환 관계로 분리하지 않고 폐쇄형 문자열과 현장 환산으로 처리했다.
+    shared_cause: null
+    rationale: finding-009은 현재 계산의 의미 불확정을, finding-013은 새 단위·시스템 추가 시 확장성 실패를 다룬다.
+      둘 모두 독립 UOM·conversion 개념 부재에서 파생된다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-003
+    to_finding_id: finding-019
+    relation: shared_cause_candidate
+    root_hypothesis: 측정값의 차원과 단위를 값에 결합하지 않아 작업장 처리량과 가용 시간이 동일한 숫자 속성으로 혼합된다.
+    shared_cause:
+      cause_claim: capacity_per_shift를 측정 차원과 단위가 없는 number로 정의해 개수/교대와 시간/교대를 구별하지 못한다.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-019.cause-002
+    rationale: 두 causal step이 모두 capacity_per_shift의 이질적인 차원과 단위 부재를 직접 지적하며,
+      finding-019는 finding-003의 작업장 용량 부분을 더 좁게 설명한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-004
+    to_finding_id: finding-018
+    relation: duplicates
+    root_hypothesis: 제품 구성과 공정 중 재생 물질 흐름을 분리하지 않고 재투입을 일반 BomLine 자기참조로 표현했다.
+    shared_cause: null
+    rationale: 두 finding은 같은 자기참조 BOM 예외, 같은 BOM 전개·소요량 위험, 같은 별도 material-flow 모델
+      제안을 제시한다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-005
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: AlternatePart에 필수 대칭성과 허용된 단방향성을 동시에 부여해 관계 양상을 결정할 수 없다.
+    shared_cause: null
+    rationale: 두 finding 모두 대칭 정의와 direction=one_way 기본값의 직접 충돌 및 소비자별 역방향 대체 판단
+      불일치를 지적한다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-015
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: 대칭 호환성과 방향성 대체 승인을 하나의 AlternatePart 개념에 혼합해 동일 인스턴스의 역방향 성립 여부가 모순된다.
+    shared_cause: null
+    rationale: logic finding은 necessary 대칭성과 possible 비대칭성의 형식 충돌을, semantics
+      finding은 동일 충돌의 의미·운영 영향을 기술한다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-016
+    to_finding_id: finding-024
+    relation: same_root_candidate
+    root_hypothesis: AlternatePart를 canonical associative relation으로 명확히 정의하지 않아 관계
+      의미와 관계 엔티티의 그래프 권위가 모두 불분명하다.
+    shared_cause: null
+    rationale: finding-016은 관계 엔티티가 상반된 의미를 담는 문제를, finding-024는 속성을 가진 그 엔티티가 명시적
+      관계 그래프에서 빠진 문제를 지적한다. canonical 관계 모델의 부재라는 공통 뿌리가 검증 가능하다.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-023
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: 모델 범위를 MES 실행까지 선언했지만 제조 실행 주체와 계보 개념을 포함하지 않아 ProductionOrder를
+      언급하는 규칙도 구조화할 수 없다.
+    shared_cause: null
+    rationale: finding-023의 ProductionOrder 엔티티·관계 부재는 finding-007이 지적한 생산오더 이후
+      실행·실적·추적 모델 전체 공백의 직접적이고 구체적인 증상이다.
+    confidence: high
+  - relation_id: rel-017
+    from_finding_id: finding-014
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: 재사용 가능한 공정 정의, 라우팅 단계, 자원 배치 및 실행을 규정하는 정보 객체의 유형 경계를 Operation 하나로 축약했다.
+    shared_cause: null
+    rationale: finding-014는 공정 정의와 라우팅·공장별 배치의 결합을, finding-017은 검사 실행 단계와 검사 계획 정보의
+      결합을 지적한다. 두 문제 모두 Operation의 역할 경계가 분리되지 않았다는 가설로 함께 설명된다.
+    confidence: medium
+singleton_findings: []

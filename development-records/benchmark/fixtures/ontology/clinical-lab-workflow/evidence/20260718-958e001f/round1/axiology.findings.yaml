@@ -1,0 +1,187 @@
+schema_version: 1
+session_id: 20260718-958e001f
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml — Result.status, Report.result_status 및
+      corrected 동기화 규칙
+    evidence_anchor: "대상: materialized-input.md:62-84,121-124. 가치 권위:
+      review-value-alignment-criteria.yaml:6-19,
+      criterion_id=user-request-intent — “EMR/LIS 통합의 개념 권위 문서로 쓰기에 적절한지… 운영 시
+      생길 위험을 중심으로.” [value_type=commitment, alignment_direction=misaligned]"
+    claim: 임상의가 신뢰하도록 선언한 보고 상태가 원천 결과 상태보다 최대 야간 배치까지 늦어질 수 있어, 통합 개념 권위라는 목적과 어긋난다.
+    what: 동일한 결과 상태를 Result.status와 Report.result_status에 서로 다른 열거값으로 중복 저장하고,
+      corrected에서 amended로의 반영을 야간 1회 배치에 맡긴다. 동시에 Report.result_status를 임상의가
+      신뢰하는 권위 값이라고 선언한다.
+    why: 권위 값이 의도적으로 원천보다 뒤처질 수 있으므로, 수정된 결과가 존재하는 동안 임상의가 이전 상태를 권위 있는 최신 상태로 받아들일
+      수 있다. 이는 단순한 표현 중복을 넘어 EMR/LIS 통합에서 하나의 신뢰 가능한 상태 의미를 제공한다는 목적을 훼손한다.
+    how_to_fix: Result 상태를 단일 권위로 정하고 Report 상태는 즉시 파생되도록 하거나, 보고 상태를 별도 개념으로 유지해야
+      한다면 두 상태의 의미·매핑·전이 원자성·실패 처리를 명시하고 corrected 반영을 동기식 또는 보장된 이벤트 처리로 바꾼다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 임상의가 신뢰할 수 있는 개념 권위 문서를 제공하는 목적
+      failure_condition: Result.status가 corrected로 변경된 뒤 야간 동기화 전까지
+        Report.result_status가 finalized 등 이전 값으로 남는 경우
+      impact: 권위로 표시된 보고 상태가 실제 원천 상태와 달라져 임상 소비자의 신뢰와 통합 시스템 간 일관성을 직접 약화한다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-124
+        - review-value-alignment-criteria.yaml:6-19
+    causal_path:
+      root_cause_candidate: 하나의 결과 상태 의미에 두 저장 좌석과 비동기 복제 정책을 부여하면서도 Report 복제본을 권위 값으로 선언했다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: corrected 결과는 야간 배치 전까지 Report의 amended 상태에 반영되지 않을 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 이 지연은 Result.status와 Report.result_status에 동일 정보를 중복 유지하는 설계의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 중복 좌석 중 지연 가능한 Report 값을 임상의가 신뢰할 권위 값으로 선언한 것이 목적 불일치를 만든다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:80-83
+            - review-value-alignment-criteria.yaml:6-19
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml — CriticalValue 통보 모델
+    evidence_anchor: "대상: materialized-input.md:100-106. 가치 권위:
+      review-value-alignment-criteria.yaml:6-19,
+      criterion_id=user-request-intent — “EMR/LIS 통합의 개념 권위 문서… 운영 시 생길 위험.”
+      [value_type=stakeholder, alignment_direction=misaligned]"
+    claim: 즉시 통보가 필요한 위험 결과의 핵심 이력을 외부 전화 기록 대장에 맡겨, 임상 안전 워크플로의 개념 권위를 온톨로지 밖으로 분산한다.
+    what: CriticalValue에는 notified 불리언만 있고, 통보 시각과 수신자는 별도 전화 기록 대장에 있다고 명시한다. 해당 외부
+      기록과의 식별자나 관계도 정의하지 않는다.
+    why: 통보 완료 여부를 검증하거나 누가 언제 통보받았는지 추적하려면 온톨로지 밖의 미연결 기록이 필요하다. 따라서 EMR/LIS가 이
+      문서만으로 위험 결과 통보의 공통 의미와 추적 경계를 구현할 수 없으며, 즉시 통보라는 선언된 목적보다 기존 기록 관행의 편의를
+      우선한 숨은 트레이드오프가 된다.
+    how_to_fix: 통보 사건을 독립 엔티티로 모델링해 CriticalValue/Result, 통보 시각, 발신자, 수신자, 전달 방식, 확인
+      상태를 연결한다. 전화 대장이 계속 권위라면 그 권위 경계와 안정적인 참조 키, 동기화 및 불일치 처리 계약을 온톨로지에 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 운영 위험까지 다루는 개념 권위 제공
+      failure_condition: 시스템이 notified 값의 근거나 통보 수신자를 확인·교환해야 하는 경우
+      impact: 핵심 안전 사건의 의미와 증거가 문서 밖에 남아 통합 구현마다 서로 다른 추적·검증 방식을 만들 수 있다.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - review-value-alignment-criteria.yaml:6-19
+    causal_path:
+      root_cause_candidate: 통보 완료라는 파생 요약만 온톨로지에 두고 그 근거 사건의 권위를 미연결 외부 대장에 남겼다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: CriticalValue는 통보 완료 여부만 표현하며 시각과 수신자는 외부 대장에 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 외부 대장으로 연결되는 식별자나 관계가 없어 notified의 근거를 온톨로지 경계 안에서 추적할 수 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-119
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 이 권위 분산은 EMR/LIS 통합의 공통 개념 권위라는 목적을 약화한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:6-8
+            - review-value-alignment-criteria.yaml:6-19
+      unresolved_beyond_evidence: 외부 전화 기록 대장의 실제 스키마와 보존·연계 방식은 현재 경계에서 확인할 수 없다.
+  - candidate_id: axiology-candidate-003
+    target: clinical-lab-ontology.yaml — Test/Assay 카탈로그 운영 방침
+    evidence_anchor: "대상: materialized-input.md:46-60,126-128. 가치 권위:
+      review-value-alignment-criteria.yaml:6-19,
+      criterion_id=user-request-intent — “EMR/LIS 통합의 개념 권위 문서로 쓰기에 적절한지.”
+      [value_type=tradeoff, alignment_direction=misaligned]"
+    claim: 신규 항목을 Test와 Assay 양쪽에 중복 등록하는 임시 운영 편의가 카탈로그 개념의 단일 권위를 훼손한다.
+    what: Test는 주문 가능한 카탈로그 단위, Assay는 수행 단위로 구분하면서 둘 사이의 관계나 대응 규칙은 없고, 신규 항목을 양쪽에
+      모두 등록하도록 한다.
+    why: 주문 개념과 수행 개념을 분리하는 것은 가능하지만, 매핑 없는 이중 등록은 동일성·분기·변경 책임을 각 시스템이 임의로 해석하게 한다.
+      ‘나중에 통합 여부를 검토’한다는 유예는 현재 문서를 통합 권위로 사용하려는 목적과 충돌한다.
+    how_to_fix: Test와 Assay를 명확히 별도 개념으로 유지하고 명시적 매핑 관계, 카디널리티, 식별자 및 변경 권위를 정의한다.
+      실제로 같은 개념이라면 하나로 통합하고 시스템별 코드는 매핑 속성으로 둔다. 이 결정 전에는 문서를 통합 권위로 승격하지 않는다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR과 LIS가 공유할 검사 카탈로그 개념 권위 제공
+      failure_condition: 신규 또는 변경된 검사 항목을 주문 측 Test와 수행 측 Assay 사이에서 대응시켜야 하는 경우
+      impact: 매핑과 변경 권위 부재로 시스템별 카탈로그가 독립적으로 분기되어 통합 문서의 단일 기준 역할이 약화된다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:126-128
+        - review-value-alignment-criteria.yaml:6-19
+    causal_path:
+      root_cause_candidate: Test와 Assay의 개념 분리 여부를 결정하지 않은 채 이중 등록을 운영 규칙으로 채택했다.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 신규 항목은 Test와 Assay 양쪽에 등록된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:126-128
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 두 엔티티 사이에는 대응 관계나 동일성 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 결정 유예와 이중 등록이 EMR/LIS 카탈로그의 단일 개념 권위 형성을 막는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:6-8
+            - materialized-input.md:126-128
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-004
+    target: clinical-lab-ontology.yaml — turnaround_time(TAT) 정의와 계산 권위
+    evidence_anchor: "대상: materialized-input.md:126-128. 가치 권위:
+      review-value-alignment-criteria.yaml:6-19,
+      criterion_id=user-request-intent — “EMR/LIS 통합의 개념 권위 문서로 쓰기에 적절한지.”
+      [value_type=boundary, alignment_direction=misaligned]"
+    claim: TAT 의미를 온톨로지에서 선언하면서 실제 계산 권위를 대시보드 팀의 자체 공식에 위임해 지표의 권위 경계를 모호하게 만든다.
+    what: 문서는 TAT를 collected_at부터 released_at까지라고 정의하지만, 대시보드 팀이 자체 계산식을 유지한다고 병기한다.
+    why: 온톨로지 정의와 소비자별 계산식이 다를 수 있는 여지를 공식적으로 허용한다. 이 경우 같은 EMR/LIS 사건에서도 서로 다른 TAT가
+      생성될 수 있어, 공통 개념 권위라는 목적보다 로컬 팀의 계산 자율성을 정당화 없이 우선한다.
+    how_to_fix: TAT의 정규 계산식, 포함·제외 조건, 결측 및 취소 처리, 시간대 기준과 버전을 온톨로지의 권위 규칙으로 정의하고
+      대시보드는 이를 소비하게 한다. 로컬 지표가 필요하면 canonical TAT와 별도 이름·목적으로 구분한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 사이에서 동일한 워크플로 지표 의미를 제공하는 개념 권위
+      failure_condition: 대시보드 자체 계산식이 온톨로지의 collected_at-to-released_at 정의와 다른 예외나 경계를 적용하는 경우
+      impact: 동일한 TAT 이름 아래 여러 값이 생성되어 운영 판단과 시스템 간 비교 가능성을 약화한다.
+      evidence_refs:
+        - materialized-input.md:126-128
+        - review-value-alignment-criteria.yaml:6-19
+    causal_path:
+      root_cause_candidate: TAT의 의미 권위와 계산 실행 권위를 분리하면서 일치 계약이나 우선순위를 정의하지 않았다.
+      root_cause_step_id: axiology-candidate-004.cause-003
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: 온톨로지는 TAT 구간을 정의하면서 대시보드 팀이 자체 계산식을 유지한다고 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:126-128
+        - cause_id: axiology-candidate-004.cause-002
+          claim: 자체 공식과 canonical 정의 사이의 우선순위·일치 검증·예외 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-128
+        - cause_id: axiology-candidate-004.cause-003
+          claim: 이 권위 분산은 통합 개념 문서가 하나의 지표 의미를 제공해야 한다는 목적을 약화한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:6-8
+            - review-value-alignment-criteria.yaml:6-19
+      unresolved_beyond_evidence: 대시보드 팀의 실제 계산식은 현재 허용 경계에 포함되지 않아 실제 불일치 여부는 확인할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

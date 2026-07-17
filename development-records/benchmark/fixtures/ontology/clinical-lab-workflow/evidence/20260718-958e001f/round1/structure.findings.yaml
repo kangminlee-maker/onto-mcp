@@ -1,0 +1,146 @@
+schema_version: 1
+session_id: 20260718-958e001f
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — Assay workflow integration
+    evidence_anchor: materialized-input.md:46-60,108-119,126-127 — Test is the
+      orderable unit, Assay is the execution unit, but Assay appears in no
+      workflow relation; the note requires dual catalog registration.
+    claim: The ontology lacks a relationship connecting an ordered Test to the Assay
+      that performs it.
+    what: Assay references only Department and has no link to Test, Specimen,
+      Result, or another execution-path entity. The relations section also
+      contains no Assay edge.
+    why: The document distinguishes the EMR-facing orderable Test from the
+      LIS/analyzer-facing Assay and says new items are registered in both
+      catalogs. Without a mapping relationship, an integration consumer cannot
+      determine which assay realizes an ordered test, including cases where
+      codes or cardinalities differ.
+    how_to_fix: Add an explicit Test-to-Assay realization/mapping relationship with
+      defined cardinality and identifiers, or merge the concepts and make Test
+      the single catalog authority. Connect Result to the chosen execution unit
+      if assay-level traceability is required.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serving as the conceptual authority for EMR/LIS integration
+        from Order through Report.
+      failure_condition: An ordered Test and its executable Assay are distinct records
+        or have non-identical codes, especially for one-to-many or many-to-one
+        catalog mappings.
+      impact: The core handoff from EMR ordering semantics to LIS execution semantics
+        is undefined, so implementations must invent mappings outside the
+        authority document and may execute or report the wrong item.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: The model introduced separate orderable and executable
+        catalog concepts without introducing the realization relationship that
+        binds them.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay has no relationship to Test or any Order-to-Report execution-path
+            entity.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-60
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-002
+          claim: The definitions assign Test and Assay complementary
+            orderable-versus-executable roles, while the maintenance note
+            requires both catalogs to be populated.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — CriticalValue occurrence linkage
+    evidence_anchor: materialized-input.md:100-119 — CriticalValue has test_ref and
+      a notified flag, but no relation to Result, Report, Order, Patient, or a
+      notification record.
+    claim: CriticalValue notification state is not connected to the result
+      occurrence that triggered it.
+    what: CriticalValue can identify a Test and threshold range, but the model
+      provides no edge to a concrete Result occurrence. Its notified flag
+      therefore has no structural subject identifying which critical result was
+      communicated.
+    why: A test can produce many results across patients and orders. A Test-level
+      path cannot distinguish the specific result whose notification was
+      completed, so the notification state can become detached from the
+      operational event it purports to describe.
+    how_to_fix: Separate the threshold definition from a critical-result occurrence,
+      then link the occurrence to Result and to a notification record or bounded
+      external-record reference carrying completion, time, and recipient.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Providing an operationally usable Order-to-Report concept
+        model for EMR/LIS integration.
+      failure_condition: The same Test produces more than one Result and one or more
+        results cross the critical threshold.
+      impact: Consumers cannot associate notified status with a unique result,
+        weakening auditability and allowing notification state to be incorrectly
+        reused across result occurrences.
+      evidence_refs:
+        - materialized-input.md:62-73
+        - materialized-input.md:100-119
+    causal_path:
+      root_cause_candidate: A reusable critical-value threshold and an
+        occurrence-specific notification state are placed on one entity without
+        an occurrence relationship.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue contains notified but has no structural link to a concrete
+            Result.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-119
+        - cause_id: structure-candidate-002.cause-002
+          claim: Result is the modeled entity representing an individual Test result,
+            whereas CriticalValue points only to the reusable Test.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:62-73
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: The external telephone log is mentioned but
+        unavailable within the boundary; it does not establish an ontology-level
+        linkage from that log to Result.
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml — relation inventory completeness
+    evidence_anchor: materialized-input.md:15-20,46-103,108-119 — several ref
+      attributes are absent from relations, while other ref attributes are
+      duplicated there.
+    claim: The explicit relations inventory is not closed over the ontology's
+      declared reference links.
+    what: Order→Patient, Order→Test, Test→Department, Assay→Department,
+      Result→Staff, and CriticalValue→Test exist as ref attributes but are
+      omitted from relations. By contrast, Report→Order and Staff→Department
+      appear in both forms.
+    why: The artifact exposes two inconsistent structural representations. A
+      consumer traversing ref attributes sees a different graph from one
+      traversing the relations list, causing some entities or paths to appear
+      disconnected depending on the ingestion route.
+    how_to_fix: Declare one canonical relationship authority and deterministically
+      derive the other representation, or add all missing reference edges to
+      relations and validate that every ref/is_a link is represented
+      consistently.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - "Fields declared as type: ref and is_a declarations are treated as
+    structural links in addition to entries under relations."
+  - CriticalValue.notified is interpreted as occurrence-specific because it
+    denotes completion of a notification, while test_ref identifies only a
+    reusable catalog item.
+validation:
+  unaddressable_candidates: []

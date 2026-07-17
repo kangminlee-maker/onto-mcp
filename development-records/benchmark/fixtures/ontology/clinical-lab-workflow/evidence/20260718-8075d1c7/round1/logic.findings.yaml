@@ -1,0 +1,131 @@
+schema_version: 1
+session_id: 20260718-8075d1c7
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml — Order completion rule
+    evidence_anchor: materialized-input.md:23, 69-72, 121-123
+    claim: Result correction after Order completion leaves the lifecycle rules
+      without a simultaneously coherent completion state.
+    what: An Order transitions to `completed` when all Results are `final`, while
+      the model explicitly permits a Result to change from `final` to
+      `corrected`. No corresponding Order reopening, completion revocation, or
+      correction-aware completion rule exists.
+    why: "This is an inter-claim temporal conflict between the completion rule at
+      line 122 and the correction path at line 123. Once correction makes the
+      completion predicate false, the Order lifecycle still retains `completed`.
+      The conflict concerns mixed modality: a necessary completion trigger
+      depends on a reversible state, but the permitted later event has no
+      defined effect on the resulting terminal state."
+    how_to_fix: "Define correction-aware precedence explicitly: either treat
+      `corrected` as completion-satisfying, transition the Order out of
+      `completed`, or model completion as a versioned snapshot tied to the
+      report/result version."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serving as the conceptual authority for consistent Order and
+        Result lifecycle handling across EMR/LIS integration.
+      failure_condition: A Result changes from `final` to `corrected` after its Order
+        has transitioned to `completed`.
+      impact: EMR and LIS consumers can derive incompatible answers about whether the
+        Order remains complete, weakening the authority and actionability of the
+        shared state model.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:69-72
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: The completion rule is based on reversible Result state
+        without defining correction-time precedence or an Order transition after
+        completion.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: A permitted correction can leave a completed Order containing a Result
+            whose status is no longer `final`.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:122-123
+        - cause_id: logic-candidate-001.cause-002
+          claim: The Order lifecycle provides `completed` but the state rules define no
+            correction-triggered reopening, revocation, or alternative
+            completion predicate.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: The target does not state whether `completed` is
+        terminal or whether `corrected` should count as completion-satisfying;
+        either interpretation requires an explicit rule.
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml — Report correction synchronization rule
+    evidence_anchor: materialized-input.md:80-84, 121-123
+    claim: The mandatory corrected-to-amended invariant conflicts with the declared
+      nightly synchronization delay.
+    what: The rule requires `Report.result_status` to become `amended` when a Result
+      changes to `corrected`, yet states that synchronization occurs only once
+      nightly. During the allowed delay, the antecedent is true while the
+      required consequent can remain false.
+    why: This is an intra-rule temporal satisfiability conflict at line 123. The
+      obligatory wording expresses `corrected → amended`, while the batch
+      schedule permits an interim `corrected ∧ ¬amended` state. That stale state
+      is material because `Report.result_status` is declared authoritative and
+      trusted by clinicians.
+    how_to_fix: "Choose and formalize one consistency contract: synchronize
+      atomically, or explicitly define eventual consistency with a bounded
+      deadline and a visible `pending_amendment`/stale-status state that
+      consumers must handle."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Providing an authoritative Report status contract for EMR/LIS
+        consumers and clinicians.
+      failure_condition: A Result is corrected after release but before the next
+        nightly synchronization batch.
+      impact: The authoritative report can still present `finalized` while its
+        underlying result is corrected, so consumers cannot safely rely on the
+        stated status invariant.
+      evidence_refs:
+        - materialized-input.md:80-84
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: The rule combines an unqualified mandatory synchronization
+        invariant with an explicitly delayed batch implementation, without
+        modeling the delay as an allowed state.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: A corrected Result can coexist temporarily with a Report status other
+            than `amended`.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:123
+        - cause_id: logic-candidate-002.cause-002
+          claim: That temporary state violates the same rule's unqualified obligation that
+            correction makes the Report amended.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:123
+        - cause_id: logic-candidate-002.cause-003
+          claim: The model has no pending or stale-status state to reconcile mandatory
+            semantics with nightly synchronization.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:80-84
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: If the intended modality is eventual rather than
+        immediate consistency, the permitted lag and consumer behavior are not
+        specified in the bounded target.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Scalar enum attributes are interpreted as holding one value at a time.
+  - The explicit phrase that Result.status changes to `corrected` is treated as
+    permitting correction after a previously final result.
+  - An unqualified conditional obligation is treated as requiring its consequent
+    whenever its antecedent holds unless a delay or exception is explicitly
+    modeled.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,66 @@
+schema_version: 1
+session_id: 20260718-8075d1c7
+planned_issues: []
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: structure 렌즈는 혼합 버전 실패를 독립 확증하지 않을 뿐 직접 구조 원인과 조치·심각도를 지지하므로 실질적 충돌이 아니다.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 근본 가설, 조치 방향과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 규칙·발생·통보 사건의 분리와 high 심각도에 동의한다.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: evolution과 semantics의 narrow 입장은 각 렌즈의 확증 범위를 한정하지만 핵심 생명주기 누락과 high
+      심각도를 부정하지 않는다.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: evolution 렌즈는 진화 관점의 직접 지지 범위만 한정하며 분석 실행 개념 부재와 high 심각도에는 동의한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: evolution 렌즈의 변경 이력 중심 한정은 불변 감사 사건 필요성이나 high 심각도와 충돌하지 않는다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: structure 렌즈는 역사적 바인딩 결손만 직접 확증하지만 전체 근본 가설과 medium 심각도를 반박하지 않는다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 정규 원천과 완전한 권위·투영 계약의 부재 및 high 심각도에 동의한다.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: structure 렌즈의 한정은 값 입도에 대한 독립 의미 판단을 유보한 것이며 공통 권위의 구조적 필요성과 medium
+      심각도에는 동의한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 재사용 가능한 권위·namespace·시간 정보를 갖춘 Identifier 모델의 필요성과 medium 심각도에 동의한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 버전형 CriticalValue 규칙과 역사적 적용 바인딩의 필요성 및 medium 심각도에 동의한다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: evolution과 structure의 narrow 입장은 관점별 직접 확증 범위를 제한할 뿐 정정 후 Order 전이 규칙
+      부재와 high 심각도에 이견이 없다.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: evolution과 structure는 각각 호환성과 중간 상태 구조로 범위를 한정하지만 즉시 의무와 지연 구현의 충돌 및
+      high 심각도를 부정하지 않는다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: evolution과 structure의 한정은 의미론적 판단의 소관을 구별한 것이며 Result·Report 상태 경계와 권위
+      전이 필요성에는 모두 동의한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: evolution과 structure가 수명주기 및 관계 결손으로 직접 지지 범위를 한정했지만 Test–Assay 의미 구별과
+      medium 심각도에 반대하지 않는다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: evolution 렌즈는 호환 계약 측면으로만 한정하며 중복 STAT 표현의 단일 권위 필요성과 medium 심각도에는 동의한다.
+  - issue_id: issue-017
+    reason_code: no_material_conflict
+    reason: evolution 렌즈는 변경 시 계보 보존 측면만 직접 지지하지만 Specimen과 분석 실행의 분리 및 medium 심각도를
+      부정하지 않는다.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: evolution 렌즈의 한정은 전이 계약의 변경 가능성에 초점을 둔 것이며 명시적 전이 그래프 부재와 medium 심각도에 대한
+      실질적 이견은 없다.

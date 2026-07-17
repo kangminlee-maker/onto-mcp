@@ -1,0 +1,159 @@
+{
+  "schema_version": "m3-report/5",
+  "judge_model": "claude-opus-4-8",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "verdict_policy": {
+    "min_adequate_runs": 8,
+    "dominant_min_fraction": 0.85,
+    "significant_mode_fraction": 0.15
+  },
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "evidence_session": "20260718-41d4c6bb",
+      "review_sessions": [
+        "20260718-41d4c6bb",
+        "20260718-958e001f",
+        "20260718-8075d1c7"
+      ],
+      "review_reps": 3,
+      "judge_runs": 24,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "indeterminate",
+        "band": null,
+        "noise_rate": null,
+        "band_frequencies": {
+          "meets": 8,
+          "below": 16
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "meets": 5,
+            "below": 3
+          }
+        },
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "meets": 3,
+            "below": 5
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        }
+      ],
+      "intra_model_stable": false,
+      "recall_material": {
+        "n": 24,
+        "min": 0.8571428571428571,
+        "max": 1,
+        "mean": 0.904761904761905,
+        "stdev": 0.0673435029701474
+      },
+      "recall_overall": {
+        "n": 24,
+        "min": 0.7,
+        "max": 0.9,
+        "mean": 0.8374999999999999,
+        "stdev": 0.06959705453537528
+      },
+      "precision": {
+        "n": 24,
+        "min": 0.7222222222222222,
+        "max": 0.8636363636363636,
+        "mean": 0.7971079846079845,
+        "stdev": 0.06011374803398042
+      }
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "evidence_session": "20260718-ca026909",
+      "review_sessions": [
+        "20260718-ca026909",
+        "20260718-6dc79b44",
+        "20260718-ddf66b5d"
+      ],
+      "review_reps": 3,
+      "judge_runs": 24,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "indeterminate",
+        "band": null,
+        "noise_rate": null,
+        "band_frequencies": {
+          "meets": 20,
+          "below": 4
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "dominant",
+          "band": "meets",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "meets": 8
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "meets",
+          "noise_rate": 0.125,
+          "band_frequencies": {
+            "below": 1,
+            "meets": 7
+          }
+        },
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "meets": 5,
+            "below": 3
+          }
+        }
+      ],
+      "intra_model_stable": false,
+      "recall_material": {
+        "n": 24,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "recall_overall": {
+        "n": 24,
+        "min": 0.8,
+        "max": 1,
+        "mean": 0.9374999999999999,
+        "stdev": 0.06959705453537525
+      },
+      "precision": {
+        "n": 24,
+        "min": 0.6923076923076923,
+        "max": 0.875,
+        "mean": 0.8381410256410257,
+        "stdev": 0.042638111223947374
+      }
+    }
+  ]
+}

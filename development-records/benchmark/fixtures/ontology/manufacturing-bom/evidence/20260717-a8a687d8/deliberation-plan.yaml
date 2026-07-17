@@ -1,0 +1,197 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+planned_issues:
+  - issue_id: issue-001
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: coverage는 ECO와 Part.rev의 권위 분산을 독립 결함이 아니라 BOM·라우팅까지 포함하는
+      revision·effectivity 기준선 부재의 일부로 대체하며, 나머지 렌즈는 현재 루트 가설을 수용한다.
+    resolution_question: issue-001의 정규 루트 원인을 ECO·Part revision 권위 분산으로 유지할 것인가, 아니면
+      제조 형상 기준선 전체의 부재로 대체하거나 상위 이슈에 통합할 것인가?
+  - issue_id: issue-009
+    priority: 7
+    conflict_type: domain_constraint
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+      - structure
+      - axiology
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+    conflict_summary: coverage·axiology·logic은 누락된 MES 실행 계약을 보완해야 한다고 보지만
+      evolution·semantics·structure는 온톨로지의 의도된 경계에 따라 최소 형상 고정 접점만 두거나 제조 마스터
+      범위로 명시적으로 한정할 수 있다고 본다.
+    resolution_question: 검토 대상의 선언된 목적이 MES 실행·실적·계보 개념까지 요구하는가, 아니면 생산 형상 고정 접점만
+      제공하고 나머지 실행 영역을 명시적으로 제외해도 되는가?
+  - issue_id: issue-012
+    priority: 3
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+    conflict_summary: evolution은 폐쇄형 UOM과 환산 모델 부재를 확장성과 의미 보존을 약화하는 medium 이슈로
+      유지하지만 coverage는 현재 BOM·능력 계산도 결정할 수 없다며 심각도 상향을 주장한다.
+    resolution_question: 현재 지원되는 계산 경로가 이미 실패하는 high 결함인가, 아니면 새로운 단위와 변환 확장 시 신뢰가 약화되는 medium 결함인가?
+  - issue_id: issue-014
+    priority: 4
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+    conflict_summary: evolution은 BOM 자기순환 표현을 향후 회수 유형 확장 시 예외 비용이 커지는 medium 이슈로
+      보지만 coverage는 일반 BOM 전개가 현재도 안전하지 않다며 심각도 상향을 주장한다.
+    resolution_question: 재투입 자기순환이 현재 일반 BOM 소비자의 핵심 전개 경로를 실패시키는 high 결함인지, 주로 확장성과
+      유지 비용을 약화하는 medium 결함인지?
+  - issue_id: issue-018
+    priority: 2
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - structure
+      - axiology
+      - coverage
+      - evolution
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-018.semantics
+      - issue-stance-matrix.yaml#stances.issue-018.structure
+      - issue-stance-matrix.yaml#stances.issue-018.axiology
+      - issue-stance-matrix.yaml#stances.issue-018.coverage
+      - issue-stance-matrix.yaml#stances.issue-018.evolution
+      - issue-stance-matrix.yaml#stances.issue-018.logic
+    conflict_summary: 대부분의 렌즈는 관리 식별 역할과 구성상 최소 단위의 혼합을 medium 루트 결함으로 지지하지만
+      structure는 상속 구조 자체가 아니라 Part 정의의 국소적 모호성으로 좁히고 심각도를 낮춘다.
+    resolution_question: 결함이 Part·Assembly 계층 또는 유형 분리를 요구하는 구조적 의미 충돌인가, 아니면 Part
+      정의만 명확히 하면 해소되는 낮은 심각도의 용어 모호성인가?
+  - issue_id: issue-019
+    priority: 1
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+      - issue-stance-matrix.yaml#stances.issue-019.axiology
+      - issue-stance-matrix.yaml#stances.issue-019.coverage
+      - issue-stance-matrix.yaml#stances.issue-019.evolution
+      - issue-stance-matrix.yaml#stances.issue-019.logic
+      - issue-stance-matrix.yaml#stances.issue-019.structure
+    conflict_summary: semantics를 비롯한 다수 렌즈는 capacity_per_shift의 차원 혼합을 독립 이슈로 지지하지만
+      axiology는 더 넓은 Quantity/UOM 모델 결함의 표면 증상으로 본다.
+    resolution_question: issue-019를 작업장 능력에 고유한 독립 material issue로 유지할 것인가, 아니면 범용
+      Quantity/UOM 결함의 표면 사례로 통합할 것인가?
+  - issue_id: issue-020
+    priority: 6
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - structure
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-020.structure
+      - issue-stance-matrix.yaml#stances.issue-020.axiology
+      - issue-stance-matrix.yaml#stances.issue-020.coverage
+      - issue-stance-matrix.yaml#stances.issue-020.evolution
+      - issue-stance-matrix.yaml#stances.issue-020.logic
+      - issue-stance-matrix.yaml#stances.issue-020.semantics
+    conflict_summary: structure·evolution·logic·semantics는 ECO별 결과 revision 연결 부재를
+      직접 루트로 지지하지만 axiology는 상위 형상·효력 결함의 표면 증상으로 좁히고 coverage는 revision 객체와 시점별
+      형상 기준선 전체의 부재로 루트를 대체하며 심각도도 높인다.
+    resolution_question: issue-020을 독립적인 ECO 결과 revision 연결 결함으로 유지할 것인가, 아니면
+      revision·effectivity 기준선 부재의 하위 증상으로 통합하고 그에 맞춰 심각도를 상향할 것인가?
+  - issue_id: issue-021
+    priority: 5
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - structure
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-021.structure
+      - issue-stance-matrix.yaml#stances.issue-021.axiology
+      - issue-stance-matrix.yaml#stances.issue-021.coverage
+      - issue-stance-matrix.yaml#stances.issue-021.evolution
+      - issue-stance-matrix.yaml#stances.issue-021.semantics
+      - issue-stance-matrix.yaml#stances.issue-021.logic
+    conflict_summary: structure와 logic은 자기참조 예외를 판별할 구조적 표지 부재를 직접 결함으로 지지하지만
+      axiology·coverage·evolution·semantics는 제품 구성과 재투입 흐름의 개념 혼합이 근본 원인이며
+      edge_kind 추가는 불충분한 완화책이라고 본다; coverage는 심각도 상향도 주장한다.
+    resolution_question: 정규 해결책이 BomLine의 구조적 유형 표지 추가인가, 아니면 재투입을 별도 MaterialFlow
+      개념으로 분리하는 것인가, 그리고 선택한 루트가 현재 심각도를 상향할 만큼 일반 BOM 경로를 직접 실패시키는가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 루트 가설, high 심각도 및 제품 구성과 재투입 흐름 분리 조치를 일관되게 지지한다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 품목별 UOM 환산 권위 부재라는 루트 가설과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 scrap_rate의 의미·권위·생명주기 결손을 결합한 루트 가설과 medium 심각도를 지지한다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 revision·effectivity 형상 기준선 부재와 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 ECO lifecycle 및 감사 증거 결손의 루트와 medium 심각도를 지지한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 차원화된 Quantity/UOM 및 변환 모델 부재와 high 심각도를 지지한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 제조 기준값의 권위·복제·유효기간·대사 모델 부재와 medium 심각도를 지지한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 AlternatePart를 조건과 증거를 가진 일급 관계로 완결해야 한다는 루트와 medium 심각도를 지지한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 불변 revision과 유효구간 부재가 변경 연속성을 막는다는 루트와 high 심각도를 지지한다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 공정 정의와 라우팅 문맥의 자원·시간 배정 결합이라는 루트와 medium 심각도를 지지한다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 무조건 대칭성과 one_way 허용의 논리적 충돌 및 medium 심각도를 지지한다.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 방향성 대체와 상호 대체의 의미 혼합이라는 루트와 medium 심각도를 지지한다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 검사 계획 정보 객체와 실행 공정 역할의 혼합이라는 루트와 medium 심각도를 지지한다.

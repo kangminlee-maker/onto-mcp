@@ -1,0 +1,70 @@
+schema_version: 1
+session_id: 20260718-6dc79b44
+planned_issues:
+  - issue_id: issue-009
+    priority: 10
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - structure
+      - logic
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+    conflict_summary: semantics는 내부 방향 의미 충돌과 공식 관계 경로의 정보 손실을 단일한 high 이슈로 지지하지만,
+      logic과 structure는 각자 입증 가능한 하위 원인으로 범위를 좁히고 심각도를 medium으로 낮추며, evolution도
+      권위 있는 정책 엔티티의 확장성 보존으로 원인을 좁힌다.
+    resolution_question: 내부 방향성 규칙 충돌과 AlternatePart 우회에 따른 정보 손실을 하나의 공통 원인·high
+      이슈로 유지해야 하는가, 아니면 입증된 하위 원인별로 범위를 분리하거나 좁히고 심각도를 조정해야 하는가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: 유일한 적용 가능 입장인 axiology가 원인, high 심각도 및 재실행 조치를 지지하고 다른 렌즈는 범위 밖으로 판단해
+      실질적 충돌이 없다.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: coverage, evolution, semantics, structure가 원인과 high 심각도에 합의한다. axiology의
+      증거 부족은 필수 가치 권위 누락에 따른 판단 유보이며 기술적 주장에 대한 반대가 아니다.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: 적용 가능한 네 렌즈가 통합 원인과 high 심각도를 지지한다. axiology의 판단 유보는 가치 권위 증거 공백을 보존할 뿐
+      반대 주장을 제시하지 않는다.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: coverage, evolution, semantics, structure가 사건 기반 lifecycle 결손과 medium
+      심각도에 합의하며 axiology는 필수 권위 부재로만 유보한다.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들이 공통 provenance 계약 결손과 medium 심각도를 일관되게 지지한다. axiology의 증거 공백은
+      이를 반박하지 않는다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: coverage, evolution, semantics, structure가 UOM 기준 엔티티와 변환 마스터 부재라는 원인 및
+      medium 심각도에 합의한다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: evolution, semantics, structure가 문맥·유효성을 가진 대체 정책의 필요성과 medium 심각도에
+      합의한다. axiology와 coverage는 독립 증거 부족으로 유보했으며 상충 주장을 제시하지 않는다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: logic, semantics, structure가 방향성 규칙의 불일치와 medium 심각도를 지지한다. axiology의
+      유보와 다른 렌즈의 비적용 판단은 실질적 충돌이 아니다.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: semantics와 structure가 제품구조와 회수물 흐름의 분리 및 high 심각도에 합의하고 evolution도 원인을
+      수용하며 심각도를 유지한다. surface_only는 관찰 범위의 한계이지 반대 입장이 아니다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: semantics, evolution, structure가 검사 사양과 실행 단계의 분리 및 medium 심각도에 합의하며 나머지
+      입장은 증거 부족 또는 비적용이다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: semantics가 계산 의미 결손을 직접 지지하고 coverage와 evolution은 각 렌즈가 입증 가능한 배경 범위로
+      원인을 한정하면서도 조치 방향과 medium 심각도를 유지한다. 이 범위 한정은 핵심 주장에 대한 모순이 아니다.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: semantics, evolution, structure가 차원이 다른 용량 값의 분리와 medium 심각도에 합의한다.
+      axiology와 coverage의 증거 부족은 해당 합의를 반박하지 않는다.

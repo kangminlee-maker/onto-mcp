@@ -1,0 +1,150 @@
+schema_version: 1
+session_id: 20260718-8075d1c7
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml — Result.status, Report.result_status,
+      state_rules
+    evidence_anchor: "Target: materialized-input.md:69-83,121-123. Value authority:
+      review-value-alignment-criteria.yaml:6-8 (criterion `user-request-intent`:
+      EMR/LIS 통합의 개념 권위 문서 적합성과 운영 위험 검토). value_type=stakeholder;
+      alignment_direction=misaligned."
+    claim: 임상의가 신뢰하도록 선언된 보고 상태가 결과 상태와 이중 권위로 관리되고 야간 배치 전까지 낡을 수 있어, EMR/LIS 통합의
+      개념 권위 목적에 어긋난다.
+    what: Result와 Report가 의미상 같은 상태를 서로 다른 어휘로 각각 저장하며, corrected 결과를 amended 보고서
+      상태에 반영하는 시점도 야간 1회로 지연한다.
+    why: 문서는 Report.result_status를 임상의가 신뢰하는 권위 값이라고 선언한다. 그러나 결과 정정 후 다음 배치 전까지
+      보고서는 finalized로 남을 수 있어, 바로 그 권위 값이 현재 임상 결과를 잘못 표현한다. 독립 상태 두 개와 비동기 동기화는
+      단일 개념 권위 문서가 방지해야 할 상태 분기를 제도화한다.
+    how_to_fix: Result 상태를 정규 권위로 지정하고 Report 상태를 동기 파생하거나, 하나의 공통 상태 개념과 명시적 매핑·원자적
+      전이 규칙을 정의한다. 정정 시 임상의에게 노출되는 보고 상태와 배포 상태가 즉시 갱신되도록 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 결과·보고 상태의 신뢰 가능한 개념 권위를 제공하는 목적.
+      failure_condition: released Report의 Result.status가 corrected로 바뀐 뒤 야간 동기화가 실행되기 전.
+      impact: 임상의가 권위 값으로 신뢰하도록 명시된 Report.result_status가 실제 결과 정정 상태와 불일치하여 통합 소비자의
+        판단과 데이터 신뢰를 훼손한다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 동일한 결과 상태 의미를 Result와 Report에 독립 저장하고 비동기 배치로 일치시키는 이중 권위 설계.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 정정된 Result가 존재해도 Report.result_status는 다음 야간 배치까지 finalized일 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 이 지연은 Result.status와 Report.result_status를 별도 필드와 별도 어휘로 유지하는 설계의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 두 필드 중 Report 값은 임상의가 신뢰하는 권위 값으로 선언되어 있어 불일치가 사용자에게 직접 노출된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:80-83
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml — Test, Assay, notes
+    evidence_anchor: "Target: materialized-input.md:46-60,126-127. Value authority:
+      review-value-alignment-criteria.yaml:6-8 (criterion `user-request-intent`:
+      EMR/LIS 통합의 개념 권위 문서 적합성). value_type=purpose;
+      alignment_direction=misaligned."
+    claim: 주문 카탈로그와 수행 카탈로그의 관계를 정의하지 않은 채 신규 항목을 양쪽에 중복 등록하는 방침은 개념 권위를 두 곳으로 분산한다.
+    what: Test와 Assay가 별도 엔티티로 존재하지만 양자 간 관계나 변환 규칙이 없고, 검체 표현도 제한 enum과 자유 문자열로
+      다르다. 문서는 당분간 신규 항목을 두 카탈로그에 모두 등록하도록 한다.
+    why: EMR의 주문 단위와 LIS의 수행 단위를 연결하는 것이 통합 문서의 핵심인데, 현재 모델은 두 개념의 대응 관계보다 중복 운영을
+      선택한다. 이 국소적 임시 방편은 코드·명칭·검체 요구가 서로 달라질 수 있는 두 권위를 만들고 통합 매핑의 신뢰성을 약화한다.
+    how_to_fix: Test와 Assay의 구별을 유지하되 명시적인 `realized_by`/매핑 엔티티, 카디널리티, 유효기간과 공통 검체
+      용어 체계를 정의한다. 신규 항목은 한 카탈로그를 원천 권위로 삼고 다른 표현은 검증 가능한 투영으로 생성한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR 주문 개념과 LIS 수행 개념을 일관되게 연결하는 통합 개념 권위.
+      failure_condition: 신규 검사 항목을 Test와 Assay에 각각 등록하거나 두 카탈로그의 코드·검체 표현이 독립적으로 변경될 때.
+      impact: 대응 관계를 문서만으로 결정할 수 없어 구현별 임의 매핑과 카탈로그 드리프트가 발생하며, 개념 권위 문서로서의 실행 가능성이
+        떨어진다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:126-127
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 주문 단위 Test와 수행 단위 Assay 사이의 정규 관계 및 원천 권위를 결정하지 않고 중복 등록을 운영 정책으로 채택함.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 신규 항목은 Test와 Assay 양쪽에 등록되지만 두 엔티티 사이의 관계가 정의되어 있지 않다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+            - materialized-input.md:126-127
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 양쪽의 검체 표현 방식도 제한 enum과 자유 문자열로 달라 동일성 검증이 보장되지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:52-60
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 이는 두 카탈로그 중 어느 쪽도 단일 원천 권위로 정하지 않은 설계의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: 실제 EMR/LIS 카탈로그 소유권과 운영 매핑은 경계 밖이지만, 대상 문서 안에 정규 관계와 권위가 없다는 점은 확정 가능하다.
+  - candidate_id: axiology-candidate-003
+    target: clinical-lab-ontology.yaml — CriticalValue
+    evidence_anchor: "Target: materialized-input.md:100-106. Value authority:
+      review-value-alignment-criteria.yaml:6-8 (criterion `user-request-intent`:
+      운영 위험을 포함한 EMR/LIS 개념 권위 적합성). value_type=commitment;
+      alignment_direction=misaligned."
+    claim: 즉시 통보가 필요한 CriticalValue의 이행 증거를 단일 boolean과 외부 전화 기록 대장에 분산한 모델은
+      즉시성·수신자·책임 추적이라는 가치 약속을 보존하지 못한다.
+    what: CriticalValue는 통보 필요 범위로 정의되지만 특정 Result와 연결되지 않고, 통보 모델은 `notified`
+      boolean뿐이다. 통보 시각과 수신자는 온톨로지 밖 전화 기록 대장에 둔다.
+    why: "`notified=true`만으로는 어떤 결과를 언제 누구에게 통보했는지 통합 시스템이 해석하거나 검증할 수 없다. 즉시 통보라는
+      선언된 목적의 핵심 증거가 외부 비정형 권위에 남아 EMR/LIS 간 운영 책임과 상태 정합성을 확립할 수 없다."
+    how_to_fix: CriticalValue 정책과 실제 CriticalNotification 이벤트를 분리하고, 이벤트를
+      Result·환자/주문·발신자·수신자·통보 시각·확인 상태에 연결한다. 전화 기록은 이 이벤트의 채널별 증거로 참조하되 통보 완료의
+      정규 권위는 구조화된 이벤트로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 위험 결과의 즉시 통보 상태를 EMR/LIS가 공통으로 해석하고 운영상 신뢰할 수 있게 하는 개념 권위.
+      failure_condition: CriticalValue에 해당하는 결과가 발생하여 통보 여부, 시각 또는 수신자를 시스템 간 확인해야 할 때.
+      impact: boolean과 외부 대장만으로는 통보 이행과 책임을 재구성할 수 없어 지연·누락·오연결을 통합 모델이 탐지하거나 조정하지 못한다.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 통보를 독립적인 임상 워크플로 이벤트로 모델링하지 않고 정책 범위 객체의 boolean 속성과 외부 기록으로 축약함.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: CriticalValue에는 통보 완료 boolean만 있고 통보 시각과 수신자는 외부 전화 기록 대장에 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 해당 객체는 특정 Result와 연결하는 속성이나 관계도 갖지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:100-119
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 이는 즉시 통보 행위를 추적 가능한 이벤트로 모델링하지 않은 축약의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: 전화 기록 대장의 실제 품질과 접근성은 경계 밖이다. 다만 현재 온톨로지만으로 통보 사건을
+        식별·검증할 수 없다는 점은 대상에서 확인된다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 외부 임상 규정은 사용하지 않았으며, `임상의는 이 값을 신뢰한다`, `즉시 통보가 필요한`, `EMR/LIS 연동 설계의 개념 권위
+    문서`라는 대상 자체의 선언을 가치 판단의 맥락으로 사용했다.
+  - session_domain이 none이므로 특정 병원·지역의 보존기간, 통보 기한 또는 의료 규제 요건은 가정하지 않았다.
+validation:
+  unaddressable_candidates: []
