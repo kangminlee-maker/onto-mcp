@@ -1,0 +1,71 @@
+# Effort-bench pre-registration — REGISTERED manifest (adaptive-effort 설계 §4-1).
+#
+# Freeze: 이 파일의 git 커밋이 등록이다. 파일럿/확증의 어떤 리뷰도 이 커밋 이전에
+# dispatch되지 않았다. 등록 후 값 변경은 프로토콜 위반(fail-closed: 미충족/미평가
+# 술어 = NOT VALIDATED, 재해석 금지). 검증기/평가기: scripts/effort-bench-prereg.ts,
+# CI 분석기: scripts/effort-bench-itt-analyzer.ts.
+#
+# 결정 근거(전부 결정론 사전계산 — coverage-map-report.yaml, 커밋 b086a69 기준):
+# - zone 실현 노브: full=300(모든 fixture rendered_lines 99~128 < 300, 무절단 기준선),
+#   partial=60(4 fixture 전부 적격: material_out 3/3/3/4), low=40(4 fixture 전부
+#   적격: material_out 6/5/6/4). 80은 clinical-lab·credit-risk 부적격이라 제외.
+#   arm 실현: development-records/benchmark/effort-bench/arm-settings/ (confound-diff
+#   기계 증명 통과, 의도 축=max_embed_lines+전 seat effort만 상이).
+# - 최소 효과크기 앵커: 결정론 ceiling = 컷 밖 material / 전체 material.
+#   partial(60): min over fixtures = 3/9 ≈ 0.33 (logistics) → 등록 0.15 ≈ ceiling의 절반
+#   low(40):     min over fixtures = 4/8 = 0.50 (manufacturing) → 등록 0.30 = ceiling의 0.6배
+#   (ITT는 자발적 tool-read 회복으로 ceiling보다 감쇠 — 절반 수준을 검출 최소선으로 등록.
+#    관측 분포 참조 없음 — 등록 시점에 어떤 리뷰 점수도 존재하지 않는다.)
+# - 파일럿/확증 분리(R2-6): fixture cohort 4종은 여기서 동결. 파일럿(분산 추정 전용,
+#   clinical-lab-workflow·manufacturing-bom × {full, partial} × medium × R=3)의 데이터는
+#   확증 셀에 산입하지 않으며, 확증은 4-fixture 전체를 새 R≥3로 실행한다.
+# - effort {medium, high}: 등록 대비는 medium 주효과 2건 + recovery. high 셀은
+#   상호작용 탐색용 수집 대상이나 등록 술어에 불포함(별도 등록 없이는 결론 발화 금지).
+schema_version: effort-bench-prereg/1
+
+estimand: inline_budget_itt
+
+gate:
+  recall_cut: 1.0
+  precision_floor: 0.8
+
+coverage_levels: [full, partial, low]
+efforts: [medium, high]
+
+# 등록 fixture cohort — 두 평가기의 evaluation universe (선택적 이탈 = not_evaluable).
+fixtures: [clinical-lab-workflow, credit-risk-taxonomy, logistics-fulfillment, manufacturing-bom]
+
+cluster:
+  min_reps_per_cell: 3        # R — 벤치 자체 게이트(INV-BENCH-1 하한과 동일)
+  min_fixtures_per_level: 2   # INV-BENCH-1
+  judge_runs: 8               # K, 핀(judge effort=low) — 분석기가 정확 일치 강제
+
+analysis:
+  ci: cluster-bootstrap-by-review
+  multiplicity: all-registered-contrasts-must-hold
+
+aggregation: per_fixture_all
+
+contrasts:
+  - id: C1-coverage-main-medium
+    metric: recall_material
+    effort: medium
+    baseline_zone: full
+    treatment_zone: partial
+    direction: decrease
+    min_effect_recall_points: 0.15
+  - id: C2-coverage-main-medium-low
+    metric: recall_material
+    effort: medium
+    baseline_zone: full
+    treatment_zone: low
+    direction: decrease
+    min_effect_recall_points: 0.3
+
+recovery:
+  baseline_zone: full
+  restored_zone: full-restored
+  effort: medium
+  within_recall_points: 0.05
+
+fail_closed: true

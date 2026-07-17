@@ -119,7 +119,14 @@ async function persistEvidence(fixtureId: string, sessionRoot: string): Promise<
   }
   // review-record가 참조하는 준비 입력(target_snapshot_ref/materialized_input_ref)도
   // 상대 구조를 유지해 영속화 — finding의 materialized-input.md:NN 인용을 repo만으로 추적.
-  for (const prep of ["target-snapshot.md", "materialized-input.md"]) {
+  // review-context-manifest.yaml은 embed_budget witness(effective+source)를 담는다 —
+  // effort-bench run admission(scripts/effort-bench-run-admission.ts)이 소비하므로
+  // 세션 tmp가 청소되기 전에 evidence로 영속화해야 벤치 채택 검증이 가능하다.
+  for (const prep of [
+    "target-snapshot.md",
+    "materialized-input.md",
+    "review-context-manifest.yaml",
+  ]) {
     try {
       const prepDst = path.join(dst, "execution-preparation");
       await fs.mkdir(prepDst, { recursive: true });
