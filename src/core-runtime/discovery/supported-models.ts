@@ -73,6 +73,14 @@ export const CONTRACTED_ROLES: readonly SupportedModelRole[] = [
   // design §4) — per-check pass-rate vs a contemporaneous baseline arm,
   // absolute core-check floors, pinned check universe, R7 human curation.
   "review",
+  // Evidence contract (INVARIANT-CHANGE: INV-MODEL-1, owner directive
+  // 2026-07-17 — sol reconstruct evidence run): golden full-pipeline LIVE
+  // completion with the model at the confirmation_provider seat, cited as a
+  // human-curated benchmark record — the same discipline as `author`
+  // (whose contract is golden full-pipeline completion at the semantic_author
+  // seat). One live run with the candidate on both actor seats may evidence
+  // both roles.
+  "confirmation_provider",
 ];
 
 const SupportedModelEntrySchema = z
@@ -167,6 +175,38 @@ export const RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH =
   "reconstruct.execution.actors.semantic_map_synthesize.llm";
 export const RECONSTRUCT_DISPATCH_FALLBACK_LLM_ROUTE_PATH =
   "reconstruct.execution.dispatch_fallback.llm";
+export const RECONSTRUCT_SEMANTIC_AUTHOR_LLM_ROUTE_PATH =
+  "reconstruct.execution.actors.semantic_author.llm";
+export const RECONSTRUCT_CONFIRMATION_PROVIDER_LLM_ROUTE_PATH =
+  "reconstruct.execution.actors.confirmation_provider.llm";
+
+/**
+ * Build the gate options for a ROLE-EXPANSION evidence run: a REGISTERED
+ * (provider, model) whose entry does not cover the required role of the seats
+ * being evidenced (e.g. a review-certified model gathering author /
+ * confirmation_provider evidence). Same exact-allowlist discipline as the
+ * unregistered bench-candidate shape — the allowance passes ONLY the named
+ * pair at the named route paths, and ONLY when a bench harness explicitly
+ * hands these options to the gate. Product surfaces (settings/API/MCP) never
+ * construct gate options, so their posture is unchanged.
+ * (INVARIANT-CHANGE: INV-MODEL-1 — B7 extended to role-expansion candidates,
+ * owner directive 2026-07-17.)
+ */
+export function roleExpansionBenchGateOptions(args: {
+  provider: string;
+  model: string;
+  allowedRoutePaths: readonly string[];
+}): SupportedModelGateOptions {
+  return {
+    benchCandidates: [
+      {
+        provider: args.provider,
+        model: args.model,
+        allowedRoutePaths: args.allowedRoutePaths,
+      },
+    ],
+  };
+}
 
 /**
  * A model dispatch whose route must be gate-validated. The single runtime-owned
@@ -214,9 +254,9 @@ export function requiredSupportedModelRoleForDispatch(
   if (dispatch.kind === "semantic_map_synthesize") return "semantic_map_synthesize";
   if (dispatch.kind === "semantic_map_verify") return "semantic_map_verify";
   switch (dispatch.path) {
-    case "reconstruct.execution.actors.semantic_author.llm":
+    case RECONSTRUCT_SEMANTIC_AUTHOR_LLM_ROUTE_PATH:
       return "author";
-    case "reconstruct.execution.actors.confirmation_provider.llm":
+    case RECONSTRUCT_CONFIRMATION_PROVIDER_LLM_ROUTE_PATH:
       return "confirmation_provider";
     case RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH:
       return "semantic_map_synthesize";
@@ -459,15 +499,19 @@ export function supportedModelMaxOutputTokens(
   return supportedModelEntryFor(registry, provider, model)?.max_output_tokens;
 }
 
-function isAllowedUnregisteredBenchCandidate(
+/**
+ * Exact-allowlist bench allowance (B7): passes only the named (provider,
+ * model) at the named route paths. Covers BOTH candidate shapes under one
+ * discipline — an UNREGISTERED pair, and a REGISTERED pair whose entry does
+ * not cover the route's required role (role-expansion evidence run;
+ * INVARIANT-CHANGE: INV-MODEL-1, owner directive 2026-07-17). The caller
+ * consults this only for routes the registry does not already cover.
+ */
+function isAllowedBenchCandidate(
   route: EffectiveModelRoute,
-  registry: SupportedModelRegistry,
   options: SupportedModelGateOptions | undefined,
 ): boolean {
   if (route.provider === undefined || route.model === undefined) return false;
-  if (supportedModelEntryFor(registry, route.provider, route.model) !== undefined) {
-    return false;
-  }
   return (options?.benchCandidates ?? []).some(
     (candidate) =>
       candidate.provider === route.provider &&
@@ -503,7 +547,10 @@ export function isSupportedModelRoute(
  * leniently accepted — the route must resolve to a verified pair, otherwise
  * the runtime would dispatch a route the gate cannot verify. A pair that is
  * registered but role-restricted (entry.roles present) is rejected at any
- * route whose requiredRole it does not list. */
+ * route whose requiredRole it does not list — UNLESS an explicit bench
+ * allowance names exactly that pair at exactly that route path (B7
+ * role-expansion candidate; options are only ever supplied by bench
+ * harnesses, never by product surfaces). */
 export function assertSupportedModelRoutes(
   routes: ReadonlyArray<EffectiveModelRoute>,
   registry: SupportedModelRegistry,
@@ -512,8 +559,13 @@ export function assertSupportedModelRoutes(
   const violations = routes.filter((route) => {
     if (route.provider === undefined || route.model === undefined) return true;
     const entry = supportedModelEntryFor(registry, route.provider, route.model);
-    if (entry !== undefined) return !entryCoversRole(entry, route.requiredRole);
-    return !isAllowedUnregisteredBenchCandidate(route, registry, options);
+    if (entry !== undefined && entryCoversRole(entry, route.requiredRole)) {
+      return false;
+    }
+    // Not covered by the registry: an unregistered pair, or a registered pair
+    // lacking the required role (role-expansion candidate). Both pass only via
+    // the same explicit exact-allowlist bench allowance (B7).
+    return !isAllowedBenchCandidate(route, options);
   });
   if (violations.length === 0) return;
   const detail = violations

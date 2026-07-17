@@ -9,6 +9,7 @@ import {
   parseSupportedModelRegistry,
   RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH,
   requiredSupportedModelRoleForDispatch,
+  roleExpansionBenchGateOptions,
   supportedModelMaxOutputTokens,
   type SupportedModelDispatch,
   type SupportedModelRegistry,
@@ -288,6 +289,20 @@ describe("parseSupportedModelRegistry (roles contract)", () => {
   it("loads an entry without roles (grandfathered full-route allowance)", () => {
     const parsed = parseSupportedModelRegistry(entry({}));
     expect(parsed.supported_models[0]?.roles).toBeUndefined();
+  });
+
+  // confirmation_provider joined CONTRACTED_ROLES (INVARIANT-CHANGE:
+  // INV-MODEL-1, owner directive 2026-07-17): its evidence contract is a
+  // golden full-pipeline LIVE completion with the model at the
+  // confirmation_provider seat — same discipline as `author`.
+  it("loads an entry restricted to the contracted author/confirmation roles", () => {
+    const parsed = parseSupportedModelRegistry(
+      entry({ roles: ["author", "confirmation_provider"] }),
+    );
+    expect(parsed.supported_models[0]?.roles).toEqual([
+      "author",
+      "confirmation_provider",
+    ]);
   });
 
   // N6: a sealed-vocabulary role WITHOUT a defined evidence contract must not
@@ -669,16 +684,57 @@ describe("assertSupportedModelRoutes (role coverage)", () => {
     ).toThrow(/unresolved model/);
   });
 
-  it("does not rescue registered role mismatches with the bench option", () => {
+  // SPEC CHANGE (INVARIANT-CHANGE: INV-MODEL-1, owner directive 2026-07-17 —
+  // sol reconstruct evidence run): B7 now also passes a REGISTERED pair whose
+  // entry lacks the required role, under the SAME exact-allowlist discipline
+  // (role-expansion evidence runs). Previously this case was categorically
+  // rejected; the product posture is unchanged because product surfaces never
+  // supply gate options (see the no-options test below).
+  it("rescues a registered role mismatch ONLY with an exact role-expansion allowance", () => {
+    const allowance = roleExpansionBenchGateOptions({
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+      allowedRoutePaths: [AUTHOR_SEAT],
+    });
+    // exact pair + exact route → passes
+    expect(() =>
+      assertSupportedModelRoutes([haiku(AUTHOR_SEAT)], roleRestricted, allowance)
+    ).not.toThrow();
+    // same allowance, different (non-allowed) route → still rejected
+    expect(() =>
+      assertSupportedModelRoutes([haiku(CONFIRM_SEAT)], roleRestricted, allowance)
+    ).toThrow(/certified for \[semantic_map_synthesize\], seat requires confirmation_provider/);
+    // allowance for a different model does not leak to this pair
     expect(() =>
       assertSupportedModelRoutes([haiku(AUTHOR_SEAT)], roleRestricted, {
         benchCandidates: [{
           provider: "anthropic",
-          model: "claude-haiku-4-5-20251001",
+          model: "some-other-model",
           allowedRoutePaths: [AUTHOR_SEAT],
         }],
       })
+    ).toThrow(/seat requires author/);
+  });
+
+  it("still rejects a registered role mismatch on the product path (no options)", () => {
+    expect(() =>
+      assertSupportedModelRoutes([haiku(AUTHOR_SEAT)], roleRestricted)
     ).toThrow(/certified for \[semantic_map_synthesize\], seat requires author/);
+  });
+
+  it("role-expansion allowance never rescues an unresolved provider/model", () => {
+    const allowance = roleExpansionBenchGateOptions({
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+      allowedRoutePaths: [AUTHOR_SEAT],
+    });
+    expect(() =>
+      assertSupportedModelRoutes(
+        [route(undefined, "claude-haiku-4-5-20251001", AUTHOR_SEAT)],
+        roleRestricted,
+        allowance,
+      )
+    ).toThrow(/unresolved provider/);
   });
 
   it("gates B4 candidates through normal support first and bench allowance only for unregistered pairs", () => {

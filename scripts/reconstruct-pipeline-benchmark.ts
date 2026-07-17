@@ -28,6 +28,11 @@ import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
 import { createOntoReconstructCoreApi } from "../src/core-api/reconstruct-api.js";
 import {
+  RECONSTRUCT_CONFIRMATION_PROVIDER_LLM_ROUTE_PATH,
+  RECONSTRUCT_SEMANTIC_AUTHOR_LLM_ROUTE_PATH,
+  roleExpansionBenchGateOptions,
+} from "../src/core-runtime/discovery/supported-models.js";
+import {
   gradeBenchmarkEvidence,
   requestedEffortForRealization,
   requestedJudgeOverrideForRealization,
@@ -77,6 +82,15 @@ interface HarnessOptions {
    */
   judgeEffort?: string;
   judgeModel?: string;
+  /**
+   * B7 role-expansion evidence candidate (live-only): a REGISTERED
+   * (provider, model) whose entry lacks the author/confirmation_provider roles,
+   * allowed for THIS run at exactly the two reconstruct actor seats so a
+   * golden full-pipeline completion can evidence those roles
+   * (INVARIANT-CHANGE: INV-MODEL-1 role-expansion allowance). Recorded in the
+   * report as role_expansion_candidate.
+   */
+  roleExpansionCandidate?: { provider: string; model: string };
   outputPath?: string;
   keepTmp: boolean;
   /** Re-derive a corrected report from an existing record without re-running. */
@@ -150,6 +164,10 @@ function usage(): string {
     "                         reasoning effort. live-only.",
     "  --judge-model <id>     Opt-in: swap the judge MODEL (on the author's provider).",
     "                         live-only; unsupported model degrades to the author.",
+    "  --role-expansion-candidate <provider>/<model>",
+    "                         B7 evidence run: allow a registered pair lacking the",
+    "                         author/confirmation_provider roles at exactly the two",
+    "                         reconstruct actor seats. live-only; recorded in-report.",
     "  --reproject-from <p>   Re-derive a corrected report from an existing record",
     "                         (no re-execution); writes to --output or in place.",
     "  --output <path>        JSON output path (md sibling is derived)",
@@ -193,6 +211,18 @@ function parseOptions(argv: string[]): HarnessOptions {
       const judgeModel = argv[++index];
       if (!judgeModel) throw new Error("--judge-model requires a value");
       options.judgeModel = judgeModel;
+    } else if (arg === "--role-expansion-candidate") {
+      const spec = argv[++index];
+      const slash = spec?.indexOf("/") ?? -1;
+      if (!spec || slash < 1 || slash === spec.length - 1) {
+        throw new Error(
+          "--role-expansion-candidate expects <provider>/<model>",
+        );
+      }
+      options.roleExpansionCandidate = {
+        provider: spec.slice(0, slash),
+        model: spec.slice(slash + 1),
+      };
     } else if (arg === "--reproject-from") {
       const from = argv[++index];
       if (!from) throw new Error("--reproject-from requires a path");
@@ -224,6 +254,14 @@ function parseOptions(argv: string[]): HarnessOptions {
     // The judge override only affects real provider calls; mock ignores it.
     // Reject for mock so a record never encodes an unapplied judge override.
     throw new Error("--judge-effort/--judge-model apply only to --realization live");
+  }
+  if (
+    options.roleExpansionCandidate !== undefined &&
+    options.realization !== "live"
+  ) {
+    // Mock runs skip the INV-MODEL-1 gate entirely; rejecting the flag for
+    // mock keeps every record's allowance disclosure truthful.
+    throw new Error("--role-expansion-candidate applies only to --realization live");
   }
   // No hard-coded effort default (INV-CFG-1): when --effort is omitted the
   // settings chain governs the provider effort and applied_effort is recorded
@@ -326,6 +364,7 @@ async function executeRun(args: {
   effort?: string;
   judgeEffort?: string;
   judgeModel?: string;
+  roleExpansionCandidate?: { provider: string; model: string };
   runIndex: number;
   commit: string;
   keepTmp: boolean;
@@ -335,7 +374,22 @@ async function executeRun(args: {
   const startedAt = new Date().toISOString();
   const startedMs = Date.now();
   try {
-    const api = createOntoReconstructCoreApi({ ontoHome: PROJECT_ROOT });
+    // B7 role-expansion allowance: exactly the candidate pair at exactly the
+    // two actor seats being evidenced — nothing else changes at the gate.
+    const gateOptions = args.roleExpansionCandidate
+      ? roleExpansionBenchGateOptions({
+        provider: args.roleExpansionCandidate.provider,
+        model: args.roleExpansionCandidate.model,
+        allowedRoutePaths: [
+          RECONSTRUCT_SEMANTIC_AUTHOR_LLM_ROUTE_PATH,
+          RECONSTRUCT_CONFIRMATION_PROVIDER_LLM_ROUTE_PATH,
+        ],
+      })
+      : undefined;
+    const api = createOntoReconstructCoreApi({
+      ontoHome: PROJECT_ROOT,
+      ...(gateOptions ? { supportedModelGateOptions: gateOptions } : {}),
+    });
     const result = await api.runReconstruct({
       projectRoot,
       targetRefs: [spec.target_path],
@@ -546,6 +600,7 @@ interface BuildReportArgs {
   effort?: string;
   judgeEffort?: string;
   judgeModel?: string;
+  roleExpansionCandidate?: { provider: string; model: string };
   fixtureIds: ReconstructQualityGateFixtureId[];
   repetitions: number;
   commit: string;
@@ -608,6 +663,12 @@ function buildReport(args: BuildReportArgs): Record<string, unknown> {
       args.judgeEffort,
       args.judgeModel,
     ),
+    // B7 role-expansion allowance disclosure (live-only, null when none): the
+    // record must say when its completion evidence ran under a bench
+    // allowance instead of a registry-covered seat.
+    role_expansion_candidate: args.roleExpansionCandidate
+      ? `${args.roleExpansionCandidate.provider}/${args.roleExpansionCandidate.model}`
+      : null,
     fixtures: args.fixtureIds,
     repetitions: args.repetitions,
     generated_at: new Date().toISOString(),
@@ -801,6 +862,9 @@ async function main(): Promise<void> {
         ...(options.effort ? { effort: options.effort } : {}),
         ...(options.judgeEffort ? { judgeEffort: options.judgeEffort } : {}),
         ...(options.judgeModel ? { judgeModel: options.judgeModel } : {}),
+        ...(options.roleExpansionCandidate
+          ? { roleExpansionCandidate: options.roleExpansionCandidate }
+          : {}),
         fixtureIds: options.fixtureIds,
         repetitions: options.runs,
         commit,
@@ -827,6 +891,9 @@ async function main(): Promise<void> {
               fixtureId,
               realization: options.realization,
               ...(options.effort ? { effort: options.effort } : {}),
+              ...(options.roleExpansionCandidate
+                ? { roleExpansionCandidate: options.roleExpansionCandidate }
+                : {}),
               ...(options.judgeEffort ? { judgeEffort: options.judgeEffort } : {}),
               ...(options.judgeModel ? { judgeModel: options.judgeModel } : {}),
               runIndex,
@@ -868,6 +935,9 @@ async function main(): Promise<void> {
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.judgeEffort ? { judgeEffort: options.judgeEffort } : {}),
     ...(options.judgeModel ? { judgeModel: options.judgeModel } : {}),
+    ...(options.roleExpansionCandidate
+      ? { roleExpansionCandidate: options.roleExpansionCandidate }
+      : {}),
     fixtureIds: options.fixtureIds,
     repetitions: options.runs,
     commit,
