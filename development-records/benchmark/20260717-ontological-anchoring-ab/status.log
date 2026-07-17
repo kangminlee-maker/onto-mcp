@@ -1,0 +1,10 @@
+[21:22:11] A/B start
+[21:22:11] START code-off project=/tmp/onto-ab-code-off-fA1gCN
+[21:32:34] DONE  code-off rc=0 session=/tmp/onto-ab-code-off-fA1gCN/.onto/review/20260717-d7b236f4/
+[21:32:34] START code-on project=/tmp/onto-ab-code-on-1ISKef
+[21:46:35] DONE  code-on rc=0 session=/tmp/onto-ab-code-on-1ISKef/.onto/review/20260717-e87f9480/
+[21:46:35] START xlsx-off project=/tmp/onto-ab-xlsx-off-qzz1VK
+[21:59:20] DONE  xlsx-off rc=0 session=/tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/
+[21:59:20] START xlsx-on project=/tmp/onto-ab-xlsx-on-vwp1Z4
+[22:09:57] DONE  xlsx-on rc=0 session=/tmp/onto-ab-xlsx-on-vwp1Z4/.onto/review/20260717-13297536/
+[22:09:57] A/B complete

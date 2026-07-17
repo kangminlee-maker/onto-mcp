@@ -1,0 +1,1125 @@
+schema_version: 1
+session_id: 20260717-13297536
+findings:
+  - finding_id: finding-001
+    lens_id: logic
+    source_ref: .onto/review/20260717-13297536/round1/logic.findings.yaml#logic-candidate-001
+    target: budget.xlsx — Summary!B1 grand-total formula
+    evidence_anchor: "materialized-input.md: formulas lists Summary!B1 as
+      SUM(Data!B2:B4); Data inventory shows five Amount values corresponding to
+      Data rows 2–6; Summary contract states “Grand Total (must aggregate ALL
+      Data rows)”"
+    claim: The declared all-row aggregation rule and the implemented grand-total
+      formula cannot both be satisfied.
+    lens_rationale_summary: A total over three of five Data amounts is logically
+      incompatible with the explicit requirement to aggregate every Data row.
+      The resulting total can understate spending and is not trustworthy for the
+      declared spending decision.
+    proposed_action: Change the formula to include the complete Amount range, at
+      minimum SUM(Data!B2:B6), and verify recalculation against all five Data
+      records.
+    affected_purpose: "Declared contract: Summary sheet totals must faithfully
+      aggregate every Data sheet row for a spending decision."
+    failure_condition: Whenever Data!B5 or Data!B6 contains an amount, Summary!B1
+      omits it from the grand total.
+    impact: The decision-facing total is incomplete, directly weakening trust in the
+      workbook’s primary result.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/logic.findings.yaml#logic-candidate-001
+      - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+      - materialized-input.md — Data has five non-empty Amount values across
+        rows 2–6
+      - materialized-input.md — Summary column contract requires aggregating ALL
+        Data rows
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Declared contract: Summary sheet totals must faithfully
+        aggregate every Data sheet row for a spending decision."
+      failure_condition: Whenever Data!B5 or Data!B6 contains an amount, Summary!B1
+        omits it from the grand total.
+      impact: The decision-facing total is incomplete, directly weakening trust in the
+        workbook’s primary result.
+      evidence_refs:
+        - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+        - materialized-input.md — Data has five non-empty Amount values across
+          rows 2–6
+        - materialized-input.md — Summary column contract requires aggregating
+          ALL Data rows
+    causal_path:
+      root_cause_candidate: The grand-total formula uses a fixed partial source range
+        ending at Data!B4 instead of the full Data Amount range ending at B6.
+      root_cause_step_id: finding-001.cause-002
+      steps:
+        - cause_id: finding-001.cause-001
+          claim: Summary!B1 omits two populated Data Amount rows from its result.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+            - materialized-input.md — Data dimensions and five non-empty Amount
+              values
+        - cause_id: finding-001.cause-002
+          claim: The omission is caused by the formula’s range boundary stopping at B4
+            while populated Data rows continue through B6.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md — formula and Data structural inventory
+      unresolved_beyond_evidence: Cell values and recalculated results were not
+        evaluated, so the exact monetary understatement is unknown; the range
+        contradiction itself is established.
+  - finding_id: finding-002
+    lens_id: logic
+    source_ref: .onto/review/20260717-13297536/round1/logic.findings.yaml#logic-candidate-002
+    target: budget.xlsx — Summary!B2 cross-sheet formula
+    evidence_anchor: "materialized-input.md: Summary!B2 formula is 'Archive'!B2,
+      while workbook inventory lists only Data and Summary sheets"
+    claim: Summary!B2 requires a sheet that the same workbook inventory establishes
+      does not exist.
+    lens_rationale_summary: The reference and the workbook’s two-sheet structure are
+      not simultaneously satisfiable. This creates a broken Summary formula and
+      further undermines confidence that the decision-facing sheet is internally
+      coherent.
+    proposed_action: Restore the intended Archive sheet or replace Summary!B2 with a
+      reference to an existing authoritative cell; then recalculate and verify
+      the Summary output.
+    affected_purpose: "Review goal: cross-sheet reference integrity and trustworthy
+      Summary totals for a spending decision."
+    failure_condition: When Summary!B2 is evaluated in the inventoried workbook, its
+      target sheet cannot be resolved.
+    impact: A broken formula on the Summary sheet makes the workbook visibly
+      inconsistent and weakens confidence in its decision-facing calculations.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/logic.findings.yaml#logic-candidate-002
+      - materialized-input.md — Summary!B2 formula 'Archive'!B2
+      - materialized-input.md — sheets list contains only Data and Summary
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Review goal: cross-sheet reference integrity and trustworthy
+        Summary totals for a spending decision."
+      failure_condition: When Summary!B2 is evaluated in the inventoried workbook, its
+        target sheet cannot be resolved.
+      impact: A broken formula on the Summary sheet makes the workbook visibly
+        inconsistent and weakens confidence in its decision-facing calculations.
+      evidence_refs:
+        - materialized-input.md — Summary!B2 formula 'Archive'!B2
+        - materialized-input.md — sheets list contains only Data and Summary
+    causal_path:
+      root_cause_candidate: Summary!B2 retains a cross-sheet reference to an Archive
+        worksheet absent from the workbook.
+      root_cause_step_id: finding-002.cause-002
+      steps:
+        - cause_id: finding-002.cause-001
+          claim: Summary!B2 cannot resolve its referenced worksheet.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md — formula 'Archive'!B2 and two-sheet
+              inventory
+        - cause_id: finding-002.cause-002
+          claim: The unresolved reference is caused by the formula targeting Archive while
+            the workbook defines only Data and Summary.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md — sheets inventory and formulas inventory
+      unresolved_beyond_evidence: The bounded evidence does not establish whether
+        Archive was deleted or the formula was misaimed; the direct reference
+        conflict is established.
+  - finding_id: finding-003
+    lens_id: structure
+    source_ref: .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-001
+    target: budget.xlsx — Summary!B1 grand-total connection
+    evidence_anchor: "materialized-input.md: Data has five populated Amount rows at
+      B2:B6, while Summary!B1 contains SUM(Data!B2:B4)."
+    claim: The grand-total path leaves Data rows 5 and 6 structurally disconnected.
+    lens_rationale_summary: The confirmed contract requires the Summary total to
+      aggregate every Data row. Because two populated Amount rows are outside
+      the referenced range, the total cannot satisfy that contract and is unsafe
+      for the spending decision.
+    proposed_action: Change the aggregation to include Data!B2:B6, preferably
+      through a correctly defined expandable Amount range or table, then
+      recalculate in Excel and reconcile the total against all five source rows.
+    affected_purpose: "Confirmed user-request-intent criterion: Summary totals must
+      faithfully aggregate every Data row for a spending decision."
+    failure_condition: Whenever Data!B5 or Data!B6 contains an amount, Summary!B1 omits it.
+    impact: The decision-facing total is structurally incomplete, so it can
+      understate or otherwise misrepresent total spending.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-001
+      - materialized-input.md — Data dimensions and populated Amount column
+      - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+      - review-value-alignment-criteria.yaml — criterion user-request-intent
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed user-request-intent criterion: Summary totals must
+        faithfully aggregate every Data row for a spending decision."
+      failure_condition: Whenever Data!B5 or Data!B6 contains an amount, Summary!B1 omits it.
+      impact: The decision-facing total is structurally incomplete, so it can
+        understate or otherwise misrepresent total spending.
+      evidence_refs:
+        - materialized-input.md — Data dimensions and populated Amount column
+        - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+        - review-value-alignment-criteria.yaml — criterion user-request-intent
+    causal_path:
+      root_cause_candidate: Summary!B1 uses a fixed source range ending at Data row 4
+        although the populated source extends through row 6.
+      root_cause_step_id: finding-003.cause-002
+      steps:
+        - cause_id: finding-003.cause-001
+          claim: Data!B5:B6 are not connected to the Summary grand-total formula.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md — Data Amount rows B2:B6 and Summary!B1
+              formula
+        - cause_id: finding-003.cause-002
+          claim: The disconnected rows result from SUM(Data!B2:B4) terminating before the
+            last two populated Data rows.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md — formula SUM(Data!B2:B4)
+            - materialized-input.md — Data dimensions 6 rows and Amount
+              non_empty=1.00 over 5/5 values
+      unresolved_beyond_evidence: null
+  - finding_id: finding-004
+    lens_id: structure
+    source_ref: .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-002
+    target: budget.xlsx — Summary!B2 cross-sheet connection
+    evidence_anchor: "materialized-input.md: Summary!B2 contains 'Archive'!B2, but
+      the workbook inventory lists only Data and Summary sheets."
+    claim: Summary!B2 points to a worksheet that does not exist.
+    lens_rationale_summary: This is a broken required relationship inside the
+      decision-facing Summary sheet. It prevents that Summary formula from
+      resolving and weakens trust in the workbook's cross-sheet integrity,
+      although the bounded inventory does not establish whether B2 participates
+      in the grand total.
+    proposed_action: Restore the intended Archive sheet or retarget/remove
+      Summary!B2 after confirming its intended source; then recalculate in Excel
+      and scan for formula errors.
+    affected_purpose: Review goals of cross_sheet_reference_integrity and
+      formula_integrity supporting trustworthy Summary totals.
+    failure_condition: When Summary!B2 is evaluated, its referenced Archive worksheet is absent.
+    impact: A broken formula on the Summary sheet makes the decision surface
+      internally incomplete and undermines confidence in its calculations.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-002
+      - "materialized-input.md — sheets: Data, Summary"
+      - materialized-input.md — Summary!B2 formula 'Archive'!B2
+      - review-target-profile.yaml — cross_sheet_reference_integrity and
+        formula_integrity goals
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Review goals of cross_sheet_reference_integrity and
+        formula_integrity supporting trustworthy Summary totals.
+      failure_condition: When Summary!B2 is evaluated, its referenced Archive worksheet is absent.
+      impact: A broken formula on the Summary sheet makes the decision surface
+        internally incomplete and undermines confidence in its calculations.
+      evidence_refs:
+        - "materialized-input.md — sheets: Data, Summary"
+        - materialized-input.md — Summary!B2 formula 'Archive'!B2
+        - review-target-profile.yaml — cross_sheet_reference_integrity and
+          formula_integrity goals
+    causal_path:
+      root_cause_candidate: The workbook contains no Archive worksheet while
+        Summary!B2 retains a reference to Archive!B2.
+      root_cause_step_id: finding-004.cause-002
+      steps:
+        - cause_id: finding-004.cause-001
+          claim: Summary!B2 has no existing worksheet endpoint for its cross-sheet
+            reference.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md — Summary!B2 formula and two-sheet inventory
+        - cause_id: finding-004.cause-002
+          claim: The disconnected endpoint is caused by the formula targeting Archive even
+            though only Data and Summary exist.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "materialized-input.md — sheets: 2, Data and Summary"
+            - materialized-input.md — formula 'Archive'!B2
+      unresolved_beyond_evidence: The bounded structural inventory does not reveal
+        whether Archive was deleted, renamed, or referenced accidentally.
+  - finding_id: finding-005
+    lens_id: structure
+    source_ref: .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-003
+    target: budget.xlsx — GrandTotalRange defined name
+    evidence_anchor: "materialized-input.md: GrandTotalRange points to
+      Data!$A$2:$A$6, while the only formulas reference Data!B2:B4 and
+      Archive!B2 directly."
+    claim: GrandTotalRange is an orphaned workbook element.
+    lens_rationale_summary: The unused name provides no active structural link
+      between the Data rows and Summary totals. Its presence can mislead
+      maintainers into believing the total is governed by a centralized range
+      when the live formula is hard-coded elsewhere.
+    proposed_action: Either redefine the name over the intended Amount cells and use
+      it in the Summary aggregation, or remove it if it has no intended role.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: The unused name provides no active structural link between the Data rows
+      and Summary totals. Its presence can mislead maintainers into believing
+      the total is governed by a centralized range when the live formula is
+      hard-coded elsewhere.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-003
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-006
+    lens_id: dependency
+    source_ref: .onto/review/20260717-13297536/round1/dependency.findings.yaml#dependency-candidate-001
+    target: budget.xlsx — Summary!B1 grand-total dependency
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md: Summary!B1 contains SUM(Data!B2:B4), while Data extends
+      through row 6 with five populated Amount values"
+    claim: The grand-total dependency stops at Data row 4 and therefore omits later
+      Data rows.
+    lens_rationale_summary: The declared spending-decision contract requires every
+      Data row to flow into the Summary total. The directed dependency from
+      Summary!B1 reaches only a truncated subset, so changes or amounts in the
+      omitted rows cannot affect the reported grand total.
+    proposed_action: Change the total to cover the complete Amount range, minimally
+      =SUM(Data!B2:B6). Prefer a table column or correctly defined dynamic
+      amount range if rows will be appended, then recalculate and verify against
+      an independent sum of all five Amount cells.
+    affected_purpose: "Confirmed user-request-intent criterion: Summary totals must
+      faithfully aggregate every Data sheet row for a spending decision."
+    failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount, or
+      either value changes, Summary!B1 does not incorporate that amount.
+    impact: The displayed grand total can materially understate or misstate the
+      budget and directly mislead the declared spending decision.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/dependency.findings.yaml#dependency-candidate-001
+      - "materialized-input.md — formula inventory: Summary!B1 = SUM(Data!B2:B4)"
+      - materialized-input.md — Data dimensions are 6 rows × 2 columns with five
+        populated Amount values
+      - materialized-input.md — GrandTotalRange spans Data rows 2–6,
+        corroborating the populated row extent
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed user-request-intent criterion: Summary totals must
+        faithfully aggregate every Data sheet row for a spending decision."
+      failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount, or
+        either value changes, Summary!B1 does not incorporate that amount.
+      impact: The displayed grand total can materially understate or misstate the
+        budget and directly mislead the declared spending decision.
+      evidence_refs:
+        - "materialized-input.md — formula inventory: Summary!B1 =
+          SUM(Data!B2:B4)"
+        - materialized-input.md — Data dimensions are 6 rows × 2 columns with
+          five populated Amount values
+        - materialized-input.md — GrandTotalRange spans Data rows 2–6,
+          corroborating the populated row extent
+    causal_path:
+      root_cause_candidate: Summary!B1 is wired to a hard-coded partial source range
+        ending at Data row 4 rather than to the complete set of Amount rows.
+      root_cause_step_id: finding-006.cause-002
+      steps:
+        - cause_id: finding-006.cause-001
+          claim: The Summary grand total fails to depend on every populated Data amount
+            row.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md — Summary!B1 formula and Data row inventory
+        - cause_id: finding-006.cause-002
+          claim: Its only aggregation dependency is SUM(Data!B2:B4), which excludes rows 5
+            and 6.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "materialized-input.md — formula inventory: SUM(Data!B2:B4)"
+            - materialized-input.md — Data dimensions and GrandTotalRange row
+              extent through row 6
+      unresolved_beyond_evidence: Cell values and recalculated results were not
+        evaluated, so the exact monetary understatement is unknown; the
+        dependency omission itself is structurally confirmed.
+  - finding_id: finding-007
+    lens_id: dependency
+    source_ref: .onto/review/20260717-13297536/round1/dependency.findings.yaml#dependency-candidate-002
+    target: budget.xlsx — Summary!B2 cross-sheet dependency
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md: Summary!B2 contains 'Archive'!B2, but the workbook
+      inventory lists only Data and Summary sheets"
+    claim: Summary!B2 depends on a worksheet that does not exist in the workbook.
+    lens_rationale_summary: This directed reference has no in-workbook producer. On
+      recalculation or cache invalidation it cannot reliably supply a value, and
+      any currently displayed cached value is not traceable to a live source
+      sheet.
+    proposed_action: Either restore the intended Archive sheet and its B2 source or
+      redirect Summary!B2 to the correct existing source. Recalculate the
+      workbook afterward and verify that the cell resolves without a reference
+      error.
+    affected_purpose: Confirmed user-request-intent criterion and review goals for
+      trustworthy Summary totals and cross-sheet reference integrity.
+    failure_condition: When Summary!B2 is recalculated or its cached result is
+      invalidated, the referenced Archive!B2 source is unavailable in the
+      workbook.
+    impact: A Summary-derived value may fail or remain stale, weakening traceability
+      and trust in the figures used for the spending decision.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/dependency.findings.yaml#dependency-candidate-002
+      - "materialized-input.md — formula inventory: Summary!B2 = 'Archive'!B2"
+      - materialized-input.md — workbook sheet inventory contains only Data and
+        Summary
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Confirmed user-request-intent criterion and review goals for
+        trustworthy Summary totals and cross-sheet reference integrity.
+      failure_condition: When Summary!B2 is recalculated or its cached result is
+        invalidated, the referenced Archive!B2 source is unavailable in the
+        workbook.
+      impact: A Summary-derived value may fail or remain stale, weakening traceability
+        and trust in the figures used for the spending decision.
+      evidence_refs:
+        - "materialized-input.md — formula inventory: Summary!B2 = 'Archive'!B2"
+        - materialized-input.md — workbook sheet inventory contains only Data
+          and Summary
+    causal_path:
+      root_cause_candidate: Summary!B2 retains a cross-sheet dependency on an absent
+        Archive worksheet.
+      root_cause_step_id: finding-007.cause-002
+      steps:
+        - cause_id: finding-007.cause-001
+          claim: Summary!B2 has an unresolved in-workbook source dependency.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md — Summary!B2 cross-sheet formula and
+              workbook sheet list
+        - cause_id: finding-007.cause-002
+          claim: The formula targets Archive!B2, but Archive is absent from the
+            authoritative two-sheet inventory.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md — 'Archive'!B2 formula
+            - "materialized-input.md — sheets: Data, Summary"
+      unresolved_beyond_evidence: Formula results were not evaluated, so the current
+        displayed error or cached value is unknown; the missing dependency
+        target is confirmed.
+  - finding_id: finding-008
+    lens_id: semantics
+    source_ref: .onto/review/20260717-13297536/round1/semantics.findings.yaml#semantics-candidate-001
+    target: budget.xlsx — Summary!B1 Grand Total formula
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md: Summary formula SUM(Data!B2:B4); Data has five populated
+      rows spanning rows 2–6; Summary label states “Grand Total (must aggregate
+      ALL Data rows)”"
+    claim: The cell named “Grand Total” does not have grand-total semantics because
+      its formula excludes two populated Data rows.
+    lens_rationale_summary: “Grand Total” and the explicit workbook contract both
+      mean an aggregation of every Data row. Omitting B5:B6 makes the displayed
+      total semantically inconsistent with its name and directly untrustworthy
+      for the stated spending decision.
+    proposed_action: Change the formula to aggregate the full amount range, such as
+      SUM(Data!B2:B6), preferably using a table column or correctly defined
+      dynamic amount range so future rows are included.
+    affected_purpose: "Confirmed user-request-intent criterion: Summary totals must
+      faithfully aggregate every Data sheet row for a spending decision."
+    failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount,
+      Summary!B1 understates or otherwise misstates the grand total.
+    impact: The primary decision value excludes 40% of the populated Data rows, so a
+      spending decision based on the labeled total can be materially wrong.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/semantics.findings.yaml#semantics-candidate-001
+      - ".onto/review/20260717-13297536/interpretation.yaml: intent_summary"
+      - ".onto/review/20260717-13297536/execution-preparation/materialized-inpu\
+        t.md: formulas and Data dimensions"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed user-request-intent criterion: Summary totals must
+        faithfully aggregate every Data sheet row for a spending decision."
+      failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount,
+        Summary!B1 understates or otherwise misstates the grand total.
+      impact: The primary decision value excludes 40% of the populated Data rows, so a
+        spending decision based on the labeled total can be materially wrong.
+      evidence_refs:
+        - ".onto/review/20260717-13297536/interpretation.yaml: intent_summary"
+        - ".onto/review/20260717-13297536/execution-preparation/materialized-in\
+          put.md: formulas and Data dimensions"
+    causal_path:
+      root_cause_candidate: Summary!B1's aggregation range terminates at Data row 4
+        instead of the final populated Data row 6.
+      root_cause_step_id: finding-008.cause-002
+      steps:
+        - cause_id: finding-008.cause-001
+          claim: The labeled Grand Total fails to include all five Data amount rows.
+          relation_to_previous: null
+          evidence_refs:
+            - ".onto/review/20260717-13297536/execution-preparation/materialize\
+              d-input.md: Summary label, Data dimensions, and formula inventory"
+        - cause_id: finding-008.cause-002
+          claim: Its formula is statically bounded to Data!B2:B4, leaving Data!B5:B6
+            outside the aggregation.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - ".onto/review/20260717-13297536/execution-preparation/materialize\
+              d-input.md: SUM(Data!B2:B4) and Data rows 2–6"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-009
+    lens_id: semantics
+    source_ref: .onto/review/20260717-13297536/round1/semantics.findings.yaml#semantics-candidate-002
+    target: budget.xlsx — workbook named range GrandTotalRange
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md: GrandTotalRange → Data!$A$2:$A$6; Data column A is Category
+      and column B is Amount"
+    claim: The name GrandTotalRange denotes a monetary total, but the range contains
+      category labels.
+    lens_rationale_summary: The range's name and referent have different meanings. A
+      maintainer using it as its name suggests could aggregate text labels or
+      wire a total formula to the wrong source, weakening named-range trust.
+    proposed_action: Either repoint GrandTotalRange to the intended amount/total
+      cells or rename it to CategoryRange if category labels are the intended
+      referent.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: The range's name and referent have different meanings. A maintainer
+      using it as its name suggests could aggregate text labels or wire a total
+      formula to the wrong source, weakening named-range trust.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/semantics.findings.yaml#semantics-candidate-002
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-010
+    lens_id: pragmatics
+    source_ref: .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-001
+    target: budget.xlsx — Summary!B1 grand-total formula
+    evidence_anchor: .onto/review/20260717-13297536/execution-preparation/materialized-input.md:15,18-23,25-30;
+      .onto/review/20260717-13297536/interpretation.yaml:5-7
+    claim: The displayed grand total omits two of the five populated Data amounts.
+    lens_rationale_summary: The formula aggregates only three amount cells, so it
+      cannot answer the declared question— the total of every Data row—with one
+      trustworthy result. Any spending decision based on this displayed total
+      can therefore be understated.
+    proposed_action: Expand the formula to include every populated amount, minimally
+      SUM(Data!B2:B6); preferably use a structured table or another
+      automatically expanding range if new rows must also be included.
+    affected_purpose: "Confirmed user-request-intent criterion: Summary sheet totals
+      must faithfully aggregate every Data sheet row for a spending decision."
+    failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount,
+      Summary!B1 excludes it.
+    impact: The primary decision total is incomplete, so the workbook cannot
+      reliably answer the spending-total question it was created to support.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-001
+      - materialized-input.md:15
+      - materialized-input.md:18-23
+      - materialized-input.md:25-30
+      - interpretation.yaml:5-7
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed user-request-intent criterion: Summary sheet totals
+        must faithfully aggregate every Data sheet row for a spending decision."
+      failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount,
+        Summary!B1 excludes it.
+      impact: The primary decision total is incomplete, so the workbook cannot
+        reliably answer the spending-total question it was created to support.
+      evidence_refs:
+        - materialized-input.md:15
+        - materialized-input.md:18-23
+        - materialized-input.md:25-30
+        - interpretation.yaml:5-7
+    causal_path:
+      root_cause_candidate: Summary!B1 has a hard-coded range ending at Data!B4
+        although populated Data amounts extend through row 6.
+      root_cause_step_id: finding-010.cause-002
+      steps:
+        - cause_id: finding-010.cause-001
+          claim: Summary!B1 aggregates only three cells despite five populated Amount
+            entries.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15
+            - materialized-input.md:18-23
+        - cause_id: finding-010.cause-002
+          claim: The formula's upper bound is B4 rather than the last populated amount
+            row, B6.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12
+            - materialized-input.md:15
+            - materialized-input.md:19-23
+      unresolved_beyond_evidence: Cell values and calculated results were not
+        evaluated, so the exact monetary understatement cannot be quantified
+        within this boundary.
+  - finding_id: finding-011
+    lens_id: pragmatics
+    source_ref: .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-002
+    target: budget.xlsx — Summary!B2 cross-sheet reference
+    evidence_anchor: .onto/review/20260717-13297536/execution-preparation/materialized-input.md:9,14-16,25-30
+    claim: A Summary formula points to an Archive sheet that does not exist in the
+      workbook inventory.
+    lens_rationale_summary: The reference cannot provide a usable answer from the
+      current workbook. Its presence alongside the grand-total output forces a
+      user to distinguish a valid-looking summary result from an unresolved
+      path, weakening practical trust in the Summary sheet.
+    proposed_action: Remove the obsolete Summary row if it is unnecessary, or
+      retarget B2 to the intended existing source and give the row an
+      unambiguous label.
+    affected_purpose: Confirmed user-request-intent criterion and the review goal of
+      cross-sheet-reference integrity for trustworthy Summary totals.
+    failure_condition: Any user or calculation relying on Summary!B2 attempts to
+      resolve a source sheet absent from the workbook.
+    impact: Part of the Summary answer surface is unusable, making the workbook's
+      decision-facing outputs harder to interpret and verify.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-002
+      - materialized-input.md:9
+      - materialized-input.md:14-16
+      - materialized-input.md:25-30
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Confirmed user-request-intent criterion and the review goal of
+        cross-sheet-reference integrity for trustworthy Summary totals.
+      failure_condition: Any user or calculation relying on Summary!B2 attempts to
+        resolve a source sheet absent from the workbook.
+      impact: Part of the Summary answer surface is unusable, making the workbook's
+        decision-facing outputs harder to interpret and verify.
+      evidence_refs:
+        - materialized-input.md:9
+        - materialized-input.md:14-16
+        - materialized-input.md:25-30
+    causal_path:
+      root_cause_candidate: Summary!B2 retains a reference to the absent Archive sheet.
+      root_cause_step_id: finding-011.cause-002
+      steps:
+        - cause_id: finding-011.cause-001
+          claim: Summary!B2 cannot resolve its referenced source within the two-sheet
+            workbook.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:9
+            - materialized-input.md:16
+        - cause_id: finding-011.cause-002
+          claim: The formula explicitly targets Archive even though only Data and Summary
+            exist.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:9
+            - materialized-input.md:16
+            - materialized-input.md:18
+            - materialized-input.md:25
+      unresolved_beyond_evidence: The structural inventory does not expose B2's row
+        label or evaluate its displayed result, so whether it is intended to
+        contribute to the grand-total decision cannot be established.
+  - finding_id: finding-012
+    lens_id: pragmatics
+    source_ref: .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-003
+    target: budget.xlsx — workbook-scoped GrandTotalRange
+    evidence_anchor: .onto/review/20260717-13297536/execution-preparation/materialized-input.md:11-12,18-23,25-30
+    claim: GrandTotalRange identifies category text rather than a grand-total value,
+      creating a misleading alternate query path.
+    lens_rationale_summary: A user or integration querying the apparently
+      authoritative GrandTotalRange receives categories rather than the total.
+      The name and target therefore support incompatible interpretations of
+      where the grand total is obtained.
+    proposed_action: Point GrandTotalRange to the canonical Summary total cell, or
+      rename it to CategoryRange if the category span is intentional.
+    affected_purpose: The named-range-hygiene and verifiability goals supporting the
+      confirmed requirement for a trustworthy decision total.
+    failure_condition: A user, formula, or integration uses GrandTotalRange as the
+      practical route to obtain the workbook's grand total.
+    impact: The workbook exposes a semantically misleading answer path that does not
+      yield the requested total, undermining unambiguous retrieval and
+      verification.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-003
+      - materialized-input.md:11-12
+      - materialized-input.md:18-23
+      - materialized-input.md:25-30
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The named-range-hygiene and verifiability goals supporting the
+        confirmed requirement for a trustworthy decision total.
+      failure_condition: A user, formula, or integration uses GrandTotalRange as the
+        practical route to obtain the workbook's grand total.
+      impact: The workbook exposes a semantically misleading answer path that does not
+        yield the requested total, undermining unambiguous retrieval and
+        verification.
+      evidence_refs:
+        - materialized-input.md:11-12
+        - materialized-input.md:18-23
+        - materialized-input.md:25-30
+    causal_path:
+      root_cause_candidate: The workbook-scoped name GrandTotalRange is bound to the
+        Category column instead of the canonical total result.
+      root_cause_step_id: finding-012.cause-002
+      steps:
+        - cause_id: finding-012.cause-001
+          claim: GrandTotalRange yields five Category cells rather than one grand-total
+            value.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:11-12
+            - materialized-input.md:21-23
+        - cause_id: finding-012.cause-002
+          claim: Its definition targets Data column A even though column A is Category and
+            the total is presented on Summary.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12
+            - materialized-input.md:18-23
+            - materialized-input.md:25-30
+      unresolved_beyond_evidence: No downstream named-range consumer is included in
+        the bounded evidence, so actual external use of this misleading path is
+        unknown.
+  - finding_id: finding-013
+    lens_id: evolution
+    source_ref: .onto/review/20260717-13297536/round1/evolution.findings.yaml#evolution-candidate-001
+    target: budget.xlsx — Summary!B1 aggregation and workbook named range
+      GrandTotalRange
+    evidence_anchor: "materialized-input.md: Summary!B1 contains SUM(Data!B2:B4);
+      Data has 6 rows with 5 Category/Amount records; GrandTotalRange is fixed
+      at Data!$A$2:$A$6"
+    claim: The total uses a fixed, already-outdated row boundary, so current and
+      newly appended Data rows are excluded unless the formula is manually
+      edited.
+    lens_rationale_summary: The fixed formula omits Data!B5:B6 now and will silently
+      omit additional rows later. Because the declared spending decision depends
+      on aggregating every Data row, this directly makes the reported total
+      incomplete and leaves future correctness dependent on manual formula
+      maintenance.
+    proposed_action: Convert the Data region to an Excel Table and calculate the
+      total with a structured reference such as SUM(DataTable[Amount]). At
+      minimum, correct the current range to B2:B6 and replace GrandTotalRange
+      with an expandable Amount range that Summary!B1 actually uses.
+    affected_purpose: "Confirmed user-request-intent criterion: “Summary sheet
+      totals must faithfully aggregate every Data sheet row for a spending
+      decision.”"
+    failure_condition: Whenever Data contains records below row 4—including the
+      evidenced records in rows 5 and 6—Summary!B1 excludes their amounts.
+    impact: The decision-facing grand total is incomplete for the current workbook
+      and will continue to drift as rows are appended, so it cannot be trusted
+      for the declared spending decision.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/evolution.findings.yaml#evolution-candidate-001
+      - "materialized-input.md — formula inventory: SUM(Data!B2:B4) at
+        Summary!B1"
+      - "materialized-input.md — Data dimensions and column profiles: 6 rows
+        with 5 Category/Amount records"
+      - materialized-input.md — GrandTotalRange → Data!$A$2:$A$6
+      - review-value-alignment-criteria.yaml — criterion user-request-intent
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed user-request-intent criterion: “Summary sheet
+        totals must faithfully aggregate every Data sheet row for a spending
+        decision.”"
+      failure_condition: Whenever Data contains records below row 4—including the
+        evidenced records in rows 5 and 6—Summary!B1 excludes their amounts.
+      impact: The decision-facing grand total is incomplete for the current workbook
+        and will continue to drift as rows are appended, so it cannot be trusted
+        for the declared spending decision.
+      evidence_refs:
+        - "materialized-input.md — formula inventory: SUM(Data!B2:B4) at
+          Summary!B1"
+        - "materialized-input.md — Data dimensions and column profiles: 6 rows
+          with 5 Category/Amount records"
+        - materialized-input.md — GrandTotalRange → Data!$A$2:$A$6
+        - review-value-alignment-criteria.yaml — criterion user-request-intent
+    causal_path:
+      root_cause_candidate: The aggregation authority is encoded as fixed cell
+        coordinates instead of an expandable Amount data structure.
+      root_cause_step_id: finding-013.cause-003
+      steps:
+        - cause_id: finding-013.cause-001
+          claim: Summary!B1 excludes Data records below row 4.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+            - materialized-input.md — Data contains five records through row 6
+        - cause_id: finding-013.cause-002
+          claim: The formula's endpoint is hard-coded at row 4 and therefore neither
+            covers the current dataset nor expands with appended records.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "materialized-input.md — formula inventory: SUM(Data!B2:B4)"
+        - cause_id: finding-013.cause-003
+          claim: No usable expandable aggregation range governs the formula;
+            GrandTotalRange is fixed, targets Category column A, and is not
+            referenced by Summary!B1.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md — GrandTotalRange → Data!$A$2:$A$6
+            - materialized-input.md — Summary!B1 directly references Data!B2:B4
+      unresolved_beyond_evidence: Formula results were not evaluated, but the
+        structural range mismatch alone proves that rows 5 and 6 are outside the
+        aggregation.
+  - finding_id: finding-014
+    lens_id: evolution
+    source_ref: .onto/review/20260717-13297536/round1/evolution.findings.yaml#evolution-candidate-002
+    target: budget.xlsx — Summary!B2 cross-sheet formula
+    evidence_anchor: "materialized-input.md: Summary!B2 contains 'Archive'!B2, while
+      the workbook inventory lists only Data and Summary sheets"
+    claim: A Summary formula depends on a sheet that no longer exists, showing that
+      worksheet lifecycle changes are not reference-safe.
+    lens_rationale_summary: Renaming or removing a worksheet has left a stale
+      dependency on the decision-facing Summary sheet. Although the bounded
+      evidence does not show that B2 feeds the grand total, the broken reference
+      weakens confidence that workbook changes preserve Summary calculations.
+    proposed_action: Remove the obsolete formula or redirect it to the intended
+      existing source. Add a workbook validation check that rejects formulas
+      whose referenced sheets do not exist after sheet additions, renames, or
+      removals.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: Renaming or removing a worksheet has left a stale dependency on the
+      decision-facing Summary sheet. Although the bounded evidence does not show
+      that B2 feeds the grand total, the broken reference weakens confidence
+      that workbook changes preserve Summary calculations.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/evolution.findings.yaml#evolution-candidate-002
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-015
+    lens_id: coverage
+    source_ref: .onto/review/20260717-13297536/round1/coverage.findings.yaml#coverage-candidate-001
+    target: budget.xlsx — Summary!B1 grand-total formula
+    evidence_anchor: .onto/review/20260717-13297536/execution-preparation/materialized-input.md:11-15,18-23,25-30
+    claim: The grand-total formula omits two of the five Data rows.
+    lens_rationale_summary: The fixed range excludes Data!B5:B6, so the Summary
+      cannot satisfy its explicit contract to aggregate every Data row. Even if
+      an omitted amount happened to be zero, the formula structurally fails the
+      coverage requirement and cannot be trusted for the spending decision.
+    proposed_action: Change the total to cover all amount rows, at minimum
+      `SUM(Data!B2:B6)`, and preferably use an expanding Excel Table column or a
+      correctly defined dynamic amount range so newly added rows are also
+      included.
+    affected_purpose: "Confirmed `user-request-intent`: Summary totals must
+      faithfully aggregate every Data sheet row for a spending decision."
+    failure_condition: Whenever Data contains entries in rows 5 or 6, Summary!B1
+      excludes them because its range ends at B4.
+    impact: A decision-facing total is structurally incomplete, directly weakening
+      trust in the amount used for spending decisions.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:15
+      - materialized-input.md:18-23
+      - materialized-input.md:29
+      - review-value-alignment-criteria.yaml:6-19
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed `user-request-intent`: Summary totals must
+        faithfully aggregate every Data sheet row for a spending decision."
+      failure_condition: Whenever Data contains entries in rows 5 or 6, Summary!B1
+        excludes them because its range ends at B4.
+      impact: A decision-facing total is structurally incomplete, directly weakening
+        trust in the amount used for spending decisions.
+      evidence_refs:
+        - materialized-input.md:15
+        - materialized-input.md:18-23
+        - materialized-input.md:29
+        - review-value-alignment-criteria.yaml:6-19
+    causal_path:
+      root_cause_candidate: Summary!B1 uses a fixed aggregation endpoint at Data!B4
+        although the populated Data region extends through row 6.
+      root_cause_step_id: finding-015.cause-002
+      steps:
+        - cause_id: finding-015.cause-001
+          claim: The Summary grand total does not cover every populated Data amount row.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15
+            - materialized-input.md:18-23
+            - materialized-input.md:29
+        - cause_id: finding-015.cause-002
+          claim: The total formula covers only B2:B4, omitting B5:B6 from the five-row
+            Data population.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12
+            - materialized-input.md:15
+            - materialized-input.md:19-23
+      unresolved_beyond_evidence: The structural inventory does not evaluate cell
+        values, so the exact monetary understatement cannot be quantified within
+        the boundary.
+  - finding_id: finding-016
+    lens_id: coverage
+    source_ref: .onto/review/20260717-13297536/round1/coverage.findings.yaml#coverage-candidate-002
+    target: budget.xlsx — Summary!B2 cross-sheet formula
+    evidence_anchor: .onto/review/20260717-13297536/execution-preparation/materialized-input.md:7-9,14-16,25-30
+    claim: A Summary formula depends on an absent Archive sheet.
+    lens_rationale_summary: The workbook omits the source area required by this
+      Summary formula, preventing the value from being independently resolved or
+      verified. This creates an unexplained gap in the Summary's decision-facing
+      coverage.
+    proposed_action: Determine the intended authoritative source, then either
+      restore the Archive sheet with the required value or repoint Summary!B2 to
+      the correct existing source; remove the formula only if the Summary row is
+      obsolete.
+    affected_purpose: "Confirmed `user-request-intent`: Summary sheet totals must be
+      trustworthy for a spending decision; the review goals also include
+      cross-sheet reference integrity."
+    failure_condition: When Summary!B2 is calculated or audited, its referenced
+      Archive sheet is absent from the two-sheet workbook.
+    impact: A Summary value lacks a present source, reducing verifiability and
+      making the decision-facing Summary unsafe to rely on without repair or
+      clarification.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:7-9
+      - materialized-input.md:14-16
+      - materialized-input.md:25-30
+      - review-value-alignment-criteria.yaml:6-19
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed `user-request-intent`: Summary sheet totals must be
+        trustworthy for a spending decision; the review goals also include
+        cross-sheet reference integrity."
+      failure_condition: When Summary!B2 is calculated or audited, its referenced
+        Archive sheet is absent from the two-sheet workbook.
+      impact: A Summary value lacks a present source, reducing verifiability and
+        making the decision-facing Summary unsafe to rely on without repair or
+        clarification.
+      evidence_refs:
+        - materialized-input.md:7-9
+        - materialized-input.md:14-16
+        - materialized-input.md:25-30
+        - review-value-alignment-criteria.yaml:6-19
+    causal_path:
+      root_cause_candidate: The workbook does not contain the Archive sheet named by
+        Summary!B2's cross-sheet reference.
+      root_cause_step_id: finding-016.cause-002
+      steps:
+        - cause_id: finding-016.cause-001
+          claim: Summary!B2 has no represented source within the workbook.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:9
+            - materialized-input.md:16
+        - cause_id: finding-016.cause-002
+          claim: Its formula targets Archive!B2 even though the workbook's only sheets are
+            Data and Summary.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:9
+            - materialized-input.md:16
+            - materialized-input.md:18
+            - materialized-input.md:25
+      unresolved_beyond_evidence: The bounded evidence does not establish whether
+        Archive was accidentally deleted, renamed, or whether the formula should
+        point to Data instead.
+  - finding_id: finding-017
+    lens_id: conciseness
+    source_ref: .onto/review/20260717-13297536/round1/conciseness.findings.yaml#conciseness-candidate-001
+    target: budget.xlsx named range GrandTotalRange
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md — named_ranges and formulas inventory: GrandTotalRange →
+      Data!$A$2:$A$6; Summary formulas reference Data!B2:B4 and Archive!B2, not
+      the named range"
+    claim: GrandTotalRange is a stale, unused second representation of the
+      workbook’s grand-total concept.
+    lens_rationale_summary: This unnecessary parallel definition suggests that the
+      named range governs the total even though it has no effect on the
+      calculation and does not contain amounts. That ambiguity makes future
+      maintenance and auditing less trustworthy.
+    proposed_action: Remove GrandTotalRange if it has no consumer, or redefine it
+      over all amount rows and make the Summary total use it as the single
+      authoritative range.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: This unnecessary parallel definition suggests that the named range
+      governs the total even though it has no effect on the calculation and does
+      not contain amounts. That ambiguity makes future maintenance and auditing
+      less trustworthy.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/conciseness.findings.yaml#conciseness-candidate-001
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-018
+    lens_id: axiology
+    source_ref: .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-001
+    target: budget.xlsx — Summary!B1 grand-total formula
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md: Summary!B1 is `SUM(Data!B2:B4)`, while Data contains five
+      populated Amount rows across workbook rows 2–6. Value authority:
+      `.onto/review/20260717-13297536/execution-preparation/review-value-alignm\
+      ent-criteria.yaml`, criterion `user-request-intent`: “the Summary sheet
+      totals must faithfully aggregate every Data sheet row for a spending
+      decision.”"
+    claim: The grand total excludes two of the five Data rows, directly violating
+      the workbook’s declared spending-decision purpose.
+    lens_rationale_summary: "This is a purpose-level misalignment: the confirmed
+      value criterion requires every Data row to be aggregated, but the formula
+      covers only three of five rows. Consequently, the displayed grand total
+      cannot be trusted as the complete spending amount."
+    proposed_action: Change the formula to cover all Amount rows, minimally
+      `=SUM(Data!B2:B6)`; preferably use a table column or correctly defined
+      dynamic amount range so added rows remain included. Recalculate and verify
+      the result against an independent sum of all five Amount cells.
+    affected_purpose: "Confirmed `user-request-intent`: Summary totals must
+      faithfully aggregate every Data row for a spending decision."
+    failure_condition: Whenever Data!B5 or Data!B6 contributes an amount, Summary!B1
+      does not incorporate that row because its range ends at B4.
+    impact: The primary decision total is structurally incomplete, so a spending
+      decision based on it may use an understated or otherwise incorrect
+      aggregate.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-001
+      - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+        — Data has five populated Amount records; Summary!B1 uses
+        SUM(Data!B2:B4)
+      - .onto/review/20260717-13297536/execution-preparation/review-value-alignment-criteria.yaml
+        — criterion user-request-intent
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed `user-request-intent`: Summary totals must
+        faithfully aggregate every Data row for a spending decision."
+      failure_condition: Whenever Data!B5 or Data!B6 contributes an amount, Summary!B1
+        does not incorporate that row because its range ends at B4.
+      impact: The primary decision total is structurally incomplete, so a spending
+        decision based on it may use an understated or otherwise incorrect
+        aggregate.
+      evidence_refs:
+        - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+          — Data has five populated Amount records; Summary!B1 uses
+          SUM(Data!B2:B4)
+        - .onto/review/20260717-13297536/execution-preparation/review-value-alignment-criteria.yaml
+          — criterion user-request-intent
+    causal_path:
+      root_cause_candidate: Summary!B1 uses a hard-coded range ending at Data row 4
+        although populated Data rows extend through row 6.
+      root_cause_step_id: finding-018.cause-002
+      steps:
+        - cause_id: finding-018.cause-001
+          claim: The purported grand total omits Data rows 5 and 6.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+              — Summary!B1 formula and Data dimensions
+        - cause_id: finding-018.cause-002
+          claim: The omission is caused by the formula’s fixed `Data!B2:B4` boundary.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+              — formula inventory
+      unresolved_beyond_evidence: Cell values and recalculated results were not
+        evaluated, so the exact numeric misstatement is unknown; the
+        row-coverage violation is nevertheless confirmed.
+  - finding_id: finding-019
+    lens_id: axiology
+    source_ref: .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-002
+    target: budget.xlsx — Summary!B2 cross-sheet formula
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md: Summary!B2 contains `'Archive'!B2`, but the workbook
+      inventory lists only Data and Summary sheets. Value authority:
+      `.onto/review/20260717-13297536/execution-preparation/review-value-alignm\
+      ent-criteria.yaml`, criterion `user-request-intent`, requiring trustworthy
+      Summary totals for a spending decision."
+    claim: A Summary formula depends on a sheet absent from the workbook, making the
+      summary calculation unverifiable and misaligned with the trust commitment.
+    lens_rationale_summary: This purpose-level misalignment introduces a broken or
+      stale external assumption into the decision-facing Summary. Because the
+      referenced authority is absent, reviewers cannot verify that the value
+      derives from the current Data rows, and recalculation may expose a
+      reference error.
+    proposed_action: If B2 should summarize current spending, replace the reference
+      with a formula derived from the present Data sheet. If historical data is
+      required, restore an explicitly governed Archive sheet and verify the
+      reference after recalculation; otherwise remove the formula.
+    affected_purpose: "Confirmed `user-request-intent`: Summary totals must
+      faithfully aggregate Data rows and support a trustworthy spending
+      decision; review goals also include cross-sheet reference integrity."
+    failure_condition: When the workbook recalculates or a reviewer traces
+      Summary!B2, its referenced Archive sheet is unavailable.
+    impact: A decision-facing summary value lacks an inspectable source and may
+      become an error or stale cached value, weakening trust in the Summary as a
+      whole.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-002
+      - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+        — workbook has only Data and Summary sheets; Summary!B2 references
+        Archive!B2
+      - .onto/review/20260717-13297536/execution-preparation/review-value-alignment-criteria.yaml
+        — criterion user-request-intent
+      - .onto/review/20260717-13297536/execution-preparation/review-target-profile.yaml
+        — cross_sheet_reference_integrity goal
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Confirmed `user-request-intent`: Summary totals must
+        faithfully aggregate Data rows and support a trustworthy spending
+        decision; review goals also include cross-sheet reference integrity."
+      failure_condition: When the workbook recalculates or a reviewer traces
+        Summary!B2, its referenced Archive sheet is unavailable.
+      impact: A decision-facing summary value lacks an inspectable source and may
+        become an error or stale cached value, weakening trust in the Summary as
+        a whole.
+      evidence_refs:
+        - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+          — workbook has only Data and Summary sheets; Summary!B2 references
+          Archive!B2
+        - .onto/review/20260717-13297536/execution-preparation/review-value-alignment-criteria.yaml
+          — criterion user-request-intent
+        - .onto/review/20260717-13297536/execution-preparation/review-target-profile.yaml
+          — cross_sheet_reference_integrity goal
+    causal_path:
+      root_cause_candidate: Summary!B2 retains a dependency on an Archive sheet that
+        is absent from the reviewed workbook.
+      root_cause_step_id: finding-019.cause-002
+      steps:
+        - cause_id: finding-019.cause-001
+          claim: Summary!B2 cannot be traced to an available worksheet source.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+              — sheet and formula inventories
+        - cause_id: finding-019.cause-002
+          claim: The unavailable source results from the formula’s reference to the
+            nonexistent Archive sheet.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+              — `'Archive'!B2` formula
+      unresolved_beyond_evidence: The structural inventory did not evaluate
+        recalculation, so whether the current visible cell shows a cached value
+        or a reference error is unknown.
+  - finding_id: finding-020
+    lens_id: axiology
+    source_ref: .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-003
+    target: budget.xlsx — workbook-scoped name `GrandTotalRange`
+    evidence_anchor: ".onto/review/20260717-13297536/execution-preparation/material\
+      ized-input.md: `GrandTotalRange` resolves to `Data!$A$2:$A$6`; Data column
+      A is Category and column B is Amount. Value authority:
+      `.onto/review/20260717-13297536/execution-preparation/review-target-profi\
+      le.yaml`, goals `verifiability`, `maintainability`, and
+      `named_range_hygiene`, applied under the confirmed spending-total
+      purpose."
+    claim: The grand-total named range points to category labels rather than
+      amounts, creating a misleading audit and maintenance surface.
+    lens_rationale_summary: "This is a principle and commitment misalignment: the
+      name suggests a canonical total input, but its target cannot be summed as
+      spending amounts. Even though current formula usage is not shown, the
+      mismatch undermines verifiability and can induce a future formula to use
+      the wrong column."
+    proposed_action: Point the name to the complete Amount range, such as
+      `Data!$B$2:$B$6`, or rename/remove it if it is intended to represent
+      categories. Then use one canonical range or table column in the Summary
+      formula.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: "This is a principle and commitment misalignment: the name suggests a
+      canonical total input, but its target cannot be summed as spending
+      amounts. Even though current formula usage is not shown, the mismatch
+      undermines verifiability and can induce a future formula to use the wrong
+      column."
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-003
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+validation:
+  unaddressable_findings: []

@@ -1,0 +1,1244 @@
+session_id: 20260717-22cfd504
+session_root: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504
+execution_realization: worker
+host_runtime: codex
+review_mode: full
+execution_status: completed
+execution_started_at: 2026-07-17T21:46:36+09:00
+execution_completed_at: 2026-07-17T21:59:19+09:00
+total_duration_ms: 763108
+max_concurrent_lenses: 4
+observed_dispatch_width: 4
+planned_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+participating_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 9
+synthesis_executed: true
+deliberation_status: performed
+halt_reason: null
+error_log_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/error-log.md
+lens_completion_barrier_ref: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/lens-completion-barrier.yaml
+lens_execution_results:
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/logic.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/logic.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:46:36+09:00
+    completed_at: 2026-07-17T21:47:37+09:00
+    duration_ms: 60508
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 22497
+    output_bytes: 6377
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/structure.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/structure.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:46:38+09:00
+    completed_at: 2026-07-17T21:47:33+09:00
+    duration_ms: 55140
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16834
+    output_bytes: 6966
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: dependency
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/dependency.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/dependency.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:46:39+09:00
+    completed_at: 2026-07-17T21:47:37+09:00
+    duration_ms: 57659
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 17601
+    output_bytes: 7506
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/semantics.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/semantics.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:46:41+09:00
+    completed_at: 2026-07-17T21:47:36+09:00
+    duration_ms: 55342
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 17970
+    output_bytes: 3985
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: pragmatics
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/pragmatics.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/pragmatics.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:47:33+09:00
+    completed_at: 2026-07-17T21:48:27+09:00
+    duration_ms: 54394
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16912
+    output_bytes: 7562
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/evolution.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/evolution.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:47:36+09:00
+    completed_at: 2026-07-17T21:48:22+09:00
+    duration_ms: 45562
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 17293
+    output_bytes: 3286
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/coverage.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/coverage.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:47:37+09:00
+    completed_at: 2026-07-17T21:49:06+09:00
+    duration_ms: 88950
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18364
+    output_bytes: 3721
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: conciseness
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/conciseness.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/conciseness.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:47:37+09:00
+    completed_at: 2026-07-17T21:48:35+09:00
+    duration_ms: 58080
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 17387
+    output_bytes: 3472
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/axiology.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/round1/axiology.findings.yaml
+    status: completed
+    started_at: 2026-07-17T21:48:22+09:00
+    completed_at: 2026-07-17T21:49:23+09:00
+    duration_ms: 61629
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 22110
+    output_bytes: 6122
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/finding-ledger.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/finding-ledger.yaml
+    status: completed
+    started_at: 2026-07-17T21:49:23+09:00
+    completed_at: 2026-07-17T21:49:23+09:00
+    duration_ms: 23
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 1087
+    output_bytes: 57264
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-07-17T21:49:24+09:00
+    completed_at: 2026-07-17T21:50:01+09:00
+    duration_ms: 37633
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 64901
+    output_bytes: 6211
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-ledger.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/issue-ledger.yaml
+    status: completed
+    started_at: 2026-07-17T21:50:01+09:00
+    completed_at: 2026-07-17T21:51:29+09:00
+    duration_ms: 88078
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13959
+    output_bytes: 21608
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/issue-stance-matrix.yaml
+    status: completed
+    started_at: 2026-07-17T21:51:29+09:00
+    completed_at: 2026-07-17T21:53:45+09:00
+    duration_ms: 136193
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 925
+    output_bytes: 72554
+    child_result_count: 9
+    child_results:
+      - unit_id: issue-stance:logic
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/logic.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/logic.yaml
+        status: completed
+        started_at: 2026-07-17T21:51:29+09:00
+        completed_at: 2026-07-17T21:52:33+09:00
+        duration_ms: 64152
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60183
+        output_bytes: 8679
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:structure
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/structure.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/structure.yaml
+        status: completed
+        started_at: 2026-07-17T21:51:29+09:00
+        completed_at: 2026-07-17T21:52:19+09:00
+        duration_ms: 49162
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60239
+        output_bytes: 6644
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:dependency
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/dependency.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/dependency.yaml
+        status: completed
+        started_at: 2026-07-17T21:51:29+09:00
+        completed_at: 2026-07-17T21:52:11+09:00
+        duration_ms: 41855
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60253
+        output_bytes: 6671
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:semantics
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/semantics.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/semantics.yaml
+        status: completed
+        started_at: 2026-07-17T21:51:29+09:00
+        completed_at: 2026-07-17T21:52:17+09:00
+        duration_ms: 47464
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60239
+        output_bytes: 8728
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:pragmatics
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/pragmatics.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/pragmatics.yaml
+        status: completed
+        started_at: 2026-07-17T21:52:11+09:00
+        completed_at: 2026-07-17T21:52:59+09:00
+        duration_ms: 47716
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60253
+        output_bytes: 8757
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:evolution
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/evolution.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/evolution.yaml
+        status: completed
+        started_at: 2026-07-17T21:52:17+09:00
+        completed_at: 2026-07-17T21:53:10+09:00
+        duration_ms: 53476
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60239
+        output_bytes: 6768
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:coverage
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/coverage.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/coverage.yaml
+        status: completed
+        started_at: 2026-07-17T21:52:19+09:00
+        completed_at: 2026-07-17T21:53:17+09:00
+        duration_ms: 58100
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60225
+        output_bytes: 7573
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:conciseness
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/conciseness.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/conciseness.yaml
+        status: completed
+        started_at: 2026-07-17T21:52:34+09:00
+        completed_at: 2026-07-17T21:53:15+09:00
+        duration_ms: 41935
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60267
+        output_bytes: 6648
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:axiology
+        unit_kind: issue_artifact
+        packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/issue-stance/axiology.prompt.md
+        output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/stance-responses/axiology.yaml
+        status: completed
+        started_at: 2026-07-17T21:52:59+09:00
+        completed_at: 2026-07-17T21:53:45+09:00
+        duration_ms: 46493
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 60225
+        output_bytes: 6911
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation-plan
+    unit_kind: issue_artifact
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation-plan.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation-plan.yaml
+    status: completed
+    started_at: 2026-07-17T21:53:46+09:00
+    completed_at: 2026-07-17T21:54:30+09:00
+    duration_ms: 44600
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 125643
+    output_bytes: 7709
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: problem-framing
+    unit_kind: issue_artifact
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/problem-framing.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/problem-framing.yaml
+    status: completed
+    started_at: 2026-07-17T21:57:42+09:00
+    completed_at: 2026-07-17T21:58:27+09:00
+    duration_ms: 45416
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 127088
+    output_bytes: 10151
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+deliberation_execution_results:
+  - unit_id: deliberation:issue-001:logic
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-001/logic.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-001/logic.yaml
+    status: completed
+    started_at: 2026-07-17T21:54:30+09:00
+    completed_at: 2026-07-17T21:55:00+09:00
+    duration_ms: 29670
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14466
+    output_bytes: 2236
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-001:evolution
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-001/evolution.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-001/evolution.yaml
+    status: completed
+    started_at: 2026-07-17T21:54:30+09:00
+    completed_at: 2026-07-17T21:55:00+09:00
+    duration_ms: 29374
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14508
+    output_bytes: 2024
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-001:coverage
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-001/coverage.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-001/coverage.yaml
+    status: completed
+    started_at: 2026-07-17T21:54:30+09:00
+    completed_at: 2026-07-17T21:55:01+09:00
+    duration_ms: 30839
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14488
+    output_bytes: 2028
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:logic
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-002/logic.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-002/logic.yaml
+    status: completed
+    started_at: 2026-07-17T21:54:30+09:00
+    completed_at: 2026-07-17T21:55:01+09:00
+    duration_ms: 30998
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14832
+    output_bytes: 2086
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:conciseness
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-002/conciseness.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-002/conciseness.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:00+09:00
+    completed_at: 2026-07-17T21:55:23+09:00
+    duration_ms: 22786
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14880
+    output_bytes: 2458
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:evolution
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-002/evolution.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-002/evolution.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:00+09:00
+    completed_at: 2026-07-17T21:55:19+09:00
+    duration_ms: 19460
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14870
+    output_bytes: 2057
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:coverage
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-002/coverage.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-002/coverage.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:01+09:00
+    completed_at: 2026-07-17T21:55:21+09:00
+    duration_ms: 19916
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14860
+    output_bytes: 2263
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-003:structure
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-003/structure.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-003/structure.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:01+09:00
+    completed_at: 2026-07-17T21:55:23+09:00
+    duration_ms: 21821
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13168
+    output_bytes: 1682
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-003:coverage
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-003/coverage.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-003/coverage.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:19+09:00
+    completed_at: 2026-07-17T21:55:47+09:00
+    duration_ms: 27266
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13158
+    output_bytes: 2066
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-003:conciseness
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-003/conciseness.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-003/conciseness.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:21+09:00
+    completed_at: 2026-07-17T21:55:45+09:00
+    duration_ms: 24039
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13182
+    output_bytes: 2103
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-004:dependency
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-004/dependency.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-004/dependency.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:23+09:00
+    completed_at: 2026-07-17T21:55:42+09:00
+    duration_ms: 19477
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13122
+    output_bytes: 2208
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-004:coverage
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-004/coverage.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-004/coverage.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:23+09:00
+    completed_at: 2026-07-17T21:55:45+09:00
+    duration_ms: 21704
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13104
+    output_bytes: 1824
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-004:conciseness
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-004/conciseness.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-004/conciseness.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:42+09:00
+    completed_at: 2026-07-17T21:56:06+09:00
+    duration_ms: 24402
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13128
+    output_bytes: 2247
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-006:axiology
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-006/axiology.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-006/axiology.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:45+09:00
+    completed_at: 2026-07-17T21:56:02+09:00
+    duration_ms: 17591
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13315
+    output_bytes: 1684
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-006:logic
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-006/logic.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-006/logic.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:45+09:00
+    completed_at: 2026-07-17T21:56:05+09:00
+    duration_ms: 19979
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13289
+    output_bytes: 1754
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-006:coverage
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-006/coverage.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-006/coverage.yaml
+    status: completed
+    started_at: 2026-07-17T21:55:47+09:00
+    completed_at: 2026-07-17T21:56:04+09:00
+    duration_ms: 16862
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13317
+    output_bytes: 1891
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-009:dependency
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-009/dependency.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-009/dependency.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:02+09:00
+    completed_at: 2026-07-17T21:56:19+09:00
+    duration_ms: 16561
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13155
+    output_bytes: 1803
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-009:logic
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-009/logic.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-009/logic.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:04+09:00
+    completed_at: 2026-07-17T21:56:21+09:00
+    duration_ms: 17859
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13105
+    output_bytes: 1710
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-009:evolution
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-009/evolution.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-009/evolution.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:05+09:00
+    completed_at: 2026-07-17T21:56:20+09:00
+    duration_ms: 15255
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 13145
+    output_bytes: 1757
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:axiology
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-011/axiology.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-011/axiology.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:06+09:00
+    completed_at: 2026-07-17T21:56:23+09:00
+    duration_ms: 16810
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14119
+    output_bytes: 1989
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:dependency
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-011/dependency.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-011/dependency.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:19+09:00
+    completed_at: 2026-07-17T21:56:33+09:00
+    duration_ms: 14161
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14137
+    output_bytes: 1519
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:semantics
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-011/semantics.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-011/semantics.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:20+09:00
+    completed_at: 2026-07-17T21:56:40+09:00
+    duration_ms: 19889
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14127
+    output_bytes: 1638
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:pragmatics
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/deliberation/issue-011/pragmatics.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation/responses/issue-011/pragmatics.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:21+09:00
+    completed_at: 2026-07-17T21:56:44+09:00
+    duration_ms: 22653
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 14133
+    output_bytes: 1544
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: controlled-deliberation
+    unit_kind: deliberation
+    packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/teamlead.deliberation.prompt.md
+    output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/deliberation-resolution.yaml
+    status: completed
+    started_at: 2026-07-17T21:56:44+09:00
+    completed_at: 2026-07-17T21:57:42+09:00
+    duration_ms: 57530
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 89991
+    output_bytes: 12816
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+synthesize_execution_result:
+  unit_id: synthesize
+  unit_kind: synthesize
+  packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis-work-items.yaml
+  output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis-ledger.yaml
+  status: completed
+  started_at: 2026-07-17T21:58:27+09:00
+  completed_at: 2026-07-17T21:59:19+09:00
+  duration_ms: 51996
+  timestamp_provenance: runner_wallclock
+  failure_message: null
+  failure_kind: null
+  attempt_count: 1
+  packet_bytes: 147067
+  output_bytes: 93375
+  executor_host_runtime: codex
+  child_result_count: 7
+  child_results:
+    - unit_id: synthesis:issue-001
+      unit_kind: synthesize
+      packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/synthesis/issue-001.prompt.md
+      output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis/responses/issue-001.yaml
+      status: completed
+      started_at: 2026-07-17T21:58:27+09:00
+      completed_at: 2026-07-17T21:58:49+09:00
+      duration_ms: 21433
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 37239
+      output_bytes: 2745
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-002
+      unit_kind: synthesize
+      packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/synthesis/issue-002.prompt.md
+      output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis/responses/issue-002.yaml
+      status: completed
+      started_at: 2026-07-17T21:58:27+09:00
+      completed_at: 2026-07-17T21:58:49+09:00
+      duration_ms: 21490
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 31758
+      output_bytes: 2988
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-003
+      unit_kind: synthesize
+      packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/synthesis/issue-003.prompt.md
+      output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis/responses/issue-003.yaml
+      status: completed
+      started_at: 2026-07-17T21:58:27+09:00
+      completed_at: 2026-07-17T21:58:45+09:00
+      duration_ms: 17925
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23785
+      output_bytes: 2281
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-004
+      unit_kind: synthesize
+      packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/synthesis/issue-004.prompt.md
+      output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis/responses/issue-004.yaml
+      status: completed
+      started_at: 2026-07-17T21:58:27+09:00
+      completed_at: 2026-07-17T21:58:49+09:00
+      duration_ms: 21923
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24245
+      output_bytes: 2463
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-005
+      unit_kind: synthesize
+      packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/synthesis/issue-005.prompt.md
+      output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis/responses/issue-005.yaml
+      status: completed
+      started_at: 2026-07-17T21:58:45+09:00
+      completed_at: 2026-07-17T21:59:19+09:00
+      duration_ms: 33980
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23369
+      output_bytes: 2056
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-006
+      unit_kind: synthesize
+      packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/synthesis/issue-006.prompt.md
+      output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis/responses/issue-006.yaml
+      status: completed
+      started_at: 2026-07-17T21:58:49+09:00
+      completed_at: 2026-07-17T21:59:17+09:00
+      duration_ms: 28076
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24503
+      output_bytes: 2771
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-010
+      unit_kind: synthesize
+      packet_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/prompt-packets/synthesis/issue-010.prompt.md
+      output_path: /tmp/onto-ab-xlsx-off-qzz1VK/.onto/review/20260717-22cfd504/synthesis/responses/issue-010.yaml
+      status: completed
+      started_at: 2026-07-17T21:58:49+09:00
+      completed_at: 2026-07-17T21:59:06+09:00
+      duration_ms: 17255
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23648
+      output_bytes: 2358
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+  artifact_generation_realization: live
+  semantic_quality_evidence:
+    status: not_evaluated
+    applicability: real_semantic_path_only
+    reason: live semantic path output requires a separate semantic quality gate
+      before quality is claimed
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000
+  salvage:
+    enabled: true
+    delta_completion: unit_llm
+  resubmit:
+    enabled: true
+  dispatch_breaker:
+    enabled: true
+    systemic_threshold: 3
+    per_call_max_attempts: 3
+    backoff_initial_ms: 3000
+    backoff_cap_ms: 30000

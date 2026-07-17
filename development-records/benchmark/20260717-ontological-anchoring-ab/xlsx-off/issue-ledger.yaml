@@ -1,0 +1,434 @@
+schema_version: 1
+session_id: 20260717-22cfd504
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: Summary!B1 uses a manually maintained fixed endpoint at
+      Data row 4 instead of an automatically expanding all-record Amount scope.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-011
+      - finding-014
+      - finding-015
+    relation_refs:
+      - rel-005
+      - rel-006
+    raised_by_lens_ids:
+      - pragmatics
+      - evolution
+      - coverage
+    issue_statement: The fixed Summary!B1 range omits current Data rows 5–6 and will
+      omit later appended rows.
+    proposed_action: Replace the fixed range with one complete, automatically
+      expanding Amount scope, then recalculate and test that current and newly
+      appended rows affect the total.
+    affected_purpose: Summary totals must faithfully aggregate every Data row for a
+      spending decision.
+    failure_condition: Data contains an Amount in row 5 or later while Summary!B1
+      remains bounded to Data!B2:B4.
+    impact: The principal decision value is incomplete now and remains vulnerable to
+      silent omissions during ordinary dataset growth.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/pragmatics.findings.yaml#pragmatics-candidate-001
+      - "materialized-input.md — Data: Amount non_empty=1.00, cardinality=5/5"
+      - "materialized-input.md — Summary formula: SUM(Data!B2:B4)"
+      - interpretation.yaml — intent_summary requires every Data sheet row
+      - .onto/review/20260717-22cfd504/round1/evolution.findings.yaml#evolution-candidate-001
+      - "materialized-input.md — Data dimensions: 6 rows × 2 columns with five
+        non-empty Amount values"
+      - "materialized-input.md — Summary formula: SUM(Data!B2:B4)"
+      - .onto/review/20260717-22cfd504/round1/coverage.findings.yaml#coverage-candidate-001
+      - "materialized-input.md: Data dimensions are 6 rows × 2 columns with five
+        non-empty Amount values"
+      - "materialized-input.md: Summary!B1 formula is SUM(Data!B2:B4)"
+      - "materialized-input.md: GrandTotalRange spans Data!$A$2:$A$6"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-002
+    root_cause_hypothesis: The Grand Total input scope is independently represented
+      by an unconsumed named range and a hard-coded formula, allowing their row
+      and column boundaries to diverge.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-001
+      - finding-016
+    relation_refs:
+      - rel-008
+    raised_by_lens_ids:
+      - logic
+      - conciseness
+    issue_statement: Competing, unlinked Grand Total scope representations leave
+      Summary!B1 bounded to only three of five Amount rows.
+    proposed_action: Establish one authoritative complete Amount scope and make
+      Summary!B1 consume it, or remove the unused competing scope
+      representation.
+    affected_purpose: The Summary total must be complete and traceable to every Data
+      row for a spending decision.
+    failure_condition: The independently maintained named range and Summary formula
+      diverge, as they currently do in both column and row coverage.
+    impact: The decision-facing total is incomplete and reviewers cannot trace it to
+      a single authoritative input set.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/logic.findings.yaml#logic-candidate-001
+      - materialized-input.md — `SUM(Data!B2:B4)` at Summary!B1
+      - materialized-input.md — Data Amount `non_empty=1.00; cardinality=5/5`
+      - materialized-input.md — `GrandTotalRange → Data!$A$2:$A$6`
+      - materialized-input.md — Summary label `Grand Total (must aggregate ALL
+        Data rows)`
+      - .onto/review/20260717-22cfd504/round1/conciseness.findings.yaml#conciseness-candidate-001
+      - "materialized-input.md: named_ranges — `GrandTotalRange` →
+        `Data!$A$2:$A$6`"
+      - "materialized-input.md: formulas — `SUM(Data!B2:B4)` on Summary"
+      - "materialized-input.md: Data dimensions — 6 rows with five Amount values"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-003
+    root_cause_hypothesis: Summary!B1 terminates its aggregation range at B4
+      although populated Amount records continue through B6.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The grand-total path structurally excludes Data rows 5 and 6.
+    proposed_action: Make the aggregation path cover the complete Amount range and
+      verify with nonzero values in the formerly omitted rows.
+    affected_purpose: Summary totals must faithfully aggregate every Data row for a
+      spending decision.
+    failure_condition: Data!B5 or Data!B6 contains an amount while Summary!B1
+      references only Data!B2:B4.
+    impact: The displayed grand total can misstate spending and directly misinform
+      the decision.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/structure.findings.yaml#structure-candidate-001
+      - "materialized-input.md: Data dimensions are 6 rows with five populated
+        Amount values"
+      - "materialized-input.md: Summary!B1 formula is SUM(Data!B2:B4)"
+      - "materialized-input.md: GrandTotalRange identifies Data rows 2:6"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Only duplicate relations connect this finding to equivalent
+      observations; no same_root_candidate relation permits a multi-finding
+      cluster under the issue contract.
+  - issue_id: issue-004
+    root_cause_hypothesis: Summary!B1 hard-codes an aggregation dependency ending at
+      Data row 4 instead of the complete populated Amount extent.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: Two populated Data rows are absent from the Summary!B1
+      aggregation dependency.
+    proposed_action: Use the complete Amount dependency, preferably through a
+      maintained dynamic or structured range.
+    affected_purpose: The Summary total must faithfully aggregate every Data row for
+      a spending decision.
+    failure_condition: Data!B5 or Data!B6 is nonzero, or additional records are
+      appended beyond the hard-coded endpoint.
+    impact: The total can misstate spending and weaken the decision basis.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/dependency.findings.yaml#dependency-candidate-001
+      - "materialized-input.md: Summary!B1 formula SUM(Data!B2:B4)"
+      - "materialized-input.md: Data dimensions 6 rows × 2 columns"
+      - "materialized-input.md: Amount non_empty=1.00 and cardinality=5/5"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Only duplicate relations connect this finding to equivalent
+      observations; no same_root_candidate relation permits a multi-finding
+      cluster under the issue contract.
+  - issue_id: issue-005
+    root_cause_hypothesis: Summary!B1 is labeled as a Grand Total while its formula
+      is prematurely bounded at Data!B4.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: The value presented as the Grand Total is semantically a
+      partial subtotal because two Amount rows are excluded.
+    proposed_action: Align the formula with the complete-total meaning and
+      recalculate the workbook.
+    affected_purpose: The Summary total must faithfully represent all Data rows for
+      a spending decision.
+    failure_condition: Data!B5 or Data!B6 is nonzero while Summary!B1 continues to
+      use SUM(Data!B2:B4).
+    impact: A partial value appears complete and can materially mislead the spending
+      decision.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+      - materialized-input.md — Data has five non-empty Amount entries
+      - review_target_profile.yaml — declared spending-decision aggregation
+        purpose
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Only duplicate relations connect this finding to equivalent
+      observations; no same_root_candidate relation permits a multi-finding
+      cluster under the issue contract.
+  - issue_id: issue-006
+    root_cause_hypothesis: Summary!B1 uses a hard-coded range ending at Data row 4
+      instead of the complete Data Amount range through row 6.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-017
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: The decision-facing Grand Total violates the declared value of
+      aggregating every Data row.
+    proposed_action: Cover all current Amount rows and use an expanding scope if
+      later rows must also be included.
+    affected_purpose: Summary totals must faithfully aggregate every Data row for a
+      spending decision.
+    failure_condition: Data rows 5 or 6 contain amounts while Summary!B1 omits them.
+    impact: The total is incomplete by construction and cannot be trusted to
+      represent total spending.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/axiology.findings.yaml#axiology-candidate-001
+      - "review-value-alignment-criteria.yaml: criterion_id=user-request-intent"
+      - "materialized-input.md: Summary formula SUM(Data!B2:B4)"
+      - "materialized-input.md: Data dimensions 6 rows and five non-empty Amount
+        values"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only a duplicate relation connects this finding to an
+      equivalent observation; no same_root_candidate relation permits a
+      multi-finding cluster under the issue contract.
+  - issue_id: issue-007
+    root_cause_hypothesis: Summary!B2 retains a reference to an Archive worksheet
+      that is absent from the workbook.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: Summary!B2 requires a source sheet that does not exist, making
+      the formula unsatisfiable within the workbook.
+    proposed_action: Confirm the intended source, then restore, redirect, or remove
+      the stale formula and verify recalculation.
+    affected_purpose: Trustworthy Summary calculations for a spending decision.
+    failure_condition: Summary!B2 is evaluated in the current two-sheet workbook
+      without an Archive sheet.
+    impact: An unresolved decision-surface formula weakens confidence that Summary
+      values are complete and coherent.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/logic.findings.yaml#logic-candidate-002
+      - materialized-input.md — `'Archive'!B2` formula on Summary
+      - "materialized-input.md — workbook `sheets: 2`, listing only Data and
+        Summary"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only a duplicate relation connects this finding to an
+      equivalent observation; no same_root_candidate relation permits a
+      multi-finding cluster under the issue contract.
+  - issue_id: issue-008
+    root_cause_hypothesis: Summary!B2 retains a structural dependency on an Archive
+      worksheet that is not present.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Summary!B2 points to a nonexistent worksheet, creating a broken
+      cross-sheet path.
+    proposed_action: Identify the intended source, then restore the sheet or replace
+      or remove the reference and confirm no broken formulas remain.
+    affected_purpose: The Summary sheet must provide trustworthy calculated
+      information for the spending decision.
+    failure_condition: Summary!B2 is evaluated while the workbook contains no Archive sheet.
+    impact: The broken path makes the decision-facing Summary structurally
+      incomplete and untrustworthy.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/structure.findings.yaml#structure-candidate-002
+      - "materialized-input.md: sheets are Data and Summary only"
+      - "materialized-input.md: Summary!B2 formula is 'Archive'!B2"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only duplicate relations connect this finding to equivalent
+      observations; no same_root_candidate relation permits a multi-finding
+      cluster under the issue contract.
+  - issue_id: issue-009
+    root_cause_hypothesis: Summary!B2 was not updated or removed after its
+      Archive-sheet source became unavailable.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: Summary!B2 has an unresolved dependency on a nonexistent Archive sheet.
+    proposed_action: Confirm the intended source, then restore, redirect, or remove
+      the dependency and verify recalculation.
+    affected_purpose: The Summary sheet must provide trustworthy, verifiable totals
+      for a spending decision.
+    failure_condition: Summary!B2 is recalculated or consumed in the current workbook.
+    impact: The unresolved dependency exposes stale structure or a formula error and
+      weakens confidence in Summary outputs.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/dependency.findings.yaml#dependency-candidate-002
+      - "materialized-input.md: sheets=2, Data and Summary"
+      - "materialized-input.md: Summary!B2 formula 'Archive'!B2"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only duplicate relations connect this finding to equivalent
+      observations; no same_root_candidate relation permits a multi-finding
+      cluster under the issue contract.
+  - issue_id: issue-010
+    root_cause_hypothesis: Summary!B2 retains an Archive reference even though the
+      reviewed artifact contains no Archive worksheet.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - pragmatics
+    issue_statement: A Summary result follows an impossible and semantically unclear query path.
+    proposed_action: Confirm whether the intended value belongs to restored
+      historical data or an existing source, then correct the formula and
+      clarify its Summary role.
+    affected_purpose: The Summary sheet must provide trustworthy totals for a spending decision.
+    failure_condition: The workbook is opened or recalculated without an Archive worksheet.
+    impact: Users cannot obtain or interpret the Summary result and may be unable to
+      identify the authoritative decision value.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/pragmatics.findings.yaml#pragmatics-candidate-002
+      - "materialized-input.md — sheets: Data, Summary"
+      - "materialized-input.md — Summary!B2 formula: 'Archive'!B2"
+      - review-target-profile.yaml — cross_sheet_reference_integrity is a review
+        goal
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only duplicate relations connect this finding to equivalent
+      observations; no same_root_candidate relation permits a multi-finding
+      cluster under the issue contract.
+  - issue_id: issue-011
+    root_cause_hypothesis: Summary!B2 is misaimed at an Archive sheet absent from the workbook.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-018
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: A decision-surface formula cannot resolve and does not
+      implement the declared all-Data-row commitment.
+    proposed_action: Confirm B2's intended role, then replace it with the correct
+      source or remove it if obsolete.
+    affected_purpose: Summary totals must faithfully aggregate every Data row and
+      remain trustworthy for a spending decision.
+    failure_condition: Summary!B2 is evaluated while the Archive sheet is absent.
+    impact: A broken or stale Summary value can expose an error instead of a usable
+      amount and weakens confidence in the decision surface.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/axiology.findings.yaml#axiology-candidate-002
+      - "review-value-alignment-criteria.yaml: criterion_id=user-request-intent"
+      - "materialized-input.md: workbook sheets are Data and Summary"
+      - "materialized-input.md: Summary formula 'Archive'!B2"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only a duplicate relation connects this finding to an
+      equivalent observation; no same_root_candidate relation permits a
+      multi-finding cluster under the issue contract.
+  - issue_id: issue-012
+    root_cause_hypothesis: GrandTotalRange is defined over category labels and is
+      not consumed by the actual total formula.
+    root_confidence: low
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The named range supplies no structural connection between all
+      Amount values and the Summary total.
+    proposed_action: Remove the unused name or redefine it over the authoritative
+      Amount scope and make the total consume it.
+    affected_purpose: Maintainable and verifiable all-row aggregation for the
+      declared spending decision.
+    failure_condition: A maintainer treats GrandTotalRange as the governing total
+      scope despite its category-column target and disconnection from
+      Summary!B1.
+    impact: The name can falsely suggest complete aggregation coverage, increasing
+      maintenance and verification risk.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/structure.findings.yaml#structure-candidate-003
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No relation involving this finding appears in the relation graph.
+  - issue_id: issue-013
+    root_cause_hypothesis: GrandTotalRange is misdirected to category labels while
+      the actual total bypasses it.
+    root_confidence: low
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: The named range creates a misleading but currently inert
+      dependency surface.
+    proposed_action: Retarget it to the complete Amount scope and consume it, or
+      rename or remove it if it is intended for categories.
+    affected_purpose: Maintainable dependency integrity for trustworthy Summary totals.
+    failure_condition: A future formula or maintainer relies on GrandTotalRange as
+      the canonical monetary input range.
+    impact: Future consumers may retrieve labels rather than amounts, while the name
+      still cannot govern total-row coverage.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/dependency.findings.yaml#dependency-candidate-003
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No relation involving this finding appears in the relation graph.
+  - issue_id: issue-014
+    root_cause_hypothesis: GrandTotalRange names category-label cells as though they
+      represented a monetary aggregation range.
+    root_confidence: low
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: The named range's meaning conflicts with the cells it denotes.
+    proposed_action: Rename it to match the category referent or repoint it to the
+      intended monetary input range.
+    affected_purpose: Clear, maintainable interpretation of the workbook's total scope.
+    failure_condition: A maintainer interprets GrandTotalRange as a monetary range
+      and uses it accordingly.
+    impact: The semantic mismatch can mislead maintenance and future formulas,
+      though no current consumer is shown.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/semantics.findings.yaml#semantics-candidate-002
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No relation involving this finding appears in the relation graph.
+  - issue_id: issue-015
+    root_cause_hypothesis: GrandTotalRange points to category labels despite
+      presenting itself as a practical navigation path to totalable values.
+    root_confidence: low
+    surface_finding_ids:
+      - finding-013
+    relation_refs: []
+    raised_by_lens_ids:
+      - pragmatics
+    issue_statement: The named range admits a misleading interpretation and does not
+      lead users to Amount values.
+    proposed_action: Rename it for categories or repoint it to the complete Amount
+      range with an unambiguous name.
+    affected_purpose: Usable and unambiguous navigation to the data supporting the
+      spending total.
+    failure_condition: A user or future formula author follows GrandTotalRange
+      expecting monetary inputs.
+    impact: They receive labels rather than totalable values, making the name
+      unreliable for verification or maintenance.
+    evidence_refs:
+      - .onto/review/20260717-22cfd504/round1/pragmatics.findings.yaml#pragmatics-candidate-003
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No relation involving this finding appears in the relation graph.
+issue_dependencies: []
+validation:
+  unclustered_finding_ids: []

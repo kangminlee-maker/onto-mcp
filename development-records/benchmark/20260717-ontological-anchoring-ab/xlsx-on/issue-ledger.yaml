@@ -1,0 +1,575 @@
+schema_version: 1
+session_id: 20260717-13297536
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: Summary!B1 encodes aggregation authority as fixed
+      coordinates ending at Data!B4 instead of an expandable complete Amount
+      range, causing both current omissions and future row drift.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+      - finding-013
+    relation_refs:
+      - rel-007
+    raised_by_lens_ids:
+      - logic
+      - evolution
+    issue_statement: The grand total omits populated Data rows 5–6 and will silently
+      omit later appended rows because its aggregation range is fixed and
+      already outdated.
+    proposed_action: Replace the fixed partial range with a correctly bound
+      expandable Amount range or table column, then recalculate and reconcile
+      the total against every Data row.
+    affected_purpose: The Summary sheet totals must faithfully aggregate every Data
+      sheet row for a spending decision.
+    failure_condition: Whenever Data contains records below row 4, including the
+      evidenced records in rows 5–6, Summary!B1 excludes their amounts.
+    impact: The primary decision-facing total is incomplete now and can continue
+      drifting as rows are appended, so it cannot be trusted for the declared
+      spending decision.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/logic.findings.yaml#logic-candidate-001
+      - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+      - materialized-input.md — Data has five non-empty Amount values across
+        rows 2–6
+      - materialized-input.md — Summary column contract requires aggregating ALL
+        Data rows
+      - .onto/review/20260717-13297536/round1/evolution.findings.yaml#evolution-candidate-001
+      - "materialized-input.md — formula inventory: SUM(Data!B2:B4) at
+        Summary!B1"
+      - "materialized-input.md — Data dimensions and column profiles: 6 rows
+        with 5 Category/Amount records"
+      - materialized-input.md — GrandTotalRange → Data!$A$2:$A$6
+      - review-value-alignment-criteria.yaml — criterion user-request-intent
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-002
+    root_cause_hypothesis: Summary!B2 retains a cross-sheet reference to Archive!B2
+      although the workbook contains no Archive worksheet.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: Summary!B2 references a worksheet absent from the workbook and
+      therefore cannot resolve against the inventoried workbook state.
+    proposed_action: Restore the intended Archive source or retarget Summary!B2 to
+      an existing authoritative cell, then recalculate and verify the Summary
+      output.
+    affected_purpose: Cross-sheet reference integrity and trustworthy Summary totals
+      for a spending decision.
+    failure_condition: When Summary!B2 is evaluated, its Archive!B2 target cannot be resolved.
+    impact: A broken formula on the decision-facing Summary sheet weakens confidence
+      in the workbook’s calculations.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/logic.findings.yaml#logic-candidate-002
+      - materialized-input.md — Summary!B2 formula 'Archive'!B2
+      - materialized-input.md — sheets list contains only Data and Summary
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; duplicate relations are not valid merge references under
+      the issue-ledger contract.
+  - issue_id: issue-003
+    root_cause_hypothesis: Summary!B1 terminates its source range at Data row 4
+      although populated Amount data extends through row 6.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The grand-total path structurally disconnects Data!B5:B6.
+    proposed_action: Connect the aggregation to the complete Amount range,
+      preferably through a correctly defined expandable range or table, and
+      reconcile the recalculated total against all source rows.
+    affected_purpose: Summary totals must faithfully aggregate every Data row for a
+      spending decision.
+    failure_condition: Whenever Data!B5 or Data!B6 contains an amount, Summary!B1 omits it.
+    impact: The decision-facing total is structurally incomplete and can
+      misrepresent total spending.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-001
+      - materialized-input.md — Data dimensions and populated Amount column
+      - materialized-input.md — Summary!B1 formula SUM(Data!B2:B4)
+      - review-value-alignment-criteria.yaml — criterion user-request-intent
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-004
+    root_cause_hypothesis: The workbook contains no Archive worksheet while
+      Summary!B2 retains a reference to Archive!B2.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Summary!B2 has no existing worksheet endpoint for its
+      cross-sheet connection.
+    proposed_action: Restore the intended Archive sheet or retarget or remove
+      Summary!B2 after confirming its intended source, then recalculate and scan
+      for formula errors.
+    affected_purpose: Cross-sheet reference integrity and formula integrity
+      supporting trustworthy Summary totals.
+    failure_condition: When Summary!B2 is evaluated, its referenced Archive worksheet is absent.
+    impact: The broken connection makes the decision surface internally incomplete
+      and undermines confidence in its calculations.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-002
+      - "materialized-input.md — sheets: Data, Summary"
+      - materialized-input.md — Summary!B2 formula 'Archive'!B2
+      - review-target-profile.yaml — cross_sheet_reference_integrity and
+        formula_integrity goals
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-005
+    root_cause_hypothesis: GrandTotalRange is defined but unused by the workbook
+      formulas, leaving it orphaned from the live grand-total path.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The named range provides no active structural link between Data
+      rows and the Summary total.
+    proposed_action: Either redefine the name over the intended Amount cells and use
+      it in the Summary aggregation, or remove it if it has no intended role.
+    affected_purpose: Maintainable and verifiable Summary aggregation for the
+      declared spending-decision purpose.
+    failure_condition: No material failure condition is established by the bounded
+      finding evidence; the risk arises when maintainers treat the unused name
+      as authoritative.
+    impact: The orphaned name can mislead maintainers into believing the total is
+      centrally governed when the live formula is hard-coded elsewhere.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/structure.findings.yaml#structure-candidate-003
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation supports merging this finding
+      with another finding.
+  - issue_id: issue-006
+    root_cause_hypothesis: Summary!B1 is wired to a hard-coded partial Amount range
+      ending at Data row 4 rather than the complete set of populated Amount
+      rows.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: The grand-total dependency excludes Data!B5:B6, so those rows
+      cannot affect the reported total.
+    proposed_action: Connect the total to the complete Amount range, preferably
+      through a table column or correctly defined dynamic range, and verify it
+      against an independent sum.
+    affected_purpose: Summary totals must faithfully aggregate every Data sheet row
+      for a spending decision.
+    failure_condition: Whenever Data!B5 or Data!B6 contains or changes an amount,
+      Summary!B1 does not incorporate it.
+    impact: The displayed total can understate or misstate the budget and directly
+      mislead the spending decision.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/dependency.findings.yaml#dependency-candidate-001
+      - "materialized-input.md — formula inventory: Summary!B1 = SUM(Data!B2:B4)"
+      - materialized-input.md — Data dimensions are 6 rows × 2 columns with five
+        populated Amount values
+      - materialized-input.md — GrandTotalRange spans Data rows 2–6,
+        corroborating the populated row extent
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-007
+    root_cause_hypothesis: Summary!B2 retains a cross-sheet dependency on an absent Archive worksheet.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: Summary!B2 has no live in-workbook producer for its referenced value.
+    proposed_action: Restore the intended Archive source or redirect Summary!B2 to
+      the correct existing source, then recalculate and verify that the
+      reference resolves.
+    affected_purpose: Trustworthy Summary totals and cross-sheet reference integrity.
+    failure_condition: When Summary!B2 is recalculated or its cached result is
+      invalidated, Archive!B2 is unavailable.
+    impact: The Summary value may fail or remain stale, weakening traceability and
+      trust in figures used for the spending decision.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/dependency.findings.yaml#dependency-candidate-002
+      - "materialized-input.md — formula inventory: Summary!B2 = 'Archive'!B2"
+      - materialized-input.md — workbook sheet inventory contains only Data and
+        Summary
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-008
+    root_cause_hypothesis: Summary!B1 terminates its aggregation at Data row 4
+      instead of the final populated row 6.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: The cell labeled Grand Total does not have grand-total
+      semantics because it excludes two populated Data rows.
+    proposed_action: Aggregate the complete Amount range, preferably through a table
+      column or correctly defined dynamic range so future rows are included.
+    affected_purpose: Summary totals must faithfully aggregate every Data sheet row
+      for a spending decision.
+    failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount,
+      Summary!B1 misstates the grand total.
+    impact: The labeled decision value excludes two of five populated rows and can
+      lead to a materially wrong spending decision.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/semantics.findings.yaml#semantics-candidate-001
+      - ".onto/review/20260717-13297536/interpretation.yaml: intent_summary"
+      - ".onto/review/20260717-13297536/execution-preparation/materialized-inpu\
+        t.md: formulas and Data dimensions"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-009
+    root_cause_hypothesis: GrandTotalRange is named as a monetary total range but is
+      bound to category-label cells in Data column A.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: The named range’s meaning conflicts with its referent.
+    proposed_action: Repoint GrandTotalRange to the intended amount or total cells,
+      or rename it to CategoryRange if category labels are intended.
+    affected_purpose: Named-range hygiene and maintainable, verifiable Summary totals.
+    failure_condition: No material failure condition is established by the bounded
+      finding evidence; risk arises if a maintainer uses the range according to
+      its name.
+    impact: The semantic mismatch can direct future formulas or maintenance work to
+      the wrong source and weaken trust in named ranges.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/semantics.findings.yaml#semantics-candidate-002
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation supports merging this finding
+      with another finding.
+  - issue_id: issue-010
+    root_cause_hypothesis: Summary!B1 has a hard-coded range ending at Data!B4
+      although populated Amount data extends through row 6.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - pragmatics
+    issue_statement: The displayed grand total omits two of the five populated Data amounts.
+    proposed_action: Expand the formula to every populated amount and preferably use
+      an automatically expanding range for future rows.
+    affected_purpose: Summary totals must faithfully aggregate every Data sheet row
+      for a spending decision.
+    failure_condition: Whenever Data!B5 or Data!B6 contains a nonzero amount,
+      Summary!B1 excludes it.
+    impact: The workbook cannot reliably answer the complete spending-total question
+      it was created to support.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-001
+      - materialized-input.md:15
+      - materialized-input.md:18-23
+      - materialized-input.md:25-30
+      - interpretation.yaml:5-7
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-011
+    root_cause_hypothesis: Summary!B2 retains a reference to an Archive sheet absent
+      from the workbook.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - pragmatics
+    issue_statement: A decision-facing Summary formula cannot provide a usable
+      answer from the current workbook.
+    proposed_action: Remove the obsolete Summary row if unnecessary, or retarget B2
+      to the intended existing source and label it unambiguously.
+    affected_purpose: Trustworthy Summary totals and cross-sheet reference integrity.
+    failure_condition: Any user or calculation relying on Summary!B2 attempts to
+      resolve a source sheet absent from the workbook.
+    impact: Part of the Summary answer surface is unusable, making decision-facing
+      outputs harder to interpret and verify.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-002
+      - materialized-input.md:9
+      - materialized-input.md:14-16
+      - materialized-input.md:25-30
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-012
+    root_cause_hypothesis: GrandTotalRange is bound to Data category cells instead
+      of the canonical total result.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - pragmatics
+    issue_statement: The workbook exposes a misleading alternate query path that
+      yields categories rather than the grand total.
+    proposed_action: Point GrandTotalRange to the canonical Summary total cell, or
+      rename it to CategoryRange if the category span is intentional.
+    affected_purpose: Named-range hygiene and verifiability supporting a trustworthy
+      decision total.
+    failure_condition: A user, formula, or integration uses GrandTotalRange to
+      obtain the workbook’s grand total.
+    impact: The named path does not yield the requested total, undermining
+      unambiguous retrieval and verification.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/pragmatics.findings.yaml#pragmatics-candidate-003
+      - materialized-input.md:11-12
+      - materialized-input.md:18-23
+      - materialized-input.md:25-30
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The only relation to another finding is shared_cause_candidate
+      rel-008, which must remain dependency context and cannot be used as a
+      merge reference.
+  - issue_id: issue-013
+    root_cause_hypothesis: Summary!B2 contains a stale worksheet reference left by
+      an unsafe worksheet lifecycle change.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: A Summary formula depends on a sheet that no longer exists,
+      indicating worksheet changes are not reference-safe.
+    proposed_action: Remove or redirect the obsolete formula and add validation for
+      formulas that reference missing sheets after worksheet lifecycle changes.
+    affected_purpose: Maintainable cross-sheet reference integrity supporting
+      trustworthy Summary calculations.
+    failure_condition: No material failure condition tied to the grand total is
+      established by the bounded finding evidence; the stale reference fails
+      when Summary!B2 is evaluated.
+    impact: The stale dependency weakens confidence that workbook changes preserve
+      decision-facing Summary calculations.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/evolution.findings.yaml#evolution-candidate-002
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation supports merging this finding
+      with another finding.
+  - issue_id: issue-014
+    root_cause_hypothesis: Summary!B1 uses a fixed aggregation endpoint at Data!B4
+      although the populated Data region extends through row 6.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-015
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: The grand-total formula covers only three of five Data rows.
+    proposed_action: Cover all Amount rows and preferably use an expanding table
+      column or correctly defined dynamic range for newly added rows.
+    affected_purpose: Summary totals must faithfully aggregate every Data sheet row
+      for a spending decision.
+    failure_condition: Whenever Data contains entries in rows 5 or 6, Summary!B1
+      excludes them because its range ends at B4.
+    impact: The decision-facing total is structurally incomplete and cannot be
+      trusted for spending decisions.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:15
+      - materialized-input.md:18-23
+      - materialized-input.md:29
+      - review-value-alignment-criteria.yaml:6-19
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-015
+    root_cause_hypothesis: Summary!B2 names Archive!B2 as its source although the
+      workbook does not contain an Archive sheet.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-016
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: A Summary formula lacks a represented and independently verifiable source.
+    proposed_action: Determine the intended authoritative source, then restore
+      Archive, repoint Summary!B2, or remove the formula if the row is obsolete.
+    affected_purpose: Trustworthy Summary totals and cross-sheet reference integrity.
+    failure_condition: When Summary!B2 is calculated or audited, its referenced
+      Archive sheet is absent.
+    impact: The Summary value lacks a present source, reducing verifiability and
+      making the decision-facing sheet unsafe to rely on without clarification
+      or repair.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:7-9
+      - materialized-input.md:14-16
+      - materialized-input.md:25-30
+      - review-value-alignment-criteria.yaml:6-19
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-016
+    root_cause_hypothesis: GrandTotalRange is an unused parallel representation of
+      the grand-total concept and does not contain Amount cells.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-017
+    relation_refs: []
+    raised_by_lens_ids:
+      - conciseness
+    issue_statement: The workbook retains a stale named range that appears
+      authoritative but has no effect on the total.
+    proposed_action: Remove GrandTotalRange if unused, or redefine it over all
+      Amount rows and make the Summary formula consume it as the single
+      authority.
+    affected_purpose: Maintainability, auditability, and named-range hygiene
+      supporting trustworthy totals.
+    failure_condition: No material failure condition is established by the bounded
+      finding evidence; ambiguity arises when maintainers or auditors treat the
+      name as authoritative.
+    impact: The parallel definition creates unnecessary ambiguity and makes future
+      maintenance and auditing less trustworthy.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/conciseness.findings.yaml#conciseness-candidate-001
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation supports merging this finding
+      with another finding.
+  - issue_id: issue-017
+    root_cause_hypothesis: Summary!B1 uses a fixed Data!B2:B4 boundary although
+      populated Data rows extend through B6.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-018
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: The grand total excludes two of five Data rows and directly
+      violates the workbook’s declared purpose.
+    proposed_action: Aggregate every Amount row through a table column or correctly
+      defined dynamic range, then recalculate and verify against an independent
+      sum.
+    affected_purpose: Summary totals must faithfully aggregate every Data row for a
+      spending decision.
+    failure_condition: Whenever Data!B5 or Data!B6 contributes an amount, Summary!B1
+      does not incorporate it.
+    impact: The primary decision total is incomplete, so a spending decision may use
+      an understated or otherwise incorrect aggregate.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-001
+      - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+        — Data has five populated Amount records; Summary!B1 uses
+        SUM(Data!B2:B4)
+      - .onto/review/20260717-13297536/execution-preparation/review-value-alignment-criteria.yaml
+        — criterion user-request-intent
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-018
+    root_cause_hypothesis: Summary!B2 retains a dependency on an Archive sheet
+      absent from the reviewed workbook.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-019
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: A decision-facing Summary value lacks an inspectable worksheet source.
+    proposed_action: Replace the reference with a present Data-derived formula,
+      restore an explicitly governed Archive source, or remove the formula if
+      obsolete.
+    affected_purpose: Trustworthy Summary totals for a spending decision and
+      cross-sheet reference integrity.
+    failure_condition: When the workbook recalculates or a reviewer traces
+      Summary!B2, its referenced Archive sheet is unavailable.
+    impact: The value may become an error or stale cached result, weakening trust in
+      the Summary as a whole.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-002
+      - .onto/review/20260717-13297536/execution-preparation/materialized-input.md
+        — workbook has only Data and Summary sheets; Summary!B2 references
+        Archive!B2
+      - .onto/review/20260717-13297536/execution-preparation/review-value-alignment-criteria.yaml
+        — criterion user-request-intent
+      - .onto/review/20260717-13297536/execution-preparation/review-target-profile.yaml
+        — cross_sheet_reference_integrity goal
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its duplicate relation is not a valid merge reference
+      under the issue-ledger contract.
+  - issue_id: issue-019
+    root_cause_hypothesis: GrandTotalRange points to category labels in Data column
+      A rather than spending amounts in column B.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-020
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: The grand-total named range creates a misleading audit and
+      maintenance surface.
+    proposed_action: Point the name to the complete Amount range, or rename or
+      remove it if it represents categories, then use one canonical range in the
+      Summary formula.
+    affected_purpose: Verifiability, maintainability, and named-range hygiene
+      supporting the spending-total purpose.
+    failure_condition: No material failure condition is established by the bounded
+      finding evidence; risk arises if the misleading name is used in future
+      formulas or audits.
+    impact: The name suggests a canonical total input but targets unsummable
+      category labels, weakening verifiability and inviting future use of the
+      wrong column.
+    evidence_refs:
+      - .onto/review/20260717-13297536/round1/axiology.findings.yaml#axiology-candidate-003
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation supports merging this finding
+      with another finding.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-012
+    relation_refs:
+      - rel-008
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (GrandTotalRange is bound to fixed Category-column
+      coordinates rather than an expandable Amount range used by the canonical
+      Summary total.)."
+validation:
+  unclustered_finding_ids: []

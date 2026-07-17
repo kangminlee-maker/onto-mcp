@@ -1,0 +1,106 @@
+schema_version: 1
+session_id: 20260717-13297536
+planned_issues:
+  - issue_id: issue-012
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - pragmatics
+      - logic
+      - structure
+      - dependency
+      - semantics
+      - evolution
+      - conciseness
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.pragmatics
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+      - issue-stance-matrix.yaml#stances.issue-012.dependency
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.conciseness
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+    conflict_summary: Pragmatics and coverage treat GrandTotalRange as a materially
+      misleading alternate retrieval path at medium severity, while the other
+      lenses limit it to a latent low-severity risk because no current formula,
+      user, or integration is evidenced as consuming the name.
+    resolution_question: Does the category-bound GrandTotalRange itself constitute a
+      current material alternate-path failure, or must the issue be narrowed to
+      a non-material prospective risk absent evidence of an active consumer?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All participating lenses support the fixed-range root hypothesis and
+      retain high severity.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All participating lenses support the absent-worksheet root hypothesis
+      and retain medium severity.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: All participating lenses agree that Data!B5:B6 are structurally
+      disconnected from the grand-total path.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: All participating lenses agree that Summary!B2 has no existing worksheet
+      endpoint and retain medium severity.
+  - issue_id: issue-005
+    reason_code: non_material_issue
+    reason: The issue is low severity and non-material; stance differences only
+      narrow its maintenance and coverage relevance.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All participating lenses support the incomplete dependency root and
+      retain high severity.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All participating lenses support the missing live producer root and
+      retain medium severity.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: All participating lenses agree that the labeled Grand Total lacks
+      complete grand-total semantics.
+  - issue_id: issue-009
+    reason_code: non_material_issue
+    reason: The issue is low severity and non-material; narrower stances preserve
+      only its conditional maintenance risk.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: All participating lenses agree that the displayed total omits two
+      populated amounts and retain high severity.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All participating lenses support the unusable Summary!B2 path and retain
+      medium severity.
+  - issue_id: issue-013
+    reason_code: non_material_issue
+    reason: The issue is classified low and non-material, so its root-cause and
+      severity disagreements do not enter material deliberation.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: All participating lenses agree that the formula covers only three of
+      five populated Data rows.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: All participating lenses support the missing represented source root and
+      retain medium severity.
+  - issue_id: issue-016
+    reason_code: non_material_issue
+    reason: The unused parallel named range is low severity and non-material;
+      surface-only stances do not create a material conflict.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: All participating lenses agree that the fixed range directly violates
+      the workbook's declared all-row aggregation purpose.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: All participating lenses support the absent inspectable source root and
+      retain medium severity.
+  - issue_id: issue-019
+    reason_code: non_material_issue
+    reason: The misleading named-range audit surface is low severity and
+      non-material; narrower stances only limit it to conditional future risk.

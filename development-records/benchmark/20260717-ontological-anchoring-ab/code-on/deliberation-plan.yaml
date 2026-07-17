@@ -1,0 +1,202 @@
+schema_version: 1
+session_id: 20260717-e87f9480
+planned_issues:
+  - issue_id: issue-001
+    priority: 12
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - conciseness
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.conciseness
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: The lenses agree that the unknown-to-string contract is
+      defective, but disagree whether the unjustified wrapper abstraction is
+      part of the same root cause or a separate concept-economy judgment.
+    resolution_question: Should the canonical root include both the absent
+      serialization policy and the unjustified wrapper abstraction, or be
+      narrowed to the unenforced serialization contract alone?
+  - issue_id: issue-002
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+      - issue-stance-matrix.yaml#stances.issue-002.conciseness
+    conflict_summary: Structure treats the incomplete input-to-string path as a
+      supported issue, while conciseness treats it as a duplicate surface of
+      issue-001.
+    resolution_question: Should issue-002 remain an independent material issue, or
+      be consolidated into the canonical serialization-policy issue?
+  - issue_id: issue-003
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - dependency
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.dependency
+      - issue-stance-matrix.yaml#stances.issue-003.conciseness
+    conflict_summary: Dependency treats coupling to a partial serializer as an
+      independent issue, while conciseness considers it another manifestation of
+      issue-001.
+    resolution_question: Does the partial-serializer dependency warrant a separate
+      issue, or should it be represented only under the shared policy-free
+      wrapper root?
+  - issue_id: issue-004
+    priority: 11
+    conflict_type: purpose_value
+    participating_lens_ids:
+      - dependency
+      - logic
+      - pragmatics
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.dependency
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.pragmatics
+      - issue-stance-matrix.yaml#stances.issue-004.conciseness
+    conflict_summary: Some lenses interpret verifiability and regression-risk goals
+      as requiring canonical output, while others find no established
+      canonical-format contract or dependent consumer and therefore lower
+      severity or report insufficient evidence.
+    resolution_question: Do the declared formatter-review purposes establish a
+      canonical-ordering obligation sufficient for a medium issue, or is
+      insertion-order sensitivity only a conditional low-severity risk?
+  - issue_id: issue-005
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+      - issue-stance-matrix.yaml#stances.issue-005.conciseness
+    conflict_summary: Semantics supports the totality failure as stated, while
+      conciseness says it duplicates the contract surface already captured by
+      issue-001.
+    resolution_question: Should issue-005 remain a distinct semantic-contract issue,
+      or be merged into issue-001 as another surface of the same missing
+      serialization policy?
+  - issue_id: issue-006
+    priority: 10
+    conflict_type: purpose_value
+    participating_lens_ids:
+      - semantics
+      - logic
+      - pragmatics
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.pragmatics
+      - issue-stance-matrix.yaml#stances.issue-006.conciseness
+    conflict_summary: Semantics treats non-canonical output as materially contrary
+      to stable regression evidence, while other lenses require an explicit
+      canonical-equivalence contract or consumer before admitting that impact.
+    resolution_question: Is canonical equivalence part of unstableFormat's declared
+      purpose, making issue-006 medium, or must the issue be narrowed and
+      lowered because that obligation is unproven?
+  - issue_id: issue-007
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - pragmatics
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.pragmatics
+      - issue-stance-matrix.yaml#stances.issue-007.conciseness
+    conflict_summary: Pragmatics treats undefined as a concrete standalone contract
+      violation, while conciseness treats it as a witness supporting issue-001
+      rather than an independent issue.
+    resolution_question: Should the concrete undefined counterexample remain a
+      separate material issue, or serve only as evidence for the canonical
+      contract-policy issue?
+  - issue_id: issue-008
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.conciseness
+    conflict_summary: Evolution presents future input compatibility as a supported
+      issue, while conciseness says it adds no distinct failure or remedy beyond
+      issue-001.
+    resolution_question: Does the evolution framing identify a separate material
+      issue, or should its compatibility risk be retained only as impact
+      evidence under issue-001?
+  - issue_id: issue-009
+    priority: 10
+    conflict_type: purpose_value
+    participating_lens_ids:
+      - evolution
+      - logic
+      - pragmatics
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.pragmatics
+      - issue-stance-matrix.yaml#stances.issue-009.conciseness
+    conflict_summary: Evolution treats construction-order sensitivity as a material
+      cross-version regression defect, while other lenses find the
+      stable-comparison purpose and consumer unestablished.
+    resolution_question: Do the review's regression and maintainability purposes
+      make cross-version canonical output an obligation, or is issue-009 merely
+      a conditional, lower-severity concern?
+  - issue_id: issue-010
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.conciseness
+    conflict_summary: Coverage frames omitted and exceptional input categories as a
+      material coverage issue, while conciseness treats those tests as
+      verification for issue-001 rather than a separate root issue.
+    resolution_question: Should missing edge-case coverage be retained as an
+      independent material issue, or folded into the corrective action and
+      verification obligations of issue-001?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.conciseness
+    conflict_summary: Axiology supports the partial-result mismatch as a direct
+      value-alignment issue, while conciseness treats it as a duplicate lens
+      framing of issue-001.
+    resolution_question: Should issue-011 remain a distinct value-alignment issue,
+      or be consolidated into the single policy-centered contract issue?
+  - issue_id: issue-012
+    priority: 10
+    conflict_type: purpose_value
+    participating_lens_ids:
+      - axiology
+      - logic
+      - pragmatics
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.pragmatics
+      - issue-stance-matrix.yaml#stances.issue-012.conciseness
+    conflict_summary: Axiology treats stable ordering as required by verifiability
+      and regression-risk objectives, while other lenses find no proven
+      canonical-output contract or consumer and question both medium severity
+      and added machinery.
+    resolution_question: Does the confirmed value alignment require stable ordering
+      for equivalent records, or should issue-012 be narrowed and lowered
+      pending evidence of a canonical-output consumer?
+skipped_issues: []

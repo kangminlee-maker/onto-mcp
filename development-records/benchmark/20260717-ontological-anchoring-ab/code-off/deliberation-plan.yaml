@@ -1,0 +1,96 @@
+schema_version: 1
+session_id: 20260717-d7b236f4
+planned_issues:
+  - issue_id: issue-002
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - logic
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+    conflict_summary: Structure and axiology treat canonical key ordering as a
+      medium-severity requirement of verifiable, regression-resistant
+      formatting, while logic and semantics consider it conditional on a
+      canonical-output contract not established by the visible API alone and
+      would lower severity.
+    resolution_question: Do the declared formatter purposes require structurally
+      equivalent objects to have identical text, making absent canonical
+      ordering a medium-severity defect, or is canonicalization only an optional
+      use-case-specific enhancement?
+  - issue_id: issue-004
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - dependency
+      - logic
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.dependency
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+    conflict_summary: Dependency and axiology regard insertion-history-dependent
+      output as a medium-severity violation of regression-resistant formatting,
+      whereas logic and semantics accept the dependency but would lower severity
+      unless canonical structural identity is an intended contract.
+    resolution_question: Is independence from object insertion history required by
+      the declared purpose, or should this issue be narrowed and lowered because
+      the visible formatter contract does not promise canonical output?
+  - issue_id: issue-008
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - pragmatics
+      - logic
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.pragmatics
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+    conflict_summary: Pragmatics and axiology classify multiple strings for
+      equivalent records as a medium-severity threat to comparisons and
+      regression evidence, while logic and semantics would lower severity
+      because textual identity for logically equivalent content is not explicit
+      in the visible contract.
+    resolution_question: Does the intended formatter behavior include canonical
+      representation for logically equivalent records, and therefore require a
+      medium-severity canonicalization remedy, or should the finding be
+      conditional and lower severity?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All participating lenses support the contract-failure diagnosis, root
+      hypothesis, and medium severity.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: All lenses agree that the sole partial serialization path cannot satisfy
+      the declared total string-result contract.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All lenses support the identified top-level undefined outcome as a
+      medium-severity contract violation.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: The narrowing stances bound the evidence for canonicality, information
+      preservation, and evolution claims but retain medium severity and agree on
+      the core missing supported-value and failure-policy defect; conditional
+      policy wording already preserves that scope.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All lenses support the concrete top-level non-JSON cases, root cause,
+      and medium severity.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: The narrowing stances distinguish proven non-string and exceptional
+      outcomes from representation-loss claims, but all retain medium severity
+      and agree on the supported-domain and failure-policy remedy, so the
+      residual scope qualification does not require controlled deliberation.
