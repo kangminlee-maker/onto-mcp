@@ -308,6 +308,28 @@ const ReviewActorSettingsSchema = z
   })
   .strict();
 
+/**
+ * Ontological-anchoring alignment flags (design:
+ * 20260716-review-ontological-primacy-runtime-alignment-design.md §2-2).
+ * Opt-in, both default OFF (INV-CFG-1). Split by blast radius:
+ * - `obligations`: per-kind packet obligation prose (code/database) — design (a)+(B).
+ * - `judgment_anchor`: kind-shared judgment framing (lens sidecar severity
+ *   anchor, issue-artifact Severity Contract anchor + confirmed-criteria
+ *   projection embed, problem-framing admission routing, deliberation
+ *   precedence ladder) — design (c)+(b).
+ * Prose-only: no schema, enum, predicate, or validation change rides these flags.
+ */
+const ReviewOntologicalAnchoringFlagSchema = z
+  .object({ enabled: z.boolean().optional() })
+  .strict();
+
+const ReviewOntologicalAnchoringSettingsSchema = z
+  .object({
+    obligations: ReviewOntologicalAnchoringFlagSchema.optional(),
+    judgment_anchor: ReviewOntologicalAnchoringFlagSchema.optional(),
+  })
+  .strict();
+
 const ReviewExecutionSettingsSchema = z
   .object({
     mode: ReviewExecutionModeSchema.optional(),
@@ -316,6 +338,7 @@ const ReviewExecutionSettingsSchema = z
     artifact_generation_realization:
       ReviewArtifactGenerationRealizationSchema.optional(),
     max_concurrent_lenses: z.number().int().min(1).optional(),
+    ontological_anchoring: ReviewOntologicalAnchoringSettingsSchema.optional(),
     teamlead: ReviewActorSettingsSchema.optional(),
     lens: ReviewActorSettingsSchema.optional(),
     synthesize: ReviewActorSettingsSchema.optional(),
@@ -515,6 +538,7 @@ const V3ReviewExecutionSettingsSchema = z
     artifact_generation_realization:
       ReviewArtifactGenerationRealizationSchema.optional(),
     max_concurrent_lenses: z.number().int().min(1).optional(),
+    ontological_anchoring: ReviewOntologicalAnchoringSettingsSchema.optional(),
     actors: z
       .object({
         teamlead: V3ReviewActorSettingsSchema.optional(),
@@ -689,12 +713,23 @@ interface ReviewExecutionSettingsInput {
   executor?: ReviewExecutorSelection | undefined;
   artifact_generation_realization?: ReviewArtifactGenerationRealization | undefined;
   max_concurrent_lenses?: number | undefined;
+  ontological_anchoring?: ReviewOntologicalAnchoringSettings | undefined;
   teamlead?: ReviewActorSettingsInput | undefined;
   lens?: ReviewActorSettingsInput | undefined;
   synthesize?: ReviewActorSettingsInput | undefined;
   deliberation?: ReviewDeliberation | undefined;
   retry?: ReviewRetrySettingsInput | undefined;
   units?: ReviewExecutionUnitsInput | undefined;
+}
+
+/**
+ * Ontological-anchoring alignment flags (design
+ * 20260716-review-ontological-primacy-runtime-alignment-design.md §2-2).
+ * Both sub-flags default OFF; absent object means both off.
+ */
+export interface ReviewOntologicalAnchoringSettings {
+  obligations?: { enabled?: boolean | undefined } | undefined;
+  judgment_anchor?: { enabled?: boolean | undefined } | undefined;
 }
 
 interface ReviewArtifactSettingsInput {
@@ -736,6 +771,7 @@ export interface ReviewExecutionSettings {
   executor?: ReviewExecutorSelection;
   artifact_generation_realization?: ReviewArtifactGenerationRealization;
   max_concurrent_lenses?: number | undefined;
+  ontological_anchoring?: ReviewOntologicalAnchoringSettings | undefined;
   teamlead?: ReviewActorSettings;
   lens?: ReviewActorSettings;
   synthesize?: ReviewActorSettings;
@@ -823,6 +859,7 @@ export interface ResolvedReviewExecutionSettings {
   executor: ReviewExecutorSelection;
   artifact_generation_realization: ReviewArtifactGenerationRealization;
   max_concurrent_lenses?: number | undefined;
+  ontological_anchoring?: ReviewOntologicalAnchoringSettings | undefined;
   teamlead: ResolvedReviewActorSettings;
   lens: ResolvedReviewActorSettings;
   synthesize: ResolvedReviewActorSettings;
@@ -1265,6 +1302,10 @@ function normalizeV3Settings(settings: V3Settings): OntoSettings {
       if (execution.max_concurrent_lenses !== undefined) {
         normalizedExecution.max_concurrent_lenses =
           execution.max_concurrent_lenses;
+      }
+      if (execution.ontological_anchoring !== undefined) {
+        normalizedExecution.ontological_anchoring =
+          execution.ontological_anchoring;
       }
       if (execution.deliberation !== undefined) {
         normalizedExecution.deliberation = execution.deliberation;
@@ -1790,6 +1831,24 @@ export function assertSettingsModelsSupported(
   }
 }
 
+/**
+ * Sub-flag-level merge (project over user): the two ontological-anchoring
+ * flags are independently togglable by blast radius (design §2-2), so a
+ * project that sets one flag must not drop the user's other flag — a
+ * whole-object override would.
+ */
+function mergeOntologicalAnchoringSettings(
+  user: ReviewOntologicalAnchoringSettings | undefined,
+  project: ReviewOntologicalAnchoringSettings | undefined,
+): ReviewOntologicalAnchoringSettings {
+  const obligations = project?.obligations ?? user?.obligations;
+  const judgmentAnchor = project?.judgment_anchor ?? user?.judgment_anchor;
+  return {
+    ...(obligations !== undefined ? { obligations } : {}),
+    ...(judgmentAnchor !== undefined ? { judgment_anchor: judgmentAnchor } : {}),
+  };
+}
+
 function mergeSettings(
   user: OntoSettings,
   project: OntoSettings,
@@ -1835,6 +1894,15 @@ function mergeSettings(
                 max_concurrent_lenses:
                   projectExecution?.max_concurrent_lenses ??
                   userExecution?.max_concurrent_lenses,
+              }
+            : {}),
+          ...(projectExecution?.ontological_anchoring !== undefined ||
+          userExecution?.ontological_anchoring !== undefined
+            ? {
+                ontological_anchoring: mergeOntologicalAnchoringSettings(
+                  userExecution?.ontological_anchoring,
+                  projectExecution?.ontological_anchoring,
+                ),
               }
             : {}),
           teamlead: mergeReviewActorSettings(

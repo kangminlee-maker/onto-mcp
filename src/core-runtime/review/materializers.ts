@@ -899,6 +899,22 @@ export async function bootstrapInvocationBindingArtifacts(
     binding_notes: params.bindingNotes ?? [],
   };
 
+  // Ontological-anchoring flags (design §2-2): stamp only when at least one
+  // sub-flag is explicitly enabled, mirroring the llm_override absent=off rule.
+  const ontologicalAnchoringSettings =
+    ontoConfig?.review?.execution?.ontological_anchoring;
+  const anchoringObligations =
+    ontologicalAnchoringSettings?.obligations?.enabled === true;
+  const anchoringJudgment =
+    ontologicalAnchoringSettings?.judgment_anchor?.enabled === true;
+  const ontologicalAnchoringPlan =
+    anchoringObligations || anchoringJudgment
+      ? {
+          obligations: anchoringObligations,
+          judgment_anchor: anchoringJudgment,
+        }
+      : undefined;
+
   const reviewExecutionPlan: ReviewExecutionPlan = {
     session_id: sessionId,
     session_root: sessionRoot,
@@ -919,6 +935,11 @@ export async function bootstrapInvocationBindingArtifacts(
     // re-overlays the freshly resolved project profile with it so an overridden
     // session's units cannot revert to the non-overlaid project models.
     ...(params.llmOverride ? { llm_override: params.llmOverride } : {}),
+    // Durable stamp of the ontological-anchoring flags (design §2-2). Absent →
+    // both off, so flag-off plans stay byte-identical to pre-flag plans.
+    ...(ontologicalAnchoringPlan
+      ? { ontological_anchoring: ontologicalAnchoringPlan }
+      : {}),
     interpretation_artifact_path: interpretationArtifactPath,
     binding_output_path: bindingOutputPath,
     session_metadata_path: sessionMetadataPath,

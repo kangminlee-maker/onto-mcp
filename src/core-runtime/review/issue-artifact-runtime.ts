@@ -5,6 +5,8 @@ import type {
   ReviewFindingSeverity,
   ReviewIssueArtifactId,
   ReviewIssueArtifactPromptPacketSeat,
+  ReviewValueAlignmentCriteriaArtifact,
+  ReviewValueAlignmentCriterion,
 } from "./artifact-types.js";
 import {
   dumpYamlDocument,
@@ -2710,6 +2712,18 @@ export async function resolveProblemFramingProfileRef(args: {
   return profileRef ? toRelativePath(profileRef, args.projectRoot) : null;
 }
 
+/**
+ * Bounded projection of one confirmed value-alignment criterion, embedded into
+ * issue-artifact prompts under `ontological_anchoring.judgment_anchor` (design
+ * §3-(c) c-2, F8): issue-artifact actors cannot read the criteria artifact, so
+ * the runtime — which owns deterministic projections — carries the confirmed
+ * statements into the prompt instead of widening the read boundary.
+ */
+export type ConfirmedValueAlignmentCriterionProjection = Pick<
+  ReviewValueAlignmentCriterion,
+  "criterion_id" | "statement"
+>;
+
 export function buildIssueArtifactPrompt(args: {
   artifactId: ReviewIssueArtifactId;
   sessionId: string;
@@ -2725,6 +2739,11 @@ export function buildIssueArtifactPrompt(args: {
   issueStanceInputProjection?: string;
   deliberationPlanInputProjection?: string;
   problemFramingInputProjection?: string;
+  /** design §3-(c)/(b): present only when `ontological_anchoring.judgment_anchor`
+   * is on for the session. Absent → byte-identical prompts. */
+  ontologicalAnchoring?: {
+    confirmedCriteria: ConfirmedValueAlignmentCriterionProjection[];
+  };
 }): string {
   const outputRef = toRelativePath(args.outputPath, args.projectRoot);
   const lensRefs = relativeList(
@@ -2736,6 +2755,33 @@ export function buildIssueArtifactPrompt(args: {
     args.projectRoot,
   );
   const allowedReadRefs = issueArtifactAllowedReadRefs(args);
+  const judgmentAnchor = args.ontologicalAnchoring !== undefined;
+  const confirmedCriteria = args.ontologicalAnchoring?.confirmedCriteria ?? [];
+  // design §3-(c) c-2: anchor lines are kind-neutral and additive — the
+  // holistic ladder definitions above them stay authoritative (E-1/E-2); the
+  // criteria embed renders only when confirmed criteria exist (F8). The two
+  // criteria-gated fragments share one predicate so they cannot drift apart.
+  const hasConfirmedCriteria = confirmedCriteria.length > 0;
+  const criteriaWeighLine = hasConfirmedCriteria
+    ? `
+- Weigh the confirmed review value-alignment criteria below as explicit sources of the declared purpose when assigning severity.`
+    : "";
+  const criteriaListSection = hasConfirmedCriteria
+    ? `
+
+Confirmed value-alignment criteria:
+${confirmedCriteria
+  .map((criterion) => `- ${criterion.criterion_id}: ${criterion.statement}`)
+  .join("\n")}`
+    : "";
+  const severityAnchorSection = judgmentAnchor
+    ? `
+
+Declared-purpose anchor:
+- Severity measures how strongly the issue undermines trust in the reviewed result for its declared purpose; the holistic severity definitions above stay authoritative.
+- Anchor \`affected_purpose\` to a declared purpose source — the criterion, review goal, or declared contract the issue affects.${criteriaWeighLine}
+- Scope exclusion is not a severity decision: a real defect outside the declared purpose keeps its honest severity and is disqualified through the admission context fields (\`judgment_state: outside_boundary\` or \`closure_obligation: out_of_scope\`) in problem framing.${criteriaListSection}`
+    : "";
   const commonHeader = `# Issue-Stance Artifact Prompt
 
 session_id: ${args.sessionId}
@@ -2774,7 +2820,7 @@ Derived materiality candidate boundary:
 - final material issue admission is derived later by material-issue-contract.md
 
 Every blocker/high/medium severity claim must cite concrete evidence and explain affected_purpose, failure_condition, and impact.
-If evidence is insufficient, use severity: info and explain the evidence gap.
+If evidence is insufficient, use severity: info and explain the evidence gap.${severityAnchorSection}
 
 ## Lens Finding Sources
 ${lensRefs}
@@ -3077,7 +3123,20 @@ Allowed conflict_type values:
 - partial_overlap_or_cluster_scope
 - evidence_gap
 - stance_conflict
-
+${
+  judgmentAnchor
+    ? `
+Conflict-type precedence — when several conflict axes apply to one issue, choose the highest listed axis as its conflict_type:
+1. root_hypothesis
+2. purpose_value
+3. domain_constraint
+4. correctness_or_blocking_execution (an execution or contract conflict that blocks the declared purpose)
+5. action_or_severity
+6. partial_overlap_or_cluster_scope
+The allowed conflict_type values above stay complete: evidence_gap and stance_conflict remain valid types outside this precedence.
+`
+    : ""
+}
 Allowed skipped reason_code values:
 - non_material_issue
 - consistent_stances
@@ -3129,7 +3188,12 @@ Submit only \`classifications\` through \`submit_issue_artifact\`.
 Do not submit \`classification_context\` or \`related_surface_finding_ids\`; runtime fills them from the projection.
 Do not read raw Round 1 lens outputs, issue-scoped deliberation responses, or the raw domain profile by default.
 Do not change issue status or lens stance.
-Do not propose detailed fixes.
+Do not propose detailed fixes.${
+        judgmentAnchor
+          ? `
+Classify against the declared purpose carried by the Severity Contract anchor above: a real defect that does not affect the declared purpose keeps its honest severity and is scope-disqualified through the admission context fields (\`judgment_state: outside_boundary\` or \`closure_obligation: out_of_scope\`) instead of being demoted.`
+          : ""
+      }
 
 Allowed common spine values:
 - issue_role: root_cause, symptom, enabler, conflicting_interpretation, evidence_gap, independent_issue
@@ -3162,6 +3226,46 @@ classifications:
     related_surface_finding_ids: [runtime-filled]
 `;
   }
+}
+
+/**
+ * Deterministic projection of the session's CONFIRMED value-alignment criteria
+ * for the judgment-anchor embed (design §3-(c) c-2, F8). Read-if-exists,
+ * confirmed-only; a missing or empty artifact yields [] and the embed section
+ * is omitted so the anchor never points at nothing. Field access narrows
+ * against ReviewValueAlignmentCriteriaArtifact (the writer's type) so a field
+ * rename fails the typecheck here instead of silently returning [].
+ */
+export async function loadConfirmedValueAlignmentCriteria(
+  executionPlan: ReviewExecutionPlan,
+): Promise<ConfirmedValueAlignmentCriterionProjection[]> {
+  const criteriaPath = executionPlan.review_value_alignment_criteria_path;
+  if (!criteriaPath || !(await fileExists(criteriaPath))) return [];
+  const artifact = await readYamlDocument<
+    Partial<ReviewValueAlignmentCriteriaArtifact> | null | undefined
+  >(criteriaPath);
+  // YAML.parse of an empty or comment-only file yields null/undefined.
+  if (typeof artifact !== "object" || artifact === null) return [];
+  const criteria = Array.isArray(artifact.criteria) ? artifact.criteria : [];
+  const projections: ConfirmedValueAlignmentCriterionProjection[] = [];
+  for (const candidate of criteria) {
+    if (typeof candidate !== "object" || candidate === null) continue;
+    const criterion = candidate as Partial<ReviewValueAlignmentCriterion>;
+    if (criterion.confirmation_status !== "confirmed") continue;
+    if (
+      typeof criterion.criterion_id !== "string" ||
+      typeof criterion.statement !== "string"
+    ) {
+      continue;
+    }
+    // Statements are free prose (often multi-line YAML scalars); the embed
+    // renders one `- id: statement` bullet per criterion, so collapse internal
+    // whitespace to keep the bullet a single line.
+    const statement = criterion.statement.replace(/\s+/g, " ").trim();
+    if (statement.length === 0) continue;
+    projections.push({ criterion_id: criterion.criterion_id, statement });
+  }
+  return projections;
 }
 
 export async function writeIssueArtifactPromptPacket(args: {
@@ -3317,6 +3421,15 @@ export async function writeIssueArtifactPromptPacket(args: {
       : {}),
     ...(problemFramingInputProjection !== undefined
       ? { problemFramingInputProjection }
+      : {}),
+    ...(args.executionPlan.ontological_anchoring?.judgment_anchor === true
+      ? {
+          ontologicalAnchoring: {
+            confirmedCriteria: await loadConfirmedValueAlignmentCriteria(
+              args.executionPlan,
+            ),
+          },
+        }
       : {}),
     executionPlan: args.executionPlan,
   });

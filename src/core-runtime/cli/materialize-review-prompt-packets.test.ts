@@ -249,6 +249,115 @@ describe("material_kind_obligations honesty (R3)", () => {
   });
 });
 
+describe("ontological anchoring — obligations flag (design §3-(a)/(B))", () => {
+  function kindProfile(kind: string): ReviewTargetProfileArtifact {
+    return {
+      target_material_kind: kind,
+      target_input_kind: "single_file",
+      target_scope_kind: "file",
+      artifact_roles: { primary: "review_target", secondary: [] },
+      closure_level: "close_in_target",
+      review_goal: ["correctness"],
+      closure_obligation_policy: [],
+      material_profile: {
+        support_status: "supported",
+        detection: { confidence: 0.9, confidence_basis: "test" },
+      },
+    } as unknown as ReviewTargetProfileArtifact;
+  }
+
+  // §7-1 flag-off equivalence: absent options, explicit false, and the exact
+  // pre-flag prose must all coincide — the off path is byte-identical.
+  it("flag-off renders the exact pre-flag code obligations (absent === explicit false)", () => {
+    const absent = renderReviewTargetProfileSummary(kindProfile("code"));
+    const explicitOff = renderReviewTargetProfileSummary(kindProfile("code"), {
+      ontologicalObligations: false,
+    });
+    expect(absent).toBe(explicitOff);
+    expect(absent).toContain(
+      "Check visible type/runtime contract mismatches, edge-case input behavior, error/null/undefined paths, and caller-facing failure modes.",
+    );
+    expect(absent).toContain(
+      "Classify a visible correctness or runtime-contract failure as material when it can violate the declared review goal inside the bounded target.",
+    );
+  });
+
+  // §7-2 negative control: flag-on must not carry the mixed operational clause;
+  // edge-case/null/failure-mode survive only inside the subordinated evidence-
+  // channel clause.
+  it("flag-on code: operational probing is subordinated to declared-contract evidence", () => {
+    const on = renderReviewTargetProfileSummary(kindProfile("code"), {
+      ontologicalObligations: true,
+    });
+    expect(on).not.toContain(
+      "Check visible type/runtime contract mismatches, edge-case input behavior",
+    );
+    expect(on).toContain("satisfies the contracts it declares");
+    expect(on).toContain(
+      "evidence channels for whether the declared contracts hold",
+    );
+    expect(on).toContain("not as a free-standing operational bug hunt");
+    expect(on).toContain(
+      "material when it defeats the declared review goal inside the bounded target",
+    );
+  });
+
+  it("flag-on database: probes are evidence channels for the declared data contract", () => {
+    const on = renderReviewTargetProfileSummary(kindProfile("database"), {
+      ontologicalObligations: true,
+    });
+    expect(on).not.toContain(
+      "Check visible key/constraint mismatches, unsafe query assumptions, migration risks, and integrity failures.",
+    );
+    expect(on).toContain("uphold the data contract they declare");
+    expect(on).toContain(
+      "evidence channels for whether the declared data contract holds",
+    );
+  });
+
+  it("flag does not touch document (and by the same switch, spreadsheet) prose", () => {
+    const off = renderReviewTargetProfileSummary(kindProfile("document"));
+    const on = renderReviewTargetProfileSummary(kindProfile("document"), {
+      ontologicalObligations: true,
+    });
+    expect(on).toBe(off);
+  });
+});
+
+describe("ontological anchoring — judgment_anchor in lens sidecar contract (design §3-(c) c-1)", () => {
+  const baseArgs = {
+    sessionDomain: "none",
+    humanOutputPath: null,
+    projectRoot: "/repo",
+  };
+
+  it("flag-off is byte-identical (absent === explicit false)", () => {
+    const absent = renderLensSidecarOutputContract(baseArgs);
+    const explicitOff = renderLensSidecarOutputContract({
+      ...baseArgs,
+      judgmentAnchor: false,
+    });
+    expect(absent).toBe(explicitOff);
+    expect(absent).not.toContain("Severity judgment anchor");
+  });
+
+  it("flag-on appends a kind-neutral declared-purpose severity anchor (§7-3, §7-3c)", () => {
+    const on = renderLensSidecarOutputContract({
+      ...baseArgs,
+      judgmentAnchor: true,
+    });
+    expect(on).toContain("Severity judgment anchor:");
+    expect(on).toContain("value-alignment criteria");
+    expect(on).toContain("materiality_basis.affected_purpose");
+    // B-1: scope exclusion must route through admission, never severity demotion.
+    expect(on).toContain("keeps its honest severity");
+    expect(on).toContain("do not demote it for scope reasons");
+    // §7-3c kind-neutrality: no code-domain vocabulary in the shared block.
+    expect(on).not.toContain("edge-case");
+    expect(on).not.toMatch(/separate tool/i);
+  });
+});
+
 describe("resolveEffectiveEmbedBudget — post-precedence witness (design §4-4, R2-4)", () => {
   it("CLI override wins and is witnessed as source=cli (the settings-knob channel)", () => {
     expect(resolveEffectiveEmbedBudget(120, 600, 300)).toEqual({

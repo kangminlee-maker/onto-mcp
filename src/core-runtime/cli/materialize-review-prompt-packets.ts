@@ -117,16 +117,39 @@ ${materializedInput}
 <!-- onto:embedded-materialized-input:end -->`;
 }
 
+/**
+ * Per-kind review obligations. `options.ontologicalObligations` gates the
+ * aligned prose for code/database (design 20260716-review-ontological-primacy-
+ * runtime-alignment-design.md §3-(a)/(B), flag `ontological_anchoring.
+ * obligations`): the carrier clause stays, contract satisfiability becomes the
+ * primary clause, and operational-path probing is subordinated to an evidence
+ * channel for the declared contract. Default off → byte-identical prose.
+ */
 function materialKindReviewObligations(
   profile: ReviewTargetProfileArtifact,
+  options?: { ontologicalObligations?: boolean },
 ): string[] {
+  const ontologicalObligations = options?.ontologicalObligations === true;
   switch (profile.target_material_kind) {
-    case "code":
+    case "code": {
+      // Shared carrier clause: single source so the flag-off byte-identity
+      // guarantee cannot drift when the evidence-source wording is edited.
+      const codeCarrierClause =
+        "Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.";
+      if (ontologicalObligations) {
+        return [
+          codeCarrierClause,
+          "Check whether the implementation satisfies the contracts it declares: surface visible type/contract mismatches as logical-integrity failures of the declared concept.",
+          "Probe edge-case inputs, error/null/undefined paths, and caller-facing failure modes as evidence channels for whether the declared contracts hold — not as a free-standing operational bug hunt.",
+          "Classify a visible contract violation as material when it defeats the declared review goal inside the bounded target.",
+        ];
+      }
       return [
-        "Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.",
+        codeCarrierClause,
         "Check visible type/runtime contract mismatches, edge-case input behavior, error/null/undefined paths, and caller-facing failure modes.",
         "Classify a visible correctness or runtime-contract failure as material when it can violate the declared review goal inside the bounded target.",
       ];
+    }
     case "spreadsheet": {
       // The obligation prose stays in lockstep with the per-ref disposition projected into
       // review_goal (the SSOT): a goal is named only when its specific structure was
@@ -178,11 +201,21 @@ function materialKindReviewObligations(
         "Treat declared purpose, audience, claims, evidence, structure, and unresolved ambiguity as review evidence.",
         "Check visible claim/evidence gaps, contradictory obligations, missing decision context, and reader-facing actionability failures.",
       ];
-    case "database":
+    case "database": {
+      const databaseCarrierClause =
+        "Treat schema, constraints, query behavior, relation cardinality, and data integrity assumptions as review evidence.";
+      if (ontologicalObligations) {
+        return [
+          databaseCarrierClause,
+          "Check whether the schema and constraints uphold the data contract they declare: surface visible key/constraint mismatches as integrity failures of the declared model.",
+          "Probe unsafe query assumptions, migration risks, and integrity failure paths as evidence channels for whether the declared data contract holds.",
+        ];
+      }
       return [
-        "Treat schema, constraints, query behavior, relation cardinality, and data integrity assumptions as review evidence.",
+        databaseCarrierClause,
         "Check visible key/constraint mismatches, unsafe query assumptions, migration risks, and integrity failures.",
       ];
+    }
     case "mixed":
       return [
         "Treat each target member according to its material kind and also check cross-artifact handoffs.",
@@ -198,13 +231,14 @@ function materialKindReviewObligations(
 
 export function renderReviewTargetProfileSummary(
   profile: ReviewTargetProfileArtifact | null,
+  options?: { ontologicalObligations?: boolean },
 ): string {
   if (!profile) {
     return `## Review Target Profile Summary
 - profile: unavailable
 - consequence: use only the materialized input and explicit request summary as target authority.`;
   }
-  const obligations = materialKindReviewObligations(profile);
+  const obligations = materialKindReviewObligations(profile, options);
   return `## Review Target Profile Summary
 - target_material_kind: ${profile.target_material_kind}
 - target_input_kind: ${profile.target_input_kind}
@@ -285,11 +319,24 @@ export function renderLensSidecarOutputContract(args: {
   sessionDomain: string;
   humanOutputPath: string | null;
   projectRoot: string;
+  /** design §3-(c) c-1 (`ontological_anchoring.judgment_anchor`): appends the
+   * kind-neutral declared-purpose severity anchor. Default off → byte-identical. */
+  judgmentAnchor?: boolean;
 }): string {
   const isDomainless =
     args.sessionDomain.length === 0 ||
     args.sessionDomain === "none" ||
     args.sessionDomain === "@-";
+  const judgmentAnchorSection =
+    args.judgmentAnchor === true
+      ? `
+
+Severity judgment anchor:
+- Judge \`severity_hint\` by how strongly the finding undermines trust in the reviewed result for its declared purpose.
+- Weigh the confirmed review value-alignment criteria and the invocation interpretation as explicit sources of that declared purpose, alongside the review target profile's review goals.
+- Anchor \`materiality_basis.affected_purpose\` to a declared purpose source — name the criterion, goal, or declared contract the finding affects — rather than a generic quality concern.
+- Scope exclusion is not a severity decision: a real defect outside the declared purpose keeps its honest severity and is disqualified later through admission context, so do not demote it for scope reasons.`
+      : "";
   return `## Runtime Sidecar Output Contract
 Submit exactly one payload for \`submit_lens_findings\` through the constrained output channel. Do not write markdown or YAML yourself.
 
@@ -317,7 +364,7 @@ Submit \`domain_constraints_used\` as ${
   }.
 Submit \`domain_context_assumptions\` as a list of strings.
 If there are no findings, submit \`findings: []\` and a concise \`no_findings_rationale\`.
-${args.humanOutputPath ? `The runtime may render a human-readable projection at ${toRelativePath(args.humanOutputPath, args.projectRoot)}.` : "No human-readable lens markdown projection is requested for this session."}`;
+${args.humanOutputPath ? `The runtime may render a human-readable projection at ${toRelativePath(args.humanOutputPath, args.projectRoot)}.` : "No human-readable lens markdown projection is requested for this session."}${judgmentAnchorSection}`;
 }
 
 // DEFAULT_MAX_EMBED_LINES is owned by review-prompt-budget.ts (the single
@@ -1266,7 +1313,10 @@ ${roleDefinitionText.trim().length > 0 ? `${roleDefinitionText.trim()}\n` : ""}
 
 ${renderEmbeddedMaterializedInputSection(embeddedMaterializedInput)}
 
-${renderReviewTargetProfileSummary(reviewTargetProfile)}
+${renderReviewTargetProfileSummary(reviewTargetProfile, {
+  ontologicalObligations:
+    executionPlan.ontological_anchoring?.obligations === true,
+})}
 
 ## Optional Context Inputs
 - session metadata: ${toRelativePath(sessionMetadataPath, projectRoot)}
@@ -1329,6 +1379,8 @@ ${lensOutputFormat === "sidecar"
           sessionDomain: binding.resolved_session_domain,
           humanOutputPath: lensHumanOutputPath,
           projectRoot,
+          judgmentAnchor:
+            executionPlan.ontological_anchoring?.judgment_anchor === true,
         })
       : renderLensOutputSchemaGate(binding.resolved_session_domain)}
 

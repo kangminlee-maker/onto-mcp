@@ -335,6 +335,19 @@ export interface ReviewIssueArtifactPromptPacketSeat {
   output_path: string;
 }
 
+/**
+ * Session stamp of the ontological-anchoring alignment flags (design §2-2,
+ * blast-radius split): `obligations` gates per-kind packet obligation prose
+ * (code/database); `judgment_anchor` gates kind-shared judgment framing
+ * (lens sidecar severity anchor, issue-artifact Severity Contract anchor +
+ * confirmed-criteria embed, problem-framing admission routing, deliberation
+ * precedence ladder).
+ */
+export interface ReviewOntologicalAnchoringPlan {
+  obligations: boolean;
+  judgment_anchor: boolean;
+}
+
 export interface ReviewExecutionPlan {
   session_id: string;
   session_root: string;
@@ -361,6 +374,14 @@ export interface ReviewExecutionPlan {
    * used, so continuation resolves the project profile unchanged (default-off).
    */
   llm_override?: PerCallLlmOverride;
+  /**
+   * Durable stamp of the ontological-anchoring alignment flags this session
+   * was prepared with (design 20260716-review-ontological-primacy-runtime-
+   * alignment-design.md §2-2). Prompt renderers read the flags from this stamp
+   * only — prose-only variants, no schema/enum/predicate change. Absent → both
+   * flags off (default-off, INV-CFG-1).
+   */
+  ontological_anchoring?: ReviewOntologicalAnchoringPlan;
   interpretation_artifact_path: string;
   binding_output_path: string;
   session_metadata_path: string;

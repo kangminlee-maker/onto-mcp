@@ -497,6 +497,17 @@ Priority order:
 5. action/severity conflict
 6. partial-overlap or singleton-vs-cluster clarification
 
+Flag-gated precedence (`review.execution.ontological_anchoring.judgment_anchor`,
+default off; design `development-records/design/20260716-review-ontological-
+primacy-runtime-alignment-design.md` §3-(b), owner-adopted option 1): when
+enabled, the deliberation-plan prompt renders the precedence
+`root_hypothesis → purpose_value → domain_constraint →
+correctness_or_blocking_execution (an execution or contract conflict that
+blocks the declared purpose) → action_or_severity →
+partial_overlap_or_cluster_scope` instead of the order above. The allowed
+`conflict_type` value set stays complete and unchanged (`evidence_gap` and
+`stance_conflict` remain valid outside the precedence).
+
 Participant rule:
 
 - Include lenses whose stance creates or constrains the material conflict.

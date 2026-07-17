@@ -12,6 +12,7 @@ import {
   buildIssueStanceInputProjection,
   issueStanceConsumerId,
   issueArtifactAllowedReadRefs,
+  loadConfirmedValueAlignmentCriteria,
   renderDeliberationPlanInputProjectionSection,
   renderFindingRelationInputProjectionSection,
   renderProblemFramingInputProjectionSection,
@@ -2938,5 +2939,191 @@ describe("buildIssueArtifactPrompt — boundary read authority", () => {
     expect(refs).not.toContain(
       "/repo/.onto/domains/software-engineering/problem_framing_profile.md",
     );
+  });
+});
+
+describe("buildIssueArtifactPrompt — ontological anchoring (design §3-(c)/(b))", () => {
+  const projectRoot = "/repo";
+  const lensOutputPaths = [
+    "/repo/.onto/review/session/round1/logic.findings.yaml",
+  ];
+
+  function promptFor(
+    artifactId: "issue-ledger" | "deliberation-plan" | "problem-framing",
+    anchoring?: { confirmedCriteria: { criterion_id: string; statement: string }[] },
+  ): string {
+    return buildIssueArtifactPrompt({
+      artifactId,
+      sessionId: "session-001",
+      projectRoot,
+      outputPath: `/repo/.onto/review/session/${artifactId}.yaml`,
+      lensOutputPaths,
+      executionPlan: minimalExecutionPlan(projectRoot),
+      ...(anchoring ? { ontologicalAnchoring: anchoring } : {}),
+    });
+  }
+
+  it("off: no anchor block, current Severity Contract preserved", () => {
+    const prompt = promptFor("issue-ledger");
+    expect(prompt).not.toContain("Declared-purpose anchor");
+    expect(prompt).not.toContain("Confirmed value-alignment criteria");
+    expect(prompt).toContain(
+      "the declared primary happy path cannot be achieved by any intended user",
+    );
+  });
+
+  it("on with confirmed criteria: additive anchor + criteria embed, holistic ladder retained (§7-3, E-1/E-2 controls)", () => {
+    const prompt = promptFor("issue-ledger", {
+      confirmedCriteria: [
+        { criterion_id: "user-request-intent", statement: "verify the design" },
+      ],
+    });
+    expect(prompt).toContain("Declared-purpose anchor:");
+    expect(prompt).toContain("Confirmed value-alignment criteria:");
+    expect(prompt).toContain("- user-request-intent: verify the design");
+    // E-2 control: the holistic ladder definitions stay authoritative and intact.
+    expect(prompt).toContain(
+      "the declared primary happy path cannot be achieved by any intended user",
+    );
+    expect(prompt).toContain("holistic severity definitions above stay authoritative");
+    // B-1 (§7-3b): scope exclusion routes through admission, never severity demotion.
+    expect(prompt).toContain("keeps its honest severity");
+    expect(prompt).toContain("judgment_state: outside_boundary");
+    expect(prompt).toContain("closure_obligation: out_of_scope");
+  });
+
+  it("on without criteria: anchor present, embed absent (§7-3 both directions)", () => {
+    const prompt = promptFor("issue-ledger", { confirmedCriteria: [] });
+    expect(prompt).toContain("Declared-purpose anchor:");
+    expect(prompt).not.toContain("Confirmed value-alignment criteria:");
+    expect(prompt).not.toContain("Weigh the confirmed review value-alignment criteria below");
+  });
+
+  it("deliberation-plan on: precedence ladder block with option-1 order, allowed values stay complete (§7-4 + E-3 negative control)", () => {
+    const prompt = promptFor("deliberation-plan", { confirmedCriteria: [] });
+    expect(prompt).toContain("Conflict-type precedence");
+    const ladder = [
+      "1. root_hypothesis",
+      "2. purpose_value",
+      "3. domain_constraint",
+      "4. correctness_or_blocking_execution",
+      "5. action_or_severity",
+      "6. partial_overlap_or_cluster_scope",
+    ];
+    let previousIndex = -1;
+    for (const rung of ladder) {
+      const index = prompt.indexOf(rung);
+      expect(index, `missing precedence rung: ${rung}`).toBeGreaterThan(-1);
+      expect(index).toBeGreaterThan(previousIndex);
+      previousIndex = index;
+    }
+    // E-3: the allowed-values enumeration is untouched — all 8 tokens present
+    // between the list heading and the precedence block.
+    const allowedStart = prompt.indexOf("Allowed conflict_type values:");
+    const precedenceStart = prompt.indexOf("Conflict-type precedence");
+    expect(allowedStart).toBeGreaterThan(-1);
+    expect(precedenceStart).toBeGreaterThan(allowedStart);
+    const allowedSegment = prompt.slice(allowedStart, precedenceStart);
+    for (const token of [
+      "correctness_or_blocking_execution",
+      "root_hypothesis",
+      "domain_constraint",
+      "purpose_value",
+      "action_or_severity",
+      "partial_overlap_or_cluster_scope",
+      "evidence_gap",
+      "stance_conflict",
+    ]) {
+      expect(allowedSegment, `allowed values lost token: ${token}`).toContain(
+        `- ${token}`,
+      );
+    }
+  });
+
+  it("deliberation-plan off: no precedence block", () => {
+    const prompt = promptFor("deliberation-plan");
+    expect(prompt).not.toContain("Conflict-type precedence");
+  });
+
+  it("problem-framing on: admission-routing classification instruction; off: absent", () => {
+    const on = promptFor("problem-framing", { confirmedCriteria: [] });
+    expect(on).toContain("scope-disqualified through the admission context fields");
+    expect(on).toContain("instead of being demoted");
+    const off = promptFor("problem-framing");
+    expect(off).not.toContain("scope-disqualified through the admission context fields");
+  });
+});
+
+describe("loadConfirmedValueAlignmentCriteria — projection robustness", () => {
+  function planWithCriteriaPath(criteriaPath: string) {
+    return {
+      ...minimalExecutionPlan("/repo"),
+      review_value_alignment_criteria_path: criteriaPath,
+    };
+  }
+
+  function tempCriteriaFile(content: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "onto-criteria-"));
+    const filePath = path.join(dir, "review-value-alignment-criteria.yaml");
+    fs.writeFileSync(filePath, content, "utf8");
+    return filePath;
+  }
+
+  it("returns [] for an existing but empty or comment-only criteria file (no crash)", async () => {
+    // YAML.parse('') === null: the loader must not deref .criteria on it.
+    expect(
+      await loadConfirmedValueAlignmentCriteria(
+        planWithCriteriaPath(tempCriteriaFile("")),
+      ),
+    ).toEqual([]);
+    expect(
+      await loadConfirmedValueAlignmentCriteria(
+        planWithCriteriaPath(tempCriteriaFile("# no body\n")),
+      ),
+    ).toEqual([]);
+  });
+
+  it("returns [] for a missing file", async () => {
+    expect(
+      await loadConfirmedValueAlignmentCriteria(
+        planWithCriteriaPath("/repo/does/not/exist.yaml"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("collapses multi-line statements to one line and filters unconfirmed entries", async () => {
+    const criteriaPath = tempCriteriaFile(
+      [
+        'schema_version: "1"',
+        "session_id: s1",
+        "created_at: 2026-07-17T00:00:00+09:00",
+        "dispatch_state: allow_dispatch",
+        "criteria:",
+        "  - criterion_id: user-request-intent",
+        "    statement: >-",
+        "      line one",
+        "      line two",
+        "    confirmation_status: confirmed",
+        "  - criterion_id: pending-one",
+        "    statement: should be filtered",
+        "    confirmation_status: pending_confirmation",
+        "  - criterion_id: literal-block",
+        "    statement: |",
+        "      alpha",
+        "      beta",
+        "    confirmation_status: confirmed",
+      ].join("\n"),
+    );
+
+    const projections = await loadConfirmedValueAlignmentCriteria(
+      planWithCriteriaPath(criteriaPath),
+    );
+
+    // Every projected statement is single-line, so the `- id: statement`
+    // prompt bullet cannot be broken by embedded newlines.
+    expect(projections).toEqual([
+      { criterion_id: "user-request-intent", statement: "line one line two" },
+      { criterion_id: "literal-block", statement: "alpha beta" },
+    ]);
   });
 });
