@@ -1,0 +1,150 @@
+schema_version: 1
+session_id: 20260717-d7b236f4
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: The exported formatter admits values that can return no
+      string or throw despite promising an unconditional string result.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Concrete serializer outcomes establish a present contract violation.
+      It is a direct manifestation of the broader missing supported-value and
+      failure policy captured by issue-006.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: Object insertion order changes the formatted text, but the
+      evidence does not establish that canonical textual equivalence is
+      required.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The order-dependent behavior is established, while its status as a
+      material defect depends on an explicit canonical-output contract or a
+      concrete identity-sensitive consumer.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: The formatter lacks a complete string-producing or
+      explicit-failure path for every value admitted by its public input type.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The sole runtime path delegates to partial serialization, so admitted
+      inputs can escape the declared result contract. This is a structural
+      manifestation of issue-006.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Formatting depends on object construction history, but
+      whether that dependency violates the contract remains unresolved.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Insertion-history dependence is observed, but its defect status and
+      severity require authoritative evidence that output must be independent of
+      construction history.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: Top-level undefined, functions, and symbols can yield a
+      missing result despite the declared string return type.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: These admitted inputs concretely falsify the unconditional string
+      contract and form a narrow instance of the missing policy root cause in
+      issue-006.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: The exported formatter presents partial JSON serialization
+      as a total unknown-to-string abstraction without owning supported-value or
+      failure semantics.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This compactly explains the proven non-string and exceptional
+      outcomes across the issue set. Ordering, preservation, and evolution
+      concerns remain conditional rather than part of the confirmed core.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-009
+      - finding-011
+      - finding-012
+  - issue_id: issue-007
+    problem_definition: Valid values in the declared unknown domain can produce a
+      non-string result that callers cannot detect through the type contract.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Runtime evidence confirms the false result guarantee for specific
+      admitted values. The issue is another concrete surface expression of
+      issue-006.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: Equivalent records can produce different strings, but
+      canonical representation is not established as an authoritative formatter
+      requirement.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The differing output is observed, while material defect status
+      requires an explicit equivalence rule or evidence of a snapshot,
+      comparison, cache-key, or identity consumer.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: The unrestricted input domain is not fully covered by the
+      declared string result or an explicit failure policy.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Non-string and exceptional outcomes establish incomplete domain
+      coverage. Broader lossless-representation concerns remain conditional,
+      while the confirmed coverage failure derives from issue-006.
+    related_surface_finding_ids:
+      - finding-010

@@ -1,0 +1,164 @@
+schema_version: 1
+session_id: 20260717-22cfd504
+planned_issues:
+  - issue_id: issue-001
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - evolution
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+    conflict_summary: The lenses agree that the fixed B4 endpoint omits records, but
+      disagree whether evidence supports the causal claim of manual maintenance;
+      coverage also disputes high severity without quantified numerical impact.
+    resolution_question: Should the canonical root be limited to the observable
+      fixed-scope contradiction, and does the present failure of the principal
+      all-row total justify high severity without quantified omitted values?
+  - issue_id: issue-002
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - conciseness
+      - evolution
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.conciseness
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+    conflict_summary: Conciseness treats the competing unlinked scope
+      representations as the root, while logic narrows that causal claim and
+      evolution and coverage replace it with the fixed formula endpoint;
+      severity is also disputed.
+    resolution_question: Is the divergent named-range/formula representation a
+      demonstrated material root, or only a maintenance condition surrounding
+      the directly proven fixed-endpoint defect, and what severity follows?
+  - issue_id: issue-003
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.conciseness
+    conflict_summary: Structure treats the excluded rows as a high-severity issue
+      with its own direct root, while conciseness treats it as a manifestation
+      of competing scope authorities and coverage assigns medium severity.
+    resolution_question: Should this structural exclusion remain a distinct root
+      issue or be represented as a surface manifestation of the broader
+      scope-authority defect, and should its severity be high or medium?
+  - issue_id: issue-004
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - dependency
+      - coverage
+      - conciseness
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.dependency
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.conciseness
+    conflict_summary: Dependency treats the incomplete dependency set as a
+      high-severity root, while conciseness treats it as a manifestation of
+      redundant scope authorities and coverage lowers severity.
+    resolution_question: Is the hard-coded incomplete dependency an independently
+      reportable root or a projection of the competing-scope issue, and is high
+      severity warranted without quantified numerical impact?
+  - issue_id: issue-006
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - logic
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+    conflict_summary: Axiology and coverage retain medium severity, while most
+      lenses raise the purpose violation to high because populated rows are
+      excluded from the principal decision-facing total.
+    resolution_question: Under the severity contract, does the current inability of
+      the principal total to satisfy the declared all-row purpose require high
+      severity even though the omitted numerical magnitude was not evaluated?
+  - issue_id: issue-009
+    priority: 4
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - dependency
+      - logic
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.dependency
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+    conflict_summary: Dependency accepts the hypothesis that the formula was not
+      updated after its source became unavailable, while logic and evolution
+      find that history unproven and support only the current unresolved
+      reference.
+    resolution_question: May the canonical root assert a historical failure to
+      update after source loss, or must it be limited to the presently
+      demonstrable retained reference to an absent sheet?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - dependency
+      - semantics
+      - pragmatics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.dependency
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.pragmatics
+    conflict_summary: Axiology frames B2 as failing the declared all-Data-row
+      commitment and accepts a misaimed Archive root, while dependency,
+      semantics, and pragmatics say B2's role and intended target are not
+      established.
+    resolution_question: Should this issue include failure of the all-row
+      aggregation commitment and a misaimed-source claim, or be narrowed to an
+      unresolved decision-surface reference whose intended role remains unknown?
+skipped_issues:
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: All applicable lenses agree that the Grand Total presentation is
+      semantically incomplete; conciseness merely classifies it as a surface
+      manifestation and does not dispute the user-facing failure.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: The lenses consistently support the unresolved absent-sheet defect and
+      medium severity; semantics only avoids an unproven historical
+      interpretation already unnecessary to the proposed action.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: All applicable lenses accept the broken cross-sheet path, its root, and
+      medium severity.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: The lenses agree that the Archive path is impossible and that B2's
+      intended meaning must be confirmed; narrowing comments do not materially
+      change the issue or action.
+  - issue_id: issue-012
+    reason_code: non_material_issue
+    reason: The issue is low severity and currently inert, so it does not meet the
+      material-conflict boundary.
+  - issue_id: issue-013
+    reason_code: non_material_issue
+    reason: The issue is a low-severity prospective dependency risk with no current
+      consumer.
+  - issue_id: issue-014
+    reason_code: non_material_issue
+    reason: The name-to-referent mismatch is low severity and has no demonstrated
+      current calculation effect.
+  - issue_id: issue-015
+    reason_code: non_material_issue
+    reason: The misleading navigation path is low severity and currently unconsumed.

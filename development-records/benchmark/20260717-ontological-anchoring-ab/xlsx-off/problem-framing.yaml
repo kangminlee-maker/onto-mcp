@@ -1,0 +1,240 @@
+schema_version: 1
+session_id: 20260717-22cfd504
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Summary!B1’s fixed Data!B2:B4 scope excludes populated rows
+      and cannot include appended rows automatically.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The fixed endpoint is directly evidenced and prevents the principal
+      total from satisfying the declared all-row purpose. High severity remains
+      appropriate for functional failure, while the monetary magnitude and
+      manual-maintenance history remain unproven.
+    related_surface_finding_ids:
+      - finding-011
+      - finding-014
+      - finding-015
+  - issue_id: issue-002
+    problem_definition: An unconsumed, column-mismatched named range creates a
+      competing and misleading representation of the Grand Total scope.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The divergent representations are observed, but deliberation rejected
+      them as the demonstrated cause of the current omission. They remain a
+      traceability and recurrence condition that should be reconciled while
+      correcting the authoritative total scope.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-016
+  - issue_id: issue-003
+    problem_definition: The executed grand-total path excludes populated Data rows 5 and 6.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The row exclusion is directly observed and blocks complete
+      aggregation. Its treatment as a distinct root versus a manifestation of
+      broader scope divergence, and high versus medium severity, remains
+      disputed.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Summary!B1’s executed dependency set ends before the
+      complete populated Amount extent.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The hard-coded dependency endpoint independently causes the
+      omitted-row defect. The root is agreed, although dependency retains a
+      high-severity reservation while the resolution retains medium severity
+      pending quantified impact.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-005
+    problem_definition: A partial subtotal is presented to users as the complete Grand Total.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The label-to-result mismatch is the directly observed user-facing
+      consequence of excluding two populated Amount rows and can cause an
+      incomplete value to be treated as authoritative.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-006
+    problem_definition: The principal decision-facing total fails the declared
+      commitment to aggregate every Data row.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "The purpose violation and corrective obligation are agreed, but the
+      governing severity interpretation is unresolved: some lenses require high
+      severity for principal-purpose failure while others retain medium without
+      quantified monetary impact."
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-007
+    problem_definition: Summary!B2 requires an Archive worksheet that is absent from
+      the current workbook.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The retained absent-sheet reference is directly evidenced and makes
+      B2 unsatisfiable. Its intended source must be established before the
+      reference can be restored, redirected, or removed safely.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-008
+    problem_definition: Summary!B2 contains a broken cross-sheet path with no
+      resolvable target node.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The missing Archive target directly breaks cross-sheet reference
+      integrity on the decision surface. Source intent remains required to
+      determine closure behavior.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-009
+    problem_definition: Summary!B2 retains a presently incompatible dependency whose
+      origin and intended authority are unknown.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The unresolved reference is observed, while deliberation explicitly
+      rejected the unsupported historical claim that it remained after a
+      formerly available source disappeared.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-010
+    problem_definition: Users cannot resolve or interpret the Summary!B2 query path
+      because its source is absent and its intended role is unclear.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The impossible path is observed, but choosing restoration,
+      redirection, or removal depends on a decision about B2’s intended meaning
+      and authoritative source.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-011
+    problem_definition: The evidence establishes an unusable Summary!B2 reference
+      but does not establish B2’s intended role or source.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation narrowed the issue away from unsupported claims that B2
+      implements the all-row commitment or is specifically misaimed. Evidence
+      identifying its intended role and authority is required for safe closure.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-012
+    problem_definition: GrandTotalRange supplies no active structural connection
+      between Amount values and the Summary total.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The category-targeting, unconsumed name is directly observed but
+      currently inert. It enables false assurance and future maintenance error
+      rather than causing the present calculation defect.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-013
+    problem_definition: GrandTotalRange exposes a prospective dependency surface
+      that yields labels rather than monetary inputs.
+    issue_role: enabler
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The mismatched referent is observed, but harm depends on a future
+      consumer relying on the currently unused name. The issue is therefore a
+      prospective evolution risk.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-014
+    problem_definition: The GrandTotalRange name communicates monetary aggregation
+      while denoting category-label cells.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The name-to-referent semantic mismatch is directly observable, but no
+      current formula consumes it. Its demonstrated effect is limited to
+      maintenance clarity and possible future misuse.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-015
+    problem_definition: GrandTotalRange provides misleading navigation by directing
+      users to labels instead of totalable Amount values.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: usability
+    timing_class: planned_follow_up
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The navigation mismatch follows from the observed referent, while
+      practical harm requires a user or future formula author to rely on the
+      currently unconsumed name.
+    related_surface_finding_ids:
+      - finding-013

@@ -1,0 +1,286 @@
+schema_version: 1
+session_id: 20260717-13297536
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Summary!B1 uses a fixed, incomplete Amount range, causing
+      current row omissions and future aggregation drift.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The fixed B2:B4 authority is directly evidenced, omits populated
+      B5:B6, and prevents the primary total from fulfilling the declared all-row
+      spending-decision purpose.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-013
+  - issue_id: issue-002
+    problem_definition: Summary!B2 references Archive!B2 even though no Archive worksheet exists.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The absent worksheet and retained reference are directly established.
+      The defect breaks cross-sheet integrity on the decision-facing Summary
+      surface, although B2 is not shown to feed the primary total.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: Populated cells Data!B5:B6 are structurally disconnected
+      from the grand-total calculation.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This is an observed structural manifestation of issue-001's
+      fixed-range cause and directly violates the requirement to aggregate every
+      Data row.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Summary!B2 has no existing worksheet endpoint for its
+      cross-sheet connection.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The missing endpoint is the structural manifestation of the
+      absent-Archive reference captured by issue-002 and materially weakens
+      formula integrity and Summary trust.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: GrandTotalRange is defined but unused, so it has no
+      authority over the live grand-total path.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The orphaned name can enable maintenance or audit mistakes, but no
+      current calculation failure or active consumer is established.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Data!B5:B6 cannot influence the reported grand total because
+      the dependency ends at B4.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This dependency-level symptom follows from issue-001's fixed partial
+      range and directly makes the decision-facing total incomplete.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: Summary!B2 has no live in-workbook producer for its referenced value.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The missing producer is the dependency manifestation of issue-002's
+      absent Archive source and prevents reliable recalculation or traceability.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: The cell labeled Grand Total excludes populated rows and
+      therefore does not satisfy grand-total semantics.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The semantic mismatch is directly observed and results from
+      issue-001's truncated aggregation boundary, undermining the primary
+      decision value.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: GrandTotalRange is named as a monetary total range but
+      refers to category-label cells.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The name–referent mismatch is directly established and is the
+      underlying configuration defect behind the named-range risks, but it has
+      no evidenced live consumer.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: The displayed grand total omits two of five populated Data amounts.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This user-visible omission is an observed consequence of issue-001
+      and prevents the workbook from answering its declared
+      complete-spending-total question.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: Summary!B2 cannot provide a usable answer because its
+      referenced worksheet is absent.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: This is the practical manifestation of issue-002's broken reference;
+      it impairs the decision-facing surface without established dependence on
+      the primary total.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: GrandTotalRange exposes a misleading but presently
+      unconsumed alternate path to category labels rather than the grand total.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: Deliberation established the misbinding but found no active consumer.
+      It is therefore a real prospective retrieval and verification risk, not a
+      current material failure.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-013
+    problem_definition: The claim that an unsafe worksheet lifecycle change caused
+      Summary!B2's stale reference is not established by bounded evidence.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The stale reference itself is observed elsewhere, but the historical
+      lifecycle mechanism is inferred and disputed by several stances;
+      additional history would be required to establish that cause.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-014
+    problem_definition: The grand-total formula covers only three of five populated Data rows.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This coverage manifestation of issue-001 directly violates the
+      explicit all-row aggregation requirement, independent of omitted-value
+      magnitude.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-015
+    problem_definition: Summary!B2 lacks a represented and independently verifiable
+      worksheet source.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The source-coverage gap is an observed consequence of issue-002 and
+      prevents independent resolution of a decision-facing Summary value.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-016
+    problem_definition: GrandTotalRange is a stale parallel representation that
+      contains categories and has no effect on the live total.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The redundant representation can enable audit and maintenance
+      ambiguity, but its lack of live consumption means it does not currently
+      alter calculation results.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-017
+    problem_definition: The incomplete grand total directly violates the workbook's
+      declared all-row spending-decision purpose.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "This purpose-level consequence of issue-001 is directly supported:
+      two populated rows cannot influence the primary decision total."
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-018
+    problem_definition: A decision-facing Summary value lacks an inspectable
+      worksheet source and may fail or remain stale.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The trust and inspectability harm is an observed consequence of
+      issue-002's absent source, while impact on the primary grand total remains
+      unestablished.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-019
+    problem_definition: The category-bound GrandTotalRange creates a misleading
+      audit and maintenance surface.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: This is the audit-facing manifestation of issue-009's name–referent
+      mismatch. It is conditional because no current formula, workflow, or
+      integration is shown to consume the name.
+    related_surface_finding_ids:
+      - finding-020

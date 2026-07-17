@@ -1,0 +1,191 @@
+schema_version: 1
+session_id: 20260717-e87f9480
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: The formatter exposes unrestricted unknown input as an
+      unconditional string-returning contract without defining behavior for
+      non-string serialization results or serialization errors.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The narrowed deliberation establishes the false unknown-to-string
+      contract as the canonical cause affecting correctness and verifiability.
+      The broader claim that the wrapper itself is unjustified remains unproven
+      and is excluded from this definition.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-011
+  - issue_id: issue-002
+    problem_definition: Some accepted inputs do not reach the formatter’s declared string result.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The incomplete input-to-result path is concrete contract evidence,
+      but deliberation consolidated it under issue-001 rather than treating it
+      as an independent cause.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: The formatter inherits a partial serializer’s non-string and
+      exceptional outcomes without exposing them in its public contract.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The dependency failure is established and must be addressed with
+      issue-001, but disagreement remains over whether it warrants independent
+      issue granularity.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Insertion-order-sensitive output would undermine repeatable
+      comparisons if canonical representation is promised or consumed.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: consistency
+    timing_class: defer_watch
+    closure_class: needs_evidence
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: Order sensitivity is observed, but no canonical-output obligation or
+      comparison consumer is established within the boundary. Evidence of such a
+      contract or consumer is required before admitting it as a defect.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: The formatter’s declared total string behavior fails for
+      unsupported or exceptional serialization inputs.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The semantic contract failure is proven, but deliberation resolved it
+      as another surface of the serialization-policy defect in issue-001.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Equivalent object mappings can produce different strings by
+      insertion order, but a canonical-equivalence requirement is unestablished.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: consistency
+    timing_class: defer_watch
+    closure_class: needs_evidence
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The observable ordering behavior alone does not prove a violated
+      declared purpose. A canonical-equivalence contract or concrete
+      stable-comparison consumer is missing.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: An admitted undefined input provides a concrete
+      counterexample to the formatter’s string-return contract.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The counterexample and contract impact are proven, but lenses retain
+      disagreement over whether it should be independently tracked or only serve
+      as evidence for issue-001.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: Future input compatibility failures arise from the existing
+      mismatch between unrestricted inputs and the serializer’s narrower result
+      and failure domain.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "Deliberation found no distinct mechanism or remedy: this is
+      evolution-impact evidence that must remain attached to the canonical
+      contract issue."
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Construction-order-sensitive output could create false
+      cross-version differences if stable canonical comparison is required.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: maintainability_evolvability
+    timing_class: defer_watch
+    closure_class: needs_evidence
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The behavior and plausible evolution risk are established, but
+      neither a canonical cross-version invariant nor a dependent comparison
+      consumer is proven.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Verification does not cover admitted inputs that produce
+      omitted serialization results or exceptions.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Deliberation classifies the missing contrast coverage as a
+      verification gap supporting issue-001, not an independent causal defect.
+      It must accompany closure of the contract issue.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: The wrapper exposes the serializer’s partial return behavior
+      under a total string signature, preventing callers from trusting the
+      result.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This is confirmed correctness and value-alignment evidence for
+      issue-001, with no distinct root cause or corrective boundary.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: Stable ordering could benefit comparison consumers, but no
+      contract or consumer requiring canonical equivalence is established.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: consistency
+    timing_class: defer_watch
+    closure_class: needs_evidence
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: Insertion-order sensitivity is proven, while its claimed snapshot,
+      hash, diff, or regression impact remains conditional on evidence absent
+      from the bounded review.
+    related_surface_finding_ids:
+      - finding-013

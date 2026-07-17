@@ -1,0 +1,309 @@
+schema_version: 1
+session_id: 20260717-d7b236f4
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: The formatter forwards unrestricted `unknown` input
+      directly to partial JSON serialization without validating non-string
+      outcomes, handling exceptions, or exposing failure semantics.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: The exported `unknown -> string` contract is unsatisfied
+      because admitted inputs can produce `undefined` or throw.
+    proposed_action: Define and enforce the supported input and failure contract by
+      narrowing accepted values, handling serialization failures, or exposing
+      partial outcomes to callers.
+    affected_purpose: Correctness and verifiability of the exported formatter contract.
+    failure_condition: A caller passes an admitted value that `JSON.stringify`
+      cannot serialize to a string, including `undefined`, a function, a symbol,
+      `BigInt`, or a cyclic object.
+    impact: The function can return a non-string or throw despite its unconditional
+      string signature, undermining compile-time and runtime trust.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/logic.findings.yaml#logic-candidate-001
+      - target.ts:13
+      - target.ts:14
+      - "Bounded Node probe: JSON.stringify(undefined) produced undefined;
+        JSON.stringify(1n) threw TypeError"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The only relation involving this finding that is eligible as
+      dependency context is `shared_cause_candidate`; its duplicate relation is
+      not a `same_root_candidate` relation and therefore cannot support a
+      multi-finding issue under this unit's clustering contract.
+  - issue_id: issue-002
+    root_cause_hypothesis: The formatter omits canonical key-order normalization
+      before applying order-preserving JSON serialization.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Structurally equivalent objects can produce different formatted
+      strings when their property insertion orders differ.
+    proposed_action: Define the intended equivalence rules and canonicalize
+      serializable objects recursively, or use a tested stable-stringification
+      implementation.
+    affected_purpose: Verifiable, regression-resistant formatter behavior.
+    failure_condition: Two structurally equivalent object values have different
+      property insertion orders.
+    impact: Output changes without a semantic data change, weakening comparisons and
+      regression signals.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/structure.findings.yaml#structure-candidate-001
+      - "materialized-input.md :: target.ts :: `unstableFormat(value: unknown):
+        string`"
+      - "materialized-input.md :: target.ts :: `return JSON.stringify(value);`"
+      - "prompt packet :: request_summary :: focus on unstableFormat"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph connects this finding to the same
+      observable defect only through a `duplicates` relation, not through the
+      required `same_root_candidate` relation.
+  - issue_id: issue-003
+    root_cause_hypothesis: The sole return path delegates to partial JSON
+      serialization without validation, fallback output, or an explicit
+      result/error path.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The declared string-returning API has no complete runtime path
+      for admitted inputs that do not serialize to a string.
+    proposed_action: Align the accepted input and visible result contract by
+      narrowing and validating input, widening the result, or defining explicit
+      fallback or failure behavior.
+    affected_purpose: Correctness of the exported formatter's visible input/output contract.
+    failure_condition: The input is a top-level non-JSON value or otherwise cannot be serialized.
+    impact: A caller can receive a non-string result or an exception despite the
+      unrestricted input and string-only result contract.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/structure.findings.yaml#structure-candidate-002
+      - "materialized-input.md :: target.ts :: `value: unknown`"
+      - "materialized-input.md :: target.ts :: declared return type `string`"
+      - "materialized-input.md :: target.ts :: direct `JSON.stringify(value)`
+        return"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Its relation to finding-001 is classified as `duplicates`,
+      while this unit permits multi-finding issue support only through
+      connecting `same_root_candidate` relations.
+  - issue_id: issue-004
+    root_cause_hypothesis: The formatter delegates ordering authority to each input
+      object's enumeration history instead of defining a canonical formatting
+      order.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: Formatter output has a hidden dependency on object property
+      insertion order.
+    proposed_action: If stable structural output is required, recursively normalize
+      object-key order or use a deterministic serializer and verify it with
+      contrast tests.
+    affected_purpose: Correct, verifiable, and regression-resistant formatting of
+      accepted `unknown` values.
+    failure_condition: Two structurally equivalent object values have different
+      property insertion orders.
+    impact: Equivalent data receives different observable strings, making
+      comparisons sensitive to construction history rather than content.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/dependency.findings.yaml#dependency-candidate-001
+      - "target.ts: `unstableFormat` directly returns `JSON.stringify(value)`"
+      - "target.ts: parameter type is `unknown`, which includes object records
+        with differing insertion orders"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Its relations to the other canonical-order findings are
+      classified as `duplicates`, not as connecting `same_root_candidate`
+      relations.
+  - issue_id: issue-005
+    root_cause_hypothesis: The wrapper assumes `JSON.stringify` always returns a
+      string and provides no validation or fallback for its top-level
+      `undefined` outcome.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: Accepted top-level values such as `undefined`, functions, and
+      symbols can violate the declared string return contract.
+    proposed_action: Expose `string | undefined`, reject unsupported top-level
+      values explicitly, or map the missing serializer result to a documented
+      representation.
+    affected_purpose: Runtime correctness and verifiability of the exported formatter contract.
+    failure_condition: The accepted `unknown` value is a top-level `undefined`,
+      function, or symbol.
+    impact: Typed callers can receive a runtime value they were not required to handle.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/dependency.findings.yaml#dependency-candidate-002
+      - "target.ts: `unstableFormat(value: unknown): string`"
+      - "target.ts: `return JSON.stringify(value)`"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation to finding-001 is `shared_cause_candidate` and
+      must remain dependency context; the relation to finding-007 is
+      `duplicates`, not `same_root_candidate`.
+  - issue_id: issue-006
+    root_cause_hypothesis: The exported formatter introduces an unrestricted
+      `unknown -> string` boundary without a policy layer defining supported
+      values, normalization, canonical ordering, information preservation, or
+      failure behavior.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+      - finding-009
+      - finding-011
+      - finding-012
+    relation_refs:
+      - rel-005
+      - rel-006
+      - rel-009
+    raised_by_lens_ids:
+      - semantics
+      - evolution
+      - conciseness
+      - axiology
+    issue_statement: The wrapper overstates a partial, non-canonical serializer as a
+      total formatter abstraction, creating present contract failures and future
+      evolution hazards.
+    proposed_action: Define the formatter's supported-value, normalization,
+      ordering, and failure policy; then either enforce a total deterministic
+      representation or narrow the public types to expose partial behavior
+      accurately.
+    affected_purpose: Correct, verifiable, regression-resistant, and maintainable
+      formatter behavior under the exported `unknown -> string` contract.
+    failure_condition: A caller supplies a JSON-unsupported, cyclic, lossy, or newly
+      introduced JavaScript value category, or relies on canonical output for
+      equivalent objects.
+    impact: The API can return no string, throw, lose information, or emit
+      order-dependent representations while appearing to guarantee a stable
+      string, weakening caller and regression trust.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/semantics.findings.yaml#semantics-candidate-001
+      - "target.ts: exported `unstableFormat(value: unknown): string` signature"
+      - "target.ts: direct `return JSON.stringify(value)` implementation"
+      - .onto/review/20260717-d7b236f4/round1/evolution.findings.yaml#evolution-candidate-001
+      - target.ts:14-16
+      - "Review target profile: exported signatures and observable runtime
+        behavior are review evidence"
+      - .onto/review/20260717-d7b236f4/round1/conciseness.findings.yaml#conciseness-candidate-001
+      - target.ts:13-15
+      - "Review target profile: exported API signatures and observable runtime
+        behavior are review evidence"
+      - .onto/review/20260717-d7b236f4/round1/axiology.findings.yaml#axiology-candidate-001
+      - .onto/review/20260717-d7b236f4/execution-preparation/materialized-input.md:18-19
+      - .onto/review/20260717-d7b236f4/execution-preparation/review-target-profile.yaml:21-25
+      - .onto/review/20260717-d7b236f4/execution-preparation/review-value-alignment-criteria.yaml:6-12
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-007
+    root_cause_hypothesis: The formatter forwards top-level non-JSON values directly
+      to `JSON.stringify` while declaring an unconditional string result.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - pragmatics
+    issue_statement: The declared string result is false for valid inputs in the
+      `unknown` input domain.
+    proposed_action: Narrow and validate the input, expose a partial return type, or
+      define fallback/error behavior that guarantees the declared result.
+    affected_purpose: The declared runtime/type contract and the review goals of
+      correctness and verifiability.
+    failure_condition: The caller supplies a top-level `undefined`, function, or
+      symbol, all permitted by `unknown`.
+    impact: Callers may treat a missing value as a usable string and cannot identify
+      failure through the declared contract.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/pragmatics.findings.yaml#pragmatics-candidate-001
+      - materialized-input.md:18-19
+      - 'Node runtime probe: all three tested inputs yielded `typeof output ===
+        "undefined"`'
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Its relation to finding-005 is classified as `duplicates`, not
+      as a connecting `same_root_candidate` relation.
+  - issue_id: issue-008
+    root_cause_hypothesis: The formatter delegates directly to order-preserving JSON
+      serialization without defining or enforcing canonical key order.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - pragmatics
+    issue_statement: The formatter does not provide a canonical representation of
+      logically equivalent object content.
+    proposed_action: Define equivalence rules and recursively canonicalize object
+      keys through a tested stable-stringification path.
+    affected_purpose: The declared review goals of verifiability and regression-risk
+      control for formatter behavior.
+    failure_condition: Equivalent records are constructed with different property
+      insertion orders.
+    impact: Textual comparisons can report false differences, making regression
+      evidence and downstream identity checks unreliable.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/pragmatics.findings.yaml#pragmatics-candidate-002
+      - materialized-input.md:18-19
+      - Node runtime probe comparing differently ordered equivalent records
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Its relation to finding-004 is classified as `duplicates`, not
+      as a connecting `same_root_candidate` relation.
+  - issue_id: issue-009
+    root_cause_hypothesis: The API admits unrestricted `unknown` values without
+      defining or enforcing serialization coverage, representation, and failure
+      policies.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: The formatter does not cover its full admitted input domain or
+      consistently satisfy its declared string result.
+    proposed_action: Define the supported value domain and failure policy, then
+      either restrict and validate inputs, handle unsupported cases explicitly,
+      or expose raw serializer partiality accurately.
+    affected_purpose: Correctness, verifiability, and regression safety of the
+      exported formatter's observable runtime contract.
+    failure_condition: A caller passes a value accepted by `unknown` that cannot
+      produce a top-level string, throws during serialization, or is represented
+      lossily.
+    impact: The declared return guarantee fails, and unsupported or lossy cases lack
+      a stated policy against which behavior can be verified.
+    evidence_refs:
+      - .onto/review/20260717-d7b236f4/round1/coverage.findings.yaml#coverage-candidate-001
+      - target.ts:13-14
+      - materialized-input.md — `unstableFormat` definition
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Its relation to finding-006 is classified as `duplicates`, not
+      as a connecting `same_root_candidate` relation.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-005
+    relation_refs:
+      - rel-004
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (The implementation directly returns
+      `JSON.stringify(value)` for unrestricted `unknown` input without
+      validating its result, supplying a fallback, or exposing partial failure
+      semantics.)."
+validation:
+  unclustered_finding_ids: []
