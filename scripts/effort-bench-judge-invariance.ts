@@ -1,0 +1,445 @@
+/**
+ * Effort-bench judge measurement-invariance harness (adaptive-effort design
+ * §4-5, finding R2-10; P1 item ④ — pure logic + sample extraction only, the
+ * blind dual-labeling itself is P2 owner-spend work).
+ *
+ * Why: low-coverage arms produce vaguer issues, and the attribution judge's
+ * miss/false-attribution behavior may differ systematically on vague issues.
+ * K judge repetitions cannot catch that (they repeat the same systematic
+ * bias), so before any cross-arm recall comparison is promoted, a BLIND
+ * dual-label sample — balanced across (coverage zone × effort) cells and
+ * stratified by issue specificity — must show the judge's FNR/FPR is
+ * comparable across arms.
+ *
+ * Three pieces:
+ *   1. `classifyIssueSpecificity` — deterministic stratification from the
+ *      issue fields the judge itself consumes (`where` location signal,
+ *      `evidence_refs` provenance): anchored / partially_anchored / unanchored.
+ *   2. `drawJudgeInvarianceSample` — seeded, deterministic draw of an equal
+ *      per-(zone, effort)-cell quota, round-robin across specificity strata.
+ *      Items are arm-BLINDED (no zone/effort/rep/issue_id on the item); the
+ *      sealed key mapping is returned separately for the harness to store
+ *      away from raters. Cells that cannot fill their quota are reported as
+ *      shortfalls, never silently under-sampled.
+ *   3. `assessJudgeInvariance` — given the sealed key + dual labels (blind
+ *      gold vs live judge attribution), per-cell FNR/FPR and the registered
+ *      comparability verdict. Fail-closed: an undefined rate (empty
+ *      denominator) or a cell below the minimum n is "not_evaluable", never
+ *      a pass.
+ */
+
+import { mulberry32 } from "./effort-bench-itt-analyzer.ts";
+
+function fail(msg: string): never {
+  throw new Error(`effort-bench-judge-invariance: ${msg}`);
+}
+
+// ── 1. specificity stratification ──
+
+/** The issue fields the sampler consumes (a projection of SurfacedIssue). */
+export interface JudgeSampleIssue {
+  issue_id: string;
+  issue_statement: string;
+  /** Distinct finding `target`s (location signal the judge reads). */
+  where: string[];
+  /** Location-supporting provenance refs. */
+  evidence_refs: string[];
+}
+
+export type IssueSpecificityStratum = "anchored" | "partially_anchored" | "unanchored";
+
+export const SPECIFICITY_STRATA: IssueSpecificityStratum[] = [
+  "anchored",
+  "partially_anchored",
+  "unanchored",
+];
+
+/**
+ * Deterministic specificity stratum from the two location-bearing fields:
+ * both present = anchored, exactly one = partially_anchored, neither =
+ * unanchored. No text heuristics — strata must be undisputable at
+ * registration time (the same R2-6 logic that bans outcome-based selection).
+ */
+export function classifyIssueSpecificity(issue: JudgeSampleIssue): IssueSpecificityStratum {
+  const hasWhere = issue.where.length > 0;
+  const hasEvidence = issue.evidence_refs.length > 0;
+  if (hasWhere && hasEvidence) return "anchored";
+  if (hasWhere || hasEvidence) return "partially_anchored";
+  return "unanchored";
+}
+
+// ── 2. blind balanced sample ──
+
+/** One review run's issues, labeled with its arm cell. */
+export interface JudgeSampleSourceRun {
+  zone: string;
+  effort: string;
+  fixture: string;
+  rep: number;
+  issues: JudgeSampleIssue[];
+}
+
+/** Arm-blinded item handed to raters (no zone/effort/rep/issue_id). */
+export interface BlindSampleItem {
+  blind_id: string;
+  /** Kept — attribution judging needs the fixture's ground truth context. */
+  fixture: string;
+  issue_statement: string;
+  where: string[];
+  evidence_refs: string[];
+  stratum: IssueSpecificityStratum;
+}
+
+/** Sealed mapping back to the arm — stored by the harness, never shown to raters. */
+export interface BlindSampleKeyEntry {
+  blind_id: string;
+  zone: string;
+  effort: string;
+  fixture: string;
+  rep: number;
+  issue_id: string;
+  /** Carried so the assessment can require cross-arm stratum-mix equality. */
+  stratum: IssueSpecificityStratum;
+}
+
+export interface CellBalance {
+  zone: string;
+  effort: string;
+  drawn: number;
+  /** quota - drawn; > 0 marks an under-filled cell (comparability at risk). */
+  shortfall: number;
+  per_stratum: Record<IssueSpecificityStratum, number>;
+}
+
+export interface JudgeInvarianceSample {
+  items: BlindSampleItem[];
+  key: BlindSampleKeyEntry[];
+  per_cell_quota: number;
+  seed: number;
+  balance: CellBalance[];
+}
+
+const shuffleInPlace = <T>(xs: T[], rng: () => number): void => {
+  for (let i = xs.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [xs[i], xs[j]] = [xs[j]!, xs[i]!];
+  }
+};
+
+interface Candidate {
+  run: JudgeSampleSourceRun;
+  issue: JudgeSampleIssue;
+  stratum: IssueSpecificityStratum;
+}
+
+/**
+ * Draw the blind sample: for every (zone, effort) cell, exactly
+ * `perCellQuota` issues (or as many as exist, reported as a shortfall),
+ * cycling round-robin across specificity strata so no arm's sample skews
+ * toward its own specificity profile. Deterministic under `seed`.
+ */
+export function drawJudgeInvarianceSample(
+  runs: JudgeSampleSourceRun[],
+  opts: { seed: number; perCellQuota: number },
+): JudgeInvarianceSample {
+  if (typeof opts.seed !== "number" || !Number.isFinite(opts.seed)) {
+    fail(`seed must be a finite number, got ${JSON.stringify(opts.seed)}`);
+  }
+  if (!Number.isInteger(opts.perCellQuota) || opts.perCellQuota < 1) {
+    fail(`perCellQuota must be a positive integer, got ${JSON.stringify(opts.perCellQuota)}`);
+  }
+  if (runs.length === 0) fail("no source runs — nothing to sample");
+
+  // Validate + bucket candidates per (zone, effort) cell and stratum.
+  const cells = new Map<string, Map<IssueSpecificityStratum, Candidate[]>>();
+  const seenRun = new Set<string>();
+  for (const run of runs) {
+    if (!run.zone || !run.effort || !run.fixture) {
+      fail(`run must carry zone/effort/fixture, got ${JSON.stringify({ zone: run.zone, effort: run.effort, fixture: run.fixture })}`);
+    }
+    if (!Number.isInteger(run.rep) || run.rep < 1) {
+      fail(`run (${run.zone}, ${run.effort}, ${run.fixture}) rep must be a positive integer`);
+    }
+    const runKey = `${run.zone} ${run.effort} ${run.fixture} ${run.rep}`;
+    if (seenRun.has(runKey)) fail(`duplicate run (${runKey})`);
+    seenRun.add(runKey);
+    const cellId = `${run.zone} ${run.effort}`;
+    const strata = cells.get(cellId) ?? new Map<IssueSpecificityStratum, Candidate[]>();
+    cells.set(cellId, strata);
+    const seenIssue = new Set<string>();
+    for (const issue of run.issues) {
+      if (!issue.issue_id) fail(`run (${runKey}): issue without issue_id`);
+      if (seenIssue.has(issue.issue_id)) fail(`run (${runKey}): duplicate issue_id ${issue.issue_id}`);
+      seenIssue.add(issue.issue_id);
+      const stratum = classifyIssueSpecificity(issue);
+      const bucket = strata.get(stratum) ?? [];
+      strata.set(stratum, bucket);
+      bucket.push({ run, issue, stratum });
+    }
+  }
+
+  const rng = mulberry32(opts.seed);
+  const drawn: Candidate[] = [];
+  const balance: CellBalance[] = [];
+  // Deterministic cell order (sorted), then seeded shuffles within strata.
+  for (const cellId of [...cells.keys()].sort()) {
+    const [zone, effort] = cellId.split(" ") as [string, string];
+    const strata = cells.get(cellId)!;
+    const queues = SPECIFICITY_STRATA.map((s) => {
+      const bucket = [...(strata.get(s) ?? [])];
+      // Stable pre-order before the seeded shuffle so input order never leaks.
+      bucket.sort(
+        (a, b) =>
+          a.run.fixture.localeCompare(b.run.fixture) ||
+          a.run.rep - b.run.rep ||
+          a.issue.issue_id.localeCompare(b.issue.issue_id),
+      );
+      shuffleInPlace(bucket, rng);
+      return bucket;
+    });
+    const cellDrawn: Candidate[] = [];
+    const perStratum: Record<IssueSpecificityStratum, number> = {
+      anchored: 0,
+      partially_anchored: 0,
+      unanchored: 0,
+    };
+    // Round-robin across strata until the quota fills or candidates run out.
+    while (cellDrawn.length < opts.perCellQuota && queues.some((q) => q.length > 0)) {
+      for (const [i, stratum] of SPECIFICITY_STRATA.entries()) {
+        if (cellDrawn.length >= opts.perCellQuota) break;
+        const next = queues[i]!.pop();
+        if (next === undefined) continue;
+        cellDrawn.push(next);
+        perStratum[stratum] += 1;
+      }
+    }
+    // A stratum with candidates that drew ZERO items means the quota was too
+    // small to honor the stratified design at all (review finding B6): the
+    // sample would silently stop assessing the judge on that specificity
+    // class in this cell. Fail loud — raise the quota or drop the cell.
+    for (const stratum of SPECIFICITY_STRATA) {
+      const hadCandidates = (strata.get(stratum) ?? []).length > 0;
+      if (hadCandidates && perStratum[stratum] === 0) {
+        fail(
+          `cell (${zone}, ${effort}): stratum ${stratum} has candidates but drew 0 items at perCellQuota=${opts.perCellQuota} — the stratified design requires every populated stratum to be sampled; raise the quota`,
+        );
+      }
+    }
+    balance.push({
+      zone,
+      effort,
+      drawn: cellDrawn.length,
+      shortfall: opts.perCellQuota - cellDrawn.length,
+      per_stratum: perStratum,
+    });
+    drawn.push(...cellDrawn);
+  }
+
+  // Global seeded shuffle so blind ids carry no cell-order signal.
+  shuffleInPlace(drawn, rng);
+  const width = String(drawn.length).length;
+  const items: BlindSampleItem[] = [];
+  const key: BlindSampleKeyEntry[] = [];
+  drawn.forEach((candidate, index) => {
+    const blindId = `blind-${String(index + 1).padStart(width, "0")}`;
+    items.push({
+      blind_id: blindId,
+      fixture: candidate.run.fixture,
+      issue_statement: candidate.issue.issue_statement,
+      where: [...candidate.issue.where],
+      evidence_refs: [...candidate.issue.evidence_refs],
+      stratum: candidate.stratum,
+    });
+    key.push({
+      blind_id: blindId,
+      zone: candidate.run.zone,
+      effort: candidate.run.effort,
+      fixture: candidate.run.fixture,
+      rep: candidate.run.rep,
+      issue_id: candidate.issue.issue_id,
+      stratum: candidate.stratum,
+    });
+  });
+
+  return { items, key, per_cell_quota: opts.perCellQuota, seed: opts.seed, balance };
+}
+
+// ── 3. FNR/FPR comparability ──
+
+/** One blind item's dual labels: blind gold attribution vs the live judge's. */
+export interface DualLabelRecord {
+  blind_id: string;
+  /** Gold (blind rater): does the issue attribute to a seeded defect? */
+  gold_attributed: boolean;
+  /** The live attribution judge's verdict on the same issue. */
+  judge_attributed: boolean;
+}
+
+export interface CellInvarianceRates {
+  zone: string;
+  effort: string;
+  n: number;
+  gold_positive: number;
+  gold_negative: number;
+  /** Judge misses among gold positives; null when gold_positive = 0. */
+  fnr: number | null;
+  /** Judge attributions among gold negatives; null when gold_negative = 0. */
+  fpr: number | null;
+}
+
+export type InvarianceOutcome = "comparable" | "not_comparable" | "not_evaluable";
+
+export interface JudgeInvarianceAssessment {
+  outcome: InvarianceOutcome;
+  cells: CellInvarianceRates[];
+  max_fnr_gap: number | null;
+  max_fpr_gap: number | null;
+  reason: string;
+}
+
+/**
+ * Registered comparability verdict over the labeled blind sample: every
+ * (zone, effort) cell must have n ≥ minPerCell and defined FNR AND FPR, and
+ * the max pairwise gaps must stay within the registered tolerances.
+ * Fail-closed: anything undefined ⇒ "not_evaluable".
+ */
+export function assessJudgeInvariance(
+  key: BlindSampleKeyEntry[],
+  labels: DualLabelRecord[],
+  opts: { maxFnrGap: number; maxFprGap: number; minPerCell: number },
+): JudgeInvarianceAssessment {
+  for (const [name, v] of [
+    ["maxFnrGap", opts.maxFnrGap],
+    ["maxFprGap", opts.maxFprGap],
+  ] as const) {
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1) {
+      fail(`${name} must be a number in [0,1], got ${JSON.stringify(v)}`);
+    }
+  }
+  if (!Number.isInteger(opts.minPerCell) || opts.minPerCell < 1) {
+    fail(`minPerCell must be a positive integer, got ${JSON.stringify(opts.minPerCell)}`);
+  }
+  const armByBlindId = new Map<string, BlindSampleKeyEntry>();
+  for (const entry of key) {
+    if (armByBlindId.has(entry.blind_id)) fail(`duplicate key entry for ${entry.blind_id}`);
+    armByBlindId.set(entry.blind_id, entry);
+  }
+  interface CellAgg {
+    zone: string;
+    effort: string;
+    n: number;
+    goldPos: number;
+    goldNeg: number;
+    misses: number;
+    falseAttr: number;
+    perStratum: Record<IssueSpecificityStratum, number>;
+  }
+  // Seed one aggregate per (zone, effort) cell present in the SEALED KEY —
+  // never only per labeled cell. An arm whose labels were withheld must show
+  // up as an empty (n=0) cell and fail the minimum below, not vanish from the
+  // comparison entirely (review findings B7/C3).
+  const aggregates = new Map<string, CellAgg>();
+  for (const entry of key) {
+    const cellId = `${entry.zone} ${entry.effort}`;
+    if (!aggregates.has(cellId)) {
+      aggregates.set(cellId, {
+        zone: entry.zone,
+        effort: entry.effort,
+        n: 0,
+        goldPos: 0,
+        goldNeg: 0,
+        misses: 0,
+        falseAttr: 0,
+        perStratum: { anchored: 0, partially_anchored: 0, unanchored: 0 },
+      });
+    }
+  }
+  const seenLabels = new Set<string>();
+  for (const label of labels) {
+    const entry = armByBlindId.get(label.blind_id);
+    if (!entry) fail(`label for unknown blind_id ${JSON.stringify(label.blind_id)}`);
+    if (seenLabels.has(label.blind_id)) fail(`duplicate label for ${label.blind_id}`);
+    seenLabels.add(label.blind_id);
+    const agg = aggregates.get(`${entry.zone} ${entry.effort}`)!;
+    agg.n += 1;
+    agg.perStratum[entry.stratum] += 1;
+    if (label.gold_attributed) {
+      agg.goldPos += 1;
+      if (!label.judge_attributed) agg.misses += 1;
+    } else {
+      agg.goldNeg += 1;
+      if (label.judge_attributed) agg.falseAttr += 1;
+    }
+  }
+  // Integrity errors above throw; verdict logic starts here.
+  if (aggregates.size < 2) {
+    return {
+      outcome: "not_evaluable",
+      cells: [],
+      max_fnr_gap: null,
+      max_fpr_gap: null,
+      reason: `the sealed key covers ${aggregates.size} (zone, effort) cell(s) — invariance needs at least 2 arms to compare — fail-closed`,
+    };
+  }
+  // Cross-arm stratum-mix equality (review finding C4): FNR/FPR aggregated
+  // over different specificity mixes are not comparable — a judge whose error
+  // concentrates in one stratum would be masked (or faked) by composition.
+  // The sampler's round-robin makes mixes identical under full supply, so an
+  // unequal mix here is a real supply/labeling artifact — fail-closed.
+  const aggList = [...aggregates.values()];
+  const referenceMix = JSON.stringify(aggList[0]!.perStratum);
+  const unequalMix = aggList.some((a) => JSON.stringify(a.perStratum) !== referenceMix);
+  if (unequalMix) {
+    return {
+      outcome: "not_evaluable",
+      cells: [],
+      max_fnr_gap: null,
+      max_fpr_gap: null,
+      reason: `labeled specificity-stratum mixes differ across cells (${aggList
+        .map((a) => `(${a.zone}, ${a.effort}): ${SPECIFICITY_STRATA.map((s) => a.perStratum[s]).join("/")}`)
+        .join("; ")}) — aggregate FNR/FPR are not comparable across unequal mixes — fail-closed`,
+    };
+  }
+
+  const cells: CellInvarianceRates[] = [...aggregates.values()]
+    .map((a) => ({
+      zone: a.zone,
+      effort: a.effort,
+      n: a.n,
+      gold_positive: a.goldPos,
+      gold_negative: a.goldNeg,
+      fnr: a.goldPos === 0 ? null : a.misses / a.goldPos,
+      fpr: a.goldNeg === 0 ? null : a.falseAttr / a.goldNeg,
+    }))
+    .sort((a, b) => a.zone.localeCompare(b.zone) || a.effort.localeCompare(b.effort));
+
+  const notEvaluable = cells.filter(
+    (c) => c.n < opts.minPerCell || c.fnr === null || c.fpr === null,
+  );
+  if (notEvaluable.length > 0) {
+    return {
+      outcome: "not_evaluable",
+      cells,
+      max_fnr_gap: null,
+      max_fpr_gap: null,
+      reason: `cell(s) below minPerCell=${opts.minPerCell} or with undefined FNR/FPR: ${notEvaluable
+        .map((c) => `(${c.zone}, ${c.effort})`)
+        .join(", ")} — fail-closed`,
+    };
+  }
+
+  const fnrs = cells.map((c) => c.fnr!);
+  const fprs = cells.map((c) => c.fpr!);
+  const maxFnrGap = Math.max(...fnrs) - Math.min(...fnrs);
+  const maxFprGap = Math.max(...fprs) - Math.min(...fprs);
+  const comparable = maxFnrGap <= opts.maxFnrGap && maxFprGap <= opts.maxFprGap;
+  return {
+    outcome: comparable ? "comparable" : "not_comparable",
+    cells,
+    max_fnr_gap: maxFnrGap,
+    max_fpr_gap: maxFprGap,
+    reason: comparable
+      ? `max FNR gap ${maxFnrGap.toFixed(4)} <= ${opts.maxFnrGap} and max FPR gap ${maxFprGap.toFixed(4)} <= ${opts.maxFprGap}`
+      : `judge rates differ across arms beyond registered tolerance (FNR gap ${maxFnrGap.toFixed(4)} vs ${opts.maxFnrGap}, FPR gap ${maxFprGap.toFixed(4)} vs ${opts.maxFprGap}) — cross-arm recall comparison must not be promoted`,
+  };
+}

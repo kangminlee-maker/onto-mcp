@@ -1,0 +1,45 @@
+# Evidence anchors — logistics-fulfillment seeded defects의 렌더 좌표 앵커
+# (adaptive-effort 설계 §4-2; 소비자 scripts/effort-bench-coverage-map.ts).
+# 규약은 clinical-lab-workflow/evidence-anchors.yaml 머리말과 동일.
+# 채점/벤치 전용 — 리뷰 타깃 프로젝트에 절대 포함하지 않는다.
+schema_version: effort-bench-evidence-anchors/1
+fixture: logistics-fulfillment
+defects:
+  - id: LSC-1
+    anchors:
+      - "values: [received, allocated, picking, shipped, delivered]"
+      - "values: [created, picked, in_transit, delivered]"
+      - "values: [dispatched, arrived_hub, out_for_delivery, delivered, exception]"
+  - id: LSC-2
+    anchors:
+      - "WMS와 ERP가 각자 값을 가지며 야간 배치로 ERP 기준에 맞춘다"
+  - id: LSC-3
+    anchors:
+      - "유효 시점(as_of) 개념이 없다"
+  - id: LSC-4
+    anchors:
+      - "구성 OrderLine 중량의 합. 출하 확정 시점에 계산해 저장한다"
+  - id: LSC-5
+    anchors:
+      - "창고별 계량 관례(kg 또는 lb)를 그대로 쓴다"
+      - "단위는 소스 시스템마다 다르다"
+  - id: LSC-6
+    anchors:
+      # 정의 프로즈(36행)와 is_a(49행)는 각각 단독으로 탐지 충분 — 독립 충분
+      # 지점을 공동 앵커하면 거짓 straddle이 생기므로 where가 지목한 is_a만 앵커.
+      - "is_a: Shipment"
+  - id: LSC-7
+    anchors:
+      - "delivered가 최종 상태다"
+  - id: LSC-8
+    anchors:
+      - "매일 밤 배치로 스냅샷을 저장한다"
+      - "일중 주문도 이 값을 읽는다"
+  - id: LSC-9
+    anchors:
+      - "현장 운영팀이 상황을 보고 수기로 조정한다"
+  - id: LSC-10
+    anchors:
+      # target 25-26행 주석이 단독으로 탐지 충분(누락 참조를 명시 서술).
+      # 104행 fulfills note는 재서술이라 공동 앵커 시 거짓 straddle — 제외.
+      - "충족한 화물/구간으로의 참조가 없다"

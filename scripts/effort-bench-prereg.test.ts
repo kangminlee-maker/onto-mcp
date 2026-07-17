@@ -91,6 +91,13 @@ describe("parseEffortBenchPrereg — fail-loud validation", () => {
     expect(await mutate((m) => delete m.recovery)).toThrow(/recovery/);
     expect(await mutate((m) => delete m.analysis)).toThrow(/analysis/);
   });
+
+  it("requires a registered fixture cohort of at least min_fixtures_per_level", async () => {
+    expect(await mutate((m) => delete m.fixtures)).toThrow(/fixtures/);
+    expect(await mutate((m) => (m.fixtures = ["only-one"]))).toThrow(
+      /< cluster.min_fixtures_per_level/,
+    );
+  });
 });
 
 describe("evaluatePrereg — fail-closed point-estimate screening (synthetic curves)", () => {
@@ -100,6 +107,16 @@ describe("evaluatePrereg — fail-closed point-estimate screening (synthetic cur
     recall: number,
     effort = "medium",
   ): CellObservation => ({ zone, effort, fixture, recall_material_mean: recall });
+
+  // The template registers the four real fixtures; the synthetic worlds here
+  // use a two-fixture registered cohort instead (same validator path).
+  const loadSyntheticManifest = async (
+    fixtures: string[] = ["fx-a", "fx-b"],
+  ): Promise<EffortBenchPrereg> => {
+    const raw = parseYaml(await readFile(TEMPLATE_PATH, "utf8")) as Record<string, unknown>;
+    raw.fixtures = fixtures;
+    return parseEffortBenchPrereg(raw);
+  };
 
   // Synthetic world where coverage loss genuinely costs recall and restoring
   // coverage recovers it — the registered contrasts must read as met.
@@ -115,7 +132,7 @@ describe("evaluatePrereg — fail-closed point-estimate screening (synthetic cur
   ];
 
   it("reproduces the registered contrasts on a synthetic effect world", async () => {
-    const manifest = await loadTemplate();
+    const manifest = await loadSyntheticManifest();
     const evaluation = evaluatePrereg(manifest, effectWorld);
     expect(evaluation.contrasts.map((c) => c.outcome)).toEqual(["met", "met"]);
     expect(evaluation.recovery.outcome).toBe("met");
@@ -126,7 +143,7 @@ describe("evaluatePrereg — fail-closed point-estimate screening (synthetic cur
   });
 
   it("a flat (no-effect) world reads not_met — the bench can fail honestly", async () => {
-    const manifest = await loadTemplate();
+    const manifest = await loadSyntheticManifest();
     const flat = [
       obs("full", "fx-a", 1.0),
       obs("full", "fx-b", 1.0),
@@ -143,11 +160,11 @@ describe("evaluatePrereg — fail-closed point-estimate screening (synthetic cur
   });
 
   it("missing cells make a predicate not_evaluable (fail-closed), never met", async () => {
-    const manifest = await loadTemplate();
+    const manifest = await loadSyntheticManifest();
     const incomplete = [
       obs("full", "fx-a", 1.0),
       obs("partial", "fx-a", 0.6),
-      // fx-b entirely missing → only 1 complete pair < min_fixtures_per_level=2
+      // fx-b entirely missing → registered-cohort attrition, fail-closed
     ];
     const evaluation = evaluatePrereg(manifest, incomplete);
     expect(evaluation.contrasts[0]!.outcome).toBe("not_evaluable");
@@ -156,7 +173,7 @@ describe("evaluatePrereg — fail-closed point-estimate screening (synthetic cur
   });
 
   it("one fixture meeting and one missing the effect → not_met (per_fixture_all)", async () => {
-    const manifest = await loadTemplate();
+    const manifest = await loadSyntheticManifest();
     const mixed = [
       obs("full", "fx-a", 1.0),
       obs("full", "fx-b", 1.0),
@@ -173,7 +190,7 @@ describe("evaluatePrereg — fail-closed point-estimate screening (synthetic cur
   });
 
   it("recovery outside the registered band → not_met", async () => {
-    const manifest = await loadTemplate();
+    const manifest = await loadSyntheticManifest();
     const drifted = effectWorld.map((o) =>
       o.zone === "full-restored" ? { ...o, recall_material_mean: 0.8 } : o,
     );
@@ -183,9 +200,32 @@ describe("evaluatePrereg — fail-closed point-estimate screening (synthetic cur
   });
 
   it("rejects duplicate observations for one cell", async () => {
-    const manifest = await loadTemplate();
+    const manifest = await loadSyntheticManifest();
     expect(() =>
       evaluatePrereg(manifest, [obs("full", "fx-a", 1.0), obs("full", "fx-a", 0.9)]),
     ).toThrow(/duplicate observation/);
+  });
+
+  it("rejects observations naming a fixture outside the registered cohort", async () => {
+    const manifest = await loadSyntheticManifest();
+    expect(() =>
+      evaluatePrereg(manifest, [...effectWorld, obs("full", "fx-ghost", 1.0)]),
+    ).toThrow(/unregistered fixture "fx-ghost"/);
+  });
+
+  it("selective attrition of a registered fixture → not_evaluable, even with enough survivors (B4)", async () => {
+    // Three registered fixtures; fx-c's data is dropped after registration.
+    // Two complete strong-effect pairs remain (>= min_fixtures_per_level=2),
+    // but evaluating only the survivors would be exactly the outcome-based
+    // selection R2-6 bans — the verdict must be not_evaluable, never met.
+    const manifest = await loadSyntheticManifest(["fx-a", "fx-b", "fx-c"]);
+    const evaluation = evaluatePrereg(manifest, effectWorld);
+    for (const contrast of evaluation.contrasts) {
+      expect(contrast.outcome).toBe("not_evaluable");
+      expect(contrast.reason).toMatch(/attrition/);
+      expect(contrast.reason).toContain("fx-c");
+    }
+    expect(evaluation.recovery.outcome).toBe("not_evaluable");
+    expect(evaluation.all_met).toBe(false);
   });
 });

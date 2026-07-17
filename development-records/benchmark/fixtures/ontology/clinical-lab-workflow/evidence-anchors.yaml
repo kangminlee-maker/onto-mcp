@@ -1,0 +1,48 @@
+# Evidence anchors — clinical-lab-workflow seeded defects의 렌더 좌표 앵커
+# (adaptive-effort 설계 §4-2; 소비자 scripts/effort-bench-coverage-map.ts).
+# 각 앵커는 렌더링된 materialized input 안에서 정확히 1회 출현하는 단일 라인
+# 부분문자열이어야 한다(맵퍼가 fail-loud 검증). 앵커는 ground-truth `where`가
+# 가리키는 1차 evidence 지점을 렌더 텍스트에서 실현한다 — 결함 탐지에 필요한
+# 최소 evidence 지점의 집합이며, 보강 서술 지점은 포함하지 않는다.
+# 채점/벤치 전용 — 리뷰 타깃 프로젝트에 절대 포함하지 않는다.
+schema_version: effort-bench-evidence-anchors/1
+fixture: clinical-lab-workflow
+defects:
+  - id: CLW-1
+    anchors:
+      - "단일 검사 항목(예: CBC, BMP). 주문 가능한 카탈로그 단위"
+      - "분석기에서 수행되는 검사 항목. 검사 카탈로그의 수행 단위"
+  - id: CLW-2
+    anchors:
+      - "Report.result_status에도 동일 정보가 유지된다"
+      - "보고서에 표시되는 결과 상태의 권위 값"
+  - id: CLW-3
+    anchors:
+      - "values: [preliminary, final, corrected]"
+      - "values: [prelim, finalized, amended]"
+  - id: CLW-4
+    anchors:
+      - "STAT 주문 여부. priority와 함께 기록"
+      - "응급(STAT) 검사 주문. Order의 하위 타입"
+  - id: CLW-5
+    anchors:
+      - "lifecycle: [collected, received, in_analysis, analyzed]"
+  - id: CLW-6
+    anchors:
+      - "kind: aggregated_into"
+      - "{ from: Report, to: Result, kind: contains }"
+      - "kind: derived_from"
+      - "{ from: Specimen, to: Result, kind: produces"
+  - id: CLW-7
+    anchors:
+      - "requires_specimen_type"
+      - "{ from: Specimen, to: Order, kind: belongs_to }"
+  - id: CLW-8
+    anchors:
+      - "대시보드 팀이 자체 계산식을 유지한다"
+  - id: CLW-9
+    anchors:
+      - "통보 시각과 수신자는 전화 기록 대장에 있다"
+  - id: CLW-10
+    anchors:
+      - "모든 Result가 final일 때 completed로 전이한다"

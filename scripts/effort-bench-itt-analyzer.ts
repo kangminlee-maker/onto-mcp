@@ -1,0 +1,433 @@
+/**
+ * Effort-bench ITT contrast/CI analyzer — the registered clustered analysis
+ * (adaptive-effort design §4-1, §4-3, §8 P1; findings R2-1, R2-7).
+ *
+ * `scripts/effort-bench-prereg.ts` owns the manifest and a POINT-ESTIMATE
+ * screening evaluator (`evaluatePrereg`). This module implements the
+ * REGISTERED CI rule that evaluator explicitly defers (manifest
+ * `analysis.ci`): "cluster-bootstrap-by-review".
+ *
+ * Cluster structure (finding R2-7, INV-BENCH-1): K judge draws repeat WITHIN
+ * one review (correlated); R reviews repeat within a fixture; fixtures repeat
+ * within a coverage level. Pooling R×K draws as one i.i.d. sample understates
+ * variance — the exact mistake this module exists to prevent. The bootstrap
+ * therefore resamples REVIEWS (not draws) with replacement within each
+ * (zone, effort, fixture) cell; a review's own K draws are collapsed to one
+ * review-level score (mean(draw_scores)) before resampling, so within-review
+ * correlation never leaks into the resampling unit.
+ *
+ * Multiplicity rule (manifest `analysis.multiplicity`):
+ * "all-registered-contrasts-must-hold" — the bench verdict (`all_met`) is met
+ * only if EVERY registered contrast AND the recovery predicate individually
+ * hold. This is an intersection-union rule, not a per-comparison alpha
+ * adjustment: each predicate's own registered CI bar already encodes its
+ * uncertainty, and requiring the conjunction (rather than correcting each
+ * bar for the number of comparisons) is the multiplicity control the
+ * manifest freezes. Mirrors `evaluatePrereg`'s `all_met`.
+ *
+ * Fail-closed semantics mirror `evaluatePrereg` exactly: "met" | "not_met" |
+ * "not_evaluable" — an incomplete or underpowered input is NEVER a pass.
+ *
+ * Pure — no I/O, no CLI. The P2 harness feeds observations and reads the
+ * report. Determinism: `seed` is a required input (never Math.random); the
+ * same seed always produces a byte-identical (deep-equal) report.
+ */
+
+import {
+  type EffortBenchPrereg,
+  type PredicateOutcome,
+} from "./effort-bench-prereg.ts";
+
+const REGISTERED_CI_RULE = "cluster-bootstrap-by-review";
+const REGISTERED_MULTIPLICITY_RULE = "all-registered-contrasts-must-hold";
+/**
+ * Percentile-CI floor: with fewer resamples the tail quantiles rest on a
+ * handful of order statistics (a 1-resample "CI" is a single point), letting
+ * a favorable draw certify a contrast the registered 95% CI would reject
+ * (review finding B2). 1000 keeps ≥25 resamples in each 2.5% tail.
+ */
+const MIN_BOOTSTRAP_ITERATIONS = 1000;
+
+function fail(msg: string): never {
+  throw new Error(`effort-bench-itt-analyzer: ${msg}`);
+}
+
+// ── input ──
+
+/** One REVIEW repetition. draw_scores = the K judge-draw recall_material
+ * values in [0,1] for that review; the review-level score is the explicit
+ * projection mean(draw_scores), keeping K's provenance visible in the input. */
+export interface BenchReviewObservation {
+  zone: string;
+  effort: string;
+  fixture: string;
+  rep: number;
+  draw_scores: number[];
+}
+
+const reviewScore = (o: BenchReviewObservation): number =>
+  o.draw_scores.reduce((a, b) => a + b, 0) / o.draw_scores.length;
+
+interface Cell {
+  zone: string;
+  effort: string;
+  fixture: string;
+  reps: BenchReviewObservation[];
+}
+
+const cellKey = (zone: string, effort: string, fixture: string): string =>
+  `${zone} ${effort} ${fixture}`;
+
+/** Fail-loud validation + grouping into (zone, effort, fixture) cells. */
+function groupObservations(
+  observations: BenchReviewObservation[],
+  registeredFixtures: string[],
+  registeredJudgeRuns: number,
+): Map<string, Cell> {
+  const registered = new Set(registeredFixtures);
+  const seenReps = new Set<string>();
+  const cells = new Map<string, Cell>();
+  for (const o of observations) {
+    const label = `(zone=${o.zone}, effort=${o.effort}, fixture=${o.fixture}, rep=${JSON.stringify(o.rep)})`;
+    if (!registered.has(o.fixture)) {
+      fail(
+        `observation ${label} names a fixture outside the registered cohort [${registeredFixtures.join(", ")}]`,
+      );
+    }
+    if (!Number.isInteger(o.rep) || o.rep <= 0) {
+      fail(`observation ${label} rep must be a positive integer`);
+    }
+    if (!Array.isArray(o.draw_scores) || o.draw_scores.length === 0) {
+      fail(`observation ${label} draw_scores must be a non-empty array`);
+    }
+    // The registered K is pinned, not a floor (template: "judge_runs: 8 — K,
+    // pinned effort=low"). A review measured with a different K is a protocol
+    // deviation; admitting it would silently rescale the review-level score's
+    // measurement error (review findings B3/C1).
+    if (o.draw_scores.length !== registeredJudgeRuns) {
+      fail(
+        `observation ${label} carries ${o.draw_scores.length} judge draw(s) but the manifest registers judge_runs=${registeredJudgeRuns} — protocol deviation, run inadmissible`,
+      );
+    }
+    for (const s of o.draw_scores) {
+      if (typeof s !== "number" || !Number.isFinite(s) || s < 0 || s > 1) {
+        fail(`observation ${label} draw_scores entries must be numbers in [0,1], got ${JSON.stringify(s)}`);
+      }
+    }
+    const repKey = `${cellKey(o.zone, o.effort, o.fixture)} ${o.rep}`;
+    if (seenReps.has(repKey)) {
+      fail(`duplicate observation row for ${label} — one row per (zone, effort, fixture, rep)`);
+    }
+    seenReps.add(repKey);
+    const key = cellKey(o.zone, o.effort, o.fixture);
+    const cell = cells.get(key);
+    if (cell) cell.reps.push(o);
+    else cells.set(key, { zone: o.zone, effort: o.effort, fixture: o.fixture, reps: [o] });
+  }
+  return cells;
+}
+
+// ── deterministic PRNG (mulberry32) ──
+
+/** mulberry32: small, fast, deterministic 32-bit PRNG. Same seed ⇒ same
+ * stream. Not cryptographic — fine for bootstrap resampling. Exported as the
+ * bench's shared seeded RNG (the judge-invariance sampler reuses it). */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/** Linear-interpolation percentile (the "type 7" / R-default / numpy-default
+ * "linear" method) over an already-sorted array. */
+const percentile = (sorted: number[], p: number): number => {
+  const n = sorted.length;
+  if (n === 1) return sorted[0]!;
+  const idx = p * (n - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo]!;
+  const frac = idx - lo;
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * frac;
+};
+
+const resampleWithReplacement = (xs: number[], rng: () => number): number[] => {
+  const n = xs.length;
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) out[i] = xs[Math.floor(rng() * n)]!;
+  return out;
+};
+
+// ── output ──
+
+export interface ClusterCI {
+  lower: number;
+  upper: number;
+  point: number;
+  bootstrap_iterations: number;
+}
+
+/** Percentile-bootstrap CI of (mean(baselineReviewScores) -
+ * mean(otherReviewScores)), resampling REVIEWS (not draws) with replacement
+ * within each side, independently, B times. */
+function bootstrapEffectCI(
+  baselineReviewScores: number[],
+  otherReviewScores: number[],
+  rng: () => number,
+  bootstrapIterations: number,
+  alpha: number,
+): ClusterCI {
+  const point = mean(baselineReviewScores) - mean(otherReviewScores);
+  const effects = new Array<number>(bootstrapIterations);
+  for (let b = 0; b < bootstrapIterations; b++) {
+    const bs = resampleWithReplacement(baselineReviewScores, rng);
+    const os = resampleWithReplacement(otherReviewScores, rng);
+    effects[b] = mean(bs) - mean(os);
+  }
+  effects.sort((a, b) => a - b);
+  return {
+    point,
+    lower: percentile(effects, alpha / 2),
+    upper: percentile(effects, 1 - alpha / 2),
+    bootstrap_iterations: bootstrapIterations,
+  };
+}
+
+export interface UnderpoweredFixture {
+  fixture: string;
+  reason: string;
+}
+
+export interface FixtureCIEffect {
+  fixture: string;
+  point: number;
+  ci: ClusterCI;
+  met: boolean;
+}
+
+export interface CIPredicateVerdict {
+  id: string;
+  outcome: PredicateOutcome;
+  per_fixture: FixtureCIEffect[];
+  underpowered: UnderpoweredFixture[];
+  reason: string;
+}
+
+export interface CellDispersion {
+  zone: string;
+  effort: string;
+  fixture: string;
+  n_reps: number;
+  mean: number;
+  /** Sample sd (n-1 denominator) of review-level scores; null when n<2. */
+  sd: number | null;
+}
+
+export interface PreregCIAnalysis {
+  contrasts: CIPredicateVerdict[];
+  recovery: CIPredicateVerdict;
+  cell_dispersion: CellDispersion[];
+  /** True only when EVERY registered contrast and the recovery predicate are met. */
+  all_met: boolean;
+  seed: number;
+  bootstrap_iterations: number;
+  alpha: number;
+  ci_rule: string;
+  /** Standing measurement caveats every consumer of this analysis must carry. */
+  caveats: string[];
+}
+
+/**
+ * P1 decision on design §4-4 item ⑥: per-run tool-read recording is NOT
+ * extended in P1 (it would touch the live review artifact surface — P1 is
+ * offline-only; the artifact keeps only the aggregate `tool_calls`). The
+ * design's fallback applies: the ITT analysis must carry the unobserved-
+ * heterogeneity disclosure so no downstream reading forgets it.
+ */
+export const TOOL_READ_HETEROGENEITY_CAVEAT =
+  "tool-read exposure heterogeneity unobserved: per-run tool-read paths are not recorded " +
+  "(aggregate tool_calls only) — lens-side voluntary tail recovery is part of the ITT " +
+  "treatment but its variation across runs is not measured (design §4-4)";
+
+const evaluateCIPair = (
+  id: string,
+  cells: Map<string, Cell>,
+  fixtures: string[],
+  baselineZone: string,
+  otherZone: string,
+  effort: string,
+  minRepsPerCell: number,
+  rng: () => number,
+  bootstrapIterations: number,
+  alpha: number,
+  met: (ci: ClusterCI) => boolean,
+): CIPredicateVerdict => {
+  const perFixture: FixtureCIEffect[] = [];
+  const underpowered: UnderpoweredFixture[] = [];
+  for (const fixture of fixtures) {
+    const baselineCell = cells.get(cellKey(baselineZone, effort, fixture));
+    const otherCell = cells.get(cellKey(otherZone, effort, fixture));
+    if (!baselineCell || !otherCell) {
+      const missing = !baselineCell ? baselineZone : otherZone;
+      underpowered.push({
+        fixture,
+        reason: `missing cell (zone=${missing}, effort=${effort}, fixture=${fixture}) — fail-closed`,
+      });
+      continue;
+    }
+    if (baselineCell.reps.length < minRepsPerCell || otherCell.reps.length < minRepsPerCell) {
+      underpowered.push({
+        fixture,
+        reason:
+          `reps below min_reps_per_cell=${minRepsPerCell}: ${baselineZone}=${baselineCell.reps.length}, ` +
+          `${otherZone}=${otherCell.reps.length} — fail-closed`,
+      });
+      continue;
+    }
+    const baselineScores = baselineCell.reps.map(reviewScore);
+    const otherScores = otherCell.reps.map(reviewScore);
+    const ci = bootstrapEffectCI(baselineScores, otherScores, rng, bootstrapIterations, alpha);
+    perFixture.push({ fixture, point: ci.point, ci, met: met(ci) });
+  }
+  // Anti-attrition (R2-6, review finding B4): `fixtures` is the REGISTERED
+  // cohort. Any registered fixture missing or underpowered means data went
+  // missing after registration — the predicate is unevaluable, never
+  // evaluated on the survivors.
+  if (underpowered.length > 0) {
+    return {
+      id,
+      outcome: "not_evaluable",
+      per_fixture: perFixture,
+      underpowered,
+      reason: `registered fixture(s) without a complete (${baselineZone} vs ${otherZone}) pair at effort=${effort}: ${underpowered
+        .map((u) => u.fixture)
+        .join(", ")} — fail-closed (attrition)`,
+    };
+  }
+  const unmet = perFixture.filter((f) => !f.met);
+  if (unmet.length > 0) {
+    return {
+      id,
+      outcome: "not_met",
+      per_fixture: perFixture,
+      underpowered,
+      reason: `fixtures not showing the registered CI-backed effect: ${unmet.map((f) => f.fixture).join(", ")}`,
+    };
+  }
+  return {
+    id,
+    outcome: "met",
+    per_fixture: perFixture,
+    underpowered,
+    reason: `all ${perFixture.length} complete fixture pairs meet the registered CI predicate`,
+  };
+};
+
+/**
+ * Evaluate every REGISTERED contrast + the recovery predicate using the
+ * manifest's declared clustered-bootstrap CI rule. Fail-closed: an
+ * incomplete/underpowered cell excludes its fixture from the complete-pair
+ * count rather than silently degrading the analysis.
+ */
+export function analyzePreregWithCI(
+  manifest: EffortBenchPrereg,
+  observations: BenchReviewObservation[],
+  opts: { seed: number; bootstrapIterations?: number; alpha?: number },
+): PreregCIAnalysis {
+  if (manifest.analysis.ci !== REGISTERED_CI_RULE) {
+    fail(
+      `this analyzer implements exactly the registered rule ${JSON.stringify(REGISTERED_CI_RULE)}; ` +
+        `manifest declares analysis.ci=${JSON.stringify(manifest.analysis.ci)} — a different registered rule ` +
+        `must not silently reuse this analyzer`,
+    );
+  }
+  // Same discipline for the multiplicity rule (review findings B5/C2): the
+  // hard-coded conjunction below IS "all-registered-contrasts-must-hold"; a
+  // manifest registering any other rule must not silently receive it.
+  if (manifest.analysis.multiplicity !== REGISTERED_MULTIPLICITY_RULE) {
+    fail(
+      `this analyzer implements exactly the registered multiplicity rule ${JSON.stringify(REGISTERED_MULTIPLICITY_RULE)}; ` +
+        `manifest declares analysis.multiplicity=${JSON.stringify(manifest.analysis.multiplicity)}`,
+    );
+  }
+  if (typeof opts.seed !== "number" || !Number.isFinite(opts.seed)) {
+    fail(`opts.seed must be a finite number, got ${JSON.stringify(opts.seed)}`);
+  }
+  const bootstrapIterations = opts.bootstrapIterations ?? 2000;
+  if (!Number.isInteger(bootstrapIterations) || bootstrapIterations < MIN_BOOTSTRAP_ITERATIONS) {
+    fail(
+      `opts.bootstrapIterations must be an integer >= ${MIN_BOOTSTRAP_ITERATIONS} (degenerate percentile tails below that), got ${JSON.stringify(bootstrapIterations)}`,
+    );
+  }
+  const alpha = opts.alpha ?? 0.05;
+  if (!(alpha > 0 && alpha <= 0.5)) {
+    fail(`opts.alpha must be in (0,0.5], got ${JSON.stringify(alpha)}`);
+  }
+
+  const rng = mulberry32(opts.seed);
+  const cells = groupObservations(observations, manifest.fixtures, manifest.cluster.judge_runs);
+  // The evaluation universe is the REGISTERED cohort, never the observed one.
+  const fixtures = [...manifest.fixtures].sort();
+
+  const contrasts = manifest.contrasts.map((c) =>
+    evaluateCIPair(
+      c.id,
+      cells,
+      fixtures,
+      c.baseline_zone,
+      c.treatment_zone,
+      c.effort,
+      manifest.cluster.min_reps_per_cell,
+      rng,
+      bootstrapIterations,
+      alpha,
+      (ci) => ci.lower >= c.min_effect_recall_points,
+    ),
+  );
+
+  const recovery = evaluateCIPair(
+    "recovery",
+    cells,
+    fixtures,
+    manifest.recovery.baseline_zone,
+    manifest.recovery.restored_zone,
+    manifest.recovery.effort,
+    manifest.cluster.min_reps_per_cell,
+    rng,
+    bootstrapIterations,
+    alpha,
+    (ci) =>
+      ci.lower >= -manifest.recovery.within_recall_points && ci.upper <= manifest.recovery.within_recall_points,
+  );
+
+  const cellDispersion: CellDispersion[] = [...cells.values()]
+    .map((cell) => {
+      const scores = cell.reps.map(reviewScore);
+      const n = scores.length;
+      const m = mean(scores);
+      const sd = n < 2 ? null : Math.sqrt(scores.reduce((acc, x) => acc + (x - m) ** 2, 0) / (n - 1));
+      return { zone: cell.zone, effort: cell.effort, fixture: cell.fixture, n_reps: n, mean: m, sd };
+    })
+    .sort(
+      (a, b) =>
+        a.zone.localeCompare(b.zone) || a.effort.localeCompare(b.effort) || a.fixture.localeCompare(b.fixture),
+    );
+
+  return {
+    contrasts,
+    recovery,
+    cell_dispersion: cellDispersion,
+    all_met: contrasts.every((c) => c.outcome === "met") && recovery.outcome === "met",
+    seed: opts.seed,
+    bootstrap_iterations: bootstrapIterations,
+    alpha,
+    ci_rule: manifest.analysis.ci,
+    caveats: [TOOL_READ_HETEROGENEITY_CAVEAT],
+  };
+}

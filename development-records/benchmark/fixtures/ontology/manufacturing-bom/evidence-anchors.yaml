@@ -1,0 +1,41 @@
+# Evidence anchors — manufacturing-bom seeded defects의 렌더 좌표 앵커
+# (adaptive-effort 설계 §4-2; 소비자 scripts/effort-bench-coverage-map.ts).
+# 규약은 clinical-lab-workflow/evidence-anchors.yaml 머리말과 동일.
+# 채점/벤치 전용 — 리뷰 타깃 프로젝트에 절대 포함하지 않는다.
+schema_version: effort-bench-evidence-anchors/1
+fixture: manufacturing-bom
+defects:
+  - id: MBO-1
+    anchors:
+      - "BOM은 비순환이어야 한다"
+  - id: MBO-2
+    anchors:
+      - "도면 리비전. 도면 관리대장이 원본"
+      - "최신 설계변경. ECO 시스템이 원본"
+  - id: MBO-3
+    anchors:
+      - "A의 대체가 B이면 B의 대체도 A다"
+      - "대체 방향. 기본은 one_way"
+  - id: MBO-4
+    anchors:
+      - "대체 가능 부품 관계"
+      - "AlternatePart를 통해 표현되는 관계의 단축 표기"
+  - id: MBO-5
+    anchors:
+      - "생산계획팀 엑셀로 별도 관리되는 값을 복사해 둔다"
+  - id: MBO-6
+    anchors:
+      - "단위는 작업장마다 다르다"
+      - "품목별 환산계수 마스터가 없고"
+  - id: MBO-7
+    anchors:
+      - "is_a: Operation"
+  - id: MBO-8
+    anchors:
+      - "구매 또는 제조되는 최소 관리 단위 품목"
+  - id: MBO-9
+    anchors:
+      - "표준원가 시스템에도 수기 입력 필드가 있어"
+  - id: MBO-10
+    anchors:
+      - "상위 품목이 하위 품목을 얼마나 쓰는지"

@@ -10,12 +10,13 @@
  *      repairs; a manifest that fails here cannot register a bench), and
  *   2. `evaluatePrereg` — the fail-closed point-estimate evaluation of the
  *      REGISTERED contrasts against per-cell observations. "met" requires
- *      every fixture with a complete observation pair to individually show
- *      the registered effect (aggregation=per_fixture_all, the only /1 mode)
- *      AND at least `min_fixtures_per_level` complete pairs; anything less is
- *      "not_evaluable" — never a pass. The full CI / multiplicity analysis is
- *      the P1 analyzer's job; its rules are declared here so they freeze with
- *      the contrasts.
+ *      EVERY fixture of the registered cohort (`fixtures`) to have a complete
+ *      observation pair AND individually show the registered effect
+ *      (aggregation=per_fixture_all, the only /1 mode); a missing or
+ *      incomplete registered fixture is attrition and the predicate is
+ *      "not_evaluable" — never a pass evaluated on the survivors. The full
+ *      CI / multiplicity analysis is the P1 analyzer's job; its rules are
+ *      declared here so they freeze with the contrasts.
  *
  * Pure — no I/O. The bench harness reads the YAML and feeds observations.
  * Template: development-records/benchmark/effort-bench/preregistration-template.yaml
@@ -49,6 +50,8 @@ export interface EffortBenchPrereg {
   gate: { recall_cut: number; precision_floor: number };
   coverage_levels: string[];
   efforts: string[];
+  /** Registered fixture cohort — the evaluation universe (anti-attrition). */
+  fixtures: string[];
   cluster: {
     min_reps_per_cell: number;
     min_fixtures_per_level: number;
@@ -115,6 +118,12 @@ export function parseEffortBenchPrereg(value: unknown): EffortBenchPrereg {
   };
   const coverageLevels = requireStringList(v.coverage_levels, "coverage_levels");
   const efforts = requireStringList(v.efforts, "efforts");
+  // The registered fixture cohort. Freezing it in the manifest is what makes
+  // selective attrition detectable (finding R2-6 / review finding B4): both
+  // evaluators take THIS list as the universe, so a fixture dropped after
+  // registration surfaces as an incomplete pair (=> not_evaluable), never as
+  // a silently smaller cohort derived from whatever observations arrived.
+  const fixtures = requireStringList(v.fixtures, "fixtures");
   if (!isRecord(v.cluster)) fail("cluster must be an object");
   const cluster = {
     // The design's own bench gate (§4-3): a manifest may tighten but never
@@ -127,6 +136,11 @@ export function parseEffortBenchPrereg(value: unknown): EffortBenchPrereg {
     ),
     judge_runs: requirePositiveInt(v.cluster.judge_runs, "cluster.judge_runs", 1),
   };
+  if (fixtures.length < cluster.min_fixtures_per_level) {
+    fail(
+      `fixtures lists ${fixtures.length} fixture(s) < cluster.min_fixtures_per_level=${cluster.min_fixtures_per_level}`,
+    );
+  }
   if (!isRecord(v.analysis)) fail("analysis must be an object (declared CI/multiplicity rules)");
   const analysis = {
     ci: requireStringList([v.analysis.ci], "analysis.ci")[0]!,
@@ -190,6 +204,7 @@ export function parseEffortBenchPrereg(value: unknown): EffortBenchPrereg {
     gate,
     coverage_levels: coverageLevels,
     efforts,
+    fixtures,
     cluster,
     analysis,
     aggregation: "per_fixture_all",
@@ -240,7 +255,7 @@ const indexObservations = (
   const byKey = new Map<string, number>();
   for (const o of observations) {
     requireUnit(o.recall_material_mean, `observation ${o.zone}/${o.effort}/${o.fixture} recall_material_mean`);
-    const key = `${o.zone} ${o.effort} ${o.fixture}`;
+    const key = `${o.zone} ${o.effort} ${o.fixture}`;
     if (byKey.has(key)) {
       fail(`duplicate observation for (zone=${o.zone}, effort=${o.effort}, fixture=${o.fixture}) — feed one row per cell`);
     }
@@ -256,14 +271,17 @@ const evaluatePair = (
   baselineZone: string,
   treatmentZone: string,
   effort: string,
-  minFixtures: number,
   met: (baseline: number, treatment: number) => boolean,
 ): PredicateVerdict => {
   const perFixture: FixtureEffect[] = [];
+  const incomplete: string[] = [];
   for (const fixture of fixtures) {
-    const baseline = byKey.get(`${baselineZone} ${effort} ${fixture}`);
-    const treatment = byKey.get(`${treatmentZone} ${effort} ${fixture}`);
-    if (baseline === undefined || treatment === undefined) continue; // incomplete pair
+    const baseline = byKey.get(`${baselineZone} ${effort} ${fixture}`);
+    const treatment = byKey.get(`${treatmentZone} ${effort} ${fixture}`);
+    if (baseline === undefined || treatment === undefined) {
+      incomplete.push(fixture);
+      continue;
+    }
     perFixture.push({
       fixture,
       baseline,
@@ -272,12 +290,17 @@ const evaluatePair = (
       met: met(baseline, treatment),
     });
   }
-  if (perFixture.length < minFixtures) {
+  // Anti-attrition (R2-6, review finding B4): `fixtures` is the REGISTERED
+  // cohort, not whatever survived. Any registered fixture without a complete
+  // pair means data went missing after registration — the predicate is
+  // unevaluable, never evaluated on the survivors (selectively dropping a
+  // flat/null fixture must not produce a pass).
+  if (incomplete.length > 0) {
     return {
       id,
       outcome: "not_evaluable",
       per_fixture: perFixture,
-      reason: `complete (${baselineZone} vs ${treatmentZone}) pairs at effort=${effort}: ${perFixture.length} < ${minFixtures} required fixtures — fail-closed`,
+      reason: `registered fixture(s) without a complete (${baselineZone} vs ${treatmentZone}) pair at effort=${effort}: ${incomplete.join(", ")} — fail-closed (attrition)`,
     };
   }
   const unmet = perFixture.filter((f) => !f.met);
@@ -306,17 +329,23 @@ export function evaluatePrereg(
   observations: CellObservation[],
 ): PreregEvaluation {
   const byKey = indexObservations(observations);
-  const fixtures = [...new Set(observations.map((o) => o.fixture))].sort();
+  const registered = new Set(manifest.fixtures);
+  for (const o of observations) {
+    if (!registered.has(o.fixture)) {
+      fail(
+        `observation names unregistered fixture ${JSON.stringify(o.fixture)} — the registered cohort is [${manifest.fixtures.join(", ")}]`,
+      );
+    }
+  }
 
   const contrasts = manifest.contrasts.map((c) =>
     evaluatePair(
       c.id,
       byKey,
-      fixtures,
+      manifest.fixtures,
       c.baseline_zone,
       c.treatment_zone,
       c.effort,
-      manifest.cluster.min_fixtures_per_level,
       (baseline, treatment) => baseline - treatment >= c.min_effect_recall_points,
     ),
   );
@@ -324,11 +353,10 @@ export function evaluatePrereg(
   const recovery = evaluatePair(
     "recovery",
     byKey,
-    fixtures,
+    manifest.fixtures,
     manifest.recovery.baseline_zone,
     manifest.recovery.restored_zone,
     manifest.recovery.effort,
-    manifest.cluster.min_fixtures_per_level,
     (baseline, restored) =>
       Math.abs(baseline - restored) <= manifest.recovery.within_recall_points,
   );
