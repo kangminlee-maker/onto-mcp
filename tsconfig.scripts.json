@@ -35,7 +35,12 @@
     "scripts/review-cert-run.mts",
     "scripts/review-pipeline-benchmark.ts",
     "scripts/review-cert-row.ts",
-    "scripts/effort-bench-prereg.ts"
+    "scripts/effort-bench-prereg.ts",
+    "scripts/effort-bench-coverage-map.ts",
+    "scripts/effort-bench-arm-settings.ts",
+    "scripts/effort-bench-itt-analyzer.ts",
+    "scripts/effort-bench-judge-invariance.ts",
+    "scripts/effort-bench-run-admission.ts"
   ],
   "exclude": []
 }
