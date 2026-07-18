@@ -1297,7 +1297,7 @@ describe("semantic-map resume preflight (v3.3)", () => {
         ]),
         dispatchBreaker: BREAKER,
       }),
-    ).rejects.toThrow(/outside current spreadsheet observations/);
+    ).rejects.toThrow(/outside current eligible observations/);
 
     const validation = parseYaml(
       await fs.readFile(path.join(sessionRoot, "semantic-map-resume-validation.yaml"), "utf8"),

@@ -5,6 +5,7 @@ import type {
 } from "../target-material-kind.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
 import type { SemanticSeedProjection } from "./comprehension-semantic-map.js";
+import type { CodeSemanticSeedProjection } from "./comprehension-semantic-map-code.js";
 
 export interface ReconstructSelectedSourceProfileRef {
   profile_id: string;
@@ -2557,24 +2558,64 @@ export interface ReconstructSemanticMapCensusColumn {
   verify_calls: number;
 }
 
+/** Step 6 (multi-artifact design DD7): the per-unit stats row for a CODE observation — identity is
+ *  the FILE (a 1a code observation carries exactly one file tree), stat vocabulary shared with the
+ *  spreadsheet column row so the census totals keep summing over `columns` uniformly.
+ *  `skipped_observation_fallback` does not apply (single unit — nothing sibling-dooms it). */
+export interface ReconstructSemanticMapCensusCodeUnit {
+  file: string;
+  status: "produced" | "empty" | "failed" | "capped";
+  reason: string | null;
+  produced_nodes: number;
+  frontier_accumulating: number;
+  frontier_frontier: number;
+  frontier_subsumed: number;
+  anchored: number;
+  unanchored: number;
+  adversarial_confirmed: number;
+  adversarial_refuted: number;
+  synthesize_calls: number;
+  verify_calls: number;
+}
+
+export type ReconstructSemanticMapCensusUnit =
+  | ReconstructSemanticMapCensusColumn
+  | ReconstructSemanticMapCensusCodeUnit;
+
 export interface ReconstructSemanticMapCensusObservation {
   observation_id: string;
+  /** Step 6 (DD7, additive): the artifact kind this row was routed as. ABSENT = spreadsheet
+   *  (pre-extension rows stay byte-identical); "code" rows carry ReconstructSemanticMapCensusCodeUnit
+   *  entries in `columns`. */
+  target_material_kind?: "spreadsheet" | "code";
   /** X5 gate: true ⇔ zero failed/capped/skipped columns AND ≥1 produced column. */
   map_present: boolean;
-  /** onto-W2 issue-003/006: a spreadsheet observation the stage SAW but could not evaluate is
+  /** onto-W2 issue-003/006: an ELIGIBLE observation (spreadsheet, or code under the
+   *  semantic_map_code opt-in ∩ author kind 광고 — DD7) the stage SAW but could not evaluate is
    *  recorded (map_absent, columns=[]) with an explicit reason — never silently dropped, so
-   *  by_observation is a COMPLETE partition of the spreadsheet observations and the totals
+   *  by_observation is a COMPLETE partition of the eligible observations and the totals
    *  reconcile. null for evaluated observations. System identities, not domain naming.
    *  deterministic_phase_failed (ultracode audit A): the pre-LLM tree build / fingerprint threw —
-   *  contained per observation so a malformed inventory column cannot crash the run. */
-  skip_reason: "no_workbook_inventory" | "no_value_tiles" | "deterministic_phase_failed" | null;
-  /** Present only for deterministic_phase_failed — the contained error message. */
+   *  contained per observation so a malformed inventory column cannot crash the run.
+   *  no_code_inventory / code_extraction_unsupported (step 6, 리뷰 gf-F5): a code observation
+   *  without a structure inventory vs one whose LANGUAGE the v1 grammars do not cover —
+   *  distinguishing "v1 limit" from "broken wiring" deterministically (skip_detail carries the
+   *  observer's reason for the unsupported case). */
+  skip_reason:
+    | "no_workbook_inventory"
+    | "no_value_tiles"
+    | "deterministic_phase_failed"
+    | "no_code_inventory"
+    | "code_extraction_unsupported"
+    | null;
+  /** Present for deterministic_phase_failed (contained error) and code_extraction_unsupported
+   *  (observer reason). */
   skip_detail?: string;
   /** §6 evidence (ultracode audit I): the per-observation PRE-EXECUTION llm-touch fingerprint the
    *  seed reuse key aggregates — recorded here so the census alone proves which epoch produced it.
    *  null for observations skipped before fingerprinting. */
   fingerprint: string | null;
-  columns: ReconstructSemanticMapCensusColumn[];
+  columns: ReconstructSemanticMapCensusUnit[];
   dispatch_execution_source?: "primary" | "fallback" | null;
   discarded_primary_synthesize_logical_calls?: number;
   discarded_primary_verify_logical_calls?: number;
@@ -2584,7 +2625,8 @@ export interface ReconstructSemanticMapCensusObservation {
 
 export interface ReconstructSemanticMapCensus {
   schema_version: "1";
-  /** ALL spreadsheet observations the stage saw (evaluated + skipped) — a complete partition:
+  /** ALL ELIGIBLE observations the stage saw (spreadsheet + opted-in code — DD7), evaluated +
+   *  skipped — a complete partition:
    *  observations_total == observations_map_present + observations_map_absent (onto-W2 issue-006). */
   observations_total: number;
   observations_map_present: number;
@@ -2626,7 +2668,10 @@ export interface ReconstructSemanticMapCensus {
  *  against a named, exported artifact contract). */
 export interface ReconstructSemanticMapSidecarObservation {
   observation_id: string;
-  projection: SemanticSeedProjection;
+  /** Step 6 (DD9, additive discriminator): ABSENT = spreadsheet (pre-extension sidecar rows stay
+   *  byte-identical); "code" rows carry a CodeSemanticSeedProjection. */
+  target_material_kind?: "spreadsheet" | "code";
+  projection: SemanticSeedProjection | CodeSemanticSeedProjection;
   node_epochs: { key: string; subtree_epoch_contribution: string }[];
 }
 
