@@ -1,0 +1,239 @@
+schema_version: 1
+session_id: 20260718-3c9b2434
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: InventoryRecord, InventoryAggregate, 재고 할당 규칙
+    evidence_anchor: 'materialized-input.md: InventoryRecord.quantity_on_hand,
+      InventoryAggregate.available_qty, integrity_rules 첫 번째 항목, notes의 "재고 진실"'
+    claim: 실시간 재고나 추가 재고 원장을 도입하면 기존 재고 구조와 할당 규칙을 함께 변경해야 한다.
+    what: 재고 값에 기준 시각, 출처 원장, 수량 종류, 계산 기준이 없고, 일중 할당도 매일 밤 생성한 단일 available_qty를 직접
+      읽도록 고정되어 있다.
+    why: 새 WMS, 다중 ERP, 실시간 예약·가용 재고를 수용하려면 기존 필드의 의미를 바꾸거나 별도 필드와 할당 규칙을 추가해야 한다.
+      또한 기존 스냅샷은 어느 시점과 원장 기준인지 복원할 수 없어 전환 전후 데이터의 연속성을 보장하기 어렵다.
+    how_to_fix: 출처, as_of/effective_at, 수량 종류(on_hand, reserved, available 등), 계산 정책
+      버전을 갖는 시간 유효 재고 관측 모델을 추가하고, 할당이 참조한 관측 또는 스냅샷을 명시적으로 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 재고 개념 기준과 안전한 주문 할당
+      failure_condition: 실시간 할당, 추가 재고 원장, 일중 재고 갱신을 도입하거나 과거 할당 근거를 재현할 때
+      impact: 기존 구조의 의미 변경과 광범위한 마이그레이션이 필요하며, 전환 중 과잉 할당 및 재고 감사 불능 위험이 생긴다.
+      evidence_refs:
+        - InventoryRecord.quantity_on_hand note
+        - InventoryAggregate.available_qty note
+        - integrity_rules[0]
+        - notes[0]
+    causal_path:
+      root_cause_candidate: 재고를 출처와 유효 시간이 있는 관측값이 아니라 무시점 단일 현재값/야간 스냅샷으로 모델링했다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 새 실시간 또는 다중 원장 재고를 기존 필드에 구분해 저장할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - InventoryRecord attributes
+            - InventoryAggregate attributes
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 할당 규칙이 일중에도 매일 밤 생성되는 available_qty에 직접 결합되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - InventoryAggregate.available_qty note
+            - integrity_rules[0]
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 재고 모델에 출처, 유효 시각, 수량 의미 및 정책 버전이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - InventoryRecord definition and attributes
+            - InventoryAggregate definition and attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: Sku.weight, Sku.dims, Shipment.total_weight
+    evidence_anchor: "materialized-input.md: Sku.weight 및 dims의 note,
+      Shipment.total_weight의 note"
+    claim: 단위 관례가 다른 창고나 외부 시스템을 추가하면 기존 측정값을 안전하게 결합할 수 없다.
+    what: weight는 kg 또는 lb를 같은 number 필드에 저장하고, dims는 단위 없는 문자열이며,
+      Shipment.total_weight는 이 값들의 합으로 저장된다.
+    why: 새 창고·운송사 연동 시 값의 단위와 차원 순서를 데이터만으로 식별할 수 없다. 단위 표준화 정책을 나중에 도입하면 기존 값의 재해석
+      또는 전면 변환이 필요하고, 원 단위를 알 수 없는 레코드는 연속성을 복구할 수 없다.
+    how_to_fix: 측정값을 value, unit, measurement_kind로 구조화하고 치수 축을 분리한다. 정규화 값과 원본 값·원본
+      단위를 함께 보존하며, total_weight에 계산 기준과 단위 또는 구성 측정값 참조를 둔다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 간 상품·화물 측정값의 공통 개념 기준
+      failure_condition: kg와 lb 또는 서로 다른 치수 단위를 쓰는 새 창고·운송사를 통합하거나 과거 값을 재계산할 때
+      impact: 중량 합계와 적재·운임 판단이 데이터 출처에 따라 달라져 통합 기준으로 신뢰할 수 없고, 이후 단위 표준화 시 손실 없는
+        마이그레이션이 불가능할 수 있다.
+      evidence_refs:
+        - Sku.weight note
+        - Sku.dims note
+        - Shipment.total_weight note
+    causal_path:
+      root_cause_candidate: 측정량의 값과 단위를 분리하지 않고 소스별 관례를 동일 필드의 암묵적 의미로 두었다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 소스의 측정값을 기존 값과 비교·합산할 때 단위를 판별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - Sku.weight note
+            - Sku.dims note
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 단위가 불명확한 SKU 중량을 합산한 total_weight가 저장된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Shipment.total_weight note
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 측정 모델에 명시적 단위와 정규화·원본 구분이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Sku attributes
+            - Shipment attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: TrackingEvent.event_type 및 Order/Shipment 상태 모델
+    evidence_anchor: "materialized-input.md: TrackingEvent.event_type note,
+      Order.fulfillment_status, Shipment.status, integrity_rules 두 번째 항목"
+    claim: 새 운송사 상태 코드나 상태 체계 버전을 추가할 때 연동별 수정이 반복되고 과거 상태 해석의 연속성이 깨진다.
+    what: 세 상태 체계가 닫힌 enum으로 정의되고 독립 관리되며, 캐리어 상태와 Shipment.status의 매핑은 각 연동에 맡겨져
+      있다. 매핑의 버전, 유효 기간, 원본 코드 보존 구조가 없다.
+    why: 운송사가 코드를 추가·변경하거나 OMS/TMS 상태가 확장되면 enum과 각 연동 매핑을 동시에 수정해야 한다. 같은 원본 코드의
+      의미가 변경되어도 당시 적용된 매핑을 식별할 수 없어 과거 배송 상태를 일관되게 재현하기 어렵다.
+    how_to_fix: 원본 시스템·원본 코드·발생 시각을 보존하고, canonical 상태로의 매핑을 버전 및 유효 기간이 있는 독립 개념으로
+      둔다. canonical enum 확장은 호환 정책과 deprecated/alias 규칙으로 관리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: OMS/TMS/캐리어 상태를 연결하는 장기적 통합 기준
+      failure_condition: 운송사 또는 내부 시스템이 상태 코드를 추가·폐기·재정의할 때
+      impact: 연동별 매핑 드리프트가 누적되고 전환 전후 동일 이벤트의 해석이 달라져 상태 기반 운영과 이력 조회의 신뢰가 약화된다.
+      evidence_refs:
+        - TrackingEvent.event_type values and note
+        - Order.fulfillment_status values
+        - Shipment.status values
+        - integrity_rules[1]
+    causal_path:
+      root_cause_candidate: 외부 코드 체계를 버전 있는 매핑 자산으로 모델링하지 않고 닫힌 enum과 연동별 구현에 분산했다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 새 상태 코드가 등장하면 canonical enum 또는 개별 연동 로직을 수정해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - TrackingEvent.event_type note
+            - Order and Shipment status enums
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 매핑이 각 연동에 분산되어 변경 시 일괄 호환성을 보장할 공통 권위가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - TrackingEvent.event_type note
+            - integrity_rules[1]
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 매핑 버전, 유효 기간, 원본 코드 보존 개념이 정의되어 있지 않다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - TrackingEvent attributes
+            - relations
+            - integrity_rules
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: Shipment, DeliveryLeg 및 fulfills 관계
+    evidence_anchor: "materialized-input.md: Shipment definition, DeliveryLeg is_a
+      Shipment, DeliveryLeg attributes, fulfills 관계"
+    claim: 다중 구간·분할·합배송·운송사 인계 시나리오를 추가하려면 현재 Shipment 계층을 재구성해야 한다.
+    what: DeliveryLeg가 Shipment의 하위 유형이지만 구간을 묶는 상위 운송 계획 또는 parent shipment 참조가 없고,
+      leg_seq만 존재한다. Shipment는 단일 carrier_ref를 가지며 fulfills는 주문 전체만 연결한다.
+    why: 새 구간을 어느 운송 여정에 배열할지, 구간별 운송사를 어떻게 표현할지, 여러 주문·출하를 어떻게 분할 또는 통합했는지 식별할 수
+      없다. 이런 운송 형태를 수용하려면 기존 상속, carrier_ref, 관계 구조를 동시에 변경해야 한다.
+    how_to_fix: Shipment와 DeliveryLeg를 구성 관계로 분리하고 명시적 journey/route 또는 parent
+      shipment 참조를 둔다. 운송사와 상태는 구간 수준에 배치할 수 있게 하며, 주문 라인과 출하 수량을 연결하는
+      fulfillment allocation 개념을 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 확장 가능한 주문-화물-배송 통합 개념 기준
+      failure_condition: 다중 구간 운송, 구간별 운송사 인계, 부분 출하 또는 합배송을 도입할 때
+      impact: 핵심 Shipment 의미와 관계를 호환성 없이 변경해야 하며, 기존 단일 구간 데이터와 새 복합 운송 데이터의 일관된 질의가
+        어려워진다.
+      evidence_refs:
+        - Shipment definition and carrier_ref
+        - DeliveryLeg is_a and attributes
+        - fulfills relation note
+    causal_path:
+      root_cause_candidate: 운송 전체와 운송 구간을 구성 관계가 아니라 is_a 관계로 합치고, 분할·통합을 나타내는 중간 개념을 두지 않았다.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 복수 구간을 하나의 운송 여정으로 묶거나 구간별 운송사를 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - DeliveryLeg attributes
+            - Shipment.carrier_ref
+        - cause_id: evolution-candidate-004.cause-002
+          claim: DeliveryLeg가 독립 Shipment로 상속되지만 상위 여정 참조가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - DeliveryLeg is_a Shipment
+            - DeliveryLeg attributes
+        - cause_id: evolution-candidate-004.cause-003
+          claim: 운송 구성과 주문 라인별 충족을 표현하는 명시적 중간 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations.fulfills note
+            - OrderLine attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-005
+    target: 온톨로지 버전 및 변경 연속성 계약
+    evidence_anchor: 'materialized-input.md: 최상위 version: "1.0"과 전체
+      entities/relations/integrity_rules'
+    claim: 향후 스키마·코드·규칙 변경 시 기존 데이터의 해석을 유지할 버전 전환 계약이 없다.
+    what: 최상위 버전 문자열만 있고, 개체·속성·enum·무결성 규칙의 도입/폐기 시점, 호환 범위, 별칭, 마이그레이션 또는 레코드별 적용
+      버전을 표현하지 않는다.
+    why: 새 버전에서 상태, 관계 또는 계산 규칙을 변경해도 기존 레코드가 어느 의미 계약으로 생성되었는지 판별할 수 없다. 결과적으로 외부
+      표준 변경이나 온톨로지 확장 때 일괄 재해석 또는 비호환 재구축에 의존하게 된다.
+    how_to_fix: 버전별 변경 계약을 정의하고 각 변경 가능한 개념에 stable identifier,
+      introduced/deprecated version, alias와 호환 규칙을 둔다. 의미가 계산 정책에 의존하는 레코드는 적용된
+      ontology/policy version을 추적하도록 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 장기간 유지되는 WMS/TMS/ERP 공통 개념 기준
+      failure_condition: 온톨로지 1.1 이상에서 상태, 관계, 계산 또는 외부 표준 매핑을 변경할 때
+      impact: 기존 데이터와 규칙의 의미를 새 버전과 함께 재현할 수 없어 점진적 전환과 감사 가능한 호환성이 약화된다.
+      evidence_refs:
+        - top-level version
+        - entities definitions
+        - relations
+        - integrity_rules
+    causal_path:
+      root_cause_candidate: 버전을 문서 식별자 수준으로만 두고 데이터 의미의 생명주기와 마이그레이션 권위로 연결하지 않았다.
+      root_cause_step_id: evolution-candidate-005.cause-003
+      steps:
+        - cause_id: evolution-candidate-005.cause-001
+          claim: 새 버전 도입 후 기존 레코드가 적용받은 의미 계약을 판별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - top-level version
+            - entity attributes
+        - cause_id: evolution-candidate-005.cause-002
+          claim: 개념과 규칙에 도입·폐기·호환 메타데이터가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities
+            - relations
+            - integrity_rules
+        - cause_id: evolution-candidate-005.cause-003
+          claim: 최상위 version 외에는 버전 전환 및 마이그레이션 계약이 정의되어 있지 않다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - top-level version
+            - complete materialized input
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 새 창고·운송사·OMS/TMS 버전, 실시간 재고 처리, 다중 구간 운송이 향후 추가될 수 있다는 변경 시나리오를 적용했다.
+  - session_domain이 none이므로 외부 물류 표준이나 도메인 문서는 사용하지 않았다.
+validation:
+  unaddressable_candidates: []

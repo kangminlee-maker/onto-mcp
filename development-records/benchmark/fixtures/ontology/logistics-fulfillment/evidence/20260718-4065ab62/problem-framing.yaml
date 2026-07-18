@@ -1,0 +1,263 @@
+schema_version: 1
+session_id: 20260718-4065ab62
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Inventory allocation relies on current or nightly quantity
+      surfaces instead of time-scoped, source-authoritative availability
+      records, collapsing WMS/ERP authority and validity-time meaning for
+      allocation and audit.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The deliberation resolution keeps this as a high-severity material
+      inventory defect accepted by all lenses. Because allocation correctness,
+      audit reconstruction, and WMS/ERP reconciliation depend on the missing
+      authority and temporal model, it is a root cause that should be closed
+      before using the ontology as the next-stage integration baseline.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-006
+  - issue_id: issue-002
+    problem_definition: Freight weights and dimensions are modeled as bare numbers
+      or strings rather than structured measurements with value, unit, source,
+      and conversion basis.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All participating stances support the medium-severity measurement
+      root. The defect directly weakens carrier rating, load planning, capacity
+      calculation, and reconciliation because numeric freight values cannot be
+      safely compared or aggregated without unit and source semantics.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-009
+  - issue_id: issue-003
+    problem_definition: The ontology lacks a versioned canonical mapping between
+      external carrier event codes and internal shipment states, leaving status
+      derivation and evolution to individual integrations.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is consistently supported at medium severity. It is a root
+      cause for inconsistent status meaning, terminal-state handling, exception
+      coordination, and auditability across WMS/TMS/carrier integrations, so it
+      should be addressed before the ontology is treated as a shared status
+      baseline.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-012
+  - issue_id: issue-004
+    problem_definition: The ontology lacks a line-level fulfillment/allocation
+      authority linking OrderLine quantities to Shipment or DeliveryLeg
+      evidence, so order-level fulfillment collapses partial, split, exception,
+      reconciliation, and audit cases.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All lenses accept the missing line-level allocation concept, but
+      deliberation preserves disagreement over whether severity is medium or
+      raised. The classification is therefore a contested root cause requiring a
+      decision on severity and consolidation with related line-traceability
+      issues before the next stage.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: The fulfillment relation is scoped to Shipment -> Order and
+      lacks a line-level allocation entity binding fulfilled OrderLine quantity
+      to Shipment or DeliveryLeg.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Coverage keeps this as a distinct high-severity coverage-owned issue
+      while axiology preserves a medium value-alignment caveat. The root is
+      accepted, but its distinctness and severity relative to issue-004 remain
+      disputed, so it needs a closure decision before the ontology advances.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Order and shipment lifecycle states cover forward progress
+      to delivered while omitting cancellation, failed delivery, return,
+      reissue, correction, reversal, and archival closure despite
+      exception-capable tracking events.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue has no material deliberation conflict and is supported as a
+      medium non-happy-path lifecycle coverage gap. It weakens exception
+      handling and reconciliation completeness, so the lifecycle model should be
+      closed before relying on the ontology as an operational standard.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-007
+    problem_definition: Fulfillment authority is fixed at whole-order granularity
+      rather than OrderLine quantity, making partial shipment, multi-warehouse
+      fulfillment, and backorder patterns require changes to the core
+      relationship model.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The evolution lens keeps high severity because the authority unit
+      blocks future fulfillment patterns, while axiology preserves a medium
+      value-only caveat. The root is accepted but severity and relationship to
+      the line-fulfillment cluster remain contested.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: Inventory quantity concepts lack structured effective time
+      and source authority, preventing continuity and reproducibility for
+      real-time inventory, audit reconstruction, allocation trust, accounting
+      adjustments, and multi-source WMS/ERP integration.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation resolves this as one combined temporal/source-authority
+      inventory issue accepted by all lenses and elevated beyond pure
+      evolvability because allocation and audit are affected. It should be fixed
+      before next-stage integration use; issue-001 carries the immediate
+      allocation correctness framing.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-009
+    problem_definition: DeliveryLeg route reasoning uses inheritance where it needs
+      shipment-route composition and ordered containment under a parent Shipment
+      or Route.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation resolves the coverage evidence gap and keeps this as a
+      material medium route-composition issue. The part-whole structural error
+      can make route legs inherit whole-shipment meanings and destabilize
+      route/status reasoning, so it must be corrected before the model is used
+      as a common route baseline.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-020
+  - issue_id: issue-010
+    problem_definition: Multi-source controlled values such as inventory quantity
+      and ETA lack source-of-truth, provenance, override evidence, governing
+      context, actor, reason, and supersession concepts.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All lenses support the high-severity authority/provenance root.
+      Because precedence and audit behavior for WMS, ERP, carrier, and manual
+      values are left to local implementations, this is a governance and
+      authority defect that must close before next-stage use.
+    related_surface_finding_ids:
+      - finding-015
+      - finding-007
+  - issue_id: issue-011
+    problem_definition: DeliveryLeg is classified as a special kind of Shipment even
+      though it is a route segment that should be contained by or associated
+      with a whole Shipment or Route with separate leg state.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation keeps this as a material medium semantic type-modeling
+      issue despite coverage's original evidence-ownership limitation. The issue
+      directly conflates segment and whole-shipment meanings, which affects
+      status mapping and fulfillment interpretation.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-012
+    problem_definition: The unit model is not evolvable because measurement unit is
+      not part of the measurement value concept, making weight, dimension, and
+      total-weight values unstable across systems and conventions.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All lenses support the measurement value/unit root at medium
+      severity. The issue is a root cause for both current aggregation ambiguity
+      and future reinterpretation risk when warehouses, carriers, regions, or
+      rating engines use different unit systems.
+    related_surface_finding_ids:
+      - finding-017
+      - finding-011
+  - issue_id: issue-013
+    problem_definition: Carrier source event meanings and internal Shipment status
+      meanings are not canonically mapped in the ontology, delegating status
+      interpretation to external integration implementations.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue has no material conflict and is supported as a medium
+      canonical mapping need. It is narrower than issue-003 but still a root
+      cause for inconsistent delivered, in_transit, and exception semantics
+      across integrations.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-014
+    problem_definition: Shipment composition and reconciliation require line-level
+      mapping from OrderLine quantities to Shipment and optionally DeliveryLeg,
+      but fulfillment is modeled only at order granularity.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Structure keeps this as a distinct high-severity structural
+      line-level traceability defect, while axiology preserves a medium
+      value-purpose caveat. The root is accepted, but severity and consolidation
+      with the line-level fulfillment cluster remain unresolved decisions.
+    related_surface_finding_ids:
+      - finding-019

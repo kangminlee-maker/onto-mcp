@@ -1,0 +1,132 @@
+schema_version: 1
+session_id: 20260718-41224df0
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml — RiskAppetite entity and relations
+    evidence_anchor: RiskAppetite definition/attributes; relations list contains no
+      edge whose from or to is RiskAppetite
+    claim: RiskAppetite가 관계 그래프에서 완전히 고립되어 준수 상태의 판정 대상을 구조적으로 식별할 수 없다.
+    what: RiskAppetite는 ExposureAggregate 초과 여부로 위반을 정의하지만, ExposureAggregate 또는 적용
+      대상 차주·포트폴리오와 연결하는 관계가 하나도 없다.
+    why: threshold와 compliance_status가 존재해도 어느 집계값을 어느 appetite에 비교해야 하는지 그래프에서 탐색할
+      수 없다. 따라서 리스크 엔진과 보고 시스템이 동일한 위반 대상을 공유한다는 목적이 실패할 수 있다.
+    how_to_fix: "RiskAppetite의 적용 범위를 명시하고 ExposureAggregate와의 기계 판독 가능한 관계(예:
+      governed_by 또는 evaluated_against)를 추가하며, 필요하면 차주·상품·포트폴리오 범위 키도 연결한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서로서 RiskAppetite 위반 및 준수 상태를 일관되게 판정하는 목적
+      failure_condition: 둘 이상의 집계 또는 appetite가 존재하거나 소비 시스템이 특정 집계에 적용할 appetite를 선택해야 할 때
+      impact: 각 소비자가 별도 규칙으로 비교 대상을 추론하게 되어 동일 데이터에 상이한 준수 상태를 산출할 수 있다.
+      evidence_refs:
+        - RiskAppetite.definition
+        - RiskAppetite.attributes.threshold
+        - RiskAppetite.attributes.compliance_status
+        - relations 전체 목록
+    causal_path:
+      root_cause_candidate: RiskAppetite 판정에 필요한 적용 대상 관계가 온톨로지의 relations에 모델링되지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite는 어떤 관계의 시작점이나 끝점으로도 등장하지 않는 고아 엔터티다.
+          relation_to_previous: null
+          evidence_refs:
+            - relations 전체 목록
+            - RiskAppetite 엔터티 선언
+        - cause_id: structure-candidate-001.cause-002
+          claim: ExposureAggregate와 RiskAppetite의 비교는 정의 문장에만 있고 구조적 관계로 표현되지 않았다.
+          relation_to_previous: causes
+          evidence_refs:
+            - RiskAppetite.definition
+            - relations 전체 목록
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: credit-risk-ontology.yaml — ExposureAggregate aggregation structure
+    evidence_anchor: ExposureAggregate.definition says it is the sum of all
+      Exposure.amount; its only declared relation is ExposureAggregate ->
+      Borrower (summarizes)
+    claim: ExposureAggregate와 집계 원천인 Exposure 사이의 필수 구조적 연결이 누락되어 있다.
+    what: ExposureAggregate는 모든 Exposure.amount의 합으로 정의되지만 relations에는
+      ExposureAggregate와 Exposure를 직접 연결하거나 집계 원천임을 표시하는 관계가 없다.
+    why: Borrower를 경유해 두 엔터티가 같은 연결 컴포넌트에 속하는 것만으로는 어떤 Exposure 집합이 집계 입력인지, 어떤 관계가
+      합산 의존성을 나타내는지 구조적으로 확정되지 않는다. 소비 시스템은 정의 문장을 별도로 해석해야 한다.
+    how_to_fix: "ExposureAggregate에서 Exposure로 향하는 집계 원천 관계(예: aggregates)를 추가하고,
+      borrower_ref 또는 명시적 범위 조건으로 포함 대상 Exposure를 규정한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: ExposureAggregate를 리스크 엔진과 보고 시스템이 동일한 총익스포저 개념으로 사용하는 목적
+      failure_condition: 소비자가 관계 그래프만으로 집계 입력 Exposure 집합을 구성하거나 집계 계보를 검증할 때
+      impact: 집계 대상 선택이 시스템별 구현 규칙에 의존하여 총익스포저의 재현성과 추적 가능성이 약화된다.
+      evidence_refs:
+        - ExposureAggregate.definition
+        - ExposureAggregate.attributes.borrower_ref
+        - "relations: ExposureAggregate -> Borrower summarizes"
+        - "relations: Borrower -> Exposure has_many"
+    causal_path:
+      root_cause_candidate: 파생 집계와 그 원천 엔터티 사이의 집계 의존 관계가 relations에 선언되지 않았다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: ExposureAggregate는 Exposure의 합으로 정의되지만 Exposure와 직접 연결되지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - ExposureAggregate.definition
+            - relations 전체 목록
+        - cause_id: structure-candidate-002.cause-002
+          claim: 현재 구조는 Borrower 연결만 제공하고 합산 원천이라는 관계 종류를 제공하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "relations: ExposureAggregate -> Borrower summarizes"
+            - "relations: Borrower -> Exposure has_many"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: credit-risk-ontology.yaml — Exposure.risk_grade derivation structure
+    evidence_anchor: classification_rules states Exposure.risk_grade is derived from
+      RiskRating.grade; relations include Borrower -> Exposure and Borrower ->
+      RiskRating but no derivation relation between Exposure and RiskRating
+    claim: 명시된 등급 도출 규칙을 지지하는 Exposure–RiskRating 관계가 누락되어 있다.
+    what: Exposure.risk_grade가 RiskRating.grade에서 도출된다고 선언했지만 두 엔터티 사이에는
+      derives_from 또는 적용 등급을 특정하는 관계가 없다.
+    why: Borrower를 통한 간접 연결은 동일 차주의 여러 Exposure와 여러 RiskRating 중 어느 등급이 각 Exposure
+      등급의 원천인지 표현하지 못한다. 도출 규칙의 구조가 설계 의도와 일치하지 않아 소비자가 별도 결합 규칙을 만들게 된다.
+    how_to_fix: Exposure.risk_grade의 원천 RiskRating을 특정하는 명시적 관계를 추가하고, 복수 등급이 가능하다면
+      적용 대상을 결정하는 식별자 또는 유효 시점 연결을 함께 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진 등급을 보고 시스템의 익스포저 등급으로 일관되게 전달하는 공유 개념 기준
+      failure_condition: 한 차주에 여러 Exposure 또는 여러 RiskRating 레코드가 존재하여 도출 원천을 선택해야 할 때
+      impact: 소비 시스템별 결합 방식이 달라져 같은 차주·익스포저에 서로 다른 risk_grade가 연결될 수 있다.
+      evidence_refs:
+        - classification_rules[0]
+        - Exposure.attributes.risk_grade
+        - RiskRating.attributes.grade
+        - "relations: Borrower -> Exposure has_many"
+        - "relations: Borrower -> RiskRating rated_by"
+    causal_path:
+      root_cause_candidate: 속성 간 도출 의존성이 관계 모델에 반영되지 않았다.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: Exposure와 RiskRating 사이에 직접적인 도출 또는 적용 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - relations 전체 목록
+            - classification_rules[0]
+        - cause_id: structure-candidate-003.cause-002
+          claim: 도출 의도는 자유 텍스트 규칙에만 존재하고 구조적 연결은 Borrower를 통한 간접 경로뿐이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[0]
+            - "relations: Borrower -> Exposure has_many"
+            - "relations: Borrower -> RiskRating rated_by"
+      unresolved_beyond_evidence: 현재 경계의 단일 파일에는 복수 RiskRating 선택 규칙이나 외부 매핑의 구조가 포함되어 있지 않다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 공유 온톨로지의 relations가 소비 시스템이 기계적으로 사용할 수 있는 개념 연결의 권위 표면이며, 자유 텍스트 정의·규칙만으로는
+    누락된 구조적 관계를 대체하지 않는다고 보았다.
+validation:
+  unaddressable_candidates: []

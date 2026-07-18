@@ -1,0 +1,208 @@
+schema_version: 1
+session_id: 20260718-4065ab62
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+    conflict_summary: All lenses support a material inventory issue, but they differ
+      on whether the root should remain the broad time-scoped
+      source-authoritative availability model, be narrowed to source-governed
+      inventory meaning or structural separation of records and allocations, and
+      whether high severity is fully justified or should be lowered from an
+      evolution-only view.
+    resolution_question: Should issue-001 be resolved as one broad high-severity
+      temporal/source-authority inventory defect, or narrowed into
+      source-authority and temporal-structure components with adjusted severity?
+  - issue_id: issue-004
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - structure
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+    conflict_summary: The lenses agree that order-level fulfillment loses line-level
+      traceability, but disagree on whether the issue is medium purpose
+      misalignment or high operational/structural coverage failure, and on
+      whether the root should be framed as a value tradeoff or an absent
+      line-level fulfillment/allocation concept.
+    resolution_question: Should issue-004 keep medium severity as value
+      misalignment, or be raised and reframed around the missing line-level
+      fulfillment/allocation concept?
+  - issue_id: issue-005
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+    conflict_summary: Coverage keeps high severity because the missing line-level
+      allocation concept blocks operational reconciliation, while axiology
+      supports the substance but lowers severity because it sees the concern as
+      materially equivalent to the medium issue-004 value framing.
+    resolution_question: Should issue-005 remain a distinct high-severity coverage
+      issue, or be severity-aligned and/or merged conceptually with the medium
+      line-traceability framing in issue-004?
+  - issue_id: issue-007
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+    conflict_summary: Evolution keeps high severity because whole-order fulfillment
+      authority blocks future partial, multi-warehouse, and backorder
+      extensions, while axiology supports the defect but lowers it to medium
+      when viewed as purpose misalignment rather than evolution-blocking model
+      authority.
+    resolution_question: Should issue-007 remain high severity as an
+      evolution-blocking authority-unit defect, or be lowered and reconciled
+      with the medium value framing of the same fulfillment traceability family?
+  - issue_id: issue-008
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - coverage
+      - semantics
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+    conflict_summary: Evolution frames the issue as medium continuity risk, while
+      axiology and coverage raise severity because the same
+      temporal/source-authority gap affects allocation trust and audit
+      reconstruction; semantics and structure narrow the root to source meaning
+      and missing temporal/provenance fields.
+    resolution_question: Should issue-008 be kept as a medium evolvability issue,
+      raised to high due to allocation/audit impact, or narrowed into
+      source-authority and temporal-structure subissues?
+  - issue_id: issue-009
+    priority: 7
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - logic
+      - structure
+      - coverage
+      - axiology
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+    conflict_summary: Logic, structure, semantics, evolution, and axiology support
+      the inheritance-versus-composition route defect, while coverage reports
+      insufficient direct evidence from its own sources. The conflict is whether
+      the coverage gap affects admission, scope, or severity of the material
+      issue.
+    resolution_question: Does the direct logic/structure/semantics evidence suffice
+      to keep issue-009 as a material medium route-composition issue despite
+      coverage's insufficient-evidence stance?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+    conflict_summary: Semantics directly supports the DeliveryLeg/Shipment
+      part-whole type error and most lenses support it, but coverage has
+      insufficient direct evidence. Deliberation must decide whether that
+      evidence gap matters for the issue's materiality or only for coverage
+      ownership.
+    resolution_question: Should issue-011 be kept as a material medium semantic
+      type-modeling issue despite coverage's insufficient-evidence stance?
+  - issue_id: issue-014
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+    conflict_summary: Structure keeps high severity because OrderLine is
+      structurally disconnected from Shipment and DeliveryLeg, while axiology
+      supports the root but lowers severity to medium when judged as
+      value-purpose misalignment rather than structural completeness.
+    resolution_question: Should issue-014 remain a distinct high-severity structural
+      issue, or be lowered and reconciled with the medium value framing of the
+      line-level fulfillment traceability cluster?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All participating lenses support the same measurement root and keep
+      medium severity; no material conflict requires deliberation.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Coverage narrows the framing to lifecycle/status coverage, but all
+      lenses support the canonical status/event mapping root and keep medium
+      severity; the narrowing does not materially change the required
+      deliberation outcome.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: Evolution and structure narrow the lifecycle issue to extensibility or
+      transition structure, but all lenses support the material non-happy-path
+      lifecycle gap and keep medium severity.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Structure narrows the authority/provenance issue to missing structural
+      containers, but all lenses support the high-severity multi-source
+      provenance root; the narrowing is complementary rather than conflicting.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: Coverage narrows the unit issue from evolvability to present coverage
+      completeness, but all lenses support the measurement value/unit root and
+      keep medium severity.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: Coverage and structure narrow the carrier-event/status issue to
+      lifecycle and mapping-structure aspects, but all lenses support the
+      canonical mapping need and keep medium severity.

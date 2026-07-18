@@ -1,0 +1,114 @@
+schema_version: 1
+session_id: 20260718-e047c9c7
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart definition and direction
+      attribute
+    evidence_anchor: materialized-input.md:37-45 — definition requires reciprocal
+      substitution, while direction permits and defaults to one_way
+    claim: The AlternatePart symmetry rule and its one-way direction state are
+      jointly unsatisfiable for a default instance.
+    what: "The definition states that whenever B substitutes for A, A also
+      substitutes for B. The same entity permits `direction: one_way` and makes
+      that value the default."
+    why: "Conflict pair: materialized-input.md:38 and materialized-input.md:42-45.
+      This is an inter-claim, mixed-modality conflict: the necessary reciprocity
+      definition excludes the explicitly possible/default one-way state. PLM and
+      MES consumers can therefore derive different substitution eligibility from
+      the same valid record."
+    how_to_fix: "Choose one canonical contract: either remove `one_way` and make all
+      alternates bidirectional, or redefine the relation conditionally so
+      reciprocity applies only when `direction: bidirectional`; also state the
+      exact semantics of each direction value."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of the ontology as a shared PLM/MES conceptual standard
+        for part substitution.
+      failure_condition: An AlternatePart record uses the permitted or default `one_way` value.
+      impact: The same conforming record simultaneously requires and forbids the
+        reverse substitution, so interoperating systems cannot apply a
+        deterministic eligibility rule.
+      evidence_refs:
+        - materialized-input.md:38
+        - materialized-input.md:42-45
+    causal_path:
+      root_cause_candidate: Reciprocity is declared unconditionally while
+        directionality is modeled as a selectable state with a contradictory
+        default.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: A default one-way AlternatePart instance conflicts with the unconditional
+            reciprocal definition.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: The definition lacks a condition that limits reciprocity to the
+            `bidirectional` state.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: manufacturing-bom-ontology.yaml — BOM acyclicity integrity rule
+    evidence_anchor: materialized-input.md:93-94 — the same integrity rule requires
+      an acyclic BOM and prescribes a self-descendant representation for scrap
+      re-entry
+    claim: The BOM integrity rule contains an unresolved conflict between mandatory
+      acyclicity and an explicitly prescribed self-cycle.
+    what: The rule first requires every BOM to be acyclic, then requires scrap
+      re-entry to be represented by an Assembly containing itself below itself.
+    why: "Conflict pair: materialized-input.md:94 and materialized-input.md:94. This
+      is an intra-claim, mixed-modality conflict unless the exception is
+      formalized as a scoped carve-out. A self-descendant edge is a cycle, and
+      the ontology exposes no declared discriminator or separate relation by
+      which an acyclicity check can exclude only scrap re-entry."
+    how_to_fix: "Make the exception structurally expressible: preferably model scrap
+      re-entry with a separate material-return relation outside the product BOM;
+      alternatively add an explicit edge classification and define acyclicity
+      over only ordinary BOM edges."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of the BOM ontology as a consistent PLM/MES integration
+        contract and integrity-validation basis.
+      failure_condition: A scrap re-entry process is represented using the prescribed
+        Assembly self-descendant edge.
+      impact: A conforming instance necessarily violates the stated acyclicity rule,
+        so validation cannot accept both declared requirements and system
+        consumers may disagree on whether the BOM is valid.
+      evidence_refs:
+        - materialized-input.md:93-94
+    causal_path:
+      root_cause_candidate: Two distinct concepts—product decomposition and scrap
+        material return—share the same BOM containment relation without a formal
+        exception discriminator.
+      root_cause_step_id: logic-candidate-002.cause-002
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: The prescribed scrap re-entry representation creates a self-cycle that
+            violates mandatory BOM acyclicity.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:94
+        - cause_id: logic-candidate-002.cause-002
+          claim: The exception cannot be isolated by the declared model because the rule
+            identifies no separate relation or edge classification for scrap
+            re-entry.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:84-95
+      unresolved_beyond_evidence: The prose marker `단` suggests an intended exception,
+        but the bounded artifact does not formalize its scope; structure lens
+        may additionally assess the missing discriminator.
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,124 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml entities.RiskAppetite / relations
+    evidence_anchor: .onto/review/20260718-1bb88da9/execution-preparation/materialized-input.md:78-90
+    claim: RiskAppetite is structurally orphaned despite being defined as a
+      compliance concept over ExposureAggregate.
+    what: RiskAppetite is declared as an entity with threshold and
+      compliance_status, and its definition says ExposureAggregate is compared
+      against it, but the relations list has no edge to or from RiskAppetite.
+    why: The relations block connects Borrower, Exposure, Collateral, RiskRating,
+      Limit, and ExposureAggregate, but omits RiskAppetite entirely. For an
+      ontology intended as a shared concept authority between a risk engine and
+      reporting systems, that leaves the breach/compliance concept outside the
+      traversable model, so consumers cannot know structurally which aggregate,
+      borrower segment, product scope, or portfolio scope an appetite threshold
+      governs.
+    how_to_fix: Add explicit relation(s) connecting RiskAppetite to the governed
+      aggregate or scope, for example ExposureAggregate -> RiskAppetite with a
+      compares_to/governed_by kind, and include any needed scoping key such as
+      borrower segment, portfolio, product, or currency if applicable.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's declared purpose as a shared concept authority
+        for risk engine and reporting systems.
+      failure_condition: When consumers need to calculate or report RiskAppetite
+        compliance from ExposureAggregate, the target contains no structural
+        edge involving RiskAppetite.
+      impact: The compliance concept can be interpreted only from prose rather than
+        from the ontology graph, weakening shared implementation and reporting
+        alignment for a core risk-control concept.
+      evidence_refs:
+        - materialized-input.md:7-8
+        - materialized-input.md:78-90
+    causal_path:
+      root_cause_candidate: The ontology declares a RiskAppetite entity and prose
+        comparison rule but does not add any relation involving RiskAppetite in
+        the relations block.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite is declared with threshold and compliance_status, and its
+            definition depends on comparing ExposureAggregate to RiskAppetite.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:78-83
+        - cause_id: structure-candidate-001.cause-002
+          claim: The complete visible relations block lists five relations and none has
+            RiskAppetite as from or to.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:85-90
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: credit-risk-ontology.yaml classification_rules[Exposure.risk_grade] /
+      relations
+    evidence_anchor: .onto/review/20260718-1bb88da9/execution-preparation/materialized-input.md:24-34,48-57,85-93
+    claim: The required derivation from RiskRating.grade to Exposure.risk_grade is
+      not represented by a structural relation.
+    what: Exposure.risk_grade is a report-facing grade, RiskRating.grade is the
+      risk-engine grade, and the classification rule says Exposure.risk_grade is
+      derived from RiskRating.grade. However, the relations block only connects
+      both entities separately through Borrower and has no relation that
+      identifies the rating-to-exposure derivation dependency.
+    why: Because the derivation is only in an unstructured rule string, consumers
+      traversing the ontology graph cannot distinguish this required grade
+      dependency from a loose shared-borrower association. That is structurally
+      incomplete for a shared model where the risk engine produces
+      RiskRating.grade and reports consume Exposure.risk_grade.
+    how_to_fix: Add an explicit relation or typed dependency for the derivation,
+      such as RiskRating -> Exposure kind derives_risk_grade or
+      Exposure.risk_grade derived_from RiskRating.grade, with the borrower
+      join/scoping rule made explicit.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's shared concept basis between risk engine output
+        and reporting-system classification.
+      failure_condition: When a consumer must determine the authoritative source path
+        for Exposure.risk_grade, the graph lacks a direct derivation relation
+        from RiskRating.grade.
+      impact: Risk-grade lineage becomes prose-only, so engine/report consumers can
+        implement different joins or precedence behavior while still appearing
+        to follow the ontology.
+      evidence_refs:
+        - materialized-input.md:31-34
+        - materialized-input.md:48-57
+        - materialized-input.md:85-93
+    causal_path:
+      root_cause_candidate: A cross-entity derivation rule was added under
+        classification_rules without a corresponding relation/dependency in the
+        ontology graph.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Exposure.risk_grade is declared as the exposure-level report grade.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:31-34
+        - cause_id: structure-candidate-002.cause-002
+          claim: RiskRating.grade is declared as the risk-engine grade.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:48-56
+        - cause_id: structure-candidate-002.cause-003
+          claim: The classification rule says Exposure.risk_grade is derived from
+            RiskRating.grade, but the relations block has no direct relation
+            between Exposure and RiskRating.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:85-93
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서 없이, 제공된 materialized input과 review target
+    profile만 사용했다.
+  - 구조 lens 범위에 맞춰 관계 방향의 도메인적 타당성이나 영역 누락이 아니라, 선언된 개념과 규칙이 relations 그래프에 연결되어
+    있는지에 한정해 판단했다.
+validation:
+  unaddressable_candidates: []

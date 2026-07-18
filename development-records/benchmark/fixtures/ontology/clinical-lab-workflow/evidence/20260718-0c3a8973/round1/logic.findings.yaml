@@ -1,0 +1,174 @@
+schema_version: 1
+session_id: 20260718-0c3a8973
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml state_rules
+    evidence_anchor: Embedded Materialized Input, state_rules[0] and Result.status enum values
+    claim: Order completion rule requires every Result to be `final`, but Result
+      statuses can later become `corrected`, making a completed Order
+      incompatible with an allowed result state transition.
+    what: The ontology declares `Order는 모든 Result가 final일 때 completed로 전이한다` while
+      `Result.status` allows `preliminary`, `final`, and `corrected`. The second
+      state rule also explicitly permits a later change to `corrected`. There is
+      no rule that reopens or changes `Order.completed` after correction, so a
+      previously completed Order can contain a Result that is no longer `final`.
+    why: "The contradiction is temporal: at completion time all Results may be
+      `final`, but the model later allows `Result.status=corrected`. If
+      `completed` continues to mean the rule condition remains true, the same
+      instance would have `Order.lifecycle=completed` while not all associated
+      Results are `final`. This weakens the ontology as an EMR/LIS authority
+      document because downstream systems cannot know whether `completed` is a
+      stable terminal state or a snapshot transition marker. Logic-specific
+      verdict: fail. conflict_pair: `state_rules[0]` vs
+      `state_rules[1]`/`Result.attributes.status.values`. satisfiability_note:
+      inter-claim; the completion rule interacts with a later correction rule
+      that makes the completion predicate false after it has been used.
+      modality_note: mixed necessary/possible; a necessary completion condition
+      is defined over a possible later mutable status. boundary_handoff_note:
+      This is primarily logic because the conflict remains after term meanings
+      are fixed; evolution may also review whether correction/reopen events are
+      modeled adequately."
+    how_to_fix: Define `completed` as either a historical transition snapshot or a
+      current invariant. If it is a current invariant, add a reopen/amended
+      lifecycle transition for Order when any Result becomes `corrected`; if it
+      is historical, change the rule to record completion based on a timestamped
+      snapshot and avoid requiring current Result statuses to remain `final`.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use the ontology as the EMR/LIS integration concept authority
+        for entity, relationship, and state behavior.
+      failure_condition: A Result is final when the Order transitions to completed,
+        then later changes to corrected as explicitly allowed by the Report
+        correction rule.
+      impact: "The integration contract cannot consistently interpret completed
+        Orders: EMR/LIS consumers may treat completion as terminal while LIS
+        corrections make the completion predicate false."
+      evidence_refs:
+        - "Embedded Materialized Input: Result.status values [preliminary,
+          final, corrected]"
+        - "Embedded Materialized Input: state_rules[0] `Order는 모든 Result가 final일
+          때 completed로 전이한다.`"
+        - "Embedded Materialized Input: state_rules[1] `Result.status가
+          corrected로 바뀌면 Report.result_status는 amended가 되어야 한다`"
+    causal_path:
+      root_cause_candidate: Order completion is defined over mutable Result.status
+        values without a corresponding Order state rule for later corrections.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: The ontology allows Result.status to be `corrected`.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Result.attributes.status.values
+              [preliminary, final, corrected]"
+        - cause_id: logic-candidate-001.cause-002
+          claim: The ontology explicitly allows Result.status to change to corrected after
+            report finalization.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1]"
+        - cause_id: logic-candidate-001.cause-003
+          claim: Order completion is triggered by all Results being final, but no rule
+            preserves or revises Order.completed when a Result later becomes
+            corrected.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Order.lifecycle [draft, placed,
+              in_progress, completed, cancelled]"
+            - "Embedded Materialized Input: state_rules[0]"
+            - "Embedded Materialized Input: state_rules list has no Order
+              correction/reopen rule"
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml Report.result_status and state_rules
+    evidence_anchor: Embedded Materialized Input, Report.result_status enum values
+      and state_rules[1]
+    claim: The Report finalization rule assigns `finalized` when `released_at` is
+      recorded and also requires `amended` after a Result correction, but the
+      model has no temporal rule resolving whether a corrected result can
+      coexist with the original `released_at` finalization condition.
+    what: "`Report.result_status` has values `prelim`, `finalized`, and `amended`.
+      The state rule says a Report becomes finalized at `released_at` recording
+      time, but if `Result.status` changes to corrected then
+      Report.result_status must become amended. Since `released_at` remains
+      recorded after correction, both the finalization condition and amendment
+      condition can be true for the same Report unless precedence or timestamp
+      scoping is added."
+    why: "As written, the rule conditions are not mutually exclusive. A corrected
+      post-release report still has a `released_at` timestamp, so the same
+      Report can satisfy the condition for `finalized` and the condition for
+      `amended`. This is a formal state-rule conflict because `result_status` is
+      a single enum value and cannot simultaneously be `finalized` and
+      `amended`. Logic-specific verdict: fail. conflict_pair: `state_rules[1]`
+      internal finalized clause vs corrected/amended clause.
+      satisfiability_note: intra-claim; one state rule contains two state
+      assignments whose predicates can overlap over time. modality_note: mixed
+      necessary/obligatory; a necessary finalization assignment conflicts with
+      an obligatory amendment assignment when both predicates hold.
+      boundary_handoff_note: Evolution may separately assess whether report
+      versioning should exist, but the immediate issue is the lack of logical
+      precedence between two explicit assignments."
+    how_to_fix: "Make the finalization condition snapshot-scoped, for example
+      `Report.result_status becomes finalized when released_at is first recorded
+      and no later correction is pending`, or define precedence so correction
+      supersedes finalization: `corrected Result after release sets
+      Report.result_status=amended until a new released_at/version is issued`."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use the ontology as a state authority for EMR/LIS report synchronization.
+      failure_condition: A Report has `released_at` recorded and a linked Result later
+        changes to `corrected`.
+      impact: Consumers cannot determine the authoritative displayed report status
+        because one enum field is required to be both `finalized` and `amended`
+        under overlapping conditions.
+      evidence_refs:
+        - "Embedded Materialized Input: Report.result_status values [prelim,
+          finalized, amended]"
+        - "Embedded Materialized Input: state_rules[1] `Report는 released_at 기록
+          시점에 finalized 상태가 된다`"
+        - "Embedded Materialized Input: state_rules[1] `Result.status가
+          corrected로 바뀌면 Report.result_status는 amended가 되어야 한다`"
+    causal_path:
+      root_cause_candidate: Report.result_status assignments are defined by
+        overlapping predicates without precedence, versioning, or snapshot
+        scoping.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: Report.result_status is a single enum field with mutually exclusive
+            values.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Report.attributes.result_status.type
+              enum"
+            - "Embedded Materialized Input:
+              Report.attributes.result_status.values [prelim, finalized,
+              amended]"
+        - cause_id: logic-candidate-002.cause-002
+          claim: Recording released_at assigns the Report to finalized.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1] first sentence"
+        - cause_id: logic-candidate-002.cause-003
+          claim: A later corrected Result assigns the same Report.result_status to amended
+            while released_at remains recorded.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1] second clause"
+            - "Embedded Materialized Input: Report.attributes.released_at has no
+              cancellation/removal condition"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Domain is none, so findings use only generic formal consistency checks over
+    explicit claims in the materialized target.
+  - Korean lifecycle/state prose is treated as declarative state-rule claims
+    only where it directly assigns or constrains states. Definitions and
+    background notes are not treated as domain rules beyond their explicit
+    declarations.
+validation:
+  unaddressable_candidates: []

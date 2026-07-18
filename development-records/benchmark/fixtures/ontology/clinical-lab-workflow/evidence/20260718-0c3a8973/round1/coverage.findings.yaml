@@ -1,0 +1,158 @@
+schema_version: 1
+session_id: 20260718-0c3a8973
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: CriticalValue notification coverage
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100-106
+    claim: CriticalValue 통보 행위의 감사 증거 개념이 온톨로지 안에 없다.
+    what: CriticalValue는 즉시 통보가 필요한 범위와 notified boolean만 정의하고, 통보 시각과 수신자는 외부 전화 기록
+      대장에 있다고만 둔다. 통보 행위자, 수신자, 통보 시각, 통보 수단, 실패/재시도, 근거 기록을 표현하는
+      Notification/Communication/AuditEvidence 같은 개념이 없다.
+    why: 권위 문서로 쓰일 EMR/LIS 통합 모델에서 중요값 통보는 임상의에게 전달되었는지 추적해야 하는 통제 행위다. 현재 모델은 완료
+      여부만 내부에 남기고 핵심 증거를 온톨로지 밖 장부로 밀어내므로, 시스템 간 통합 시 어떤 자료가 통보 사실의 권위인지와 누가 언제
+      무엇을 받았는지를 재구성할 수 없다.
+    how_to_fix: CriticalValueNotification 같은 행위/증거 엔티티를 추가하고 CriticalValue 또는
+      Result와 연결한다. 최소 속성으로 result_ref/test_ref, notifier_staff_ref, recipient,
+      notified_at, channel, acknowledgement/status, reason/evidence_ref를 두고, 외부
+      전화 기록 대장을 쓰더라도 그 장부를 권위 원본으로 참조하는 관계를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 엔티티·관계·상태와 운영 위험을 설명하는 목적
+      failure_condition: 중요값 통보가 발생하거나 누락/지연/정정되었을 때, 온톨로지 내부에서 통보 행위의
+        행위자·시각·수신자·근거·권위 원본을 식별해야 하는 경우
+      impact: 중요값 통보는 환자 안전과 운영 책임에 직접 연결되는 통제 행위인데, 현재 모델은 boolean만 남겨 통합 시스템의 감사 추적과
+        책임 소재 판단을 약화시킨다.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - materialized-input.md:6-8
+    causal_path:
+      root_cause_candidate: 통제가 필요한 행위를 별도 사건/증거 개념으로 모델링하지 않고 상태성 boolean으로 축약했다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: CriticalValue에는 notified boolean과 외부 전화 기록 대장 언급만 있고 통보 사건 엔티티나
+            행위자·시각·수신자 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 이 축약은 통보 완료 여부와 통보 증거를 분리하지 못하게 한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:106
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 권위 문서 용도에서는 EMR/LIS가 신뢰해야 할 통보 증거의 단일 표현 범위가 닫히지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:6-8
+            - materialized-input.md:106
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: Specimen lifecycle coverage
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:37-44,121-124
+    claim: Specimen lifecycle이 분석 이후의 보관·폐기 구간을 온톨로지 범위에 포함하지 않는다.
+    what: Specimen 상태는 collected, received, in_analysis, analyzed에서 끝나며,
+      state_rules는 analyzed 이후 보관/폐기 처리를 각 부서 내규에 맡긴다고만 말한다. 보관, 보존기간, 이관, 폐기,
+      반송, 부적합/거절 같은 종결 구간 개념이 없다.
+    why: 대상 문서는 주문부터 보고까지의 파이프라인을 다룬다고 하지만 검체는 결과 산출의 근거이며, 분석 후에도 재검·추가검사·감사·폐기 책임에
+      영향을 준다. 종료 구간을 외부 내규로만 남기면 EMR/LIS 통합 설계에서 검체가 더 이상 사용 가능하지 않은 시점, 보관 권한,
+      폐기 완료 상태를 공통 개념으로 판단할 수 없다.
+    how_to_fix: Specimen lifecycle에 stored/retained/disposed/returned/rejected 같은 종결
+      및 예외 상태를 추가하거나, SpecimenDisposition/SpecimenRetentionPolicy 엔티티를 두어 보관 위치,
+      보존 기한, 처분 시각, 처분자, 근거 정책을 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 검체 기반 임상검사 워크플로를 EMR/LIS 통합의 개념 권위로 닫는 목적
+      failure_condition: 분석 완료 뒤 검체 보관, 재검 가능성, 폐기 완료, 부서별 내규 차이를 시스템 간 공통 상태로 판정해야 하는 경우
+      impact: 검체 lifecycle의 종료 구간이 빠져 운영 상태 판단이 부서별 외부 규칙에 흩어지고, 결과 재검·감사·폐기 책임에 대한 통합
+        권위가 약해진다.
+      evidence_refs:
+        - materialized-input.md:37-44
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: 검체 개념의 lifecycle 범위를 결과 생성까지만 모델링하고 분석 후 처분 영역을 온톨로지 밖 정책으로 위임했다.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Specimen lifecycle은 analyzed에서 종료된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-44
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 분석 후 보관/폐기 처리는 상태나 엔티티가 아니라 부서 내규 위임 문장으로만 존재한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 따라서 EMR/LIS 통합 모델 안에서 분석 후 검체의 운영 상태와 종결 증거를 공통으로 표현할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:6-8
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: Catalog, threshold, and TAT temporal-authority coverage
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46-60,100-106,126-128
+    claim: 시점 의존 값과 병행 관리 값에 유효기간·이력·단일 권위 개념이 부족하다.
+    what: Test와 Assay는 별도 카탈로그 단위로 있고 신규 항목을 두 곳 모두 등록한다고 되어 있지만 통합 전 권위 원본이나 매핑 이력을
+      표현하지 않는다. CriticalValue 경계값도 lower_bound/upper_bound만 있고 유효기간이나 개정 이력이 없다.
+      TAT 계산식은 대시보드 팀이 자체 유지한다고 되어 있어 권위 있는 계산 정의가 온톨로지에 없다.
+    why: 검사 카탈로그, 중요값 기준, TAT 계산은 시간이 지나며 변경될 수 있는 운영 기준이다. 현재 모델은 현재값만 담고 언제 어떤 기준이
+      적용되었는지 재구성할 수 없으며, Test/Assay 및 TAT처럼 여러 시스템이 병행 관리하는 값의 단일 권위를 지정하지 않는다.
+      과거 결과 해석이나 통합 데이터 불일치 처리에서 권위 문서 역할이 약해진다.
+    how_to_fix: TestCatalogEntry/AssayMapping/CriticalValueRule/TatDefinition 같은 버전
+      가능 개념을 추가하고 effective_from/effective_to, version, source_system/authority,
+      supersedes, mapping status를 둔다. TAT는 계산 시작/종료 이벤트와 예외 규칙을 권위 정의로 모델링하고
+      대시보드 계산식은 그 정의의 소비자로 위치시킨다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 검사 카탈로그, 중요값 기준, 성과 지표의 개념 권위를 제공하는 목적
+      failure_condition: 카탈로그 항목, 중요값 임계치, TAT 계산 규칙이 변경된 뒤 과거 시점의 결과·알림·지표를 재현하거나 두
+        시스템의 값 충돌을 해소해야 하는 경우
+      impact: 유효기간·이력·권위 원본이 없으면 통합 시스템이 현재값으로 과거 기록을 오해하거나, Test/Assay 및 대시보드 계산식 간
+        불일치에서 어떤 값을 신뢰해야 하는지 결정할 수 없다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:100-106
+        - materialized-input.md:126-128
+    causal_path:
+      root_cause_candidate: 변경 가능한 운영 기준과 병행 관리 대상을 버전 있는 권위 개념이 아니라 현재 속성/메모 수준으로 모델링했다.
+      root_cause_step_id: coverage-candidate-003.cause-004
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Test와 Assay는 별도 카탈로그 단위로 존재하고 신규 항목을 두 곳 모두 등록한다고 되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-127
+        - cause_id: coverage-candidate-003.cause-002
+          claim: CriticalValue는 경계값만 있고 유효기간이나 개정 이력 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-003.cause-003
+          claim: TAT는 수집시각부터 보고시각까지라는 설명과 별도 대시보드 계산식 유지 메모만 있고 권위 있는 계산 규칙 엔티티가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:128
+        - cause_id: coverage-candidate-003.cause-004
+          claim: 이 때문에 변경 이력과 시스템 간 권위 판단이 필요한 값을 온톨로지 내부에서 재구성할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:100-106
+            - materialized-input.md:126-128
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 외부 도메인 문서나 웹 표준은 사용하지 않았고, materialized input에 명시된
+    EMR/LIS 통합 권위 문서 목적과 임상검사 워크플로 텍스트만 근거로 삼았다.
+  - 중요값 통보, 분석 후 검체 처분, 검사 카탈로그/임계치/TAT 정의는 대상 텍스트 자체가 언급한 운영 영역이므로 온톨로지 범위 검토
+    대상으로 보았다.
+validation:
+  unaddressable_candidates: []

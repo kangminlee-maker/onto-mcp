@@ -1,0 +1,96 @@
+schema_version: 1
+session_id: 20260718-f461553b
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml — Order completion rule and Result status model
+    evidence_anchor: .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:69-72,121-123
+    claim: Order의 completed 판정이 corrected 후속 전이에서도 유지되어야 하는지 형식화되지 않아 시간 경로상 일관성을
+      판정할 증거가 부족하다.
+    what: 모든 Result가 final이면 Order가 completed로 전이하지만, 이후 Result.status가 corrected로
+      바뀌는 경로도 명시되어 있습니다. 이때 Order를 completed로 유지할지, 다시 열지, corrected를 완료 조건에
+      포함할지가 정의되지 않았습니다.
+    why: final 상태에서 completed로 전이한 뒤 corrected가 발생하면 원래 완료 조건은 거짓이 됩니다. 현재 규칙만으로는
+      completed가 과거 사건인지 지속 불변식인지 결정할 수 없어 EMR과 LIS가 서로 다른 Order 상태를 산출할 수 있습니다.
+    how_to_fix: 완료 의미를 하나로 명시하십시오. 예를 들어 각 기대 Result가 final 또는 corrected이면
+      completed이며 정정은 Order를 재개방하지 않는다고 규정하거나, 정정 시 명시적인 reopened/revision 전이를
+      추가하십시오.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 Order 상태를 동일하게 판정하는 개념 권위 계약
+      failure_condition: completed 이후 Result가 corrected로 전이하고 양 시스템이 완료 상태의 지속 여부를 다르게 해석할 때
+      impact: 동일 사건 경로에서 시스템별 Order 상태와 후속 처리 조건이 달라질 수 있어 상태 모델의 권위성과 실행 가능성이 약화됩니다.
+      evidence_refs:
+        - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:69-72
+        - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 완료 조건의 시간 양상과 corrected 발생 후 전이 규칙이 명시되지 않았습니다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: completed 이후 corrected가 발생하면 완료를 촉발한 '모든 Result가 final' 조건이 더 이상 성립하지
+            않습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:69-72
+            - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:121-123
+        - cause_id: logic-candidate-001.cause-002
+          claim: 완료 규칙은 전이 시점 조건만 제시하고 조건 소실 시 Order 상태를 어떻게 처리할지 제시하지 않습니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:121-123
+      unresolved_beyond_evidence: completed가 불변 종결 상태인지 단순 이력 사건인지에 대한 의도는 현재 경계의 문서만으로 확정할 수 없습니다.
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml — Result.status와 Report.result_status 동기화 계약
+    evidence_anchor: .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:69-83,123
+    claim: "'동일 정보 유지' 주장은 서로 다른 폐쇄 enum 사이의 대응 규칙이 없어 문자적 동일성으로는 만족 불가능하고 의미적
+      동등성으로는 판정 불충분하다."
+    what: Result.status는 preliminary/final/corrected이고 Report.result_status는
+      prelim/finalized/amended입니다. 문서는 동일 정보가 유지된다고 선언하지만 값 대응표와 동기화 시점의 일관성 조건을
+      정의하지 않습니다.
+    why: 두 enum의 값 집합은 서로 겹치지 않으므로 값의 직접 equality로는 선언을 만족할 수 없습니다. 의미적 매핑을 의도했다면 그
+      매핑과 야간 배치 전 허용 상태가 필요하지만 현재 문서에는 없어, 어떤 Report 값이 특정 Result 상태와 논리적으로
+      일치하는지 결정할 수 없습니다.
+    how_to_fix: 하나의 canonical status enum을 재사용하거나, 세 값의 전단사 매핑과 동기화 양상(즉시 일관성 또는 명시된
+      지연 일관성), 배치 전 임시 상태의 권위 규칙을 선언하십시오.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 임상의가 신뢰하는 보고 상태를 EMR/LIS 간 동일하게 해석하는 개념 권위 계약
+      failure_condition: 한 시스템이 상태를 직접 equality로 비교하거나, 문서에 없는 서로 다른 매핑 또는 동기화 시점을 적용할 때
+      impact: 동일 결과가 preliminary/final/corrected 중 어느 의미인지 시스템별로 달라져 보고 상태와 정정 처리의
+        상호운용성이 검증 불가능합니다.
+      evidence_refs:
+        - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:69-83
+        - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:123
+    causal_path:
+      root_cause_candidate: 중복 상태 필드 사이의 canonical enum 또는 명시적 대응·일관성 규칙이 없습니다.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 동일 정보 유지가 선언된 두 필드가 서로 다른 enum 값 집합을 사용합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:69-83
+        - cause_id: logic-candidate-002.cause-002
+          claim: corrected에서 amended로의 갱신은 야간 배치로 지연되지만 지연 구간의 권위와 허용 조합이 정의되지 않았습니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:123
+        - cause_id: logic-candidate-002.cause-003
+          claim: 상태 의미를 단일 권위나 형식 매핑으로 고정하지 않은 중복 모델이 두 문제를 가능하게 합니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:69-83
+            - .onto/review/20260718-f461553b/execution-preparation/materialized-input.md:123
+      unresolved_beyond_evidence: 외부 구현에 대응표가 존재할 수 있으나 현재 bounded target에는 없으므로 의미적
+        동등성의 만족 가능성을 확정할 수 없습니다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - YAML enum의 values는 해당 속성이 취할 수 있는 폐쇄 값 집합으로 해석했습니다.
+  - 각 enum 속성은 한 시점에 하나의 현재 값만 갖는 것으로 해석했습니다.
+  - 상태 규칙의 '전이한다'는 시간 경로상의 상태 변경을 뜻하는 것으로 해석했습니다.
+validation:
+  unaddressable_candidates: []

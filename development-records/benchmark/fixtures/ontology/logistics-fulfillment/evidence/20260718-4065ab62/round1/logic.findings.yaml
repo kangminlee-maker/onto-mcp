@@ -1,0 +1,77 @@
+schema_version: 1
+session_id: 20260718-4065ab62
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: logistics-fulfillment-ontology.yaml / entities.Shipment and
+      entities.DeliveryLeg
+    evidence_anchor: .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:40,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:52
+    claim: DeliveryLeg is declared as a Shipment while its definition allows route
+      segments that are not complete warehouse-to-customer shipments.
+    what: "`Shipment` is defined as a physical movement from warehouse to customer,
+      and `DeliveryLeg` is declared `is_a: Shipment`. But `DeliveryLeg` is
+      defined as one route segment, with examples including warehouse-to-hub and
+      hub-to-customer. Under ordinary subtype logic, every DeliveryLeg must
+      satisfy the Shipment definition; a hub-to-customer leg is not itself a
+      warehouse-to-customer movement."
+    why: "This is an inter-claim necessary-type conflict: the subtype declaration
+      requires all DeliveryLeg instances to be Shipment instances, while the
+      DeliveryLeg definition permits instances whose origin/destination pattern
+      does not meet the Shipment definition. It matters for WMS/TMS/ERP concept
+      integration because code or mappings that inherit Shipment obligations
+      onto each DeliveryLeg can treat a partial leg as a full customer shipment,
+      weakening status, carrier, and fulfillment reasoning."
+    how_to_fix: Make `Shipment` the whole consignment/order movement and model
+      `DeliveryLeg` as a component of Shipment instead of `is_a`, or broaden
+      `Shipment` to mean any physical cargo movement and introduce a separate
+      whole-shipment concept for warehouse-to-customer fulfillment.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Concept baseline for WMS/TMS/ERP integration across order,
+        freight, and delivery concepts.
+      failure_condition: "When DeliveryLeg instances such as hub-to-customer are
+        interpreted through the `is_a: Shipment` declaration, they must also
+        satisfy the narrower Shipment definition of warehouse-to-customer
+        movement."
+      impact: The ontology can classify partial route legs as full shipments, making
+        downstream integration rules about shipment status, fulfillment, and
+        delivery scope logically unstable.
+      evidence_refs:
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:40-49
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:52-58
+    causal_path:
+      root_cause_candidate: The ontology uses inheritance for a part-of route segment
+        relationship while keeping the parent definition narrower than the
+        child’s allowed instances.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: "`Shipment` is defined as movement from warehouse to customer."
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:40-41
+        - cause_id: logic-candidate-001.cause-002
+          claim: "`DeliveryLeg` is declared `is_a: Shipment`."
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:52-54
+        - cause_id: logic-candidate-001.cause-003
+          claim: "`DeliveryLeg` permits route segments such as warehouse-to-hub and
+            hub-to-customer, which are not necessarily full
+            warehouse-to-customer movements."
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:52-58
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`is_a` is interpreted as subtype inheritance: every instance of the child
+    concept must satisfy the parent concept definition."
+  - No domain-specific logistics rule document was used because `session_domain`
+    is `none`; the finding is based only on explicit claims in the materialized
+    input.
+validation:
+  unaddressable_candidates: []

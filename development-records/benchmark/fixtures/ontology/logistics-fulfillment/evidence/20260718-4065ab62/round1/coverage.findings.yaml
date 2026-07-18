@@ -1,0 +1,343 @@
+schema_version: 1
+session_id: 20260718-4065ab62
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: OrderLine / Shipment fulfillment coverage
+    evidence_anchor: "Embedded materialized input: OrderLine attributes comment;
+      relations `fulfills` note"
+    claim: OrderLine-level fulfillment allocation is missing, so partial shipment
+      coverage is incomplete.
+    what: The ontology models `Shipment fulfills Order` only at order level and
+      explicitly omits mapping from each `OrderLine` to the shipment or delivery
+      leg that fulfilled it.
+    why: For WMS/TMS/ERP integration, fulfillment is not only an order-level state;
+      line quantities may be split, backordered, substituted, or shipped in
+      multiple consignments. Without a line-level fulfillment/allocation
+      concept, the model cannot reconstruct which SKU quantity left in which
+      shipment, weakening reconciliation between order promise, inventory
+      decrement, shipment confirmation, and customer delivery.
+    how_to_fix: Add a line-fulfillment concept such as `FulfillmentAllocation` or
+      `ShipmentLine` with refs to `OrderLine`, `Shipment` or `DeliveryLeg`,
+      fulfilled quantity, allocation/pick/ship timestamps, and lifecycle/status
+      for partial, canceled, or backordered quantities.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory,
+        shipment, and delivery concepts.
+      failure_condition: When one order has multiple lines or a line is partially
+        fulfilled across multiple shipments, the ontology has no concept to bind
+        the fulfilled quantity to the actual shipment or leg.
+      impact: Operational reconciliation and exception handling become non-actionable
+        because order status, inventory movement, and shipment evidence cannot
+        be traced at the unit where fulfillment actually occurs.
+      evidence_refs:
+        - "OrderLine comment: no reference to actual cargo/segment fulfilling
+          the line"
+        - "relations `fulfills`: Shipment to Order only; note says no
+          OrderLine-level mapping"
+    causal_path:
+      root_cause_candidate: The ontology's fulfillment relation is scoped to `Shipment
+        -> Order` and does not include a line-level fulfillment/allocation
+        entity.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: "`OrderLine` has only `sku_ref` and `qty`, with no fulfilled quantity,
+            shipment reference, or delivery-leg reference."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded materialized input: `OrderLine.attributes`"
+        - cause_id: coverage-candidate-001.cause-002
+          claim: The only fulfillment relation is `Shipment fulfills Order`, and its note
+            explicitly excludes OrderLine-level mapping.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: `relations` entry `fulfills`"
+        - cause_id: coverage-candidate-001.cause-003
+          claim: This prevents the ontology from covering partial shipment and line-level
+            reconciliation scenarios required by the declared integration
+            purpose.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input header: WMS/TMS/ERP integration
+              concept baseline"
+            - "Embedded materialized input: OrderLine omission comment"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: InventoryRecord / InventoryAggregate temporal inventory coverage
+    evidence_anchor: "Embedded materialized input: InventoryRecord
+      `quantity_on_hand` note and comment; InventoryAggregate `available_qty`
+      note; integrity rule for allocation"
+    claim: Inventory quantities lack effective-time and movement-history coverage
+      despite being used for allocation.
+    what: The ontology keeps current or nightly snapshot quantities but does not
+      define as-of timestamps, validity periods, inventory movements,
+      reservations, adjustments, or snapshot provenance sufficient to
+      reconstruct inventory at order time.
+    why: Inventory values are time-dependent. The target itself notes that
+      `InventoryRecord` has no `as_of` concept, while allocation reads
+      `InventoryAggregate.available_qty` even for intraday orders although that
+      aggregate is a nightly snapshot. This leaves a coverage gap for historical
+      reconstruction, oversell investigation, reservation accounting, and
+      WMS/ERP reconciliation.
+    how_to_fix: "Introduce temporal inventory concepts: `InventorySnapshot` with
+      `as_of`, source system, and scope; `InventoryMovement` or
+      `InventoryTransaction` for receipts, picks, shipments, returns,
+      adjustments; and `Reservation`/`Allocation` with effective time and
+      release/consume events."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Inventory and order fulfillment authority for WMS/TMS/ERP integration.
+      failure_condition: When an order is accepted or audited at a prior point in
+        time, the ontology cannot reconstruct available or on-hand inventory
+        from effective timestamps or movement history.
+      impact: The concept baseline cannot support allocation correctness, dispute
+        analysis, or cross-system reconciliation because only current/nightly
+        quantity surfaces are modeled.
+      evidence_refs:
+        - "InventoryRecord `quantity_on_hand` note: WMS and ERP each hold
+          values, adjusted nightly to ERP"
+        - "InventoryRecord comment: no as_of concept for order-time inventory
+          queries"
+        - "InventoryAggregate `available_qty` note: nightly batch snapshot"
+        - "Integrity rule: intraday allocation reads
+          InventoryAggregate.available_qty"
+    causal_path:
+      root_cause_candidate: Inventory is represented as current/nighly aggregate
+        values without temporal source concepts or movement events.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: "`InventoryRecord.quantity_on_hand` is a current quantity with no
+            effective timestamp."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded materialized input: `InventoryRecord.quantity_on_hand`
+              and adjacent comment"
+        - cause_id: coverage-candidate-002.cause-002
+          claim: "`InventoryAggregate.available_qty` is only a nightly snapshot but is
+            used for intraday allocation decisions."
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: `InventoryAggregate.available_qty`
+              note"
+            - "Embedded materialized input: first integrity rule"
+        - cause_id: coverage-candidate-002.cause-003
+          claim: The model lacks inventory movement, reservation, and adjustment concepts
+            that would cover temporal reconstruction and reconciliation.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: entities list contains
+              InventoryRecord and InventoryAggregate but no
+              movement/reservation/adjustment entity"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: Cross-system quantity and ETA authority coverage
+    evidence_anchor: "Embedded materialized input: InventoryRecord
+      `quantity_on_hand` note; notes `재고 진실`; Shipment `eta` note; notes `ETA`"
+    claim: Parallel WMS/ERP and carrier/manual values are described without
+      source-of-truth or provenance concepts.
+    what: The ontology says inventory truth differs between WMS physical quantity
+      and ERP accounting quantity, and ETA mixes carrier API values with manual
+      operational adjustments, but it does not model authoritative source
+      selection, override records, adjustment actor/time/reason, or provenance
+      for the displayed value.
+    why: Coverage lens treats single authority and audit evidence as required
+      dimensions when values are managed across systems or manually controlled.
+      Here, both inventory and ETA are explicitly multi-source. Without
+      authority/provenance concepts, downstream integrations cannot know which
+      value governs allocation, accounting, display, or audit, and manual
+      changes cannot be explained after the fact.
+    how_to_fix: Add source/provenance and authority concepts, for example
+      `SystemOfRecordPolicy`, `QuantityAssertion`, `EtaEstimate`, and
+      `ManualOverride` with source system, effective time, actor, reason,
+      superseded value, and consuming context.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline with clear authority
+        for order, inventory, shipment, and delivery values.
+      failure_condition: When WMS and ERP disagree on inventory, or carrier ETA and
+        manual ETA differ, the ontology lacks a concept that identifies the
+        governing value and its evidence.
+      impact: The integration baseline leaves precedence and audit behavior to
+        implementation-specific interpretation, undermining trust in allocation,
+        accounting reconciliation, and customer-facing ETA decisions.
+      evidence_refs:
+        - "InventoryRecord `quantity_on_hand` note: WMS and ERP each have values"
+        - "notes `재고 진실`: WMS physical basis, ERP accounting basis, nightly
+          adjustment"
+        - "Shipment `eta` note: operations manually adjusts ETA"
+        - "notes `ETA`: carrier API and manual values are mixed; final display
+          follows operations judgment"
+    causal_path:
+      root_cause_candidate: The ontology describes multi-source managed values but
+        does not include authority, provenance, or override evidence entities.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Inventory quantity is maintained separately by WMS and ERP with different
+            meanings.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded materialized input: `InventoryRecord.quantity_on_hand`
+              note"
+            - "Embedded materialized input: notes `재고 진실`"
+        - cause_id: coverage-candidate-003.cause-002
+          claim: ETA combines carrier API input and manual operational judgment.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded materialized input: `Shipment.eta` note"
+            - "Embedded materialized input: notes `ETA`"
+        - cause_id: coverage-candidate-003.cause-003
+          claim: No entity or attribute records source-of-truth policy, actor, time,
+            reason, or superseded value for these controlled changes.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: entities list includes Shipment,
+              TrackingEvent, InventoryRecord, InventoryAggregate, Carrier, but
+              no authority/provenance/override entity"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: Order and Shipment lifecycle coverage
+    evidence_anchor: "Embedded materialized input: Order `fulfillment_status`
+      values; Shipment `status` values and note; TrackingEvent `event_type`
+      values"
+    claim: Lifecycle states stop at happy-path delivery and omit cancellation,
+      exception resolution, return, correction, and archival phases.
+    what: "`Order.fulfillment_status` covers received through delivered, and
+      `Shipment.status` covers created through delivered. Tracking events
+      include `exception`, but the shipment lifecycle has no corresponding
+      exception, failed delivery, returned, canceled, reissued, archived, or
+      corrected states/events."
+    why: A logistics fulfillment baseline must cover operational endings and
+      post-final corrections. The current state models treat `delivered` as
+      final while still having carrier exceptions and multi-system updates
+      elsewhere, so real operations such as failed delivery, return-to-sender,
+      cancellation after allocation, shipment reissue, proof-of-delivery
+      correction, and audit closure are outside the conceptual lifecycle.
+    how_to_fix: "Extend lifecycle coverage with explicit terminal and post-terminal
+      concepts: canceled/backordered for orders or lines;
+      exception/failed_delivery/returned/reissued for shipments; correction or
+      reversal events; and archival/audit-closed states with rules for how
+      post-delivery events affect status."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order, freight, and delivery concept consistency for logistics
+        operations.
+      failure_condition: When fulfillment leaves the happy path or a delivered
+        shipment must be corrected, the ontology has no lifecycle concept to
+        represent the condition without overloading existing states.
+      impact: Operations risk is hidden because exceptions and reversals cannot be
+        represented consistently across OMS, TMS, carrier tracking, and ERP
+        reconciliation.
+      evidence_refs:
+        - "Order `fulfillment_status` values: received, allocated, picking,
+          shipped, delivered"
+        - "Shipment `status` values: created, picked, in_transit, delivered;
+          note says delivered is final"
+        - TrackingEvent `event_type` includes exception
+    causal_path:
+      root_cause_candidate: Lifecycle enumerations are limited to forward-progress
+        delivery states and define delivered as final.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Order and shipment statuses enumerate only normal forward progress to
+            delivered.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded materialized input: `Order.fulfillment_status` values"
+            - "Embedded materialized input: `Shipment.status` values"
+        - cause_id: coverage-candidate-004.cause-002
+          claim: Carrier tracking can report `exception`, but shipment status has no
+            exception or recovery state.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: `TrackingEvent.event_type` values"
+            - "Embedded materialized input: `Shipment.status` values"
+        - cause_id: coverage-candidate-004.cause-003
+          claim: The ontology therefore does not cover cancellation, failed delivery,
+            returns, reissue, correction, or archival lifecycle phases.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: entity/status definitions contain no
+              cancellation/return/correction/archive states"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: Sku measurement and packaging/unit coverage
+    evidence_anchor: "Embedded materialized input: Sku `weight` note; Sku `dims`
+      note; Shipment `total_weight` note"
+    claim: Measurement units and package handling are under-modeled for freight and
+      warehouse integration.
+    what: "`Sku.weight` uses whichever warehouse convention applies, `Sku.dims` is a
+      unitless string whose units vary by source system, and
+      `Shipment.total_weight` stores a computed sum without unit, measurement
+      basis, package/carton/pallet structure, or dimensional-weight coverage."
+    why: Weight, dimensions, and packaging drive carrier rating, routing, capacity,
+      customs-adjacent documentation, warehouse handling, and shipment
+      reconciliation. Even though international/customs is out of scope,
+      domestic WMS/TMS integration still needs consistent units and packaging
+      hierarchy to avoid incorrect total weights and carrier handoff ambiguity.
+    how_to_fix: Add normalized measurement concepts with unit of measure, precision,
+      source, and effective time; represent package/handling-unit hierarchy such
+      as carton, pallet, parcel, and shipment container; and attach
+      gross/net/dimensional weight and dimensions to the appropriate level.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Freight, warehouse, and TMS integration concept baseline.
+      failure_condition: When SKUs or shipments cross warehouses/carriers using
+        different measurement conventions, the ontology cannot determine the
+        unit, measurement basis, or package level of weight/dimensions.
+      impact: Carrier rating, routing, capacity planning, and reconciliation can be
+        wrong because numeric measurements are not semantically comparable
+        across systems.
+      evidence_refs:
+        - "Sku `weight` note: warehouse-specific kg or lb convention is used"
+        - "Sku `dims` note: dimensions are a string and units vary by source
+          system"
+        - "Shipment `total_weight` note: computed sum stored at shipment
+          confirmation"
+    causal_path:
+      root_cause_candidate: Measurements are represented as bare numbers/strings
+        without unit or handling-unit concepts.
+      root_cause_step_id: coverage-candidate-005.cause-003
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: SKU weight is a number whose unit depends on warehouse convention.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded materialized input: `Sku.weight` note"
+        - cause_id: coverage-candidate-005.cause-002
+          claim: SKU dimensions are stored as a string with source-system-dependent units.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: `Sku.dims` note"
+        - cause_id: coverage-candidate-005.cause-003
+          claim: Shipment total weight is computed and stored without unit, package
+            hierarchy, or dimensional-weight model.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded materialized input: `Shipment.total_weight` note"
+            - "Embedded materialized input: entities list lacks
+              package/handling-unit entity"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Session domain is `none`; no external domain document or web research was
+    used.
+  - "Coverage assessment is bounded to the embedded materialized input and the
+    declared purpose: WMS/TMS/ERP integration concept baseline for order,
+    inventory, freight, and delivery."
+  - International/customs shipping is treated as explicitly out of scope, but
+    domestic freight measurement, package handling, authority, temporal
+    inventory, and lifecycle coverage remain in scope for the declared
+    integration purpose.
+validation:
+  unaddressable_candidates: []

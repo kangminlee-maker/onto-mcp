@@ -1,0 +1,61 @@
+schema_version: 1
+session_id: 20260718-3c9b2434
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg type hierarchy
+    evidence_anchor: logistics-fulfillment-ontology.yaml:35-49
+    claim: DeliveryLeg의 명시적 예시와 Shipment의 필수 정의는 `is_a` 상속 아래 동시에 만족될 수 없다.
+    what: "Shipment는 창고에서 고객까지 가는 물리적 이동으로 정의되지만, 그 하위 타입인 DeliveryLeg에는 창고→허브 및
+      허브→고객처럼 해당 정의를 충족하지 않는 구간이 명시되어 있다. Conflict pair:
+      logistics-fulfillment-ontology.yaml:35-36 ↔
+      logistics-fulfillment-ontology.yaml:47-49. Satisfiability: inter-claim.
+      Modality: necessary."
+    why: "`is_a`를 부분형 관계로 적용하면 모든 DeliveryLeg는 Shipment의 정의를 만족해야 한다. 그러나 문서가 허용하는
+      중간 구간은 출발점이나 도착점이 각각 창고 또는 고객이 아니므로 반례가 된다. 이 모순은 WMS/TMS/ERP가 구간 이동과 종단 간
+      화물을 같은 타입으로 처리하게 만들어 타입 기반 통합 계약의 신뢰를 약화한다. Boundary handoff: 용어 의미의 모호성만
+      제거해도 상위 정의와 하위 타입 예시의 충돌이 남으므로 logic이 주 소유자이며, 계층 재구성은 structure lens와
+      연관된다."
+    how_to_fix: "`DeliveryLeg.is_a: Shipment`를 제거하고 Shipment와 DeliveryLeg 사이에
+      `has_leg`/`part_of` 관계를 두는 것이 가장 작고 명확한 수정이다. 대안으로 Shipment를 모든 물리 이동을
+      포괄하도록 넓히고, 창고→고객 종단 간 화물을 별도 하위 타입으로 분리한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합을 위한 물류·주문충족 개념 기준 문서로서 일관된 화물 및 배송 구간 타입 계약을 제공하는 목적
+      failure_condition: 창고→허브 또는 허브→고객 DeliveryLeg가 `is_a`에 따라 Shipment로 검증되면서 동시에
+        Shipment의 창고→고객 정의를 적용받는 경우
+      impact: 동일 인스턴스가 선언된 상위 타입 정의를 위반하므로 시스템별 타입 판정, 상태 적용 범위, 관계 매핑이 서로 달라질 수 있다.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:35-36
+        - logistics-fulfillment-ontology.yaml:47-49
+    causal_path:
+      root_cause_candidate: 배송 경로의 부분 구간을 종단 간 화물 이동의 구성요소가 아니라 하위 타입으로 모델링했다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 문서는 창고→허브 및 허브→고객 구간을 DeliveryLeg의 유효한 사례로 허용하면서 DeliveryLeg를 Shipment의
+            하위 타입으로 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:47-49
+        - cause_id: logic-candidate-001.cause-002
+          claim: Shipment의 정의는 모든 Shipment 인스턴스를 창고에서 고객으로 가는 이동으로 한정하므로 위 구간 사례가 상위 타입
+            정의를 충족하지 못한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:35-36
+            - logistics-fulfillment-ontology.yaml:47-49
+        - cause_id: logic-candidate-001.cause-003
+          claim: 이 상위 정의와 하위 사례의 충돌은 부분-전체 관계를 `is_a` 관계로 표현한 데서 발생한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:35-36
+            - logistics-fulfillment-ontology.yaml:47-49
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`is_a`는 하위 타입의 모든 인스턴스가 상위 타입의 정의와 제약을 상속하는 일반적인 부분형 관계로 해석했다."
+validation:
+  unaddressable_candidates: []

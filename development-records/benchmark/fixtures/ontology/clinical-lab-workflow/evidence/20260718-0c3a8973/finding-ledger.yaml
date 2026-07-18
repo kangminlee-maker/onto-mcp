@@ -1,0 +1,1279 @@
+schema_version: 1
+session_id: 20260718-0c3a8973
+findings:
+  - finding_id: finding-001
+    lens_id: axiology
+    source_ref: .onto/review/20260718-0c3a8973/round1/axiology.findings.yaml#axiology-candidate-001
+    target: clinical-lab-ontology.yaml Report.result_status / Result.status
+      synchronization rule
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:69-83,121-123;
+      .onto/review/20260718-0c3a8973/execution-preparation/review-value-alignment-criteria.yaml:6-8
+    claim: Nightly correction synchronization is misaligned with the ontology's
+      stated role as an EMR/LIS concept authority for clinician-trusted report
+      state.
+    lens_rationale_summary: "The review purpose is to judge whether this ontology is
+      suitable as the concept authority document for EMR/LIS integration,
+      especially operational risks. A clinician-facing authoritative status that
+      can remain stale after `Result.status=corrected` weakens the purpose of a
+      shared authority model: the model accepts a hidden timeliness tradeoff
+      exactly where it says clinicians rely on the report status."
+    proposed_action: "Make correction propagation an explicit state/event contract:
+      define the maximum acceptable propagation delay, expose an intermediate
+      pending-amendment or correction-pending state if asynchronous processing
+      is required, and identify which system owns clinician-visible amended
+      status before the document is used as integration authority."
+    affected_purpose: Use the ontology as the concept authority document for EMR/LIS
+      integration and operational workflow design.
+    failure_condition: A result is corrected after release but the report remains
+      clinician-visible as finalized until the nightly synchronization runs.
+    impact: The model's own trust statement for clinicians is undermined, so
+      implementers could build an integration that preserves internally
+      corrected LIS data while exposing stale report authority to clinical
+      users.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:69-83
+      - materialized-input.md:121-123
+      - review-value-alignment-criteria.yaml:6-8
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept authority document for EMR/LIS
+        integration and operational workflow design.
+      failure_condition: A result is corrected after release but the report remains
+        clinician-visible as finalized until the nightly synchronization runs.
+      impact: The model's own trust statement for clinicians is undermined, so
+        implementers could build an integration that preserves internally
+        corrected LIS data while exposing stale report authority to clinical
+        users.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: The ontology splits result authority between LIS-owned
+        `Result.status` and clinician-trusted `Report.result_status` while
+        accepting delayed synchronization without a compensating state or timing
+        contract.
+      root_cause_step_id: finding-001.cause-003
+      steps:
+        - cause_id: finding-001.cause-001
+          claim: "`Result.status` is recorded by LIS and is said to be duplicated into
+            `Report.result_status`."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+        - cause_id: finding-001.cause-002
+          claim: "`Report.result_status` is described as the authoritative value that
+            clinicians trust."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: finding-001.cause-003
+          claim: When a result becomes corrected, report amendment is required but only by
+            a nightly batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+  - finding_id: finding-002
+    lens_id: axiology
+    source_ref: .onto/review/20260718-0c3a8973/round1/axiology.findings.yaml#axiology-candidate-002
+    target: clinical-lab-ontology.yaml CriticalValue notification model
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100-106;
+      .onto/review/20260718-0c3a8973/execution-preparation/review-value-alignment-criteria.yaml:6-8
+    claim: Critical value handling delegates purpose-critical notification evidence
+      outside the ontology, weakening its authority for EMR/LIS workflow
+      integration.
+    lens_rationale_summary: For a concept authority document, the
+      immediate-notification commitment is not just an implementation detail; it
+      is an operational value promise embedded in the entity definition.
+      Reducing it to a boolean while the auditable details live outside the
+      ontology leaves EMR/LIS integration without a shared concept for who was
+      notified, when, by whom, or whether the notification obligation is still
+      pending or failed.
+    proposed_action: Promote notification to a first-class concept or event linked
+      to `CriticalValue`, `Result`, recipient, notifier, timestamp, and delivery
+      status. If the phone log remains external, model it as an authoritative
+      external record with explicit ownership and synchronization semantics.
+    affected_purpose: Support operationally safe EMR/LIS integration using the
+      ontology as the shared conceptual authority.
+    failure_condition: A critical value exists and downstream systems need to
+      coordinate, audit, or display notification state beyond a
+      completed/not-completed flag.
+    impact: The ontology hides the evidence needed to satisfy its own
+      immediate-notification commitment, so integrations may treat an external
+      phone log as out of scope even though it carries the operationally
+      decisive facts.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:100-106
+      - review-value-alignment-criteria.yaml:6-8
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Support operationally safe EMR/LIS integration using the
+        ontology as the shared conceptual authority.
+      failure_condition: A critical value exists and downstream systems need to
+        coordinate, audit, or display notification state beyond a
+        completed/not-completed flag.
+      impact: The ontology hides the evidence needed to satisfy its own
+        immediate-notification commitment, so integrations may treat an external
+        phone log as out of scope even though it carries the operationally
+        decisive facts.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: The model treats critical notification details as external
+        recordkeeping instead of part of the shared workflow concept model.
+      root_cause_step_id: finding-002.cause-003
+      steps:
+        - cause_id: finding-002.cause-001
+          claim: "`CriticalValue` is defined as requiring immediate notification."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-101
+        - cause_id: finding-002.cause-002
+          claim: "The modeled notification state is only `notified: boolean`."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:102-106
+        - cause_id: finding-002.cause-003
+          claim: Time and recipient are explicitly assigned to an external phone log,
+            leaving no modeled relation or state for those facts in the
+            ontology.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:106
+      unresolved_beyond_evidence: null
+  - finding_id: finding-003
+    lens_id: axiology
+    source_ref: .onto/review/20260718-0c3a8973/round1/axiology.findings.yaml#axiology-candidate-003
+    target: clinical-lab-ontology.yaml TAT ownership note
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:6-8,126-128;
+      .onto/review/20260718-0c3a8973/execution-preparation/review-value-alignment-criteria.yaml:6-8
+    claim: Delegating turnaround-time calculation to a dashboard-owned formula
+      creates purpose drift from shared ontology authority to local metric
+      authority.
+    lens_rationale_summary: TAT spans specimen collection and report release, so it
+      is a cross-system workflow concept. Leaving the calculation authority with
+      a dashboard team accepts an undocumented local optimization that can
+      diverge from the ontology's role as the shared source for integration
+      semantics.
+    proposed_action: Define TAT as a derived metric in the ontology with source
+      fields, inclusion/exclusion rules, and ownership. If dashboard-specific
+      variants are required, model them as named projections of the canonical
+      TAT concept rather than independent formulas.
+    affected_purpose: Use the ontology as a concept authority for EMR/LIS
+      integration across entities, relations, and states.
+    failure_condition: Operational dashboards, LIS, or EMR integrations compute TAT
+      differently because the authoritative formula is maintained outside the
+      ontology.
+    impact: A key workflow metric becomes locally governed, reducing trust in the
+      ontology as the integration authority and increasing risk of conflicting
+      operational interpretations.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:6-8
+      - materialized-input.md:126-128
+      - review-value-alignment-criteria.yaml:6-8
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use the ontology as a concept authority for EMR/LIS
+        integration across entities, relations, and states.
+      failure_condition: Operational dashboards, LIS, or EMR integrations compute TAT
+        differently because the authoritative formula is maintained outside the
+        ontology.
+      impact: A key workflow metric becomes locally governed, reducing trust in the
+        ontology as the integration authority and increasing risk of conflicting
+        operational interpretations.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:126-128
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: The ontology names TAT but does not retain authority over
+        the metric's formula or variants.
+      root_cause_step_id: finding-003.cause-003
+      steps:
+        - cause_id: finding-003.cause-001
+          claim: The target declares itself as the concept model intended for EMR/LIS
+            integration authority.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:6-8
+        - cause_id: finding-003.cause-002
+          claim: TAT is defined in prose as spanning `collected_at` to `released_at`.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:126-128
+        - cause_id: finding-003.cause-003
+          claim: The calculation formula is maintained by the dashboard team rather than
+            modeled as an authoritative ontology concept.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:128
+      unresolved_beyond_evidence: null
+  - finding_id: finding-004
+    lens_id: coverage
+    source_ref: .onto/review/20260718-0c3a8973/round1/coverage.findings.yaml#coverage-candidate-001
+    target: CriticalValue notification coverage
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100-106
+    claim: CriticalValue 통보 행위의 감사 증거 개념이 온톨로지 안에 없다.
+    lens_rationale_summary: 권위 문서로 쓰일 EMR/LIS 통합 모델에서 중요값 통보는 임상의에게 전달되었는지 추적해야 하는
+      통제 행위다. 현재 모델은 완료 여부만 내부에 남기고 핵심 증거를 온톨로지 밖 장부로 밀어내므로, 시스템 간 통합 시 어떤 자료가
+      통보 사실의 권위인지와 누가 언제 무엇을 받았는지를 재구성할 수 없다.
+    proposed_action: CriticalValueNotification 같은 행위/증거 엔티티를 추가하고 CriticalValue 또는
+      Result와 연결한다. 최소 속성으로 result_ref/test_ref, notifier_staff_ref, recipient,
+      notified_at, channel, acknowledgement/status, reason/evidence_ref를 두고, 외부
+      전화 기록 대장을 쓰더라도 그 장부를 권위 원본으로 참조하는 관계를 명시한다.
+    affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 엔티티·관계·상태와 운영 위험을 설명하는 목적
+    failure_condition: 중요값 통보가 발생하거나 누락/지연/정정되었을 때, 온톨로지 내부에서 통보 행위의
+      행위자·시각·수신자·근거·권위 원본을 식별해야 하는 경우
+    impact: 중요값 통보는 환자 안전과 운영 책임에 직접 연결되는 통제 행위인데, 현재 모델은 boolean만 남겨 통합 시스템의 감사 추적과
+      책임 소재 판단을 약화시킨다.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:100-106
+      - materialized-input.md:6-8
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 엔티티·관계·상태와 운영 위험을 설명하는 목적
+      failure_condition: 중요값 통보가 발생하거나 누락/지연/정정되었을 때, 온톨로지 내부에서 통보 행위의
+        행위자·시각·수신자·근거·권위 원본을 식별해야 하는 경우
+      impact: 중요값 통보는 환자 안전과 운영 책임에 직접 연결되는 통제 행위인데, 현재 모델은 boolean만 남겨 통합 시스템의 감사 추적과
+        책임 소재 판단을 약화시킨다.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - materialized-input.md:6-8
+    causal_path:
+      root_cause_candidate: 통제가 필요한 행위를 별도 사건/증거 개념으로 모델링하지 않고 상태성 boolean으로 축약했다.
+      root_cause_step_id: finding-004.cause-003
+      steps:
+        - cause_id: finding-004.cause-001
+          claim: CriticalValue에는 notified boolean과 외부 전화 기록 대장 언급만 있고 통보 사건 엔티티나
+            행위자·시각·수신자 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: finding-004.cause-002
+          claim: 이 축약은 통보 완료 여부와 통보 증거를 분리하지 못하게 한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:106
+        - cause_id: finding-004.cause-003
+          claim: 권위 문서 용도에서는 EMR/LIS가 신뢰해야 할 통보 증거의 단일 표현 범위가 닫히지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:6-8
+            - materialized-input.md:106
+      unresolved_beyond_evidence: null
+  - finding_id: finding-005
+    lens_id: coverage
+    source_ref: .onto/review/20260718-0c3a8973/round1/coverage.findings.yaml#coverage-candidate-002
+    target: Specimen lifecycle coverage
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:37-44,121-124
+    claim: Specimen lifecycle이 분석 이후의 보관·폐기 구간을 온톨로지 범위에 포함하지 않는다.
+    lens_rationale_summary: 대상 문서는 주문부터 보고까지의 파이프라인을 다룬다고 하지만 검체는 결과 산출의 근거이며, 분석
+      후에도 재검·추가검사·감사·폐기 책임에 영향을 준다. 종료 구간을 외부 내규로만 남기면 EMR/LIS 통합 설계에서 검체가 더 이상
+      사용 가능하지 않은 시점, 보관 권한, 폐기 완료 상태를 공통 개념으로 판단할 수 없다.
+    proposed_action: Specimen lifecycle에 stored/retained/disposed/returned/rejected
+      같은 종결 및 예외 상태를 추가하거나, SpecimenDisposition/SpecimenRetentionPolicy 엔티티를 두어
+      보관 위치, 보존 기한, 처분 시각, 처분자, 근거 정책을 모델링한다.
+    affected_purpose: 검체 기반 임상검사 워크플로를 EMR/LIS 통합의 개념 권위로 닫는 목적
+    failure_condition: 분석 완료 뒤 검체 보관, 재검 가능성, 폐기 완료, 부서별 내규 차이를 시스템 간 공통 상태로 판정해야 하는 경우
+    impact: 검체 lifecycle의 종료 구간이 빠져 운영 상태 판단이 부서별 외부 규칙에 흩어지고, 결과 재검·감사·폐기 책임에 대한 통합
+      권위가 약해진다.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:37-44
+      - materialized-input.md:121-124
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 검체 기반 임상검사 워크플로를 EMR/LIS 통합의 개념 권위로 닫는 목적
+      failure_condition: 분석 완료 뒤 검체 보관, 재검 가능성, 폐기 완료, 부서별 내규 차이를 시스템 간 공통 상태로 판정해야 하는 경우
+      impact: 검체 lifecycle의 종료 구간이 빠져 운영 상태 판단이 부서별 외부 규칙에 흩어지고, 결과 재검·감사·폐기 책임에 대한 통합
+        권위가 약해진다.
+      evidence_refs:
+        - materialized-input.md:37-44
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: 검체 개념의 lifecycle 범위를 결과 생성까지만 모델링하고 분석 후 처분 영역을 온톨로지 밖 정책으로 위임했다.
+      root_cause_step_id: finding-005.cause-003
+      steps:
+        - cause_id: finding-005.cause-001
+          claim: Specimen lifecycle은 analyzed에서 종료된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-44
+        - cause_id: finding-005.cause-002
+          claim: 분석 후 보관/폐기 처리는 상태나 엔티티가 아니라 부서 내규 위임 문장으로만 존재한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: finding-005.cause-003
+          claim: 따라서 EMR/LIS 통합 모델 안에서 분석 후 검체의 운영 상태와 종결 증거를 공통으로 표현할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:6-8
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: null
+  - finding_id: finding-006
+    lens_id: coverage
+    source_ref: .onto/review/20260718-0c3a8973/round1/coverage.findings.yaml#coverage-candidate-003
+    target: Catalog, threshold, and TAT temporal-authority coverage
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46-60,100-106,126-128
+    claim: 시점 의존 값과 병행 관리 값에 유효기간·이력·단일 권위 개념이 부족하다.
+    lens_rationale_summary: 검사 카탈로그, 중요값 기준, TAT 계산은 시간이 지나며 변경될 수 있는 운영 기준이다. 현재
+      모델은 현재값만 담고 언제 어떤 기준이 적용되었는지 재구성할 수 없으며, Test/Assay 및 TAT처럼 여러 시스템이 병행
+      관리하는 값의 단일 권위를 지정하지 않는다. 과거 결과 해석이나 통합 데이터 불일치 처리에서 권위 문서 역할이 약해진다.
+    proposed_action: TestCatalogEntry/AssayMapping/CriticalValueRule/TatDefinition
+      같은 버전 가능 개념을 추가하고 effective_from/effective_to, version,
+      source_system/authority, supersedes, mapping status를 둔다. TAT는 계산 시작/종료
+      이벤트와 예외 규칙을 권위 정의로 모델링하고 대시보드 계산식은 그 정의의 소비자로 위치시킨다.
+    affected_purpose: EMR/LIS 통합에서 검사 카탈로그, 중요값 기준, 성과 지표의 개념 권위를 제공하는 목적
+    failure_condition: 카탈로그 항목, 중요값 임계치, TAT 계산 규칙이 변경된 뒤 과거 시점의 결과·알림·지표를 재현하거나 두
+      시스템의 값 충돌을 해소해야 하는 경우
+    impact: 유효기간·이력·권위 원본이 없으면 통합 시스템이 현재값으로 과거 기록을 오해하거나, Test/Assay 및 대시보드 계산식 간
+      불일치에서 어떤 값을 신뢰해야 하는지 결정할 수 없다.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/coverage.findings.yaml#coverage-candidate-003
+      - materialized-input.md:46-60
+      - materialized-input.md:100-106
+      - materialized-input.md:126-128
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 검사 카탈로그, 중요값 기준, 성과 지표의 개념 권위를 제공하는 목적
+      failure_condition: 카탈로그 항목, 중요값 임계치, TAT 계산 규칙이 변경된 뒤 과거 시점의 결과·알림·지표를 재현하거나 두
+        시스템의 값 충돌을 해소해야 하는 경우
+      impact: 유효기간·이력·권위 원본이 없으면 통합 시스템이 현재값으로 과거 기록을 오해하거나, Test/Assay 및 대시보드 계산식 간
+        불일치에서 어떤 값을 신뢰해야 하는지 결정할 수 없다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:100-106
+        - materialized-input.md:126-128
+    causal_path:
+      root_cause_candidate: 변경 가능한 운영 기준과 병행 관리 대상을 버전 있는 권위 개념이 아니라 현재 속성/메모 수준으로 모델링했다.
+      root_cause_step_id: finding-006.cause-004
+      steps:
+        - cause_id: finding-006.cause-001
+          claim: Test와 Assay는 별도 카탈로그 단위로 존재하고 신규 항목을 두 곳 모두 등록한다고 되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-127
+        - cause_id: finding-006.cause-002
+          claim: CriticalValue는 경계값만 있고 유효기간이나 개정 이력 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: finding-006.cause-003
+          claim: TAT는 수집시각부터 보고시각까지라는 설명과 별도 대시보드 계산식 유지 메모만 있고 권위 있는 계산 규칙 엔티티가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:128
+        - cause_id: finding-006.cause-004
+          claim: 이 때문에 변경 이력과 시스템 간 권위 판단이 필요한 값을 온톨로지 내부에서 재구성할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:100-106
+            - materialized-input.md:126-128
+      unresolved_beyond_evidence: null
+  - finding_id: finding-007
+    lens_id: evolution
+    source_ref: .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-001
+    target: clinical-lab-ontology.yaml Test/Assay catalog model
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+    claim: 신규 검사 항목 추가 시 Test와 Assay를 병렬 등록해야 하지만 두 개념 사이의 권위 관계가 없어 카탈로그 확장이 비연속적이다.
+    lens_rationale_summary: EMR/LIS 통합의 개념 권위 문서라면 주문 카탈로그와 분석기 수행 카탈로그 사이의 확장 경로가
+      안정적이어야 한다. 지금 구조에서는 새 검사, 패널 분해, 장비별 assay variant가 추가될 때 기존 Test와 Assay
+      양쪽을 수동으로 수정해야 하고, 둘 중 하나만 갱신된 상태를 온톨로지가 표현하거나 검출할 연결점이 없다. 이는 미래 카탈로그 정비
+      전까지가 아니라 바로 현재의 확장 절차 자체를 취약하게 만든다.
+    proposed_action: "Test와 Assay를 하나로 합치거나, 둘을 유지한다면 canonical Test/OrderableTest와
+      PerformableAssay의 관계를 명시한다. 예: Test has_many Assay, Assay performs Test,
+      또는 Assay variant_of Test. 신규 항목 등록 권위와 코드 매핑의 소유 필드를 한 곳에 둔다."
+    affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 주문 카탈로그와 수행 카탈로그의 확장 규칙을 제공하는 목적.
+    failure_condition: 새 검사 항목, 장비별 assay variant, 또는 기존 검사-수행 매핑 변경이 생길 때 Test와
+      Assay를 각각 수정해야 하지만 온톨로지 안에는 둘의 매핑/권위 관계가 없다.
+    impact: 통합 구현자가 어느 코드 체계를 기준으로 EMR 주문과 LIS 수행을 연결해야 하는지 결정할 수 없어, 확장 때마다 로컬 해석이나
+      별도 매핑 문서를 만들어야 한다.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-001
+      - materialized-input.md:46
+      - materialized-input.md:54
+      - materialized-input.md:108
+      - materialized-input.md:127
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 주문 카탈로그와 수행 카탈로그의 확장 규칙을 제공하는 목적.
+      failure_condition: 새 검사 항목, 장비별 assay variant, 또는 기존 검사-수행 매핑 변경이 생길 때 Test와
+        Assay를 각각 수정해야 하지만 온톨로지 안에는 둘의 매핑/권위 관계가 없다.
+      impact: 통합 구현자가 어느 코드 체계를 기준으로 EMR 주문과 LIS 수행을 연결해야 하는지 결정할 수 없어, 확장 때마다 로컬 해석이나
+        별도 매핑 문서를 만들어야 한다.
+      evidence_refs:
+        - materialized-input.md:46
+        - materialized-input.md:54
+        - materialized-input.md:108
+        - materialized-input.md:127
+    causal_path:
+      root_cause_candidate: 주문 카탈로그(Test)와 수행 카탈로그(Assay)를 분리했지만 양자 간 관계와 등록 권위를 모델링하지 않았다.
+      root_cause_step_id: finding-007.cause-004
+      steps:
+        - cause_id: finding-007.cause-001
+          claim: Test는 주문 가능한 카탈로그 단위로 정의되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46
+        - cause_id: finding-007.cause-002
+          claim: Assay는 분석기에서 수행되는 검사 항목으로 별도 엔티티다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:54
+        - cause_id: finding-007.cause-003
+          claim: relations 목록에는 Test와 Assay 사이의 관계가 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:108
+        - cause_id: finding-007.cause-004
+          claim: notes는 신규 항목을 Test와 Assay 두 곳 모두에 등록한다고 명시한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:127
+      unresolved_beyond_evidence: null
+  - finding_id: finding-008
+    lens_id: evolution
+    source_ref: .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-002
+    target: clinical-lab-ontology.yaml specimen category representation
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:42,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:52,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:60
+    claim: 검체 종류가 Specimen/Test에서는 닫힌 enum이고 Assay에서는 자유 문자열이라 새 검체 범주 추가 시 호환 확장이
+      깨진다.
+    lens_rationale_summary: 새 검체 세부 범주, 외부 LIS 표기, 장비별 specimen kind가 추가되면 enum 쪽은
+      스키마 수정이 필요하고 Assay 쪽은 문자열 변형을 그대로 받을 수 있다. 같은 개념을 한쪽은 닫힌 값, 다른 쪽은 열린 문자열로
+      표현하므로, 확장 시 기존 규칙이 어느 값을 같은 검체로 볼지 유지하기 어렵다.
+    proposed_action: 검체 종류를 독립된 SpecimenType/SpecimenKind 코드셋 엔티티로 승격하고, Specimen,
+      Test, Assay가 모두 같은 권위 개념을 참조하게 한다. 로컬/장비/LIS 표기는 alias 또는 external_code
+      속성으로 분리한다.
+    affected_purpose: EMR/LIS 통합에서 주문 요구 검체, 실제 검체, 분석기 수행 검체를 안정적으로 연결하는 개념 권위 목적.
+    failure_condition: 새 검체 종류나 외부 표기 체계가 추가될 때 enum 값 수정과 자유 문자열 매핑이 동시에 필요하다.
+    impact: 검체 호환성 판단이 온톨로지의 공통 개념이 아니라 구현별 문자열/enum 해석에 의존하게 되어 통합 확장성과 데이터 연속성이 약해진다.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-002
+      - materialized-input.md:42
+      - materialized-input.md:52
+      - materialized-input.md:60
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 주문 요구 검체, 실제 검체, 분석기 수행 검체를 안정적으로 연결하는 개념 권위 목적.
+      failure_condition: 새 검체 종류나 외부 표기 체계가 추가될 때 enum 값 수정과 자유 문자열 매핑이 동시에 필요하다.
+      impact: 검체 호환성 판단이 온톨로지의 공통 개념이 아니라 구현별 문자열/enum 해석에 의존하게 되어 통합 확장성과 데이터 연속성이
+        약해진다.
+      evidence_refs:
+        - materialized-input.md:42
+        - materialized-input.md:52
+        - materialized-input.md:60
+    causal_path:
+      root_cause_candidate: 동일한 검체 분류 개념을 닫힌 enum과 자유 문자열이라는 서로 다른 확장 모델로 중복 표현했다.
+      root_cause_step_id: finding-008.cause-003
+      steps:
+        - cause_id: finding-008.cause-001
+          claim: Specimen.specimen_type은 네 개 값으로 제한된 enum이다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:42
+        - cause_id: finding-008.cause-002
+          claim: Test.requires_specimen_type도 같은 네 개 값으로 제한된 enum이다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:52
+        - cause_id: finding-008.cause-003
+          claim: Assay.specimen_kind는 예시 표기를 문자열로 받는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:60
+      unresolved_beyond_evidence: null
+  - finding_id: finding-009
+    lens_id: evolution
+    source_ref: .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-003
+    target: clinical-lab-ontology.yaml Result/Report status model
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:69,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:80,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:83,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:123
+    claim: 결과 상태와 보고 상태가 별도 enum으로 중복되어 외부 LIS 상태 변경이나 신규 상태 추가 때 연속성이 깨질 수 있다.
+    lens_rationale_summary: 미래에 LIS가 새 상태를 추가하거나 기존 상태 의미를 바꾸면 두 enum과 동기화 규칙을 함께
+      갱신해야 한다. 권위 상태가 Report에 있다고 하면서 LIS가 Result.status를 기록하고 동일 정보를 중복 유지하므로,
+      변경 기간에는 어느 상태가 진짜인지 판단 기준이 흔들린다. 특히 야간 1회 동기화는 상태 체계 변경 시 임상 표시 값의 연속성 위험을
+      키운다.
+    proposed_action: 결과 상태의 canonical enum을 하나로 두고 Report에는 해당 상태의
+      projection/display mapping만 두거나, ReportStatus를 별도 개념으로 유지한다면 명시적 versioned
+      mapping(ResultStatusMapping)을 둔다. 외부 LIS status code와 내부 canonical status의
+      매핑 버전 및 적용 시점을 표현한다.
+    affected_purpose: EMR/LIS 통합에서 결과 상태의 권위와 변경 연속성을 보장하는 목적.
+    failure_condition: LIS 상태 코드나 임상 보고 상태가 확장될 때 Result.status,
+      Report.result_status, 배치 동기화 규칙을 동시에 바꿔야 한다.
+    impact: 상태 변경 중에 임상의가 신뢰하는 Report.result_status와 LIS가 기록한 Result.status 사이의 권위가
+      갈라질 수 있어 개념 권위 문서로서 통합 설계 판단을 약화한다.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-003
+      - materialized-input.md:69
+      - materialized-input.md:80
+      - materialized-input.md:83
+      - materialized-input.md:123
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 결과 상태의 권위와 변경 연속성을 보장하는 목적.
+      failure_condition: LIS 상태 코드나 임상 보고 상태가 확장될 때 Result.status,
+        Report.result_status, 배치 동기화 규칙을 동시에 바꿔야 한다.
+      impact: 상태 변경 중에 임상의가 신뢰하는 Report.result_status와 LIS가 기록한 Result.status 사이의 권위가
+        갈라질 수 있어 개념 권위 문서로서 통합 설계 판단을 약화한다.
+      evidence_refs:
+        - materialized-input.md:69
+        - materialized-input.md:80
+        - materialized-input.md:83
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: 하나의 결과 상태 의미를 Result와 Report의 서로 다른 enum 및 배치 동기화 규칙으로 분산했다.
+      root_cause_step_id: finding-009.cause-004
+      steps:
+        - cause_id: finding-009.cause-001
+          claim: Result.status는 preliminary/final/corrected enum이다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69
+            - materialized-input.md:71
+        - cause_id: finding-009.cause-002
+          claim: Report.result_status는 prelim/finalized/amended라는 다른 enum이다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:80
+            - materialized-input.md:82
+        - cause_id: finding-009.cause-003
+          claim: Report.result_status는 임상의가 신뢰하는 권위 값이라고 명시되어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:83
+        - cause_id: finding-009.cause-004
+          claim: corrected 변경은 야간 1회 동기화 배치로 Report.result_status에 반영된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:123
+      unresolved_beyond_evidence: null
+  - finding_id: finding-010
+    lens_id: evolution
+    source_ref: .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-004
+    target: clinical-lab-ontology.yaml specimen lifecycle after analysis
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:44,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:86,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:124
+    claim: Specimen lifecycle이 analyzed에서 끝나고 이후 보관/폐기를 부서 내규로 밀어내어 부서 추가나 내규 변경을
+      온톨로지 안에서 확장할 수 없다.
+    lens_rationale_summary: 부서별 보관, 재검, 폐기, 반송 같은 후속 상태가 바뀌거나 새 부서가 생기면 개념 권위 문서가 공통
+      상태나 부서별 정책 확장점을 제공하지 않는다. 결과적으로 구현자는 부서 내규를 외부 규칙으로 해석해야 하며, EMR/LIS 간 검체
+      추적 연속성은 analyzed 이후 끊긴다.
+    proposed_action: Specimen lifecycle에 보관/폐기/반송/보류 같은 후분석 상태를 직접 추가하거나,
+      SpecimenDispositionPolicy 같은 확장 엔티티를 두어 Department별 lifecycle extension과
+      상태 전이를 참조하게 한다.
+    affected_purpose: 검체 상태 모델을 EMR/LIS 통합의 권위 문서로 사용해 운영 변경을 수용하는 목적.
+    failure_condition: 부서별 보관/폐기 규칙이 추가되거나 변경될 때 온톨로지에는 analyzed 이후 상태와 정책 연결 구조가 없다.
+    impact: 분석 이후 검체 추적은 부서 외부 내규에 의존하게 되어 새 부서나 정책 변경을 문서의 기존 구조에 추가하기보다 별도 해석으로
+      처리해야 한다.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/evolution.findings.yaml#evolution-candidate-004
+      - materialized-input.md:44
+      - materialized-input.md:86
+      - materialized-input.md:124
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 검체 상태 모델을 EMR/LIS 통합의 권위 문서로 사용해 운영 변경을 수용하는 목적.
+      failure_condition: 부서별 보관/폐기 규칙이 추가되거나 변경될 때 온톨로지에는 analyzed 이후 상태와 정책 연결 구조가 없다.
+      impact: 분석 이후 검체 추적은 부서 외부 내규에 의존하게 되어 새 부서나 정책 변경을 문서의 기존 구조에 추가하기보다 별도 해석으로
+        처리해야 한다.
+      evidence_refs:
+        - materialized-input.md:44
+        - materialized-input.md:86
+        - materialized-input.md:124
+    causal_path:
+      root_cause_candidate: 후분석 검체 상태와 부서별 처분 정책을 온톨로지의 확장 가능한 개념으로 모델링하지 않았다.
+      root_cause_step_id: finding-010.cause-003
+      steps:
+        - cause_id: finding-010.cause-001
+          claim: Specimen lifecycle은 analyzed에서 종료된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:44
+        - cause_id: finding-010.cause-002
+          claim: Department는 검사 수행 부서로 정의되지만 정책 속성이나 lifecycle extension 관계가 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:86
+            - materialized-input.md:88
+        - cause_id: finding-010.cause-003
+          claim: analyzed 이후 보관/폐기는 각 부서 내규를 따른다고 외부화되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:124
+      unresolved_beyond_evidence: null
+  - finding_id: finding-011
+    lens_id: logic
+    source_ref: .onto/review/20260718-0c3a8973/round1/logic.findings.yaml#logic-candidate-001
+    target: clinical-lab-ontology.yaml state_rules
+    evidence_anchor: Embedded Materialized Input, state_rules[0] and Result.status enum values
+    claim: Order completion rule requires every Result to be `final`, but Result
+      statuses can later become `corrected`, making a completed Order
+      incompatible with an allowed result state transition.
+    lens_rationale_summary: "The contradiction is temporal: at completion time all
+      Results may be `final`, but the model later allows
+      `Result.status=corrected`. If `completed` continues to mean the rule
+      condition remains true, the same instance would have
+      `Order.lifecycle=completed` while not all associated Results are `final`.
+      This weakens the ontology as an EMR/LIS authority document because
+      downstream systems cannot know whether `completed` is a stable terminal
+      state or a snapshot transition marker. Logic-specific verdict: fail.
+      conflict_pair: `state_rules[0]` vs
+      `state_rules[1]`/`Result.attributes.status.values`. satisfiability_note:
+      inter-claim; the completion rule interacts with a later correction rule
+      that makes the completion predicate false after it has been used.
+      modality_note: mixed necessary/possible; a necessary completion condition
+      is defined over a possible later mutable status. boundary_handoff_note:
+      This is primarily logic because the conflict remains after term meanings
+      are fixed; evolution may also review whether correction/reopen events are
+      modeled adequately."
+    proposed_action: Define `completed` as either a historical transition snapshot
+      or a current invariant. If it is a current invariant, add a reopen/amended
+      lifecycle transition for Order when any Result becomes `corrected`; if it
+      is historical, change the rule to record completion based on a timestamped
+      snapshot and avoid requiring current Result statuses to remain `final`.
+    affected_purpose: Use the ontology as the EMR/LIS integration concept authority
+      for entity, relationship, and state behavior.
+    failure_condition: A Result is final when the Order transitions to completed,
+      then later changes to corrected as explicitly allowed by the Report
+      correction rule.
+    impact: "The integration contract cannot consistently interpret completed
+      Orders: EMR/LIS consumers may treat completion as terminal while LIS
+      corrections make the completion predicate false."
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/logic.findings.yaml#logic-candidate-001
+      - "Embedded Materialized Input: Result.status values [preliminary, final,
+        corrected]"
+      - "Embedded Materialized Input: state_rules[0] `Order는 모든 Result가 final일 때
+        completed로 전이한다.`"
+      - "Embedded Materialized Input: state_rules[1] `Result.status가 corrected로
+        바뀌면 Report.result_status는 amended가 되어야 한다`"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use the ontology as the EMR/LIS integration concept authority
+        for entity, relationship, and state behavior.
+      failure_condition: A Result is final when the Order transitions to completed,
+        then later changes to corrected as explicitly allowed by the Report
+        correction rule.
+      impact: "The integration contract cannot consistently interpret completed
+        Orders: EMR/LIS consumers may treat completion as terminal while LIS
+        corrections make the completion predicate false."
+      evidence_refs:
+        - "Embedded Materialized Input: Result.status values [preliminary,
+          final, corrected]"
+        - "Embedded Materialized Input: state_rules[0] `Order는 모든 Result가 final일
+          때 completed로 전이한다.`"
+        - "Embedded Materialized Input: state_rules[1] `Result.status가
+          corrected로 바뀌면 Report.result_status는 amended가 되어야 한다`"
+    causal_path:
+      root_cause_candidate: Order completion is defined over mutable Result.status
+        values without a corresponding Order state rule for later corrections.
+      root_cause_step_id: finding-011.cause-003
+      steps:
+        - cause_id: finding-011.cause-001
+          claim: The ontology allows Result.status to be `corrected`.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Result.attributes.status.values
+              [preliminary, final, corrected]"
+        - cause_id: finding-011.cause-002
+          claim: The ontology explicitly allows Result.status to change to corrected after
+            report finalization.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1]"
+        - cause_id: finding-011.cause-003
+          claim: Order completion is triggered by all Results being final, but no rule
+            preserves or revises Order.completed when a Result later becomes
+            corrected.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Order.lifecycle [draft, placed,
+              in_progress, completed, cancelled]"
+            - "Embedded Materialized Input: state_rules[0]"
+            - "Embedded Materialized Input: state_rules list has no Order
+              correction/reopen rule"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-012
+    lens_id: logic
+    source_ref: .onto/review/20260718-0c3a8973/round1/logic.findings.yaml#logic-candidate-002
+    target: clinical-lab-ontology.yaml Report.result_status and state_rules
+    evidence_anchor: Embedded Materialized Input, Report.result_status enum values
+      and state_rules[1]
+    claim: The Report finalization rule assigns `finalized` when `released_at` is
+      recorded and also requires `amended` after a Result correction, but the
+      model has no temporal rule resolving whether a corrected result can
+      coexist with the original `released_at` finalization condition.
+    lens_rationale_summary: "As written, the rule conditions are not mutually
+      exclusive. A corrected post-release report still has a `released_at`
+      timestamp, so the same Report can satisfy the condition for `finalized`
+      and the condition for `amended`. This is a formal state-rule conflict
+      because `result_status` is a single enum value and cannot simultaneously
+      be `finalized` and `amended`. Logic-specific verdict: fail. conflict_pair:
+      `state_rules[1]` internal finalized clause vs corrected/amended clause.
+      satisfiability_note: intra-claim; one state rule contains two state
+      assignments whose predicates can overlap over time. modality_note: mixed
+      necessary/obligatory; a necessary finalization assignment conflicts with
+      an obligatory amendment assignment when both predicates hold.
+      boundary_handoff_note: Evolution may separately assess whether report
+      versioning should exist, but the immediate issue is the lack of logical
+      precedence between two explicit assignments."
+    proposed_action: "Make the finalization condition snapshot-scoped, for example
+      `Report.result_status becomes finalized when released_at is first recorded
+      and no later correction is pending`, or define precedence so correction
+      supersedes finalization: `corrected Result after release sets
+      Report.result_status=amended until a new released_at/version is issued`."
+    affected_purpose: Use the ontology as a state authority for EMR/LIS report synchronization.
+    failure_condition: A Report has `released_at` recorded and a linked Result later
+      changes to `corrected`.
+    impact: Consumers cannot determine the authoritative displayed report status
+      because one enum field is required to be both `finalized` and `amended`
+      under overlapping conditions.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/logic.findings.yaml#logic-candidate-002
+      - "Embedded Materialized Input: Report.result_status values [prelim,
+        finalized, amended]"
+      - "Embedded Materialized Input: state_rules[1] `Report는 released_at 기록 시점에
+        finalized 상태가 된다`"
+      - "Embedded Materialized Input: state_rules[1] `Result.status가 corrected로
+        바뀌면 Report.result_status는 amended가 되어야 한다`"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use the ontology as a state authority for EMR/LIS report synchronization.
+      failure_condition: A Report has `released_at` recorded and a linked Result later
+        changes to `corrected`.
+      impact: Consumers cannot determine the authoritative displayed report status
+        because one enum field is required to be both `finalized` and `amended`
+        under overlapping conditions.
+      evidence_refs:
+        - "Embedded Materialized Input: Report.result_status values [prelim,
+          finalized, amended]"
+        - "Embedded Materialized Input: state_rules[1] `Report는 released_at 기록
+          시점에 finalized 상태가 된다`"
+        - "Embedded Materialized Input: state_rules[1] `Result.status가
+          corrected로 바뀌면 Report.result_status는 amended가 되어야 한다`"
+    causal_path:
+      root_cause_candidate: Report.result_status assignments are defined by
+        overlapping predicates without precedence, versioning, or snapshot
+        scoping.
+      root_cause_step_id: finding-012.cause-003
+      steps:
+        - cause_id: finding-012.cause-001
+          claim: Report.result_status is a single enum field with mutually exclusive
+            values.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Report.attributes.result_status.type
+              enum"
+            - "Embedded Materialized Input:
+              Report.attributes.result_status.values [prelim, finalized,
+              amended]"
+        - cause_id: finding-012.cause-002
+          claim: Recording released_at assigns the Report to finalized.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1] first sentence"
+        - cause_id: finding-012.cause-003
+          claim: A later corrected Result assigns the same Report.result_status to amended
+            while released_at remains recorded.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1] second clause"
+            - "Embedded Materialized Input: Report.attributes.released_at has no
+              cancellation/removal condition"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-013
+    lens_id: semantics
+    source_ref: .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-001
+    target: Order priority / is_stat / StatOrder
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:21,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:22,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25
+    claim: STAT is modeled simultaneously as an enum value, a boolean flag, and a
+      subtype, so the same semantic concept has three competing authorities.
+    lens_rationale_summary: "For an EMR/LIS concept authority document, this weakens
+      the meaning of STAT ordering because a single order can be `priority:
+      stat`, `is_stat: false`, or be/not be a `StatOrder` with no semantic rule
+      declaring which representation wins. It also treats STAT as a rigid
+      subtype even though the target itself presents it as a priority/flag on an
+      order."
+    proposed_action: "Choose one canonical STAT concept. Prefer making STAT a
+      priority value with optional `stat_reason`, or define an explicit
+      invariant that `StatOrder`, `priority: stat`, and `is_stat: true` are
+      exactly equivalent and identify one as authoritative."
+    affected_purpose: Use as the concept authority document for EMR/LIS integration design.
+    failure_condition: When EMR and LIS exchange or interpret STAT orders, the
+      artifact provides multiple independent representations of the same STAT
+      meaning without a precedence rule.
+    impact: Different systems can implement different STAT authorities and disagree
+      about urgent handling, making the ontology unsafe as the shared semantic
+      contract.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:21
+      - materialized-input.md:22
+      - materialized-input.md:25-29
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use as the concept authority document for EMR/LIS integration design.
+      failure_condition: When EMR and LIS exchange or interpret STAT orders, the
+        artifact provides multiple independent representations of the same STAT
+        meaning without a precedence rule.
+      impact: Different systems can implement different STAT authorities and disagree
+        about urgent handling, making the ontology unsafe as the shared semantic
+        contract.
+      evidence_refs:
+        - materialized-input.md:21
+        - materialized-input.md:22
+        - materialized-input.md:25-29
+    causal_path:
+      root_cause_candidate: The ontology has not normalized the STAT concept into one
+        canonical representation or explicitly mapped the subtype/flag/priority
+        forms.
+      root_cause_step_id: finding-013.cause-003
+      steps:
+        - cause_id: finding-013.cause-001
+          claim: "`priority` includes `stat` as an enum value."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:21
+        - cause_id: finding-013.cause-002
+          claim: "`is_stat` separately records STAT order status alongside `priority`."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:22
+        - cause_id: finding-013.cause-003
+          claim: "`StatOrder` separately models STAT as an `Order` subtype with
+            `stat_reason`."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:25-29
+      unresolved_beyond_evidence: null
+  - finding_id: finding-014
+    lens_id: semantics
+    source_ref: .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-002
+    target: Result.status and Report.result_status
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:69,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:80,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:123
+    claim: The same result-status meaning is split across two differently named enum
+      vocabularies while both are described as authoritative or duplicated
+      information.
+    lens_rationale_summary: "The ontology asserts semantic sameness but uses
+      different terms: `preliminary` versus `prelim`, `final` versus
+      `finalized`, and `corrected` versus `amended`. Without an explicit value
+      mapping and authority rule, corrected results may be interpreted as
+      amended reports or final results may be interpreted as finalized reports
+      even though those terms can refer to different workflow layers."
+    proposed_action: Define one canonical status vocabulary or add a formal mapping
+      table between result-level and report-level statuses, including authority,
+      timing, and whether `corrected` and `amended` are synonyms or distinct
+      events.
+    affected_purpose: Use as a concept authority for EMR/LIS integration and
+      clinician-facing report semantics.
+    failure_condition: When result status is exchanged, displayed, or synchronized,
+      the target offers two vocabularies for the same asserted information
+      without a precise semantic mapping.
+    impact: Systems can diverge on whether a result is preliminary/final/corrected
+      versus a report being prelim/finalized/amended, undermining trust in
+      report status values clinicians rely on.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:69-83
+      - materialized-input.md:123
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use as a concept authority for EMR/LIS integration and
+        clinician-facing report semantics.
+      failure_condition: When result status is exchanged, displayed, or synchronized,
+        the target offers two vocabularies for the same asserted information
+        without a precise semantic mapping.
+      impact: Systems can diverge on whether a result is preliminary/final/corrected
+        versus a report being prelim/finalized/amended, undermining trust in
+        report status values clinicians rely on.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: The ontology conflates result-state and report-state
+        vocabularies while also declaring duplicate maintenance of the same
+        information.
+      root_cause_step_id: finding-014.cause-004
+      steps:
+        - cause_id: finding-014.cause-001
+          claim: "`Result.status` defines the LIS-recorded values `preliminary`, `final`,
+            and `corrected`."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+        - cause_id: finding-014.cause-002
+          claim: The note says the same information is also maintained in
+            `Report.result_status`.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:72
+        - cause_id: finding-014.cause-003
+          claim: "`Report.result_status` uses different values and is called the authority
+            value trusted by clinicians."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: finding-014.cause-004
+          claim: A state rule requires synchronization from `corrected` to `amended` by a
+            nightly batch, showing the split is operationally meaningful rather
+            than a harmless label difference.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:123
+      unresolved_beyond_evidence: null
+  - finding_id: finding-015
+    lens_id: semantics
+    source_ref: .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-003
+    target: Test and Assay catalog concepts
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+    claim: "`Test` and `Assay` are semantically overlapping catalog-item concepts
+      but the artifact leaves their identity boundary unresolved while requiring
+      duplicate registration."
+    lens_rationale_summary: For EMR/LIS integration, orderable tests and executable
+      assays can be legitimately distinct, but this artifact does not define
+      their mapping or distinction. Because both are named as 검사 항목 and catalog
+      units, duplicate registration creates semantic drift between what the EMR
+      orders and what the LIS analyzer performs.
+    proposed_action: State the canonical distinction and relationship, such as
+      `Test` = orderable catalog item and `Assay` = executable analytic method,
+      then add an explicit maps-to relation and shared specimen/type vocabulary;
+      or merge them if they are intended to be synonyms.
+    affected_purpose: Use as the shared concept authority for order-to-analysis
+      EMR/LIS integration.
+    failure_condition: When a new lab item is ordered and performed, the model
+      requires entries in both `Test` and `Assay` without defining whether they
+      are synonyms, variants, or mapped concepts.
+    impact: The concept authority cannot reliably govern catalog synchronization,
+      because EMR order codes and LIS/analyzer execution codes can drift while
+      appearing to represent the same 검사 항목.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:46-60
+      - materialized-input.md:127
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use as the shared concept authority for order-to-analysis
+        EMR/LIS integration.
+      failure_condition: When a new lab item is ordered and performed, the model
+        requires entries in both `Test` and `Assay` without defining whether
+        they are synonyms, variants, or mapped concepts.
+      impact: The concept authority cannot reliably govern catalog synchronization,
+        because EMR order codes and LIS/analyzer execution codes can drift while
+        appearing to represent the same 검사 항목.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:127
+    causal_path:
+      root_cause_candidate: The ontology defers the semantic boundary between
+        orderable catalog item and executable assay while still making both
+        active registration locations.
+      root_cause_step_id: finding-015.cause-003
+      steps:
+        - cause_id: finding-015.cause-001
+          claim: "`Test` is defined as a single test item and orderable catalog unit."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-52
+        - cause_id: finding-015.cause-002
+          claim: "`Assay` is defined as an analyzer-performed test item and catalog
+            execution unit, using overlapping terminology."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:54-60
+        - cause_id: finding-015.cause-003
+          claim: The notes require current new items to be registered in both places while
+            postponing integration review.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:127
+      unresolved_beyond_evidence: null
+  - finding_id: finding-016
+    lens_id: semantics
+    source_ref: .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-004
+    target: CriticalValue
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:106
+    claim: "`CriticalValue` mixes a threshold/range concept with a
+      notification-event state."
+    lens_rationale_summary: A critical-value range is a definitional rule for
+      identifying dangerous results, while notification completion is an
+      operational event about a specific patient/result occurrence. Placing
+      `notified` on the range concept makes the range appear to become notified,
+      which is semantically wrong and can hide which result, clinician, time, or
+      recipient was actually notified.
+    proposed_action: Separate `CriticalValueThreshold` from a
+      `CriticalValueNotification` or `CriticalResultEvent`. Keep bounds on the
+      threshold concept and move notification status, time, recipient, and
+      linked result/order/patient to the event concept.
+    affected_purpose: Use as an operationally safe concept authority for clinical
+      lab workflow integration.
+    failure_condition: When critical value handling is implemented, notification
+      state is attached to the threshold/range rather than to the specific
+      result event requiring notification.
+    impact: Systems may record or interpret notification as a property of the rule
+      rather than of an actual critical result, weakening auditability and
+      clinical follow-up semantics.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:100-106
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use as an operationally safe concept authority for clinical
+        lab workflow integration.
+      failure_condition: When critical value handling is implemented, notification
+        state is attached to the threshold/range rather than to the specific
+        result event requiring notification.
+      impact: Systems may record or interpret notification as a property of the rule
+        rather than of an actual critical result, weakening auditability and
+        clinical follow-up semantics.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: The ontology conflates a stable threshold definition with
+        a per-occurrence notification event.
+      root_cause_step_id: finding-016.cause-002
+      steps:
+        - cause_id: finding-016.cause-001
+          claim: "`CriticalValue` is defined as an immediately reportable dangerous
+            result-value range."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-105
+        - cause_id: finding-016.cause-002
+          claim: The same entity carries `notified`, a completion flag for communication
+            whose detailed record is outside the entity.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:106
+      unresolved_beyond_evidence: null
+  - finding_id: finding-017
+    lens_id: semantics
+    source_ref: .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-005
+    target: Specimen-to-Result relation naming
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:118,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:119
+    claim: The relation `Specimen produces Result` gives a physical specimen the
+      semantic role of producing a result.
+    lens_rationale_summary: A specimen is the physical source material; the analysis
+      process, assay, instrument, or lab workflow produces the result. Calling
+      the specimen the producer blurs source material with operational
+      actor/process. This is a semantic naming mismatch, even if a derived-from
+      relation is appropriate.
+    proposed_action: Keep `Result derived_from Specimen` for material provenance and
+      replace `Specimen produces Result` with a relation from `Assay` or an
+      analysis event/process to `Result`, if that process concept is in scope.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: A specimen is the physical source material; the analysis process, assay,
+      instrument, or lab workflow produces the result. Calling the specimen the
+      producer blurs source material with operational actor/process. This is a
+      semantic naming mismatch, even if a derived-from relation is appropriate.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/semantics.findings.yaml#semantics-candidate-005
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-018
+    lens_id: structure
+    source_ref: .onto/review/20260718-0c3a8973/round1/structure.findings.yaml#structure-candidate-001
+    target: clinical-lab-ontology.yaml relations graph
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25,31,54,100,108
+    claim: Several declared entities are structurally absent from the explicit
+      relations graph.
+    lens_rationale_summary: The ontology is intended as a concept authority for
+      EMR/LIS integration, and the relations section is the visible structural
+      graph. If core entities are omitted from that graph, consumers relying on
+      relations cannot traverse Order-to-Patient, Test-to-Assay execution, or
+      CriticalValue-to-result/notification paths, and subtype participation for
+      STAT orders is implicit rather than structurally visible.
+    proposed_action: "Either define that `type: ref` and `is_a` entries are
+      first-class graph edges, or add explicit relations for these entities,
+      such as `Order -> Patient`, `StatOrder -> Order`, `Test -> Assay` or an
+      equivalent catalog/execution mapping, and `CriticalValue -> Test/Result`
+      plus its notification target if that concept remains in scope."
+    affected_purpose: Use of the ontology as the EMR/LIS integration concept
+      authority for entities, relationships, and states.
+    failure_condition: A downstream consumer treats the `relations:` section as the
+      authoritative relationship graph and therefore sees no structural path for
+      Patient, StatOrder, Assay, or CriticalValue.
+    impact: The integration design can omit or inconsistently implement patient
+      association, STAT subtype handling, assay execution mapping, or
+      critical-value handling because those concepts are not connected in the
+      explicit graph.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/structure.findings.yaml#structure-candidate-001
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:7
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:31
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use of the ontology as the EMR/LIS integration concept
+        authority for entities, relationships, and states.
+      failure_condition: A downstream consumer treats the `relations:` section as the
+        authoritative relationship graph and therefore sees no structural path
+        for Patient, StatOrder, Assay, or CriticalValue.
+      impact: The integration design can omit or inconsistently implement patient
+        association, STAT subtype handling, assay execution mapping, or
+        critical-value handling because those concepts are not connected in the
+        explicit graph.
+      evidence_refs:
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:7
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:31
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+    causal_path:
+      root_cause_candidate: The ontology mixes attribute references, subtype
+        declarations, and explicit relations without making all declared entity
+        connections available in the explicit `relations:` graph.
+      root_cause_step_id: finding-018.cause-003
+      steps:
+        - cause_id: finding-018.cause-001
+          claim: The explicit relation list starts at `relations:` and contains no
+            relation whose `from` or `to` is Patient, StatOrder, Assay, or
+            CriticalValue.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:109
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:119
+        - cause_id: finding-018.cause-002
+          claim: Those omitted names are declared entities, so their absence from the
+            relation list creates graph-orphan behavior for relation-based
+            consumers.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:31
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100
+        - cause_id: finding-018.cause-003
+          claim: The target declares itself as an EMR/LIS concept authority for entities,
+            relations, and states, so relation-graph omissions weaken the
+            intended authority surface.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:6
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:7
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:8
+      unresolved_beyond_evidence: null
+  - finding_id: finding-019
+    lens_id: structure
+    source_ref: .onto/review/20260718-0c3a8973/round1/structure.findings.yaml#structure-candidate-002
+    target: clinical-lab-ontology.yaml Assay structure
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46,54,108,127
+    claim: Assay lacks the required structural connection to Test despite being
+      maintained alongside Test.
+    lens_rationale_summary: "This is a structural gap rather than only a naming
+      issue: the document declares two catalog-like entities that must be
+      co-maintained, but provides no graph edge that lets an integration
+      determine which executable assay realizes a requested test."
+    proposed_action: Add an explicit mapping relation such as `Test -> Assay` with a
+      clear kind like `realized_by`, `maps_to`, or `performed_as`, or define a
+      join entity if one Test can map to multiple assays by specimen type or
+      analyzer.
+    affected_purpose: EMR/LIS integration design from orderable tests to
+      LIS/analyzer execution units.
+    failure_condition: A workflow needs to route an ordered Test to the
+      corresponding Assay, but the ontology provides no explicit relation
+      connecting the two.
+    impact: Implementers may create local, incompatible mappings outside the concept
+      authority, weakening traceability from orders to executed assays and
+      produced results.
+    evidence_refs:
+      - .onto/review/20260718-0c3a8973/round1/structure.findings.yaml#structure-candidate-002
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+      - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS integration design from orderable tests to
+        LIS/analyzer execution units.
+      failure_condition: A workflow needs to route an ordered Test to the
+        corresponding Assay, but the ontology provides no explicit relation
+        connecting the two.
+      impact: Implementers may create local, incompatible mappings outside the concept
+        authority, weakening traceability from orders to executed assays and
+        produced results.
+      evidence_refs:
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+    causal_path:
+      root_cause_candidate: The model introduces `Assay` as a separate execution
+        concept but leaves its relationship to `Test` as an unresolved note
+        instead of an explicit relation.
+      root_cause_step_id: finding-019.cause-003
+      steps:
+        - cause_id: finding-019.cause-001
+          claim: "`Test` and `Assay` are separate declared entities with catalog/execution
+            roles."
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+        - cause_id: finding-019.cause-002
+          claim: The note states new items are currently registered in both `Test` and
+            `Assay`, implying an operational co-maintenance relationship.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+        - cause_id: finding-019.cause-003
+          claim: The explicit relation list contains `Test -> Result` but no `Test ->
+            Assay` or equivalent mapping edge.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:111
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:119
+      unresolved_beyond_evidence: null
+validation:
+  unaddressable_findings: []

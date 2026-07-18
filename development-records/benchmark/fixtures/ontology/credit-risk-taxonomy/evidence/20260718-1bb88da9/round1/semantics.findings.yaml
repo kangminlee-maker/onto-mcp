@@ -1,0 +1,290 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: credit-risk-ontology.yaml entities.Collateral
+    evidence_anchor: 'Embedded Materialized Input: Collateral.definition = "익스포저를
+      담보하는 자산. 담보 평가의 기본 단위." and Collateral.is_a = Exposure'
+    claim: Collateral is semantically misclassified as an Exposure subtype.
+    what: "The ontology states that Collateral is an asset securing an exposure, but
+      models Collateral with `is_a: Exposure`, making a collateral asset a kind
+      of credit exposure."
+    why: "The embedded target defines Exposure as credit exposure to a borrower,
+      while Collateral is defined as an asset that secures an exposure. These
+      are different ontological types: a credit obligation/position versus a
+      securing asset. Because the artifact is intended as a shared concept
+      authority for risk engines and reporting systems, this subtype assertion
+      can cause consumers to inherit exposure semantics for collateral records
+      and misinterpret collateral assets as exposure instances."
+    how_to_fix: "Remove `Collateral.is_a: Exposure`; keep Collateral as a separate
+      entity and express the relationship through `Exposure secured_by
+      Collateral` or an equivalent association with explicit cardinality/role."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The ontology's declared purpose as a shared concept authority
+        for risk engine and reporting systems covering exposures, grades,
+        limits, and collateral.
+      failure_condition: When a consuming engine or report treats subtype assertions
+        as inheritance or classification authority, Collateral becomes an
+        Exposure instance despite the definitions distinguishing collateral
+        assets from credit exposures.
+      impact: This weakens trust in the shared taxonomy because a foundational entity
+        boundary is semantically wrong, allowing collateral records to be
+        counted, filtered, validated, or reported under exposure semantics.
+      evidence_refs:
+        - "Embedded Materialized Input: header declares shared concept authority
+          purpose"
+        - "Embedded Materialized Input: Exposure.definition"
+        - "Embedded Materialized Input: Collateral.definition"
+        - "Embedded Materialized Input: Collateral.is_a = Exposure"
+    causal_path:
+      root_cause_candidate: The ontology uses subtype inheritance for Collateral even
+        though its own definitions only support an associative securing
+        relationship to Exposure.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: "Collateral is asserted as a subtype of Exposure via `is_a: Exposure`."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Collateral.is_a = Exposure"
+        - cause_id: semantics-candidate-001.cause-002
+          claim: The definitions distinguish Exposure as a credit exposure to a borrower
+            and Collateral as an asset that secures an exposure.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Exposure.definition"
+            - "Embedded Materialized Input: Collateral.definition"
+        - cause_id: semantics-candidate-001.cause-003
+          claim: The same model already has an associative relation `Exposure secured_by
+            Collateral`, so the subtype assertion is not needed to express the
+            securing relationship.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: relations entry from Exposure to
+              Collateral kind secured_by"
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: credit-risk-ontology.yaml rating concepts
+    evidence_anchor: "Embedded Materialized Input: Borrower.internal_rating values
+      are described as 1~10; RiskRating.grade values are [R1, R2, R3, R4, R5];
+      Exposure.risk_grade values are [AAA, AA, A, BBB, BB, B, CCC]; notes say
+      the three scales coexist and each consuming system performs conversion."
+    claim: Three credit-grade concepts are semantically overlapping but lack an
+      authoritative mapping inside the ontology.
+    what: The ontology presents Borrower.internal_rating, RiskRating.grade, and
+      Exposure.risk_grade as credit/risk grade concepts, but leaves their
+      conversion to external wiki/consumer systems and permits manual
+      report-team adjustment of Exposure.risk_grade.
+    why: All three fields name a borrower/exposure credit risk grade, but their
+      scale names and authorities differ. The target itself says this artifact
+      is meant to be the shared concept authority between a risk engine and
+      reporting systems; leaving semantically overlapping grades to separate
+      consumer-side mappings means the same borrower or exposure risk meaning
+      can diverge by system.
+    how_to_fix: "Define canonical grade concepts and authority boundaries in the
+      ontology: either model one canonical rating with explicit scale
+      mappings/versioning, or split the concepts by meaning such as borrower
+      internal rating, engine borrower rating, and report exposure grade with
+      authoritative mapping rules and allowed override semantics."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Shared concept authority for the risk engine and reporting
+        system, especially for ratings used in classification and reports.
+      failure_condition: When the engine emits RiskRating.grade and reporting consumes
+        Exposure.risk_grade or Borrower.internal_rating, each consumer may apply
+        a different conversion or manual override without an ontology-governed
+        semantic mapping.
+      impact: The ontology cannot reliably establish whether two systems are referring
+        to the same risk grade meaning, so risk classification and reporting can
+        disagree while still appearing compliant with the shared taxonomy.
+      evidence_refs:
+        - "Embedded Materialized Input: Borrower.internal_rating note"
+        - "Embedded Materialized Input: RiskRating.grade note"
+        - "Embedded Materialized Input: Exposure.risk_grade note"
+        - "Embedded Materialized Input: classification_rules first rule"
+        - "Embedded Materialized Input: notes first item"
+    causal_path:
+      root_cause_candidate: The ontology defines multiple overlapping rating scales
+        but delegates conversion authority to external wiki/consumer systems
+        instead of making the semantic mapping part of the shared concept model.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Borrower.internal_rating, RiskRating.grade, and Exposure.risk_grade all
+            represent credit or risk grade concepts with different scales.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Borrower.internal_rating note"
+            - "Embedded Materialized Input: RiskRating.definition and
+              RiskRating.grade values"
+            - "Embedded Materialized Input: Exposure.risk_grade note"
+        - cause_id: semantics-candidate-002.cause-002
+          claim: The classification rule derives Exposure.risk_grade from RiskRating.grade
+            but also allows report-team manual adjustment based on market
+            conditions.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: classification_rules first rule"
+        - cause_id: semantics-candidate-002.cause-003
+          claim: The notes state that conversion among the three coexisting scales is
+            performed by each consuming system.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: notes first item"
+      unresolved_beyond_evidence: The specific correct mapping table is outside the
+        bounded target; the finding is limited to the ontology's absence of an
+        authoritative mapping and semantic authority boundary.
+  - candidate_id: semantics-candidate-003
+    target: credit-risk-ontology.yaml Exposure.ltv
+    evidence_anchor: 'Embedded Materialized Input: Exposure.ltv note = "담보인정비율. 심사
+      시점에 심사역이 입력한다."; Collateral has appraised_value and classification rule
+      covers stale appraisals.'
+    claim: LTV is named as a derived ratio but modeled as an independent manual
+      input without source-value semantics.
+    what: "`Exposure.ltv` is a loan-to-value/collateral-recognition ratio by name
+      and note, yet the ontology stores it as a number manually entered at
+      review time without defining the numerator, denominator, valuation date,
+      or relationship to Collateral.appraised_value."
+    why: "The semantics lens treats names containing ratios as derived-value risk
+      areas when source attributes coexist. Here Collateral.appraised_value and
+      appraised_at are present, and stale valuation affects reevaluation, but
+      LTV is independently entered. This creates semantic drift: consumers
+      cannot know whether LTV means current exposure-to-current-collateral
+      value, origination-time ratio, approved collateral recognition ratio, or a
+      manually overridden review metric."
+    how_to_fix: Either define LTV as a derived attribute with an authoritative
+      formula, source fields, valuation timestamp, and currency basis, or
+      rename/split it into an explicitly manual review metric with override
+      provenance and as-of semantics.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared risk-engine and reporting concept basis for exposure
+        and collateral metrics.
+      failure_condition: When systems compare or recompute LTV using Exposure.amount
+        and Collateral.appraised_value/appraised_at, the stored manual LTV may
+        not mean the same ratio or time basis.
+      impact: Risk engines and reports can disagree on collateral adequacy or policy
+        thresholds because the ontology exposes a ratio-shaped concept without
+        authoritative derivation or temporal semantics.
+      evidence_refs:
+        - "Embedded Materialized Input: Exposure.ltv note"
+        - "Embedded Materialized Input: Exposure.amount"
+        - "Embedded Materialized Input: Collateral.appraised_value and
+          appraised_at"
+        - "Embedded Materialized Input: classification_rules stale appraisal
+          rule"
+    causal_path:
+      root_cause_candidate: A ratio-named field is modeled as an independent manual
+        input while likely source values and valuation timing are also modeled.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: "`ltv` is defined as a number and described as a collateral recognition
+            ratio manually entered at review time."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Exposure.ltv note"
+        - cause_id: semantics-candidate-003.cause-002
+          claim: The ontology also contains Exposure.amount and
+            Collateral.appraised_value/appraised_at, which are plausible source
+            and timing inputs for an LTV-like ratio.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Exposure.amount"
+            - "Embedded Materialized Input: Collateral.appraised_value"
+            - "Embedded Materialized Input: Collateral.appraised_at"
+        - cause_id: semantics-candidate-003.cause-003
+          claim: Collateral valuation age is semantically material because stale
+            appraised_value triggers reevaluation after one year.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: classification_rules third rule"
+      unresolved_beyond_evidence: The bounded target does not define the
+        organization's intended LTV formula, so the finding does not assert a
+        specific correct calculation.
+  - candidate_id: semantics-candidate-004
+    target: credit-risk-ontology.yaml Limit.approved_amount and classification_rules
+      Limit 소진율
+    evidence_anchor: "Embedded Materialized Input: Limit.approved_amount note says
+      CRM available_limit is managed by summing; classification rule defines
+      utilization as ExposureAggregate.total_amount / Limit.approved_amount with
+      each system's same-day FX table."
+    claim: Limit amount semantics mix approved limit, available limit, utilization
+      denominator, and cross-system currency conversion without a single
+      authoritative meaning.
+    what: "`Limit.approved_amount` is defined as approved limit, but its note
+      references CRM `available_limit` and says they are managed by summing. The
+      utilization rule then uses approved_amount as denominator and delegates
+      currency conversion to each system's same-day FX table."
+    why: Approved amount, available limit, and utilized/exposure amount are distinct
+      credit limit concepts. Treating CRM available_limit as summable with
+      approved_amount blurs remaining-capacity semantics with approved-capacity
+      semantics. Because utilization depends on both denominator meaning and FX
+      basis, allowing each system to use its own FX table further changes the
+      semantic value of the same named utilization ratio.
+    how_to_fix: Separate approved limit, available/remaining limit, and utilized
+      exposure as distinct concepts; define whether they may be aggregated and
+      under what currency/as-of rules. Make the FX source and valuation date an
+      ontology-governed authority or explicit input, not a per-system semantic
+      choice.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared concept authority for limits and utilization reporting
+        between risk engine and reporting systems.
+      failure_condition: When systems calculate or report limit utilization for
+        multi-currency or CRM-integrated borrowers, they may use different
+        denominator semantics or FX sources under the same rule name.
+      impact: Limit breach, utilization, and risk appetite reporting can diverge while
+        appearing to follow the ontology because the key terms do not have
+        stable meanings.
+      evidence_refs:
+        - "Embedded Materialized Input: Limit.definition"
+        - "Embedded Materialized Input: Limit.approved_amount note"
+        - "Embedded Materialized Input: classification_rules second rule"
+    causal_path:
+      root_cause_candidate: The ontology lacks semantic separation and authority rules
+        for approved limit, available limit, utilized exposure, and FX
+        conversion basis.
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: Limit is defined as borrower/product credit limit, and approved_amount is
+            the approved limit recorded by the approval system.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Limit.definition"
+            - "Embedded Materialized Input: Limit.approved_amount note"
+        - cause_id: semantics-candidate-004.cause-002
+          claim: The same approved_amount note introduces CRM available_limit and says it
+            is managed by summing, mixing approved capacity with available
+            remaining capacity semantics.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Limit.approved_amount note"
+        - cause_id: semantics-candidate-004.cause-003
+          claim: Limit utilization is defined as ExposureAggregate.total_amount divided by
+            Limit.approved_amount, with currency conversion performed using each
+            system's same-day FX table.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: classification_rules second rule"
+      unresolved_beyond_evidence: The bounded target does not provide CRM field
+        definitions or FX-table ownership, so the finding is limited to the
+        ontology's internal semantic ambiguity.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Credit exposure, collateral asset, approved limit, available limit, and
+    credit rating scale are treated as distinct banking risk-management concepts
+    based on the target's own definitions and notes, without using an external
+    domain document.
+  - Ratio-like names such as LTV and utilization imply derived or at least
+    formula-governed semantics when source fields coexist in the ontology.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,267 @@
+schema_version: 1
+session_id: 20260718-0c3a8973
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: Order priority / is_stat / StatOrder
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:21,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:22,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25
+    claim: STAT is modeled simultaneously as an enum value, a boolean flag, and a
+      subtype, so the same semantic concept has three competing authorities.
+    what: The ontology defines `priority` with value `stat`, also defines `is_stat`,
+      and also defines `StatOrder` as an `Order` subtype. These are not three
+      clearly distinct meanings in the artifact; all describe whether the order
+      is STAT.
+    why: "For an EMR/LIS concept authority document, this weakens the meaning of
+      STAT ordering because a single order can be `priority: stat`, `is_stat:
+      false`, or be/not be a `StatOrder` with no semantic rule declaring which
+      representation wins. It also treats STAT as a rigid subtype even though
+      the target itself presents it as a priority/flag on an order."
+    how_to_fix: "Choose one canonical STAT concept. Prefer making STAT a priority
+      value with optional `stat_reason`, or define an explicit invariant that
+      `StatOrder`, `priority: stat`, and `is_stat: true` are exactly equivalent
+      and identify one as authoritative."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as the concept authority document for EMR/LIS integration design.
+      failure_condition: When EMR and LIS exchange or interpret STAT orders, the
+        artifact provides multiple independent representations of the same STAT
+        meaning without a precedence rule.
+      impact: Different systems can implement different STAT authorities and disagree
+        about urgent handling, making the ontology unsafe as the shared semantic
+        contract.
+      evidence_refs:
+        - materialized-input.md:21
+        - materialized-input.md:22
+        - materialized-input.md:25-29
+    causal_path:
+      root_cause_candidate: The ontology has not normalized the STAT concept into one
+        canonical representation or explicitly mapped the subtype/flag/priority
+        forms.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: "`priority` includes `stat` as an enum value."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:21
+        - cause_id: semantics-candidate-001.cause-002
+          claim: "`is_stat` separately records STAT order status alongside `priority`."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:22
+        - cause_id: semantics-candidate-001.cause-003
+          claim: "`StatOrder` separately models STAT as an `Order` subtype with
+            `stat_reason`."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:25-29
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: Result.status and Report.result_status
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:69,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:80,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:123
+    claim: The same result-status meaning is split across two differently named enum
+      vocabularies while both are described as authoritative or duplicated
+      information.
+    what: "`Result.status` has values `[preliminary, final, corrected]` and says the
+      same information is also maintained in `Report.result_status`.
+      `Report.result_status` has `[prelim, finalized, amended]` and says
+      clinicians trust it as the authoritative value."
+    why: "The ontology asserts semantic sameness but uses different terms:
+      `preliminary` versus `prelim`, `final` versus `finalized`, and `corrected`
+      versus `amended`. Without an explicit value mapping and authority rule,
+      corrected results may be interpreted as amended reports or final results
+      may be interpreted as finalized reports even though those terms can refer
+      to different workflow layers."
+    how_to_fix: Define one canonical status vocabulary or add a formal mapping table
+      between result-level and report-level statuses, including authority,
+      timing, and whether `corrected` and `amended` are synonyms or distinct
+      events.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as a concept authority for EMR/LIS integration and
+        clinician-facing report semantics.
+      failure_condition: When result status is exchanged, displayed, or synchronized,
+        the target offers two vocabularies for the same asserted information
+        without a precise semantic mapping.
+      impact: Systems can diverge on whether a result is preliminary/final/corrected
+        versus a report being prelim/finalized/amended, undermining trust in
+        report status values clinicians rely on.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: The ontology conflates result-state and report-state
+        vocabularies while also declaring duplicate maintenance of the same
+        information.
+      root_cause_step_id: semantics-candidate-002.cause-004
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: "`Result.status` defines the LIS-recorded values `preliminary`, `final`,
+            and `corrected`."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+        - cause_id: semantics-candidate-002.cause-002
+          claim: The note says the same information is also maintained in
+            `Report.result_status`.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:72
+        - cause_id: semantics-candidate-002.cause-003
+          claim: "`Report.result_status` uses different values and is called the authority
+            value trusted by clinicians."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: semantics-candidate-002.cause-004
+          claim: A state rule requires synchronization from `corrected` to `amended` by a
+            nightly batch, showing the split is operationally meaningful rather
+            than a harmless label difference.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:123
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: Test and Assay catalog concepts
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+    claim: "`Test` and `Assay` are semantically overlapping catalog-item concepts
+      but the artifact leaves their identity boundary unresolved while requiring
+      duplicate registration."
+    what: "`Test` is defined as a single test item and orderable catalog unit.
+      `Assay` is also defined as a performed test item and catalog execution
+      unit. The notes say new items are currently registered in both places
+      while future integration is deferred."
+    why: For EMR/LIS integration, orderable tests and executable assays can be
+      legitimately distinct, but this artifact does not define their mapping or
+      distinction. Because both are named as 검사 항목 and catalog units, duplicate
+      registration creates semantic drift between what the EMR orders and what
+      the LIS analyzer performs.
+    how_to_fix: State the canonical distinction and relationship, such as `Test` =
+      orderable catalog item and `Assay` = executable analytic method, then add
+      an explicit maps-to relation and shared specimen/type vocabulary; or merge
+      them if they are intended to be synonyms.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as the shared concept authority for order-to-analysis
+        EMR/LIS integration.
+      failure_condition: When a new lab item is ordered and performed, the model
+        requires entries in both `Test` and `Assay` without defining whether
+        they are synonyms, variants, or mapped concepts.
+      impact: The concept authority cannot reliably govern catalog synchronization,
+        because EMR order codes and LIS/analyzer execution codes can drift while
+        appearing to represent the same 검사 항목.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:127
+    causal_path:
+      root_cause_candidate: The ontology defers the semantic boundary between
+        orderable catalog item and executable assay while still making both
+        active registration locations.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: "`Test` is defined as a single test item and orderable catalog unit."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-52
+        - cause_id: semantics-candidate-003.cause-002
+          claim: "`Assay` is defined as an analyzer-performed test item and catalog
+            execution unit, using overlapping terminology."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:54-60
+        - cause_id: semantics-candidate-003.cause-003
+          claim: The notes require current new items to be registered in both places while
+            postponing integration review.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:127
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: CriticalValue
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:106
+    claim: "`CriticalValue` mixes a threshold/range concept with a
+      notification-event state."
+    what: "`CriticalValue` is defined as a dangerous result-value range, with
+      `lower_bound` and `upper_bound`, but also contains `notified`, whose note
+      says notification time and recipient are stored in a separate phone log."
+    why: A critical-value range is a definitional rule for identifying dangerous
+      results, while notification completion is an operational event about a
+      specific patient/result occurrence. Placing `notified` on the range
+      concept makes the range appear to become notified, which is semantically
+      wrong and can hide which result, clinician, time, or recipient was
+      actually notified.
+    how_to_fix: Separate `CriticalValueThreshold` from a `CriticalValueNotification`
+      or `CriticalResultEvent`. Keep bounds on the threshold concept and move
+      notification status, time, recipient, and linked result/order/patient to
+      the event concept.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as an operationally safe concept authority for clinical
+        lab workflow integration.
+      failure_condition: When critical value handling is implemented, notification
+        state is attached to the threshold/range rather than to the specific
+        result event requiring notification.
+      impact: Systems may record or interpret notification as a property of the rule
+        rather than of an actual critical result, weakening auditability and
+        clinical follow-up semantics.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: The ontology conflates a stable threshold definition with
+        a per-occurrence notification event.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: "`CriticalValue` is defined as an immediately reportable dangerous
+            result-value range."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-105
+        - cause_id: semantics-candidate-004.cause-002
+          claim: The same entity carries `notified`, a completion flag for communication
+            whose detailed record is outside the entity.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:106
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: Specimen-to-Result relation naming
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:118,
+      .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:119
+    claim: The relation `Specimen produces Result` gives a physical specimen the
+      semantic role of producing a result.
+    what: The ontology already says `Result` is `derived_from` `Specimen`, but also
+      adds `Specimen` `produces` `Result` with the note '검체가 결과를 생산한다'.
+    why: A specimen is the physical source material; the analysis process, assay,
+      instrument, or lab workflow produces the result. Calling the specimen the
+      producer blurs source material with operational actor/process. This is a
+      semantic naming mismatch, even if a derived-from relation is appropriate.
+    how_to_fix: Keep `Result derived_from Specimen` for material provenance and
+      replace `Specimen produces Result` with a relation from `Assay` or an
+      analysis event/process to `Result`, if that process concept is in scope.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - No external clinical or interoperability standard was used because the
+    packet sets session_domain to none and denies web research.
+  - "General clinical-lab semantics were inferred only from the target text:
+    orders are placed, specimens are collected/analyzed, assays are performed,
+    results are reported."
+validation:
+  unaddressable_candidates: []

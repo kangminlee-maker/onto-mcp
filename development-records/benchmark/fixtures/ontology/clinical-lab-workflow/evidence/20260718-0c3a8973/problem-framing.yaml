@@ -1,0 +1,233 @@
+schema_version: 1
+session_id: 20260718-0c3a8973
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result and Report status authority is split across
+      duplicated status surfaces without a single authoritative state, mapping,
+      timing, and correction-propagation contract.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The deliberation resolution retains the broad high-severity
+      split-authority framing while preserving logic's narrower disagreement
+      about what is formally proven. Because clinician-facing report state can
+      become stale or ambiguously mapped after correction, this is a
+      target-level consistency problem that must be closed in the authority
+      artifact.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-009
+      - finding-014
+  - issue_id: issue-002
+    problem_definition: Critical-value thresholds are conflated with per-result
+      notification workflow state instead of separating the rule from the
+      notification event.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Applicable lenses agree that notification status belongs to an
+      occurrence-specific event, not the threshold concept. The issue weakens
+      operational responsibility for critical results, so it should be fixed
+      before downstream workflow use, though it is framed as medium severity
+      rather than a universal current blocker.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-016
+  - issue_id: issue-003
+    problem_definition: Critical-value notification audit authority is absent as a
+      first-class evidence-bearing event with actor, recipient, time, status,
+      channel, evidence, and source authority.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The resolution keeps this visible as a standalone high-risk
+      audit-authority issue while noting semantics would scope it more narrowly.
+      Missing notification evidence directly affects patient-safety
+      accountability and must be closed in the ontology authority target.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-004
+    problem_definition: TAT is named as a workflow metric, but its authoritative
+      derivation, source events, exclusions, ownership, and variants are
+      delegated outside the ontology.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Applicable lenses consistently classify this as a medium
+      authority/formula gap rather than a formal contradiction. It weakens
+      shared metric governance and should be carried forward into the next
+      ontology refinement stage.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-005
+    problem_definition: Mutable catalog, threshold, TAT, and specimen classification
+      values lack shared versionable authority concepts, with specimen kind
+      split across enum and free-string representations.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The resolution preserves the broad high-severity
+      governance/versioning issue while noting semantics narrows it to code-set
+      meaning drift. Because historical interpretation and future change depend
+      on versionable authority concepts, this must close in the target artifact.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-008
+  - issue_id: issue-006
+    problem_definition: Test and Assay are split as catalog concepts without a
+      defined identity boundary, mapping relation, or registration authority.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Applicable lenses consistently support the merge-or-map framing. The
+      gap can force local EMR-to-LIS execution mappings, so it is a medium
+      consistency problem that should be resolved before downstream integration
+      design proceeds.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-015
+      - finding-019
+  - issue_id: issue-007
+    problem_definition: The specimen lifecycle stops at analysis and leaves
+      retention, storage, disposal, return, and policy evidence outside the
+      shared workflow authority.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: "The issue is a consistent medium coverage gap: the lifecycle is
+      incomplete after analysis, but no direct contradiction is shown. It should
+      be carried forward as part of completing the specimen workflow model."
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-008
+    problem_definition: Post-analysis specimen states and departmental disposition
+      policies are not modeled as extensible ontology concepts.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: This is the evolution-facing counterpart to the post-analysis
+      lifecycle gap. It is medium severity because future policy changes cannot
+      be absorbed cleanly, so it should be carried forward into the next
+      lifecycle-extension work.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-009
+    problem_definition: Order completion depends on mutable Result.status values
+      without snapshot semantics or a correction/reopen rule.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The logic evidence directly shows that a later corrected result can
+      invalidate the predicate that made an order completed. This is a
+      high-severity state-correctness defect in the authority model and must be
+      closed in the target.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: Report.result_status can be assigned overlapping finalized
+      and amended states after release because predicates lack precedence,
+      versioning, or snapshot scope.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The logic evidence directly supports a mutually exclusive status
+      assignment risk for one report status field. Because this affects
+      authoritative displayed report status after correction, it is a current
+      correctness blocker for the target ontology.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-011
+    problem_definition: STAT ordering has three independent representations without
+      a canonical authority or equivalence invariant.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The semantic issue is consistently supported, with structure only
+      narrowing the representation split. Multiple STAT authorities can cause
+      urgent-order disagreement, so this medium consistency issue should close
+      before the next integration stage.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-012
+    problem_definition: Declared entities are absent from the explicit relation
+      graph because attribute references, subtype declarations, and explicit
+      relations do not share an authority rule.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The structure lens directly supports the missing graph-path issue,
+      and other applicable lenses agree. Relation-based consumers can lose
+      traversal paths for core entities, so the graph-completeness problem
+      should be closed before downstream use.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-013
+    problem_definition: The Specimen produces Result relation label blurs material
+      provenance with production by an analysis process or assay.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The projection explicitly treats this as low severity and
+      non-material under bounded evidence. It is a surface relation-label
+      clarity issue rather than a material failure of the ontology authority, so
+      documentation or later cleanup is sufficient.
+    related_surface_finding_ids:
+      - finding-017

@@ -1,0 +1,197 @@
+schema_version: 1
+session_id: 20260718-3c9b2434
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: 일중 할당이 유효시점 없는 야간 재고 스냅샷에 결합된 것이 두 finding의 공통 원인이다.
+    shared_cause:
+      cause_claim: 기준시각 없는 야간 available_qty를 일중 할당에도 사용한다.
+      from_cause_ref: finding-001.cause-001
+      to_cause_ref: finding-007.cause-002
+    rationale: 두 finding 모두 같은 야간 스냅샷 사용 규칙과 as_of 부재를 근거로 각각 가치 정합성과 시간성 결손을 지적한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: 물리·회계 재고의 권위 차이를 모델링하지 않고 야간 ERP 조정으로 처리한 것이 두 finding의 공통 원인이다.
+    shared_cause:
+      cause_claim: 실물 기준과 회계 기준의 구분 및 조정 증거 없이 ERP 기준으로 야간 조정한다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-008.cause-002
+    rationale: 두 finding은 동일한 WMS·ERP 충돌 처리 정책을 근거로 권위 판정과 감사 가능성의 실패를 설명한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: 재고를 출처·유효시점이 있는 관측값이 아니라 무시점 현재값과 야간 스냅샷으로 모델링한 것이 현재 할당 위험과 미래
+      확장 위험의 공통 뿌리다.
+    shared_cause: null
+    rationale: finding-001은 현재 일중 할당의 신뢰 실패를, finding-013은 실시간·다중 원장 도입 시의 마이그레이션
+      실패를 다루지만 둘 다 출처와 시간성 없는 재고 모델을 근본 원인으로 명시한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-008
+    to_finding_id: finding-019
+    relation: duplicates
+    root_hypothesis: WMS 실물 재고와 ERP 회계 재고를 하나의 quantity_on_hand로 축약한 동일 결함이 두 렌즈에서 재발견되었다.
+    shared_cause: null
+    rationale: 대상 필드, 실패 조건, 권위 혼동, 야간 조정 위험 및 제안 조치가 실질적으로 동일하며 coverage와 semantics
+      관점만 다르다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-005
+    to_finding_id: finding-027
+    relation: duplicates
+    root_hypothesis: 할당을 지속되는 연결 개체로 모델링하지 않고 집계 재고 조회 규칙과 주문 상태로만 표현한 동일 구조 결함이다.
+    shared_cause: null
+    rationale: 두 finding 모두 OrderLine과 재고·수량을 연결하는 할당 레코드 부재를 지적하고
+      InventoryAllocation 도입을 제안한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-005
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: 할당을 상태 있는 예약 과정이 아니라 야간 available_qty 조회로 축약한 것이 할당 생명주기 부재와
+      가용량 의미 부재의 공통 원인이다.
+    shared_cause:
+      cause_claim: 할당은 야간 생성된 InventoryAggregate.available_qty를 확인하는 규칙으로만 존재한다.
+      from_cause_ref: finding-005.cause-002
+      to_cause_ref: finding-020.cause-001
+    rationale: 할당 개체가 없으면 예약 차감과 해제 상태를 available_qty 산식에 연결할 수 없고, 두 finding은 동일
+      integrity rule을 근거로 이 단절을 지적한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-002
+    to_finding_id: finding-006
+    relation: duplicates
+    root_hypothesis: 충족 단위를 Order 전체로 고정해 OrderLine·수량별 Shipment 연결을 생략한 동일 결함이 두 렌즈에서 재발견되었다.
+    shared_cause: null
+    rationale: 두 finding의 실패 조건은 부분·분할 출하이고, 근거는 OrderLine 매핑 부재와 Shipment→Order
+      fulfills뿐이며 제안도 수량을 가진 연결 개체로 일치한다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-006
+    to_finding_id: finding-026
+    relation: duplicates
+    root_hypothesis: OrderLine과 실제 Shipment 사이의 충족 수량 연결 경로가 없다는 동일 구조 결함이다.
+    shared_cause: null
+    rationale: coverage와 structure 렌즈 모두 동일 대상, 동일 단절 경로, 동일 부분출하 실패를 기술한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-006
+    to_finding_id: finding-025
+    relation: same_root_candidate
+    root_hypothesis: 주문선·수량 수준의 중간 충족 개념을 생략한 것이 추적 불가능성과 주문 전체 충족의 과대 표현을 함께 만든다.
+    shared_cause: null
+    rationale: finding-006은 누락된 세분화 연결을, finding-025는 그 결과 fulfills 의미가 과도해지는 문제를
+      다루며 둘 다 주문 단위 단일 관계를 원인으로 든다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-003
+    to_finding_id: finding-021
+    relation: duplicates
+    root_hypothesis: Sku 측정값에 단위가 없는데 이를 Shipment.total_weight로 합산하는 동일 결함이 가치와 의미 렌즈에서 재발견되었다.
+    shared_cause: null
+    rationale: 대상 속성, 혼합 단위 실패 조건, 잘못된 총중량 영향 및 value+unit 조치가 실질적으로 동일하다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: 물류 수치를 단위 결합 값 객체가 아닌 원시 숫자나 문자열로 모델링한 것이 두 finding의 공통 뿌리다.
+    shared_cause: null
+    rationale: finding-003은 중량·치수와 total_weight에 집중하고 finding-009는 수량까지 범위를 넓히지만, 모두
+      공통 단위 개념 부재를 원인으로 제시한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-003
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: 측정 단위를 데이터의 필수 의미가 아니라 소스별 관례로 둔 것이 현재 합산 불신과 신규 소스 통합·마이그레이션 위험의 공통 뿌리다.
+    shared_cause: null
+    rationale: 동일한 weight, dims, total_weight 필드가 근거이며, 한 finding은 현재 의미 정합성, 다른
+      finding은 변화 수용성을 평가한다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-004
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: canonical 상태 의미와 판정 권위를 중앙 모델에 두지 않고 각 연동에 위임한 것이 두 finding의 공통 뿌리다.
+    shared_cause: null
+    rationale: finding-004는 주문·화물·추적 상태 전반을, finding-011은 캐리어 이벤트 매핑을 좁게 다루지만 둘 다
+      연동별 독자 매핑과 공통 권위 부재를 근거로 한다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-004
+    to_finding_id: finding-023
+    relation: same_root_candidate
+    root_hypothesis: 서로 다른 상태 주체를 canonical 의미 경계와 매핑 없이 연결한 것이 권위 분산과 delivered 의미 혼동을 함께 만든다.
+    shared_cause: null
+    rationale: 두 finding 모두 Order, Shipment, TrackingEvent 사이의 상태 의미·권위·전이 규칙 부재를
+      지적하며 동일 연동 위임 정책을 근거로 한다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-004
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: 공통 상태 계약을 독립 시스템의 단순 정상경로 enum으로 축약한 설계 결정이 canonical 매핑 부재와 예외
+      생명주기 누락을 함께 낳았다.
+    shared_cause: null
+    rationale: 상태 권위 분산과 예외 상태 누락은 구별되는 결함이지만 동일 Order·Shipment 상태 열거형과 전이 규칙 부재에서
+      발생한다. 단일 설계 결정인지 여부는 추가 설계 이력 없이 확정할 수 없어 후보 관계로 둔다.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-015
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: 버전을 문서 식별자 수준에만 두고 변경 가능한 의미와 매핑의 유효기간·호환 계약에 연결하지 않은 것이 공통 원인이다.
+    shared_cause:
+      cause_claim: 상태 매핑과 전체 온톨로지 모두에 적용 버전, 유효기간 및 마이그레이션 계약이 정의되지 않았다.
+      from_cause_ref: finding-015.cause-003
+      to_cause_ref: finding-017.cause-003
+    rationale: finding-015는 상태 코드 매핑의 시간적 연속성을, finding-017은 전체 개념·규칙의 버전 연속성을 다루며
+      공통으로 버전 계약 부재를 명시한다.
+    confidence: high
+  - relation_id: rel-017
+    from_finding_id: finding-012
+    to_finding_id: finding-024
+    relation: same_root_candidate
+    root_hypothesis: 캐리어 예측, 운영 보정, 표시값을 버전 있는 별도 의미로 모델링하지 않고 단일 eta 필드에 덮어쓴 것이 공통 뿌리다.
+    shared_cause: null
+    rationale: finding-012는 변경 이력과 통제 증거 부재를, finding-024는 권위와 의미 혼합을 강조하지만 동일
+      Shipment.eta와 운영팀 덮어쓰기 정책을 근거로 한다.
+    confidence: high
+  - relation_id: rel-018
+    from_finding_id: finding-018
+    to_finding_id: finding-022
+    relation: duplicates
+    root_hypothesis: 운송 경로의 부분인 DeliveryLeg를 전체 Shipment의 하위 유형으로 표현한 동일 part-of/is-a 오류다.
+    shared_cause: null
+    rationale: 두 finding 모두 Shipment 정의와 DeliveryLeg.is_a의 충돌을 대상으로 하며 구성 관계로 교체하는
+      동일 조치를 제안한다.
+    confidence: high
+  - relation_id: rel-019
+    from_finding_id: finding-018
+    to_finding_id: finding-028
+    relation: causes
+    root_hypothesis: DeliveryLeg 소속을 구성 관계 대신 is_a로 표현한 선택 때문에 상위 Shipment를 가리키는 경로
+      소속 관계가 존재하지 않는다.
+    shared_cause: null
+    rationale: finding-028의 causal path는 DeliveryLeg와 Shipment 사이에 is_a만 있고 구성·소속
+      관계가 없음을 직접 원인으로 명시하며, 이는 finding-018이 식별한 유형 오류와 같은 모델링 선택이다.
+    confidence: high
+  - relation_id: rel-020
+    from_finding_id: finding-016
+    to_finding_id: finding-028
+    relation: symptom_of
+    root_hypothesis: 다중 구간 확장 시 Shipment 계층을 재구성해야 하는 문제는 DeliveryLeg를 특정 여정에 귀속시키는
+      구성 관계 부재의 확장성 증상이다.
+    shared_cause: null
+    rationale: finding-016의 다중 구간·운송사 인계 실패는 finding-028의 부모 Shipment 연결과 순서 범위 부재가
+      실제 확장 시 드러나는 결과다. 다만 finding-016에는 주문선 충족 중간 개념 부재도 함께 포함되어 완전한 중복은 아니다.
+    confidence: high
+singleton_findings: []

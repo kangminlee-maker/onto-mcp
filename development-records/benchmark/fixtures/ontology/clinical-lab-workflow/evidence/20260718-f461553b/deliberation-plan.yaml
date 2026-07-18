@@ -1,0 +1,187 @@
+schema_version: 1
+session_id: 20260718-f461553b
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: Axiology and semantics attribute the failure to delayed
+      duplication of authoritative Result and Report states, while coverage and
+      logic narrow the root to missing correction-lifecycle, mapping, and
+      interim-state rules; the distinction materially changes whether delayed
+      synchronization is inherently unacceptable or conditionally valid.
+    resolution_question: Is the root defect the existence of delayed dual-authority
+      synchronization itself, or specifically the absence of an authoritative
+      mapping, correction lifecycle, and explicit non-final state during the
+      delay?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: Coverage generalizes the evidence to verification, release,
+      amendment, and notification control events at high severity, whereas
+      axiology and semantics say their direct evidence establishes only
+      critical-value notification and does not independently support the broader
+      control-event scope; axiology also lowers severity for the generalized
+      issue.
+    resolution_question: Should this issue remain a high-severity shared-root issue
+      covering all control actions, or be narrowed to critical-value
+      notification unless separate evidence establishes the other event types?
+  - issue_id: issue-004
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: Axiology and semantics treat delegation of TAT computation to
+      a dashboard team as creating competing semantic authority, while coverage,
+      logic, and structure narrow the defect to missing authoritative
+      boundary-case and event-selection rules rather than organizational
+      ownership itself.
+    resolution_question: Is external dashboard ownership inherently a second
+      authority for TAT, or is it acceptable when the ontology fully specifies
+      versioned event-selection and boundary-case rules and the dashboard merely
+      executes them?
+  - issue_id: issue-019
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.coverage
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+    conflict_summary: Semantics identifies the erroneous causal role assigned by
+      Specimen produces Result as the root defect, while coverage treats that
+      relation as a surface symptom and replaces the root with the absence of an
+      AnalysisExecution domain entity; these positions imply different minimum
+      corrective scopes.
+    resolution_question: Can correcting the Specimen–Result relation resolve this
+      issue independently, or must the issue be rooted in and remedied through
+      introduction of AnalysisExecution as the authoritative result-producing
+      event?
+  - issue_id: issue-020
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-020.evolution
+      - issue-stance-matrix.yaml#stances.issue-020.structure
+    conflict_summary: Structure treats the missing Test–Assay realization
+      relationship as the root of a standalone high-severity path break, while
+      evolution treats it as a surface manifestation of the broader absence of
+      an authoritative, versioned mapping lifecycle.
+    resolution_question: Should issue-020 remain a standalone structural issue
+      resolved by adding a canonical cardinality-explicit relationship, or be
+      scoped under the broader versioned Test–Assay authority and lifecycle
+      defect?
+  - issue_id: issue-021
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-021.axiology
+      - issue-stance-matrix.yaml#stances.issue-021.structure
+    conflict_summary: Structure treats the disconnected notification-evidence record
+      as a standalone medium-severity defect, while axiology characterizes it as
+      a structural surface of the broader external-record and notification-event
+      authority problem represented by the control-event issue.
+    resolution_question: Should the missing notification-evidence link remain an
+      independently actionable issue, or be incorporated as a structural
+      manifestation and required relation within the broader
+      notification/control-event issue?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: Axiology's severity qualification identifies reliance on other lenses
+      for the high rating but accepts the root cause and action; coverage and
+      the remaining lenses supply that evidence, so no unresolved material
+      disagreement remains.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All participating lenses accept the missing AnalysisExecution root
+      hypothesis and retain high severity.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All participating lenses agree that the specimen lifecycle omits
+      operational exception and terminal states and retain high severity.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All participating lenses agree that overwrite-based Result and Report
+      state loses version history and retain high severity.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: All participating lenses support modeling CriticalValue as a contextual,
+      versioned rule and retain medium severity.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All participating lenses support the unresolved, unversioned Test–Assay
+      mapping root and retain high severity.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: All participating lenses support a shared versioned specimen taxonomy as
+      the remedy and retain medium severity.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All participating lenses agree that identifiers and codes lack issuer
+      and version context and retain high severity.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: All participating lenses agree that Order completion lacks a canonical
+      Result set and post-correction temporal rule and retain medium severity.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: All participating lenses agree that duplicated status enums require a
+      canonical vocabulary or explicit mapping and retain medium severity.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: All participating lenses accept the duplicated closed publication-state
+      vocabularies and missing canonical mapping as a shared root and retain
+      high severity.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: All applicable lenses support the duplicated STAT authority defect and
+      retain high severity; coverage explicitly abstains rather than
+      disagreeing.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: All participating lenses support separating orderable Test from
+      executable Assay and defining an explicit realization mapping at medium
+      severity.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: All participating lenses agree that specimen material and
+      processing-form axes are improperly flattened and retain medium severity.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: All participating lenses support separating reusable critical thresholds
+      from result-specific events and notifications and retain high severity.

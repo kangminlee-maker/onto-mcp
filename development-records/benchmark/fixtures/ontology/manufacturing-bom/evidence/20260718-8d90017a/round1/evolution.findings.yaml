@@ -1,0 +1,245 @@
+schema_version: 1
+session_id: 20260718-8d90017a
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: Part.uom and unit conversion extensibility
+    evidence_anchor: manufacturing-bom-ontology.yaml:14,95
+    claim: Hard-coded item UOM values plus no conversion master make new units and
+      cross-unit BOM/MES integration non-extensible.
+    what: The ontology limits Part.uom to [ea, kg, m] while also stating that kg↔ea
+      conversion has no item-specific conversion-factor master and is handled ad
+      hoc in the field.
+    why: For a PLM/MES concept baseline, unit identity and conversion are shared
+      integration concepts. With the allowed unit set embedded as an enum and
+      conversion rules explicitly outside the model, adding normal manufacturing
+      units or integrating systems that require deterministic cross-unit
+      quantities requires changing the ontology and/or preserving manual
+      interpretation outside the concept model.
+    how_to_fix: Replace the closed uom enum with a UnitOfMeasure reference/entity
+      and add an item-specific conversion-factor concept with source authority,
+      effective dating, and validity constraints for cross-unit BOM quantities.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline for item, BOM, routing,
+        and manufacturing operations.
+      failure_condition: When a new unit or a BOM/MES flow requiring deterministic
+        unit conversion is introduced, the current concept model cannot
+        represent it without schema/enum change or manual external conversion.
+      impact: This weakens change tolerance because quantity semantics become partly
+        outside the ontology, making integrations brittle as item classes and
+        operational units expand.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:14
+        - manufacturing-bom-ontology.yaml:95
+    causal_path:
+      root_cause_candidate: Unit semantics are modeled as a closed enum and conversion
+        authority is absent from the ontology.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: Part.uom is restricted to the enum values ea, kg, and m.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:14
+        - cause_id: evolution-candidate-001.cause-002
+          claim: The notes state that item-specific kg↔ea conversion factors do not exist
+            and are converted at the shop floor when needed.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:95
+        - cause_id: evolution-candidate-001.cause-003
+          claim: Together, new units or cross-unit integrations require ontology
+            modification or uncontrolled external interpretation.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:14
+            - manufacturing-bom-ontology.yaml:95
+      unresolved_beyond_evidence: The bounded target does not show downstream PLM/MES
+        consumers, so the finding is limited to the ontology's declared
+        concept-baseline role.
+  - candidate_id: evolution-candidate-002
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: manufacturing-bom-ontology.yaml:58-62
+    claim: Work-center capacity has no unit/dimension model, so adding heterogeneous
+      work centers forces implicit reinterpretation of the same numeric field.
+    what: capacity_per_shift is a number whose note says its unit differs by work
+      center, such as count or time, but the ontology provides no unit
+      attribute, measure type, or conversion rule.
+    why: Capacity is a scheduling and MES integration concept. If one field can mean
+      pieces, hours, machine minutes, or another local measure depending on the
+      work center, future work-center types cannot be added without out-of-band
+      rules or schema change to disambiguate capacity semantics.
+    how_to_fix: Model capacity as a measured quantity with explicit unit, capacity
+      basis/type, calendar or shift context, and optional
+      conversion/normalization rules. Keep WorkCenter.capacity as a reference to
+      that structured capacity concept rather than a bare number.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES routing and production-order readiness concept baseline
+        for work centers and operations.
+      failure_condition: When heterogeneous work centers are integrated or a new
+        capacity basis is introduced, consumers cannot know how to interpret
+        capacity_per_shift from the ontology alone.
+      impact: This reduces extensibility and integration safety because scheduling
+        behavior depends on hidden local conventions instead of stable model
+        semantics.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:58
+        - manufacturing-bom-ontology.yaml:62
+    causal_path:
+      root_cause_candidate: Work-center capacity is represented as an untyped number
+        while its unit is declared variable by work center.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: WorkCenter defines capacity_per_shift as type number.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:60-62
+        - cause_id: evolution-candidate-002.cause-002
+          claim: The capacity note states that the unit differs by work center, including
+            count or time.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:62
+        - cause_id: evolution-candidate-002.cause-003
+          claim: A bare number with variable units cannot safely absorb new capacity
+            categories without external rules or model changes.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:62
+      unresolved_beyond_evidence: The file does not include actual scheduler behavior;
+        the risk is assessed from the declared ontology contract.
+  - candidate_id: evolution-candidate-003
+    target: ECO effectivity model
+    evidence_anchor: manufacturing-bom-ontology.yaml:64-70,91
+    claim: ECO effectivity is only date-based, so phased, lot/serial, plant, BOM, or
+      routing-specific changes cannot be added while preserving change
+      continuity.
+    what: ECO contains affected_parts, a single effective_date, and status. The
+      integrity rule says production after effective_date follows the new rev,
+      while Part.rev is synchronized later by weekly batch.
+    why: PLM/MES integration often needs change applicability to survive phased
+      rollout and operational cutover conditions. This ontology has no explicit
+      effectivity scope beyond date and affected parts, and no object-level link
+      to BOM lines or routings, so future effectivity dimensions require
+      changing the ECO concept or encoding exceptions elsewhere.
+    how_to_fix: Introduce an Effectivity concept referenced by ECO that can scope
+      applicability by date/time, lot, serial, plant/site, BOM line,
+      routing/operation, and revision transition, with explicit source authority
+      and synchronization state.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Change-management concept baseline for PLM/MES production applicability.
+      failure_condition: When a change must apply by plant, lot, serial range,
+        routing, BOM line, or phased cutover rather than a single date for all
+        affected parts, the current ECO model cannot represent the continuity
+        conditions.
+      impact: Existing change records would need reinterpretation or migration,
+        undermining traceability between engineering change and MES production
+        execution.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:91
+    causal_path:
+      root_cause_candidate: ECO applicability is modeled with affected parts plus a
+        single effective date rather than a versioned effectivity scope.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: ECO defines affected_parts, effective_date, and status, with no
+            effectivity entity or applicability dimension.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:64-70
+        - cause_id: evolution-candidate-003.cause-002
+          claim: The integrity rule binds post-effective_date production to the new rev
+            while noting delayed Part.rev synchronization through a weekly
+            batch.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:91
+        - cause_id: evolution-candidate-003.cause-003
+          claim: Future non-date or phased effectivity scenarios cannot be represented
+            without altering the ECO model or relying on external exception
+            logic.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:64-70
+            - manufacturing-bom-ontology.yaml:91
+      unresolved_beyond_evidence: The target does not define actual ECO system
+        capabilities; the finding is limited to the concept model visible in
+        this file.
+  - candidate_id: evolution-candidate-004
+    target: BOM acyclicity rule and scrap reinsertion exception
+    evidence_anchor: manufacturing-bom-ontology.yaml:88-89
+    claim: The acyclic BOM rule is immediately overridden by modeling scrap
+      reinsertion as self-containment, making future circular recovery/rework
+      cases extension-hostile.
+    what: The integrity rule declares BOMs non-cyclic, but then allows
+      recycled-material recovery by modeling an Assembly as containing itself as
+      a child.
+    why: A concept baseline should separate ordinary product structure from process
+      yield, scrap recovery, rework, or co-/by-product flows. Encoding a
+      recovery process as a self-cycle weakens the invariant and leaves no
+      extensible pattern for additional controlled cycles beyond this named
+      exception.
+    how_to_fix: Keep product BOM acyclic and introduce a separate material-recovery,
+      rework, or process-output relationship for scrap reinsertion. Add explicit
+      allowed cycle semantics there instead of weakening the BOM containment
+      rule.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM and routing concept baseline for manufacturing operations
+        and future process extensions.
+      failure_condition: When more recovery, rework, by-product, or recirculation
+        scenarios are introduced, the model either violates its own acyclicity
+        invariant or requires ad hoc exceptions for each scenario.
+      impact: This reduces extensibility because a core structural rule becomes
+        exception-driven, making downstream BOM traversal, planning, and
+        integration semantics unstable.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:88-89
+    causal_path:
+      root_cause_candidate: Process recirculation is represented inside BOM
+        containment rather than as a separate process/material-flow concept.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: The integrity rule states that BOMs must be acyclic.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:88-89
+        - cause_id: evolution-candidate-004.cause-002
+          claim: The same rule allows scrap reinsertion by modeling an Assembly as
+            containing itself as a child.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:89
+        - cause_id: evolution-candidate-004.cause-003
+          claim: Using self-containment for process recovery forces future cyclic process
+            cases into BOM exceptions rather than an extensible material-flow
+            model.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:89
+      unresolved_beyond_evidence: No additional domain document was used because
+        session_domain is none; the finding relies only on the target's declared
+        PLM/MES baseline purpose.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The review treats the file header's statement that this is a PLM/MES
+    integration concept baseline as the declared purpose of the artifact.
+  - Session domain is none, so no external manufacturing domain document or web
+    research was used.
+  - The embedded role definition in the prompt packet was used; the external
+    role-definition ref was not available through the bounded filesystem path,
+    but the embedded role text was sufficient.
+validation:
+  unaddressable_candidates: []

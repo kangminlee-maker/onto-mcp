@@ -1,0 +1,75 @@
+schema_version: 1
+session_id: 20260718-8d90017a
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml entities.AlternatePart / relations
+    evidence_anchor: 'materialized-input.md: entities.AlternatePart declares
+      primary_ref, alternate_ref, and direction; relations only declares Part ->
+      Part alternate_of with note "AlternatePart를 통해 표현되는 관계의 단축 표기".'
+    claim: AlternatePart is structurally bypassed by the relation graph.
+    what: The ontology defines AlternatePart as the entity carrying the
+      substitute-part relationship and direction, but the relations section does
+      not connect AlternatePart to Part or expose AlternatePart as the relation
+      carrier. Instead it declares a direct Part-to-Part shortcut relation.
+    why: From a structure lens, this leaves the entity that is supposed to hold the
+      relationship metadata disconnected from the canonical relation graph.
+      Consumers traversing relations for PLM/MES integration can see that Parts
+      are alternates, but cannot structurally reach the AlternatePart record or
+      its direction field through that relation path.
+    how_to_fix: Model AlternatePart explicitly in relations, for example Part ->
+      AlternatePart for primary, AlternatePart -> Part for alternate, and make
+      the Part -> Part shortcut either derived or remove it from the canonical
+      relation list.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as a concept baseline for PLM/MES integration
+        across items, BOM, routing, and change-management concepts.
+      failure_condition: When substitute-part relationships are consumed from the
+        relations section, the AlternatePart entity and its direction metadata
+        are not reachable from the declared alternate_of path.
+      impact: This weakens integration trust because a structurally important
+        relationship object can be skipped, causing directionality and
+        relationship-level metadata to be lost in downstream mappings.
+      evidence_refs:
+        - "materialized-input.md: entities.AlternatePart attributes primary_ref,
+          alternate_ref, direction"
+        - "materialized-input.md: relations Part -> Part alternate_of note says
+          it is a shorthand through AlternatePart"
+    causal_path:
+      root_cause_candidate: The ontology defines AlternatePart as an entity but
+        represents its relation path as a direct Part-to-Part relation instead
+        of connecting the entity in the relation graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: AlternatePart carries primary_ref, alternate_ref, and direction
+            attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: entities.AlternatePart"
+        - cause_id: structure-candidate-001.cause-002
+          claim: The relations list omits AlternatePart and uses Part -> Part alternate_of
+            as a shortcut.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: relations Part -> Part alternate_of"
+        - cause_id: structure-candidate-001.cause-003
+          claim: The declared relation graph cannot structurally traverse from
+            alternate_of to the AlternatePart entity or its direction metadata.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: entities.AlternatePart direction"
+            - "materialized-input.md: relations Part -> Part alternate_of"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The relations section is treated as the canonical traversable relationship
+    graph for this ontology review.
+  - Attribute-level ref declarations are treated as structural evidence, but
+    relation-list omissions matter when the ontology also declares a separate
+    canonical relations section.
+validation:
+  unaddressable_candidates: []

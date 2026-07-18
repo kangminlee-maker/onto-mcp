@@ -1,0 +1,131 @@
+schema_version: 1
+session_id: 20260718-e047c9c7
+planned_issues:
+  - issue_id: issue-001
+    priority: 100
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: 단위·차원·변환 계약 부재가 직접 근원이라는 입장과 권위·유효기간·동기화·충돌 우선순위까지 동일 근원에 포함해야
+      한다는 입장이 대립한다.
+    resolution_question: issue-001의 정준 근본 원인을 Quantity·UnitConversion 의미 계약에 한정할지,
+      값의 권위와 동기화 거버넌스까지 하나의 근원 및 조치 범위로 결합할지 결정해야 하는가?
+  - issue_id: issue-004
+    priority: 95
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - structure
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+    conflict_summary: 정의부터 실행까지의 전체 정체성 사슬 결손을 high로 보는 입장과, 직접 확인된 ECO 탐색 경로 및 구성
+      정체성 결손으로 범위를 좁혀 medium으로 보는 입장이 충돌한다.
+    resolution_question: 버전 기준선·일반 ChangeItem·ProductionOrder를 하나의 high 이슈로 유지할 충분한
+      공통 근거가 있는가, 아니면 직접 입증된 하위 결함으로 범위와 심각도를 낮춰야 하는가?
+  - issue_id: issue-013
+    priority: 90
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - structure
+      - logic
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+      - issue-stance-matrix.yaml#stances.issue-013.structure
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+      - issue-stance-matrix.yaml#stances.issue-013.axiology
+    conflict_summary: 대칭·one_way 의미 모순과 단축 관계의 방향 유실을 결합한 high 이슈라는 입장과, 각 렌즈가 직접
+      확인한 하위 결함만 medium으로 다뤄야 한다는 입장이 대립한다.
+    resolution_question: 두 하위 결함을 하나의 정준 방향성 계약 부재에서 발생한 high 이슈로 결합할 것인가, 아니면 의미
+      모순과 방향 보존 투영 결함을 별도 medium 범위로 분리할 것인가?
+  - issue_id: issue-012
+    priority: 85
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+    conflict_summary: 논리 렌즈는 직접 모순 자체를 medium으로 평가하지만 의미론 렌즈는 제품 구조와 운영 계산을 함께 훼손하는
+      high 이슈로 평가한다.
+    resolution_question: 필연적 비순환 위반과 제품구조 의미 훼손의 결합 영향이 high를 정당화하는가, 아니면 직접 논리 모순의
+      범위에 맞춰 medium으로 분류해야 하는가?
+  - issue_id: issue-003
+    priority: 80
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: issue-003을 독립적인 제품 구성·공정 흐름 범주 혼합 이슈로 유지하는 입장과, 동일 충돌을 더 직접적으로
+      포착한 issue-012의 표면 또는 중복 범위로 보는 입장이 대립한다.
+    resolution_question: issue-003은 issue-012와 구별되는 독립 material issue인가, 아니면
+      issue-012에 병합하거나 그 파생 표면으로 처리해야 하는가?
+  - issue_id: issue-010
+    priority: 75
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+    conflict_summary: 회수 시나리오 확장에 따른 예외 누적을 독립 진화 이슈로 유지하는 입장과, issue-012의 현재 모순에서
+      파생되는 증상으로 보는 입장이 대립한다.
+    resolution_question: issue-010의 확장성 실패가 별도 material issue로 유지될 만큼 독립적인가, 아니면
+      issue-012의 원인·조치 범위에 포함되는 파생 영향인가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 적용 렌즈가 근본 원인, high 심각도 및 리비전·효력 분리 조치를 일관되게 지지한다.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: logic과 semantics의 narrow 입장은 운영 정책에 따른 세부 범위를 유보할 뿐, lifecycle 전이와 승인
+      증거의 필요성이나 medium 심각도와 충돌하지 않는다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 provenance·동기화 계약 부재라는 원인과 medium 심각도를 일관되게 지지한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 독립 버전 객체와 유효구간 부재라는 원인 및 high 심각도에 동의한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 폐쇄형 단위 enum과 품목별 변환 규칙 부재라는 원인 및 medium 심각도에 동의한다.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: logic의 narrow 입장은 비선형 요구가 존재하는 범위라는 명시적 failure condition과 일치하며,
+      원인·조치·심각도에 실질적 이견이 없다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 대칭성과 one_way 기본값의 모순, medium 심각도 및 정준 계약 선택 필요성에 동의한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 계획 객체와 실행 행위의 범주 혼동이라는 원인, 분리 조치 및 high 심각도에 동의한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: structure의 narrow 입장은 명칭보다 원천 값·산식·범위를 보존하지 않는 속성 구조를 강조하며, 다른 렌즈의 근본
+      가설과 실질적으로 양립한다.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 서로 다른 물리 차원을 무단위 단일 속성에 결합한 원인과 medium 심각도에 동의한다.

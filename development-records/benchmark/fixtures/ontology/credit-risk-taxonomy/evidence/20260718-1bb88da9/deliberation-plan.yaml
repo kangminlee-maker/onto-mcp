@@ -1,0 +1,266 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+planned_issues:
+  - issue_id: issue-002
+    priority: 90
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - semantics
+      - coverage
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+    conflict_summary: Most lenses keep high severity for an under-specified
+      utilization contract, while evolution lowers severity to medium and
+      semantics narrows the root toward authoritative meaning for numerator,
+      denominator, as-of, and FX semantics. The disagreement affects whether the
+      issue is primarily a high-severity control authority failure or a narrower
+      calculation/semantic specification gap.
+    resolution_question: Should issue-002 retain high severity and the broad
+      calculation-input authority root, or be narrowed/lowered to the
+      evolution/semantics framing while preserving only the specific numerator,
+      denominator, timing, FX, and limit-source meaning gaps?
+  - issue_id: issue-003
+    priority: 85
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - logic
+      - coverage
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+    conflict_summary: Axiology, coverage, semantics, and structure support the
+      missing default/delinquency boundary relation as material, evolution
+      narrows it to a durable external-status boundary projection, and logic
+      says the projection is insufficient to prove a formal requirement rather
+      than an intentional external boundary.
+    resolution_question: Is the available purpose and scope evidence sufficient to
+      treat exclusion of default/delinquency without a boundary relation as a
+      material issue, and if so should the root be framed as a purpose-critical
+      boundary omission rather than a formal inconsistency?
+  - issue_id: issue-004
+    priority: 80
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - logic
+      - semantics
+      - axiology
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: Coverage, axiology, evolution, and structure support the full
+      audit-evidence root for manual grade overrides, while logic and semantics
+      narrow the root to ambiguous derived-versus-overridden grade state,
+      source-versus-adjusted meaning, and precedence. This changes the necessary
+      remedy from a broad audit concept to a narrower value-resolution and
+      precedence model.
+    resolution_question: Should the deliberated root require a full
+      RiskGradeAdjustment audit concept with actor/time/reason/approval
+      evidence, or should it be narrowed to the semantic and logical distinction
+      between derived and overridden grade values with explicit precedence?
+  - issue_id: issue-007
+    priority: 75
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - logic
+      - axiology
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+    conflict_summary: Coverage and most supporting lenses treat omitted
+      default/delinquency status as a material central credit-risk lifecycle
+      gap, evolution narrows the issue to a system-boundary resilience concern,
+      and logic finds insufficient evidence that the concept must be included
+      rather than externally related. The conflict affects whether this issue is
+      admitted as its own material coverage issue or treated as a narrower
+      boundary concern overlapping issue-003.
+    resolution_question: Does issue-007 have enough evidence and distinct scope to
+      remain a material issue about omitted default/delinquency status, or
+      should it be narrowed or merged into the boundary-relation framing of
+      issue-003?
+  - issue_id: issue-010
+    priority: 70
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+    conflict_summary: Logic supports the Collateral.is_a Exposure defect at medium
+      severity as a type-membership contradiction, while semantics raises
+      severity because the same defect is a foundational type-boundary error for
+      taxonomy trust. The disagreement affects severity and whether the issue
+      should be treated as a medium formal modeling defect or a higher-severity
+      semantic authority failure.
+    resolution_question: Should the collateral subtype issue keep medium severity as
+      a logical inheritance contradiction, or be raised because the
+      misclassification breaks a foundational semantic boundary in the shared
+      taxonomy?
+  - issue_id: issue-011
+    priority: 65
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - coverage
+      - evolution
+      - structure
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+    conflict_summary: Logic and semantics support the entity-versus-attribute
+      comparison defect, while coverage, evolution, and structure narrow the
+      issue toward missing predicate scope, appetite dimensions, and graph
+      relation structure. The conflict affects whether the root is an invalid
+      predicate expression or a broader missing scoped compliance model.
+    resolution_question: Should issue-011 be resolved as a logic defect in the
+      breach predicate's entity-level comparison, or as a broader scoped
+      predicate and relation-structure gap for RiskAppetite compliance?
+  - issue_id: issue-012
+    priority: 60
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+    conflict_summary: Semantics keeps high severity for Collateral.is_a Exposure as
+      a foundational type-boundary error, while logic supports the same root but
+      lowers severity to medium because the formal evidence proves a
+      type-membership contradiction rather than the broader taxonomy trust
+      impact. This mirrors issue-010 but with the semantic issue as the primary
+      raised finding.
+    resolution_question: Should issue-012 retain high severity based on semantic
+      taxonomy trust impact, or be lowered to medium based on the narrower
+      formal contradiction proven by the logic lens?
+  - issue_id: issue-014
+    priority: 55
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - evolution
+      - logic
+      - structure
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+    conflict_summary: Semantics supports the LTV issue as a ratio-shaped field
+      lacking formula, source, currency, and valuation-time semantics, while
+      axiology, evolution, logic, and structure narrow the root to the
+      unresolved choice between derived LTV and an explicitly manual review
+      metric with provenance/as-of semantics. The remedy depends on that
+      distinction.
+    resolution_question: Should LTV be treated as a derived ratio requiring
+      authoritative formula and source-value semantics, or should the issue be
+      narrowed to requiring an explicit manual metric/provenance contract when
+      derivation is not intended?
+  - issue_id: issue-017
+    priority: 50
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-017.structure
+      - issue-stance-matrix.yaml#stances.issue-017.semantics
+      - issue-stance-matrix.yaml#stances.issue-017.axiology
+      - issue-stance-matrix.yaml#stances.issue-017.coverage
+      - issue-stance-matrix.yaml#stances.issue-017.evolution
+      - issue-stance-matrix.yaml#stances.issue-017.logic
+    conflict_summary: Structure and several lenses support the missing
+      RiskRating.grade to Exposure.risk_grade derivation edge as a material
+      lineage issue, while semantics treats it as a surface manifestation of the
+      deeper missing authoritative grade mapping and override semantics captured
+      by related grade-authority issues. The conflict is about whether this
+      remains a standalone structural issue or is folded into a broader
+      grade-mapping cluster.
+    resolution_question: Should issue-017 be deliberated as an independent material
+      structural lineage gap, or should it be merged or scoped under the broader
+      authoritative grade mapping and override semantics issues?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All participating lenses support the rating-scale conversion authority
+      issue, accept the root hypothesis, and keep severity; no material conflict
+      requires deliberation.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: The structure lens narrows the issue to concrete structural absences,
+      but this is compatible with the broader temporal-governance root supported
+      by the other lenses; severity is consistently kept.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All lenses support the cross-system authority issue, accept the root
+      hypothesis, and keep severity; no material conflict is present.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: Logic narrows the lifecycle issue to under-specified inclusion and
+      exclusion predicates, which is a compatible refinement of the broader
+      current-record lifecycle gap; severity remains consistent.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Logic narrows the critique from enum use generally to missing versioned
+      identity for changeable classifications, which is compatible with the
+      proposed governed code-set remedy; severity remains consistent.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: All lenses support the overlapping grade-concepts issue, accept the root
+      hypothesis, and keep severity; no material conflict requires deliberation.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: All lenses support the limit amount semantics issue, accept the root
+      hypothesis, and keep severity; no material conflict requires deliberation.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: Coverage and evolution narrow the structural orphaning issue to scope
+      coverage and change fragility, but those refinements are compatible with
+      the structure, logic, semantics, and axiology support for adding
+      RiskAppetite relations; severity remains consistent.

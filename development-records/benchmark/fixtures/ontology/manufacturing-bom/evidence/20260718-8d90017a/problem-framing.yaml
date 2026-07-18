@@ -1,0 +1,213 @@
+schema_version: 1
+session_id: 20260718-8d90017a
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: scrap_rate가 외부 계획 엑셀의 복사값인데 BomLine의 권위 있는 운영 값처럼 노출되어 원본
+      권한과 동기화 의미가 불명확하다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 여러 렌즈가 복사된 운영 핵심값의 권한·동기화 계약 부재를 지지하며, PLM/MES 통합 기준 문서의 신뢰 경계를
+      약화시키므로 다음 단계 전에 권위와 파생/캐시 성격을 정해야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: ECO 적용 권한 상태와 지연 동기화되는 Part.rev 표시 상태가 분리되지 않아 생산 리비전 판정 기준이 흔들린다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: ECO effective_date 이후 생산은 신규 rev를 따른다는 규칙과 Part.rev의 주간 배치 지연이 동시에
+      제시되어 현재 생산 리비전 해석이 갈라질 수 있으므로 대상 산출물 안에서 정합성을 바로 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: UOM 변환과 작업장 capacity basis의 측정 의미가 명시 개념으로 표준화되지 않아 계산 의미가 지역 관행에 의존한다.
+    issue_role: enabler
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 숙의 결과상 issue-003은 issue-004와 issue-005의 상위 측정-의미 문제로 유지되며, 직접 중복 수정
+      범위라기보다 두 좁은 이슈를 묶는 공유 원인 프레임이다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Part.uom이 닫힌 enum이고 품목별 변환 권한이 없어 신규 단위와 cross-unit 흐름을 온톨로지
+      내부에서 결정적으로 처리할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 닫힌 단위 모델과 변환 마스터 부재가 명시되어 확장성과 결정적 계산을 약화시키므로 다음 통합 단계 전에 단위 권한 개념을 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: WorkCenter.capacity_per_shift가 단위와 basis 없는 숫자로 표현되어 이종 작업장의
+      capacity 값을 같은 속성으로 안정적으로 해석할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: capacity 단위가 작업장별로 달라질 수 있는데 값은 bare number로 모델링되어 스케줄링과 비교 계산의 의미가
+      깨질 수 있다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: ECO 적용 범위가 affected parts와 단일 effective_date로만 모델링되어 plant,
+      lot, serial, routing, BOM-line 등 scoped effectivity를 표현하지 못한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 변경관리 기준 문서 목적에 비해 effectivity 정의역이 부족하다는 데 렌즈들이 수렴했고, scoped cutover는
+      외부 예외 논리 없이 통합 기준에 포함되어야 한다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 공정 재순환을 BOM containment 안의 self-containment로 표현해 BOM 비순환 불변식을 예외 의존적으로 만든다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 스크랩 재투입을 제품 구조 그래프에 넣는 설계가 future rework/recovery 확장성과 BOM traversal
+      안정성을 동시에 약화시키므로 대상 모델에서 그래프 경계를 정리해야 한다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: BOM 비순환 필수 규칙과 스크랩 재투입 self-child 예외가 같은 Assembly-child 관계
+      안에서 valid와 invalid를 동시에 요구한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 동일 데이터가 필수 비순환 검증에서는 거부되고 재투입 규칙에서는 허용 또는 요구되는 직접 충돌이므로 invalid input
+      behavior를 결정할 수 없는 현재 차단 이슈다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: AlternatePart 정의는 항상 대칭 관계를 주장하지만 direction enum은 one_way
+      기본값을 허용해 대체 관계 방향성이 충돌한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 대칭성과 단방향성이 같은 개념에서 서로 다른 modality로 선언되어 substitution rule 소비자가 반대 방향
+      허용 여부를 결정할 수 없다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: scrap_rate가 파생 rate처럼 명명되었지만 외부 계획 스프레드시트에서 독립 복사된 입력으로 모델링되어 권위와 가시성이 섞인다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: issue-001과 같은 scrap_rate 권한 문제의 의미론적 표현으로, BomLine에 노출된 외부 관리값이 권위값처럼
+      소비될 위험을 만든다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: capacity_per_shift가 숫자 속성 하나로 count capacity와 time capacity를
+      섞어 안정적인 단위 의미를 제공하지 못한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: issue-005와 같은 capacity 측정 의미 문제의 의미론적 표현이며, 라우팅과 스케줄링 소비자가 같은 숫자 필드를
+      서로 다른 차원으로 해석할 수 있다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: AlternatePart가 symmetric equivalence와 directed substitution
+      approval을 한 개념에 결합해 정의와 direction 속성의 의미 계약이 충돌한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 숙의 결과 issue-012는 issue-015의 relation traversal 문제와 분리된 개념 정의·속성 의미
+      충돌로 확정되었고, production substitution 기준에 직접 영향을 준다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-013
+    problem_definition: Part.rev와 current_eco가 현재 권위 상태처럼 명명되었지만 실제로는 외부 또는 지연 동기화
+      projection으로 정의되어 생산 기준 리비전 권위가 불분명하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: ECO effectivity와 Part 표시값 사이의 temporal authority가 닫히지 않아 issue-002와
+      같은 변경관리 정합성 위험을 만든다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-014
+    problem_definition: InspectionPlan이 Operation으로 타입 지정되어 검사 사양/계획 객체가 실행 가능한 라우팅 단계 의미를 상속한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 검사 실행 활동과 이를 지배하는 specification의 lifecycle과 소비 방식이 다르므로, 현재 타입 구조는
+      MES routing 소비자에게 잘못된 실행 의미를 줄 수 있다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-015
+    problem_definition: canonical relations가 AlternatePart 엔티티 대신 직접 Part-to-Part
+      alternate_of shortcut을 제공해 direction metadata가 traversal에서 손실될 수 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 숙의상 issue-012와 별개로 보존된 relation-path metadata 문제이며, 관계 객체가 가진
+      direction 권위가 canonical traversal 경로에서 유지되지 않아 통합 매핑 신뢰를 약화시킨다.
+    related_surface_finding_ids:
+      - finding-015

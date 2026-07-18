@@ -1,0 +1,194 @@
+schema_version: 1
+session_id: 20260718-e047c9c7
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: Part/ECO/BOM/Routing revision and effectivity model
+    evidence_anchor: "manufacturing-bom-ontology.yaml:
+      entities.Part.attributes.rev/current_eco; entities.BomLine;
+      entities.Routing; entities.ECO.attributes.effective_date;
+      integrity_rules[2]"
+    claim: 새 리비전이 도입되면 BOM·라우팅의 과거 구성과 전환 시점 연속성을 보존할 수 없다.
+    what: Part에는 현재 리비전을 나타내는 단일 문자열만 있고, BOM 행과 라우팅은 특정 품목 리비전이나 유효기간에 연결되지 않는다.
+      ECO도 변경 후 리비전, 변경 대상 BOM/라우팅 버전, 종료 시점을 표현하지 않는다.
+    why: 동일 품목의 구·신 리비전이 전환 기간에 공존하거나 과거 생산분을 재현해야 할 때 어느 BOM과 라우팅이 적용됐는지 판별할 수 없다.
+      주간 배치로 Part.rev가 늦게 갱신된다는 규칙은 ECO 유효일과 현재 값이 어긋나는 기간까지 명시하므로, 변경이 누적될수록
+      PLM/MES 간 구성 기준이 단절된다.
+    how_to_fix: PartRevision을 별도 엔티티로 두고 ECO가 이전·신규 리비전과 변경 대상을 명시하도록 한다. BOM과
+      Routing도 버전 또는 리비전별 객체로 만들고 valid_from/valid_to 또는 동등한 effectivity 범위를 부여해
+      생산 시점 기준 구성을 결정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 품목·BOM·라우팅·변경관리의 개념 기준을 제공하는 목적
+      failure_condition: 품목 리비전이 변경되거나 구·신 리비전이 동시에 유효한 전환 기간 및 과거 생산 이력을 재현할 때
+      impact: 적용 BOM과 공정 경로를 결정할 기준이 없어 생산 오더가 잘못된 구성으로 생성되거나 과거 제조 이력을 재현할 수 없다.
+      evidence_refs:
+        - entities.Part.attributes.rev
+        - entities.Part.attributes.current_eco
+        - entities.BomLine
+        - entities.Routing
+        - entities.ECO.attributes.effective_date
+        - integrity_rules[2]
+    causal_path:
+      root_cause_candidate: 리비전과 유효성이 독립된 버전 객체 및 시간 범위가 아니라 Part의 현재값과 ECO의 단일 시작일로 축약되어 있다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 리비전 변경 후 특정 시점에 적용된 BOM과 라우팅을 모델에서 선택할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.BomLine
+            - entities.Routing
+            - integrity_rules[2]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: BOM과 Routing이 PartRevision 또는 effectivity 범위를 참조하지 않는 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine.attributes.parent_ref
+            - entities.Routing.attributes.part_ref
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 리비전과 유효성이 Part.rev, Part.current_eco, ECO.effective_date의 현재값 중심 구조로 축약된
+            것이 시작 원인이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Part.attributes.rev
+            - entities.Part.attributes.current_eco
+            - entities.ECO.attributes.effective_date
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: Part.uom and quantity conversion model
+    evidence_anchor: "manufacturing-bom-ontology.yaml: entities.Part.attributes.uom; notes[1]"
+    claim: 새 단위나 외부 시스템 단위 체계를 수용하려면 스키마 수정과 현장 수기 환산이 필요하다.
+    what: 품목 단위가 ea, kg, m의 폐쇄 enum으로 고정되어 있고, 품목별 환산계수나 변환 규칙을 표현하는 개념이 없다.
+    why: L, mm, set, sheet 같은 새 단위를 추가할 때마다 기준 스키마와 소비 시스템을 함께 변경해야 한다. kg↔ea처럼 품목
+      의존적인 변환은 모델 밖에서 수행되므로 PLM 수량과 MES 투입량을 반복 가능하게 변환하거나 검증할 수 없다.
+    how_to_fix: UnitOfMeasure와 품목별 UnitConversion을 독립된 확장 가능 마스터로 모델링한다.
+      BomLine.qty_per와 용량·시간 값은 수치와 단위를 함께 갖는 Quantity 형태로 통일하고, 코드·차원·환산 출처 및
+      유효기간을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 서로 다른 품목·수량 체계를 사용하는 PLM/MES의 공통 개념 기준 제공
+      failure_condition: 현재 enum에 없는 단위 또는 품목별 단위 변환이 필요한 데이터가 통합될 때
+      impact: 스키마와 연계 구현을 반복 수정해야 하며 수기 환산 결과가 재현·검증되지 않아 계획 수량과 현장 투입량이 달라질 수 있다.
+      evidence_refs:
+        - entities.Part.attributes.uom
+        - entities.BomLine.attributes.qty_per
+        - notes[1]
+    causal_path:
+      root_cause_candidate: 단위가 확장 가능한 참조 개념이 아니라 폐쇄 enum으로 선언되고 변환 규칙이 모델에서 제외되어 있다.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 단위 추가는 기존 uom enum 변경을 요구하고 품목별 변환은 모델 내에서 실행할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Part.attributes.uom
+            - notes[1]
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 이는 단위 코드와 변환을 독립 마스터로 다루지 않은 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Part.attributes.uom
+            - notes[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: Routing.operations topology and operation occurrence model
+    evidence_anchor: "manufacturing-bom-ontology.yaml:
+      entities.Routing.attributes.operations; entities.Operation; relations
+      Routing→Operation"
+    claim: 병렬·선택·재작업 공정을 추가하려면 현재 선형 라우팅 구조를 교체해야 한다.
+    what: Routing은 Operation 참조의 단일 ordered_list만 보유한다. 분기 조건, 선후행 관계, 대체 경로, 반복·재작업
+      연결을 표현하는 라우팅 단계 또는 전이 개념이 없다.
+    why: 새 공정 유형을 Operation 하위형으로 추가하는 것은 가능하지만 공정 흐름 자체가 선형이 아닐 경우 기존 operations
+      필드의 의미와 소비 로직을 변경해야 한다. 따라서 MES 확장에서 흔히 필요한 경로 선택이나 재작업을 기존 구조에 호환되게 추가할
+      확장 지점이 없다.
+    how_to_fix: RoutingStep 또는 OperationOccurrence를 도입하고, step이 Operation을 참조하도록 한다.
+      StepTransition에 predecessor/successor, 조건, 경로 유형을 두어 단순 선형 라우팅도 같은 구조의 특수한
+      경우로 유지한다. 라우팅 버전과 유효성은 품목 리비전 모델과 함께 연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES가 실행할 제조 공정 순서를 PLM과 공유하는 확장 가능한 개념 기준 제공
+      failure_condition: 라우팅에 병렬 공정, 조건부 대체 경로, 반복 또는 재작업 흐름이 추가될 때
+      impact: 기존 라우팅 필드와 연계 소비자를 변경하거나 별도 우회 모델을 만들어야 하므로 통합 계약의 연속성이 깨진다.
+      evidence_refs:
+        - entities.Routing.attributes.operations
+        - entities.Operation
+        - relations[3]
+    causal_path:
+      root_cause_candidate: 공정 정의와 라우팅 내 공정 발생을 분리하지 않고 흐름을 단일 ordered_list로 고정했다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 비선형 흐름을 기존 Routing.operations 값으로 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Routing.attributes.operations
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 분기와 반복을 담을 단계·전이 개념이 없는 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Routing
+            - entities.Operation
+            - relations[3]
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 공정 정의 참조의 순서 목록이 라우팅 토폴로지 전체를 겸하도록 모델링된 것이 시작 원인이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Routing.attributes.operations
+            - relations[3]
+      unresolved_beyond_evidence: 실제 대상 공장의 병렬·재작업 요구 빈도는 현재 경계의 자료로 확인할 수 없지만, 구조적 표현 한계 자체는 대상 파일에서 확인된다.
+  - candidate_id: evolution-candidate-004
+    target: BOM cycle rule and recycled-material modeling
+    evidence_anchor: "manufacturing-bom-ontology.yaml: integrity_rules[0]"
+    claim: 재생 원료 흐름을 확장할수록 일반 BOM 순환 검증과 전개 로직에 예외 수정이 누적된다.
+    what: BOM은 비순환이어야 한다고 선언하면서 스크랩 재투입은 Assembly가 자기 자신을 하위에 포함하는 순환으로 표현하도록 한다.
+      의도된 회수 흐름을 일반 구성 관계와 구분하는 타입이나 관계가 없다.
+    why: 새 회수·재투입 시나리오가 생기면 검증기는 허용할 순환과 오류 순환을 별도 규칙으로 추론해야 한다. 같은 BomLine 그래프를
+      사용하는 BOM 전개, 소요량 계산, 원가 누적은 종료 조건과 수율 의미를 추가하지 않으면 무한 순회하거나 중복 계산할 수 있다.
+    how_to_fix: 구성 BOM은 비순환 계약을 유지하고, 스크랩 회수·재투입은 MaterialRecoveryFlow 같은 별도 관계로
+      분리한다. 투입원, 회수 대상, 수율, 적용 공정, 최대 반복 또는 종료 조건을 명시하고 필요한 계산에서만 두 그래프를 결합한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 안정적인 BOM 전개와 제조 운영 규칙을 제공하면서 재생 공정을 확장하는 목적
+      failure_condition: 자기참조 외의 다단계 회수, 여러 조립품 간 재투입 또는 반복 회수 흐름이 추가될 때
+      impact: 정상 회수 흐름과 오류 순환을 구분할 수 없어 검증 및 BOM 전개 소비자를 계속 수정해야 하고, 소요량·원가 계산의 종료와
+        정확성을 보장하기 어렵다.
+      evidence_refs:
+        - integrity_rules[0]
+        - entities.BomLine.attributes.parent_ref
+        - entities.BomLine.attributes.child_ref
+    causal_path:
+      root_cause_candidate: 제품 구성 관계와 공정 부산물 회수 흐름이라는 서로 다른 생명주기·계산 의미를 하나의 BomLine 관계로 합쳤다.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 의도된 순환이 늘어날 때마다 비순환 검증과 BOM 전개에 예외 처리가 필요하다.
+          relation_to_previous: null
+          evidence_refs:
+            - integrity_rules[0]
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 이는 회수 흐름이 일반 parent-child 구성 관계의 자기참조로 표현된 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - integrity_rules[0]
+            - entities.BomLine.attributes.parent_ref
+            - entities.BomLine.attributes.child_ref
+        - cause_id: evolution-candidate-004.cause-003
+          claim: 구성 관계와 자원 회수 관계를 분리하지 않은 것이 시작 원인이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine
+            - integrity_rules[0]
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 생산 시점별 품목·BOM·라우팅 구성을 재현하고 구·신 리비전의 전환을 표현할 수 있어야 한다.
+  - 통합 대상의 단위 집합은 ea, kg, m보다 확장될 수 있고 품목 의존적인 단위 변환이 필요할 수 있다.
+  - 향후 MES 라우팅에는 선형 순서 외에 병렬, 조건부 대체, 반복 또는 재작업 흐름이 추가될 수 있다.
+validation:
+  unaddressable_candidates: []

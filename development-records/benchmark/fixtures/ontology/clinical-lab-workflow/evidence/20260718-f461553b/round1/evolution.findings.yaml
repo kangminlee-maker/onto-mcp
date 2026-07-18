@@ -1,0 +1,333 @@
+schema_version: 1
+session_id: 20260718-f461553b
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml — Test/Assay catalog model
+    evidence_anchor: 'entities.Test; entities.Assay; notes[0]: "현재 신규 항목은 두 곳 모두에 등록한다."'
+    claim: The unresolved dual catalog requires every new laboratory item to be
+      maintained in two independent structures, so catalog growth can break
+      identity continuity.
+    what: Test and Assay have separate identifiers and attributes, but no relation,
+      mapping entity, shared canonical identifier, or effective-version
+      mechanism connects them. The document explicitly requires duplicate
+      registration.
+    why: As new tests, analyzer-specific assays, or revised catalog items are
+      introduced, maintainers must coordinate two records manually. A rename,
+      split, merge, or retirement can therefore produce conflicting identities
+      and make historical Result.test_ref data difficult to relate to the
+      current execution catalog.
+    how_to_fix: Keep Test and Assay as distinct concepts, but add an explicit
+      versioned realization relation such as Assay realizes Test, with
+      cardinality, effective dates, status, and stable identifiers. Define which
+      catalog owns each shared property and replace duplicate registration with
+      one authoritative creation workflow.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        integration and continued catalog evolution.
+      failure_condition: A test or assay is added, renamed, split, merged, retired, or
+        assigned differently across analyzers while the two catalogs are
+        maintained independently.
+      impact: Integrators cannot reliably determine whether Test and Assay records
+        denote the same evolving item, weakening interoperability and historical
+        traceability.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Test
+        - clinical-lab-ontology.yaml entities.Assay
+        - clinical-lab-ontology.yaml notes[0]
+    causal_path:
+      root_cause_candidate: The model leaves the Test–Assay conceptual boundary
+        unresolved and supplies no authoritative, versioned mapping between the
+        two catalogs.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: New items must be registered independently in both Test and Assay.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml notes[0]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Test and Assay use separate codes and overlapping properties without any
+            relation or shared identity.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Test.attributes
+            - clinical-lab-ontology.yaml entities.Assay.attributes
+            - clinical-lab-ontology.yaml relations
+        - cause_id: evolution-candidate-001.cause-003
+          claim: The Test–Assay boundary and mapping authority are not modeled.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Test
+            - clinical-lab-ontology.yaml entities.Assay
+            - clinical-lab-ontology.yaml notes[0]
+      unresolved_beyond_evidence: The bounded artifact does not establish whether an
+        external catalog service currently compensates for this gap.
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml — Result and Report status evolution
+    evidence_anchor: entities.Result.attributes.status;
+      entities.Report.attributes.result_status; state_rules[1]
+    claim: Parallel status vocabularies and delayed synchronization make every
+      status extension a coordinated breaking change across LIS and EMR-facing
+      representations.
+    what: Result uses preliminary/final/corrected, while Report uses
+      prelim/finalized/amended. Their correspondence is encoded only in prose,
+      and corrected results are propagated by a nightly batch.
+    why: Adding a status or changing transition semantics requires modifying two
+      enums, their mapping, the synchronization process, and consumers. During
+      migration or batch delay, the clinician-facing authoritative Report status
+      can lag or fail to represent a new Result state.
+    how_to_fix: Define one canonical, extensible result-publication state model with
+      explicit mappings or projections for system-specific labels. Version the
+      mapping and transitions, specify behavior for unmapped states, and make
+      Report status deterministically derived or event-synchronized with
+      correction provenance.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Stable status semantics across EMR/LIS integration as the
+        workflow evolves.
+      failure_condition: A new result/report state is introduced, an existing state is
+        renamed, or corrected results must be reflected before the nightly
+        synchronization run.
+      impact: The two systems can expose incompatible interpretations of the same
+        result, and the declared clinician-facing authority can become stale
+        during evolution.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Result.attributes.status
+        - clinical-lab-ontology.yaml entities.Report.attributes.result_status
+        - clinical-lab-ontology.yaml state_rules[1]
+    causal_path:
+      root_cause_candidate: The ontology duplicates one publication-state concept as
+        two closed vocabularies without a canonical mapping or synchronous
+        derivation rule.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: A Result correction can coexist with a non-amended Report until the
+            nightly batch runs.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Result and Report encode related status meanings using different closed
+            enum values.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Result.attributes.status
+            - clinical-lab-ontology.yaml entities.Report.attributes.result_status
+        - cause_id: evolution-candidate-002.cause-003
+          claim: No canonical state concept or machine-readable mapping owns the
+            correspondence.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Result.attributes.status
+            - clinical-lab-ontology.yaml entities.Report.attributes.result_status
+            - clinical-lab-ontology.yaml state_rules
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml — specimen classification
+    evidence_anchor: entities.Specimen.attributes.specimen_type;
+      entities.Test.attributes.requires_specimen_type;
+      entities.Assay.attributes.specimen_kind
+    claim: Specimen categories are duplicated as closed enums while Assay uses
+      unconstrained strings, so adding a specimen kind requires structural edits
+      and ad hoc translation.
+    what: The same four categories are repeated in Specimen and Test, but Assay
+      records examples such as WB, Serum, and Urine-random as free text. No
+      shared taxonomy or mapping connects these representations.
+    why: A new or more specific specimen category cannot be introduced once and
+      reused. Existing enums must be changed, consumers must be redeployed, and
+      free-text Assay values must be manually reconciled, creating compatibility
+      gaps as the catalog expands.
+    how_to_fix: Introduce a single versioned SpecimenType concept or controlled code
+      reference used by Specimen, Test requirements, and Assay. Support
+      hierarchy or mappings for broad versus analyzer-specific forms, and
+      preserve deprecated codes through explicit aliases/effective periods.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Extension of the workflow to new specimen categories without
+        breaking EMR/LIS mappings.
+      failure_condition: A new specimen type, subtype, collection form, or
+        analyzer-specific specimen designation is introduced.
+      impact: The change requires edits in multiple existing schema locations and may
+        leave incompatible enum and string representations across systems.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Specimen.attributes.specimen_type
+        - clinical-lab-ontology.yaml
+          entities.Test.attributes.requires_specimen_type
+        - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+    causal_path:
+      root_cause_candidate: Specimen classification has no shared authoritative
+        concept; it is copied into two enums and separately represented as free
+        text.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: A new specimen category must be added to multiple enums and translated to
+            Assay strings.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml
+              entities.Specimen.attributes.specimen_type
+            - clinical-lab-ontology.yaml
+              entities.Test.attributes.requires_specimen_type
+            - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+        - cause_id: evolution-candidate-003.cause-002
+          claim: The three attributes use incompatible representations and no mapping
+            relation is defined.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml
+              entities.Specimen.attributes.specimen_type
+            - clinical-lab-ontology.yaml
+              entities.Test.attributes.requires_specimen_type
+            - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+            - clinical-lab-ontology.yaml relations
+        - cause_id: evolution-candidate-003.cause-003
+          claim: The specimen taxonomy is duplicated rather than modeled as one extensible
+            authority.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Specimen.attributes
+            - clinical-lab-ontology.yaml entities.Test.attributes
+            - clinical-lab-ontology.yaml entities.Assay.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: clinical-lab-ontology.yaml — identifiers and coded values
+    evidence_anchor: entities.Patient.attributes.patient_id/mrn;
+      entities.Test.attributes.test_code; entities.Assay.attributes.assay_code;
+      entities.Department.attributes.dept_code; entities.Result.attributes.unit
+    claim: Identifiers and coded values lack assigning-system and version context,
+      so multi-system integration or code revisions cannot preserve unambiguous
+      continuity.
+    what: Patient, test, assay, department, and unit values are plain strings with
+      no namespace, issuing organization, code system, version, validity period,
+      or replacement relation.
+    why: When another facility or LIS introduces the same local code with a
+      different meaning, or a code/unit definition changes, the ontology cannot
+      distinguish identities or retain the interpretation that applied to
+      historical records. Consumers would need out-of-model conventions or
+      schema changes.
+    how_to_fix: Model reusable Identifier and CodedConcept structures with
+      system/issuer, code, display, version, effective interval, and
+      supersession or equivalence mappings. Apply them consistently while
+      retaining immutable internal identifiers for historical references.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as a durable conceptual authority across
+        EMR/LIS systems and future participating domains.
+      failure_condition: Two integrated systems reuse a local identifier, or a
+        catalog/unit/code meaning changes over time.
+      impact: Current and historical records can no longer be resolved unambiguously,
+        undermining cross-system identity and semantic continuity.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Patient.attributes
+        - clinical-lab-ontology.yaml entities.Test.attributes.test_code
+        - clinical-lab-ontology.yaml entities.Assay.attributes.assay_code
+        - clinical-lab-ontology.yaml entities.Department.attributes.dept_code
+        - clinical-lab-ontology.yaml entities.Result.attributes.unit
+    causal_path:
+      root_cause_candidate: The ontology represents externally governed identities and
+        codes as context-free strings without provenance or temporal versioning.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: The model cannot disambiguate equal local codes from different systems or
+            retain earlier meanings after a revision.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Patient.attributes.patient_id
+            - clinical-lab-ontology.yaml entities.Patient.attributes.mrn
+            - clinical-lab-ontology.yaml entities.Test.attributes.test_code
+            - clinical-lab-ontology.yaml entities.Assay.attributes.assay_code
+            - clinical-lab-ontology.yaml entities.Result.attributes.unit
+        - cause_id: evolution-candidate-004.cause-002
+          claim: The relevant attributes contain only string values and define no issuer,
+            code system, version, or validity metadata.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Patient.attributes
+            - clinical-lab-ontology.yaml entities.Test.attributes
+            - clinical-lab-ontology.yaml entities.Assay.attributes
+            - clinical-lab-ontology.yaml entities.Department.attributes
+            - clinical-lab-ontology.yaml entities.Result.attributes
+        - cause_id: evolution-candidate-004.cause-003
+          claim: Identity and terminology evolution are not represented as first-class
+            concepts.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities
+            - clinical-lab-ontology.yaml relations
+      unresolved_beyond_evidence: The bounded artifact does not show whether external
+        master-data services provide namespaces or version mappings, but this
+        authority document neither references nor constrains such a source.
+  - candidate_id: evolution-candidate-005
+    target: clinical-lab-ontology.yaml — CriticalValue rule lifecycle
+    evidence_anchor: entities.CriticalValue.attributes
+    claim: Critical-value thresholds have no identity, context, or effective
+      version, so rule changes overwrite historical meaning instead of evolving
+      alongside it.
+    what: CriticalValue contains a Test reference, two bounds, and a notification
+      boolean, but no rule identifier, unit linkage, applicability context,
+      effective interval, revision, or supersession relation.
+    why: When a threshold changes, the model cannot retain both the old rule for
+      prior results and the new rule for current evaluation. Adding
+      context-specific thresholds would require changing the entity shape or
+      creating indistinguishable duplicate records.
+    how_to_fix: Give CriticalValue rules stable identities and versions, bind bounds
+      to units and applicable context, add effective-from/effective-to and
+      status fields, and define supersession so historical evaluations retain
+      the rule version used.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Continuous and auditable operation of laboratory alert rules
+        as policies and catalog definitions evolve.
+      failure_condition: A critical threshold changes or different thresholds must
+        coexist by context or effective period.
+      impact: Historical alerts cannot be reconstructed from the authority model, and
+        new rule variants require ambiguous duplication or structural redesign.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.CriticalValue.attributes
+        - clinical-lab-ontology.yaml entities.Result.attributes.unit
+    causal_path:
+      root_cause_candidate: CriticalValue is modeled as mutable current-state bounds
+        rather than a versioned rule concept.
+      root_cause_step_id: evolution-candidate-005.cause-003
+      steps:
+        - cause_id: evolution-candidate-005.cause-001
+          claim: Old and new threshold interpretations cannot coexist or be linked to the
+            results evaluated under them.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.CriticalValue.attributes
+        - cause_id: evolution-candidate-005.cause-002
+          claim: The entity lacks stable rule identity, effective dates, version, unit
+            binding, and supersession metadata.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.CriticalValue.attributes
+            - clinical-lab-ontology.yaml entities.Result.attributes.unit
+        - cause_id: evolution-candidate-005.cause-003
+          claim: Threshold evolution and historical rule provenance are absent from the
+            model.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.CriticalValue
+            - clinical-lab-ontology.yaml relations
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - EMR/LIS integration may involve multiple assigning systems and local catalog
+    namespaces.
+  - The ontology is expected to accommodate future specimen categories, catalog
+    revisions, status additions, and threshold changes while preserving
+    historical interpretation.
+validation:
+  unaddressable_candidates: []
