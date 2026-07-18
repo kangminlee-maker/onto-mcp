@@ -3776,11 +3776,16 @@ export async function runSemanticMapStage(args: {
     observationId: string,
     skipReason: NonNullable<ReconstructSemanticMapCensusObservation["skip_reason"]>,
     skipDetail?: string,
+    // 교차검증 xver-ct F1: skipped CODE rows carry the kind discriminator too — absent = spreadsheet
+    // (artifact-types 규약), so a code-only skip reason on a discriminator-less row would be an
+    // internally contradictory census row. Spreadsheet callers omit it (bytes unchanged).
+    targetMaterialKind?: "code",
   ): void => {
     census.observations_total += 1;
     census.observations_map_absent += 1;
     census.by_observation.push({
       observation_id: observationId,
+      ...(targetMaterialKind ? { target_material_kind: targetMaterialKind } : {}),
       map_present: false,
       skip_reason: skipReason,
       ...(skipDetail ? { skip_detail: skipDetail } : {}),
@@ -3803,11 +3808,11 @@ export async function runSemanticMapStage(args: {
     const { inventory, unsupportedReason } = semanticMapCodeStructural(observation);
     if (unsupportedReason !== undefined) {
       // 리뷰 gf-F5: "v1 limit" (no bundled grammar) stays deterministically distinct from failure.
-      recordSkippedObservation(observation.observation_id, "code_extraction_unsupported", unsupportedReason);
+      recordSkippedObservation(observation.observation_id, "code_extraction_unsupported", unsupportedReason, "code");
       return;
     }
     if (!inventory) {
-      recordSkippedObservation(observation.observation_id, "no_code_inventory");
+      recordSkippedObservation(observation.observation_id, "no_code_inventory", undefined, "code");
       return;
     }
     census.observations_total += 1;

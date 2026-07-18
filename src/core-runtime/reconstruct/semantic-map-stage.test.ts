@@ -2091,7 +2091,9 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
     const rows = new Map(result.census!.by_observation.map((r) => [r.observation_id, r]));
     expect(rows.get("obs-unsupported")?.skip_reason).toBe("code_extraction_unsupported");
     expect(rows.get("obs-unsupported")?.skip_detail).toBe("language not supported: .rb");
+    expect(rows.get("obs-unsupported")?.target_material_kind).toBe("code"); // xver-ct F1: skip rows carry the kind too.
     expect(rows.get("obs-no-inventory")?.skip_reason).toBe("no_code_inventory");
+    expect(rows.get("obs-no-inventory")?.target_material_kind).toBe("code");
     const emptyRow = rows.get("obs-empty-file");
     expect(emptyRow?.skip_reason).toBeNull();
     expect(emptyRow?.fingerprint).not.toBeNull(); // evaluated (deterministic empty), not skipped-before-fingerprint.
