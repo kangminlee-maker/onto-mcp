@@ -135,7 +135,7 @@
     "verify_calls_total": 11,
     "verify_model_identity": "golden-verify-model"
   },
-  "gate_logic_sha256_informational": "bf9299308934c9c3d238c6c1780f8e09e970cbbd303d8f84b0ed07ea6fd3ae9f",
+  "gate_logic_sha256_informational": "76cd6159d50200b6a961316d1a63adb5885dc04a580df4886def18b625cdd97a",
   "ground": {
     "obs-golden-capped/Ledger#0": {
       "frontier_modes": {
