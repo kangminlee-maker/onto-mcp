@@ -63,7 +63,7 @@ Phase 1(코드) 완료 = 아래 게이트 전부 통과. 각 게이트는 **비�
   추가로 답할 수 있어야 한다 — 블라인드 평정(owner 또는 독립 judge, 어느 쪽인지 기록).
   코드에는 flat leaf-reader 경로가 없어(leaf-reader.ts는 spreadsheet 전용 import) 재귀 맵이
   코드 이해의 전부이므로, 이 게이트 없이는 "outline 재발명"이 전 게이트 green으로 통과한다.
-  **실패 시 DD6 fallback 트리거 발동** (봉투 확장 후 재시도, §DD6).
+  **실패 시 재설계 스톱** (O-5로 봉투 보강이 v1에 선행 반영되어 fallback은 소진됨, §DD6).
 - **G-OFF (default-off 증명)**: code 관찰이 존재해도 (i) settings 옵트인 부재 또는 (ii) author
   kind 광고 부재면 code 경로 0 호출 + 정직한 skip census, spreadsheet 산출물 바이트 동일.
 
@@ -233,6 +233,8 @@ interface CodeSemanticSynthesisInput {
   signal_clusters: string[];                   // kind 토큰 집합 (sorted)
   symbol_seams: { line: number; prev_kind: string; new_kind: string }[];
   symbol_names: string[];                      // 이 노드가 덮는 선언 식별자 (bounded, sorted)
+  doc_comment_first_line: string | null;       // 저자 서술 목적 1줄 (유계 chars; O-5 보강)
+  signature_line: string | null;               // 선언(또는 문장) 첫 줄 (유계 chars; O-5 보강)
   child_summaries: { key: string; summary: string }[];
 }
 ```
@@ -242,11 +244,17 @@ interface CodeSemanticSynthesisInput {
   `character_*`는 "경계 전/후 내용의 의미적 성격"이라는 아티팩트-중립 개념이라 유지).
   verify 입력·seed boundary도 동형(`CodeSemanticBoundaryVerifyInput`, `line` 기반).
   disposition 어휘(`structural_location_only | adversarial_confirmed`)는 그대로 재사용.
-- **source-safety 규칙 (spreadsheet 규율의 코드 번역)**: 식별자(심볼 이름·경로)는 leaf-reader의
-  "header label = 컬럼 IDENTITY" 선례에 따라 허용; **선언 본문 라인은 v1 봉투에 넣지 않는다**.
-  **fallback 트리거 (리뷰 gf-F1 — 명시화)**: G-SEM 실패 시 봉투에 (i) doc-comment 첫 줄,
-  (ii) 선언 signature 한 줄(bounded chars)을 추가 승인하고 G-SEM을 재실행한다. 이 확장은
-  "공유 파일-소스 prefix + cache_control"(§5.3 캐싱 재개 조건)과 별개의 유계 확장이다.
+- **source-safety 규칙 (spreadsheet 규율의 코드 번역) + O-5 보강 결정 (owner 2026-07-18)**:
+  식별자(심볼 이름·경로)·doc-comment 첫 줄·signature 첫 줄은 저작 identity-급 정보로 허용
+  (leaf-reader "header label = 컬럼 IDENTITY" 선례의 확장); **선언 본문은 봉투에 넣지 않는다**.
+  초안의 "이름-only v1 + G-SEM 실패 시 fallback" 시퀀스는 **프로브 증거로 기각·선행 반영**:
+  (C1) G-SEM 대조군(flat outline)이 이름을 이미 전부 가져 이름-only는 게이트 구조상 통과
+  확률이 낮고, (C2) 프로브 8형상 중 3형상(재수출·실행문 스크립트·거대 타입)에서 이름-only
+  카드 정보량 ≈ 0 (보강 시 8/8 — 재수출·실행문은 그 줄 자체가 signature로 실림), (C3) 지금
+  추가 = 추출기 유계 필드 2개 vs 나중 추가 = live 재실행+봉투/프롬프트/골든 재작업.
+  ⇒ **v1 기본 봉투 = 이름 + doc-comment 첫 줄 + signature 첫 줄 (각 유계 chars)**.
+  G-SEM은 불변이며, 실패 시 추가 봉투 확장 없이 **재설계 스톱**이다 (fallback은 소진됨).
+  이 확장은 "공유 파일-소스 prefix + cache_control"(§5.3 캐싱 재개 조건)과 별개의 유계 확장.
 - **프롬프트 등록 (리뷰 ct-F2 — 초안의 "fingerprint 불변" 주장 정정)**:
   `CODE_SEMANTIC_MAP_SYNTHESIZE/VERIFY_SYSTEM_PROMPT` 2종은 기존 CG-1 카탈로그
   (`RECONSTRUCT_AUTHORING_PROMPT_CONTRACT`, run.ts:10451)에 넣지 **않는다** —
@@ -351,8 +359,8 @@ spreadsheet 전용 필터). node_ref를 느슨한 union으로 넓히면 code pro
   등록 필요) — Phase 2 설계에서 다룬다.
 - **5.3 prompt caching(#8)**: v1 code 봉투에 대형 공유 prefix 없음(DD6) ⇒ **계속 접음**.
   재개 조건 = "본문/파일-소스 공유 블록을 봉투에 넣는 결정"과 동시 — 그때 sealed:417
-  anthropic arm의 그 블록에 `cache_control`을 부여한다. (DD6의 G-SEM fallback — doc-comment
-  첫 줄·signature 한 줄 — 은 per-node 소량이라 캐싱 재개 조건이 아니다.)
+  anthropic arm의 그 블록에 `cache_control`을 부여한다. (O-5 보강 필드 — doc-comment
+  첫 줄·signature 첫 줄 — 은 per-node 소량이라 캐싱 재개 조건이 아니다.)
 - **5.4 멀티파일 스케일 (리뷰 gf-F4 — 초안의 침묵 누락 정정)**: SSOT §7의 "동시성/토큰
   예산(max_concurrent_lenses·output-budget) 상호작용" 검토는 **1b로 명시 이월**한다 — §4의
   set-tier preflight 캡 + live 2-파일 수용 기준이 그 이월분이며, O-3는 시점 결정이 아니라
@@ -381,8 +389,8 @@ spreadsheet 전용 필터). node_ref를 느슨한 union으로 넓히면 code pro
 4. **E2E (mock)**: 2-파일 code fixture로 reconstruct 전 구간 (INV-MOCK-1 boundary 내
    mock author) — seed projection에 code 노드 > 0 단언 + DD9 렌더러 출력 스냅샷.
 5. **E2E (live, owner-spend)**: N=1 — 소형 실파일 1개, live author로 1a 경로, **수용 기준 =
-   G-SEM**(대조군 blind 평정). **owner 결정 항목 O-2** (§7). 실패 시 DD6 fallback 트리거 →
-   재실행; 재실패 시 재설계 스톱. G-OFF에 의해 제품 경로는 어느 경우에도 무손상.
+   G-SEM**(대조군 blind 평정). **owner 결정 항목 O-2** (§7). 실패 시 재설계 스톱(O-5로
+   봉투 보강 소진). G-OFF에 의해 제품 경로는 어느 경우에도 무손상.
 
 ## 7. 구현 순서 (커밋 단위) · owner 결정 항목
 
@@ -411,6 +419,9 @@ spreadsheet 전용 필터). node_ref를 느슨한 union으로 넓히면 code pro
 - **O-4 결정 (원안 개정)**: "코드가 typescript만 있는 것은 아니다 — python 등 대응 필요"
   → TypeScript compiler API 단일 파서안 폐기, **tree-sitter WASM + 언어별 문법 플러그**
   채택 (DD4·DD5). v1 문법 = TS/JS + Python; `typescript` 패키지 승격 문제는 소멸.
+- **O-5 결정 (2026-07-18, step 2 게이트 이행)**: 프로브 envelope dump 검토 완료 →
+  **봉투 보강 선행 확정** (v1 기본 = 이름 + doc-comment 첫 줄 + signature 첫 줄, 근거
+  C1~C3은 §DD6). §7 step 2→3 게이트("envelope dump owner 확인") **충족** — step 3 진행 승인.
 
 ## 8. 리스크 / 열린 문제
 
