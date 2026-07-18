@@ -9,8 +9,8 @@ import { Parser, Language, type Node as SyntaxNode } from "web-tree-sitter";
 // (multi-artifact design 20260718 §3 DD4/DD5; the code analog of spreadsheet-structure-observer).
 // LLM-free. Parses via tree-sitter WASM (owner decision O-4: multi-language by grammar plug —
 // v1 grammars TS/JS + Python) and emits a LINE-OWNERSHIP partition: every line of the file belongs
-// to exactly ONE leaf span (leading comments/blank lines attach to the FOLLOWING declaration;
-// same-line siblings coalesce into one leaf), so the spans are strictly non-overlapping and
+// to exactly ONE leaf span (a standalone comment is its own comment_block leaf and blank lines
+// attach to the FOLLOWING item; same-line siblings coalesce), so the spans are strictly non-overlapping and
 // gapless — the shape the reduce monoid's contiguity law requires (리뷰 inv-F2 정정 규칙).
 // Depth is fixed at 2 (file → top-level declaration → container member); a container declaration
 // contributes decl_header / decl_footer leaves only when they own ≥1 line no member owns
@@ -377,26 +377,37 @@ export async function observeCodeStructure(args: {
     return { status: "unsupported", reason: `language not supported: ${ext || "(no extension)"}` };
   }
   const { language: grammar, wasmSha256 } = await loadLanguage(language);
+  // Parser/Tree wrap WASM-heap objects freed only by explicit .delete() (web-tree-sitter.d.ts) —
+  // without teardown every observed file leaks a parser + full syntax tree for the run's lifetime,
+  // an OOM path over a large code target (교차검증 xver-impl F1).
   const parser = new Parser();
-  parser.setLanguage(grammar);
-  const tree = parser.parse(args.text);
-  if (!tree) {
-    return { status: "unsupported", reason: `parse failed: ${ext}` };
+  try {
+    parser.setLanguage(grammar);
+    const tree = parser.parse(args.text);
+    if (!tree) {
+      return { status: "unsupported", reason: `parse failed: ${ext}` };
+    }
+    try {
+      const lineCount = args.text.length === 0 ? 0 : args.text.split(/\r?\n/).length;
+      const { spans, hierarchy, rootKey } = extractTree(language, tree.rootNode, lineCount);
+      return {
+        status: "ok",
+        inventory: {
+          schema_version: CODE_STRUCTURE_SCHEMA_VERSION,
+          language,
+          line_count: lineCount,
+          content_sha256: createHash("sha256").update(args.text).digest("hex"),
+          extractor_logic_sha256: createHash("sha256")
+            .update(extractorSourceDigest())
+            .update(`|grammar:${language}:${wasmSha256}`)
+            .digest("hex"),
+          symbol_tiles: { spans, hierarchy, root_key: rootKey },
+        },
+      };
+    } finally {
+      tree.delete();
+    }
+  } finally {
+    parser.delete();
   }
-  const lineCount = args.text.length === 0 ? 0 : args.text.split(/\r?\n/).length;
-  const { spans, hierarchy, rootKey } = extractTree(language, tree.rootNode, lineCount);
-  return {
-    status: "ok",
-    inventory: {
-      schema_version: CODE_STRUCTURE_SCHEMA_VERSION,
-      language,
-      line_count: lineCount,
-      content_sha256: createHash("sha256").update(args.text).digest("hex"),
-      extractor_logic_sha256: createHash("sha256")
-        .update(extractorSourceDigest())
-        .update(`|grammar:${language}:${wasmSha256}`)
-        .digest("hex"),
-      symbol_tiles: { spans, hierarchy, root_key: rootKey },
-    },
-  };
 }
