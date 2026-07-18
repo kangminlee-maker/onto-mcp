@@ -325,3 +325,79 @@ export function foldLeavesWithTraceCore<N, R, W>(
   if (!root) throw new Error(`${adapter.moduleTag}: empty tree (unreachable)`);
   return { root, trace: { nodes, root_key: adapter.nodeKey(adapter.region(root)) }, nodesByKey };
 }
+
+// ── explicit-hierarchy fold (design 20260718 DD5 — the AST/span-tree analog of the fan-in fold) ──
+//
+// The fan-in fold synthesizes tree shape from a window size; artifacts with an AUTHORED hierarchy
+// (code AST, directory trees) supply the shape explicitly instead. The monoid law is enforced per
+// merge exactly as in foldLeavesCore, so the root ground is grouping-invariant between the two
+// folds (proven live by the N=1 probe P3 8/8). A node with more children than `fanin` is folded
+// through canonical-order fan-in chunks (synthetic intermediate merges keep fan-out bounded; the
+// trace stays a tree). A single-child node is a pass-through (identity — no new trace node).
+
+export interface HierarchyFoldNode<N> {
+  /** Present ⇔ this is a leaf. */
+  leaf?: N;
+  children?: HierarchyFoldNode<N>[];
+}
+
+export function foldHierarchyWithTraceCore<N, R, W>(
+  adapter: ReduceCoordAdapter<N, R, W>,
+  root: HierarchyFoldNode<N>,
+  fanin: number,
+): { root: N; trace: ReduceTraceCore<R>; nodesByKey: Map<string, N> } {
+  if (!Number.isSafeInteger(fanin) || fanin < 2) {
+    throw new Error(`${adapter.moduleTag}: hierarchy fold fanin must be a safe integer ≥ 2, got ${fanin} (fail-closed)`);
+  }
+  const nodes = new Map<string, ReduceTraceNodeCore<R>>();
+  const nodesByKey = new Map<string, N>();
+  const register = (node: N, childKeys: string[]): string => {
+    const r = adapter.region(node);
+    const key = adapter.nodeKey(r);
+    if (nodes.has(key)) {
+      throw new Error(
+        `${adapter.moduleTag}: trace key collision at ${key} — two distinct nodes share a node key (fail-closed; a silent last-wins overwrite would drop a real node from the trace)`,
+      );
+    }
+    nodes.set(key, { node_ref: adapter.cloneRegion(r), ground_hash: adapter.groundHash(node), child_keys: childKeys });
+    nodesByKey.set(key, node);
+    return key;
+  };
+  const mergeChunked = (children: { node: N; key: string }[]): { node: N; key: string } => {
+    let level = [...children].sort(
+      (a, b) => adapter.spanStart(adapter.region(a.node)) - adapter.spanStart(adapter.region(b.node)),
+    );
+    while (level.length > 1) {
+      const next: typeof level = [];
+      for (let i = 0; i < level.length; i += fanin) {
+        const group = level.slice(i, i + fanin);
+        const single = group[0];
+        if (group.length === 1 && single) {
+          next.push(single); // pass-through — already registered.
+          continue;
+        }
+        const parent = mergeNodesCore(adapter, group.map((g) => g.node));
+        const key = register(parent, group.map((g) => g.key));
+        next.push({ node: parent, key });
+      }
+      level = next;
+    }
+    const top = level[0];
+    if (!top) throw new Error(`${adapter.moduleTag}: empty hierarchy level (unreachable)`);
+    return top;
+  };
+  const build = (h: HierarchyFoldNode<N>): { node: N; key: string } => {
+    if (h.leaf !== undefined) {
+      return { node: h.leaf, key: register(h.leaf, []) };
+    }
+    const children = (h.children ?? []).map(build);
+    const single = children[0];
+    if (children.length === 1 && single) return single; // pass-through (identity).
+    if (children.length === 0) {
+      throw new Error(`${adapter.moduleTag}: hierarchy node with no leaf and no children (malformed span-tree)`);
+    }
+    return mergeChunked(children);
+  };
+  const rootRef = build(root);
+  return { root: rootRef.node, trace: { nodes, root_key: rootRef.key }, nodesByKey };
+}
