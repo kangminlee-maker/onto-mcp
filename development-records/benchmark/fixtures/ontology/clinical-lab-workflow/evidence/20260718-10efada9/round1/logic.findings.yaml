@@ -1,0 +1,53 @@
+schema_version: 1
+session_id: 20260718-10efada9
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml의 Order 완료 상태 규칙
+    evidence_anchor: materialized-input.md:23, 69-72, 121-124
+    claim: Result 정정이 허용된 상태에서 Order.completed가 가역적인 Result.status에만 의존해, 완료 후 완료
+      조건이 깨지는 상태 경로를 허용한다.
+    what: 모든 Result가 final이면 Order가 completed로 전이하지만, 이후 Result가 corrected로 바뀔 수 있다.
+      이때 Order를 재개하거나 완료 의미를 유지하는 별도 규칙이 없다.
+    why: 허용된 경로 `모든 결과 final → Order completed → 결과 corrected`를 따르면 완료 판정의 근거가
+      사라지는데도 Order는 completed에 남는다. EMR과 LIS가 Order 완료 여부를 서로 다르게 해석할 수 있어 개념 권위
+      문서의 상태 계약이 약화된다.
+    how_to_fix: 완료 의미를 명시하고 한 가지 규칙으로 닫는다. 예를 들어 corrected도 완료된 결과로 간주하도록 완료 조건을
+      정의하거나, 완료 후 정정 시 Order를 in_progress로 재개한 뒤 재완료하도록 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 주문·결과 상태의 개념 권위 문서로 사용되는 목적
+      failure_condition: 모든 Result가 final인 상태에서 Order가 completed로 전이한 뒤 하나 이상의 Result가
+        corrected로 변경되는 경우
+      impact: 동일한 사건 이력에 대해 Order가 완료 상태인지 재처리 상태인지 결정할 수 없어 시스템 간 상태 동기화와 후속 처리의 신뢰성이
+        낮아진다.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:69-72
+        - materialized-input.md:122-123
+    causal_path:
+      root_cause_candidate: 종결 상태인 Order.completed의 판정 조건이 변경 가능한 Result.status에 의존하면서
+        정정 후 Order 상태를 조정하는 규칙이 정의되지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 허용된 사건 순서에서 Order.completed와 corrected Result가 동시에 남을 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:122-123
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이는 완료 전이가 Result.status=final에 의존하지만 corrected 전이에 대응하는 Order 재평가 규칙이 없기
+            때문이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:69-72
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: completed가 과거의 처리 완료만 뜻하는지, 현재 결과 집합의 확정 완료를 뜻하는지는 문서에 명시되지 않았다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Order.completed는 단순 이력 표식이 아니라 통합 시스템이 현재 주문의 종결 여부를 판단하는 상태로 사용된다고 보았다.
+validation:
+  unaddressable_candidates: []

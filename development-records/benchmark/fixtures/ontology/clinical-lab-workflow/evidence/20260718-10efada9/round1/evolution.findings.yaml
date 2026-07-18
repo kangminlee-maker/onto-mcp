@@ -1,0 +1,231 @@
+schema_version: 1
+session_id: 20260718-10efada9
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml — specimen classification across Specimen,
+      Test, and Assay
+    evidence_anchor: materialized-input.md:37-60 — Specimen.specimen_type and
+      Test.requires_specimen_type repeat the same closed enum, while
+      Assay.specimen_kind uses unconstrained strings such as WB and Serum.
+    claim: Adding or renaming a specimen category requires coordinated schema edits
+      and ad hoc string mapping across three representations.
+    what: The same specimen concept is represented by two duplicated enums and one
+      incompatible free-text field.
+    why: A new category cannot be added once at a canonical authority. Existing enum
+      definitions must both change, while Assay values require separately
+      maintained mappings; renamed or subdivided categories can consequently
+      break historical and cross-system continuity.
+    how_to_fix: Introduce one canonical, extensible SpecimenType concept with stable
+      identifiers, aliases, effective-version metadata, and mappings to
+      external/local codes; make all three attributes reference it.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Serving as the conceptual authority for EMR/LIS integration
+        while accommodating new laboratory categories.
+      failure_condition: A new specimen category, synonym, or revised classification
+        must be exchanged between ordering, collection, and analyzer catalogs.
+      impact: Consumers must coordinate edits and mappings outside the authority
+        document, weakening interoperability and making old and new records
+        difficult to interpret consistently.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:37-60
+    causal_path:
+      root_cause_candidate: Specimen classification lacks a single referenced,
+        versionable authority concept.
+      root_cause_step_id: evolution-candidate-001.cause-002
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: A specimen-category change must be applied to multiple closed enums and
+            reconciled with free-text Assay values.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:42
+            - materialized-input.md:52
+            - materialized-input.md:60
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Those fields independently encode the same evolving classification
+            instead of referencing one canonical concept.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-60
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml — Test and Assay catalog model
+    evidence_anchor: materialized-input.md:46-60,108-119,126-127 — Test and Assay
+      are separate entities without a relation, and every new item must
+      currently be registered in both.
+    claim: Catalog expansion requires duplicate creation without a defined
+      Test-to-Assay mapping, so additions cannot be made atomically or traced
+      reliably.
+    what: The ordering catalog and execution catalog are parallel structures, but
+      the ontology defines neither their relationship nor lifecycle/version
+      alignment.
+    why: Every new or revised laboratory item must be entered twice. Because no
+      relation states whether the mapping is one-to-one, one-to-many, or
+      version-dependent, future panels, reflex tests, analyzer substitutions,
+      and catalog revisions require out-of-model conventions and can diverge.
+    how_to_fix: Keep Test and Assay as distinct concepts, but add an explicit
+      versioned realization/mapping entity or relation with cardinality,
+      effective dates, status, and stable identifiers; replace the
+      dual-registration note with that authoritative workflow.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Providing the conceptual authority for ordering-to-execution
+        integration between EMR and LIS.
+      failure_condition: A test is introduced, revised, split across assays, or moved
+        to another analyzer implementation.
+      impact: The authoritative model cannot determine which executable assay realizes
+        an ordered test, forcing duplicated external conventions and risking
+        inconsistent catalogs across systems.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:127
+    causal_path:
+      root_cause_candidate: The ontology models Test and Assay as parallel catalogs
+        but omits an authoritative realization mapping and its lifecycle.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: New catalog items must be registered independently in both Test and
+            Assay, with no modeled link between them.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+            - materialized-input.md:127
+        - cause_id: evolution-candidate-002.cause-002
+          claim: The two catalog concepts have separate identifiers and attributes but no
+            relation, cardinality, or effective-version semantics.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+      unresolved_beyond_evidence: The intended Test-to-Assay cardinality is not stated
+        within the bounded artifact.
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml — identifiers and ontology versioning
+    evidence_anchor: materialized-input.md:10-11,46-60,86-98 — only a global
+      ontology version is declared; test_code, assay_code, dept_code, and staff
+      role values have no namespace, code-system version, validity interval,
+      alias, or replacement semantics.
+    claim: External or local code-set revisions cannot preserve historical identity
+      or support side-by-side versions.
+    what: Integration-facing identifiers and classifications are plain strings or
+      closed enums governed only by the ontology's single global version.
+    why: When a source system changes a code, merges concepts, or introduces a new
+      code-system release, the model cannot distinguish identical strings from
+      different namespaces, record which version applied, or relate deprecated
+      codes to successors. Updating the ontology in place can therefore change
+      the interpretation of historical records.
+    how_to_fix: Define a reusable versioned Coding/Concept reference with system
+      namespace, code, display, version, validity interval, status, and
+      replaced-by/alias relations; use it for catalog, department, role, and
+      other integration-facing classifications while retaining immutable
+      historical references.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Acting as a durable conceptual authority across EMR/LIS code
+        and version changes.
+      failure_condition: An external or local catalog releases a new version, reuses a
+        code, deprecates a value, or requires concurrent old and new mappings.
+      impact: Historical records and integration rules lose stable interpretation, so
+        migrations or external mapping tables become the de facto authority.
+      evidence_refs:
+        - materialized-input.md:6-11
+        - materialized-input.md:46-60
+        - materialized-input.md:86-98
+    causal_path:
+      root_cause_candidate: The model lacks versioned, namespaced concept identity and
+        temporal replacement semantics.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: A code-set revision can only overwrite or reinterpret plain string and
+            enum values under a new global ontology version.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:10-11
+            - materialized-input.md:49
+            - materialized-input.md:57
+            - materialized-input.md:89
+            - materialized-input.md:97
+        - cause_id: evolution-candidate-003.cause-002
+          claim: Integration-facing codes carry no code-system namespace, individual
+            version, validity period, alias, or successor relation.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:86-98
+      unresolved_beyond_evidence: The particular external terminology systems to be
+        supported are not specified, but the missing continuity mechanism is
+        visible regardless of which systems are chosen.
+  - candidate_id: evolution-candidate-004
+    target: clinical-lab-ontology.yaml — Result and Report status evolution
+    evidence_anchor: materialized-input.md:62-84,121-123 — Result.status and
+      Report.result_status encode corresponding states with different
+      vocabularies and are synchronized by a nightly batch.
+    claim: Adding or revising a result state requires coupled enum, transition, and
+      batch-mapping changes, while mixed-version consumers can observe
+      incompatible states.
+    what: One evolving status concept is duplicated as two closed enums with
+      different labels and delayed synchronization.
+    why: A new state such as cancellation, withdrawal, or partial correction cannot
+      be introduced once. Both vocabularies and every mapping rule must change
+      together; during rollout or the stated nightly delay, EMR and LIS
+      consumers can disagree about the authoritative state.
+    how_to_fix: Separate result lifecycle from report publication lifecycle, define
+      each as a canonical versioned state machine, and express explicit
+      transition/mapping events with compatibility rules; derive projections
+      instead of duplicating one status as stored authority in both entities.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Maintaining stable, evolvable state semantics for EMR/LIS integration.
+      failure_condition: A status vocabulary or transition is added, renamed,
+        deprecated, or deployed asynchronously across systems.
+      impact: Multiple coordinated modifications and delayed synchronization can make
+        the authority document ambiguous and expose inconsistent clinical states
+        during migration.
+      evidence_refs:
+        - materialized-input.md:62-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: Status authority is duplicated across incompatible closed
+        vocabularies and reconciled operationally rather than modeled through
+        canonical lifecycle semantics.
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: A status change requires edits to both enums and their synchronization
+            rule, with inconsistency possible until the nightly batch runs.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:123
+        - cause_id: evolution-candidate-004.cause-002
+          claim: Result and Report store corresponding status information using different
+            labels while both are treated as authoritative inputs to workflow
+            behavior.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: The bounded artifact does not specify deployment
+        compatibility or migration behavior for enum changes.
+domain_constraints_used: []
+domain_context_assumptions:
+  - EMR/LIS integrations must accommodate additions and revisions to local or
+    external catalogs without changing the meaning of historical records.
+  - Ordering concepts and analyzer execution concepts may evolve independently
+    and can require non-one-to-one mappings.
+  - Status vocabularies may be deployed asynchronously across integrated systems.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,239 @@
+schema_version: 1
+session_id: 20260718-8de943b3
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: clinical-lab-ontology.yaml — Test 및 Assay 엔티티
+    evidence_anchor: entities.Test.definition, entities.Assay.definition, notes[0]
+    claim: Test와 Assay의 의미 경계가 결정되지 않은 채 별도 권위 개념처럼 사용된다.
+    what: Test는 주문 가능한 카탈로그 단위, Assay는 분석기 수행 단위로 설명되지만 둘의 대응 관계와 식별 기준이 없다. 동시에 신규
+      항목을 두 곳 모두 등록하도록 요구한다.
+    why: 동일 항목의 동의어인지, 주문 항목과 수행 항목이라는 서로 다른 계층인지 판정할 수 없다. 이 상태에서는 EMR의 Test와 LIS의
+      Assay를 일관되게 매핑하거나 결과의 대상 개념을 결정할 수 없다.
+    how_to_fix: Test를 주문 가능 항목, Assay를 수행 가능한 분석법으로 구분할지 먼저 결정하고 정의·식별자·카디널리티가 있는
+      명시적 매핑을 추가한다. 실제 동의어라면 하나를 권위 개념으로 정하고 다른 이름은 별칭으로 관리한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 주문 카탈로그와 LIS 수행 카탈로그의 의미를 일관되게 매핑하는 목적
+      failure_condition: 동일한 신규 항목이 의미 구분이나 대응 관계 없이 Test와 Assay 양쪽에 독립 등록될 때
+      impact: 시스템마다 서로 다른 개념 또는 식별자를 결과와 주문에 연결할 수 있어 통합 매핑의 신뢰성이 크게 약화된다.
+      evidence_refs:
+        - entities.Test.definition
+        - entities.Assay.definition
+        - notes[0]
+    causal_path:
+      root_cause_candidate: Test와 Assay의 동의어성 또는 계층 구분에 관한 개념 결정이 유보된 상태에서 이중 등록을 운영 규칙으로 채택했다.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: Test와 Assay가 서로 겹치는 검사 항목 정의를 가지지만 관계가 선언되지 않았다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Test.definition
+            - entities.Assay.definition
+            - relations
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 신규 항목을 두 엔티티에 모두 등록하도록 요구해 불확정된 의미 경계를 데이터에 복제한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[0]
+      unresolved_beyond_evidence: 실제 기관 카탈로그에서 두 개념이 일대일, 일대다 또는 부분 중첩인지 여부는 현재 경계 내 자료로 확정할 수 없다.
+  - candidate_id: semantics-candidate-002
+    target: clinical-lab-ontology.yaml — Result.status와 Report.result_status
+    evidence_anchor: entities.Result.attributes.status,
+      entities.Report.attributes.result_status, state_rules[1]
+    claim: 서로 다른 범위의 상태를 '동일 정보'로 취급하면서 값 체계와 권위를 이중화했다.
+    what: Result는 preliminary/final/corrected를, Report는 prelim/finalized/amended를
+      사용한다. Result 쪽은 같은 정보를 Report에도 유지한다고 하고, Report 쪽은 임상의가 신뢰하는 권위 값이라고
+      선언하며, corrected에서 amended로의 반영은 야간 배치로 지연된다.
+    why: corrected는 개별 결과의 정정 상태이고 amended는 보고서의 개정 상태이므로 단순 동의어가 아니다. 두 상태를 동일 정보로
+      취급하면 개별 결과 상태와 보고서 출판 상태가 혼동되고, 배치 전에는 두 권위 값이 의도적으로 모순된다.
+    how_to_fix: Result의 검증·정정 상태와 Report의 발행·개정 상태를 별도 개념으로 정의한다. 둘 사이의 상태 투영 규칙과 전이
+      사건을 명시하고 각 개념마다 단일 권위 원천을 지정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR이 임상의에게 전달할 결과 및 보고 상태를 LIS와 의미적으로 일관되게 해석하는 목적
+      failure_condition: Result가 corrected로 바뀐 뒤 야간 동기화 전이거나 여러 Result가 서로 다른 상태인 보고서를 교환할 때
+      impact: 정정된 결과가 포함된 보고서를 최종본으로 오인하거나 서로 다른 상태 코드를 동의어로 잘못 매핑할 수 있다.
+      evidence_refs:
+        - entities.Result.attributes.status
+        - entities.Report.attributes.result_status
+        - state_rules[1]
+    causal_path:
+      root_cause_candidate: 개별 Result의 상태와 집합 문서인 Report의 상태를 독립 개념으로 분리하지 않았다.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Result와 Report가 서로 다른 상태 어휘를 사용하면서 동일 정보를 유지한다고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 상태 동기화를 야간 배치에 맡겨 두 표현의 불일치 기간을 만든다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - state_rules[1]
+      unresolved_beyond_evidence: 여러 Result 상태를 하나의 Report 상태로 축약하는 기관별 정책은 현재 자료에 없다.
+  - candidate_id: semantics-candidate-003
+    target: clinical-lab-ontology.yaml — CriticalValue 엔티티
+    evidence_anchor: entities.CriticalValue.definition 및 entities.CriticalValue.attributes
+    claim: 재사용 가능한 임계값 규칙과 개별 위험 결과의 통보 상태가 하나의 엔티티에 혼합되어 있다.
+    what: test_ref와 lower_bound/upper_bound는 검사별 임계값 정책을 나타내지만 notified는 특정 발생 건의 통보
+      완료 여부를 나타낸다.
+    why: 임계값은 여러 Result에 적용되는 규칙인 반면 통보 여부는 특정 위험 결과와 수신자에 종속되는 사건 상태다. 현재 모델에서는 한
+      임계값의 notified 값으로 여러 결과의 개별 통보를 표현할 수 없다.
+    how_to_fix: 검사별 CriticalThreshold 또는 CriticalRule과, 특정 Result에 연결되는
+      CriticalResult/Notification 사건을 분리한다. notified 대신 통보 시각·수신자·상태를 사건에 귀속한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 위험 결과 판정과 통보를 EMR/LIS 사이에서 의미 손실 없이 교환하는 목적
+      failure_condition: 같은 검사 임계값에 해당하는 위험 결과가 둘 이상 발생하거나 결과별 통보 상태가 다를 때
+      impact: 규칙 자체의 상태와 환자별 통보 이력을 구분할 수 없어 미통보 건을 통보 완료로 오인할 수 있다.
+      evidence_refs:
+        - entities.CriticalValue.definition
+        - entities.CriticalValue.attributes.test_ref
+        - entities.CriticalValue.attributes.lower_bound
+        - entities.CriticalValue.attributes.upper_bound
+        - entities.CriticalValue.attributes.notified
+    causal_path:
+      root_cause_candidate: 제도적 판정 규칙과 시간에 발생하는 임상 사건을 하나의 존재론적 유형으로 모델링했다.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: CriticalValue가 임계 범위 속성과 통보 완료 속성을 동시에 가진다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.CriticalValue.attributes
+        - cause_id: semantics-candidate-003.cause-002
+          claim: 통보 세부 정보는 외부 전화 기록 대장에만 있고 CriticalValue는 특정 Result를 참조하지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.CriticalValue.attributes.notified
+            - entities.CriticalValue.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: clinical-lab-ontology.yaml — STAT 주문 표현
+    evidence_anchor: entities.Order.attributes.priority,
+      entities.Order.attributes.is_stat, entities.StatOrder
+    claim: STAT이라는 동일 분류가 enum 값, 불리언, 하위 타입의 세 가지 독립 개념처럼 표현된다.
+    what: Order.priority의 stat, Order.is_stat, StatOrder 하위 타입이 모두 STAT 여부를 나타내지만 일치
+      조건이나 권위 원천이 없다.
+    why: STAT은 주문의 우선순위 분류인데 하위 타입으로도 모델링되어 본질적 유형인지 변경 가능한 상태인지 불명확하다. 세 표현이 불일치하면
+      같은 주문이 서로 다른 의미 분류를 가질 수 있다.
+    how_to_fix: priority를 권위 속성으로 정하고 is_stat은 파생값으로 정의한다. StatOrder가 필요하다면
+      `priority=stat` 제약을 갖는 뷰 또는 명시적 분류로 정의하고 독립 저장을 피한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS가 주문 우선순위를 동일하게 해석하고 라우팅하는 목적
+      failure_condition: priority, is_stat, StatOrder 타입 중 일부만 갱신되거나 시스템별로 서로 다른 표현을 권위로 사용할 때
+      impact: 응급 주문의 분류와 처리 우선순위가 시스템 간 달라질 수 있다.
+      evidence_refs:
+        - entities.Order.attributes.priority
+        - entities.Order.attributes.is_stat
+        - entities.StatOrder
+    causal_path:
+      root_cause_candidate: 변경 가능한 우선순위 속성을 별도 파생 표현과 하위 타입으로 중복 모델링했다.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: 한 Order에 STAT을 나타내는 세 표현이 공존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Order.attributes.priority
+            - entities.Order.attributes.is_stat
+            - entities.StatOrder
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 세 표현 사이의 등가 제약이나 단일 권위가 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Order
+            - entities.StatOrder
+      unresolved_beyond_evidence: 기관 업무상 STAT 지정이 주문 후 변경 가능한지 여부는 현재 자료로 확정할 수 없다.
+  - candidate_id: semantics-candidate-005
+    target: clinical-lab-ontology.yaml — Specimen과 Result의 produces 관계
+    evidence_anchor: relations의 Specimen→Result produces, Result→Specimen
+      derived_from 및 entities.Assay.definition
+    claim: 물리적 검체가 결과를 생산한다고 표현하여 결과 생성 행위와 입력 재료의 의미를 혼동한다.
+    what: Specimen은 Result의 출처로도, 생산자로도 연결되지만 실제 수행 단위로 정의된 Assay는 결과 생성 관계에 참여하지
+      않는다.
+    why: 검체는 분석의 입력 또는 대상이고 결과는 수행된 분석에서 생성된다. 검체를 생산 주체로 모델링하면 어떤 분석법·실행이 결과를
+      만들었는지에 대한 provenance가 사라진다.
+    how_to_fix: Specimen→Result는 출처 관계로 한정한다. Assay 자체와 실행 사건을 구분하고, AssayExecution
+      같은 수행 개념을 Test/Assay, Specimen, Result에 연결해 결과 생산 주체로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: LIS 결과의 검체 및 수행 계보를 EMR에 정확히 전달하는 목적
+      failure_condition: 한 검체에서 여러 분석이 수행되거나 동일 Test가 서로 다른 Assay로 수행될 때
+      impact: 결과를 생성한 실제 수행 단위를 식별할 수 없어 추적성과 결과 해석이 약화된다.
+      evidence_refs:
+        - "relations: Specimen→Result produces"
+        - "relations: Result→Specimen derived_from"
+        - entities.Assay.definition
+    causal_path:
+      root_cause_candidate: 물리적 입력인 Specimen과 결과를 생성하는 분석 수행 사건을 구분하지 않았다.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: Specimen이 Result를 produces한다고 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - "relations: Specimen→Result produces"
+        - cause_id: semantics-candidate-005.cause-002
+          claim: 수행 단위로 정의된 Assay는 어떤 결과 생성 관계에도 연결되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Assay.definition
+            - relations
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-006
+    target: clinical-lab-ontology.yaml — turnaround_time(TAT) 정의
+    evidence_anchor: notes[1], relations의 Order→Specimen has_many 및 Order→Report produces
+    claim: TAT 파생값의 시작·종료 시각은 제시됐지만 어떤 업무 단위를 측정하는지 정의되지 않았다.
+    what: TAT를 collected_at부터 released_at까지로 계산한다고 하지만 한 Order는 여러 Specimen과 Report를
+      가질 수 있어 어느 시각을 선택하는지 알 수 없다. 계산식의 권위도 대시보드 팀에 분리되어 있다.
+    why: 최초 또는 최종 채취, 부분 또는 최종 보고 중 무엇을 선택하느냐에 따라 같은 주문의 TAT가 달라진다. 개념 권위 문서가 측정 대상을
+      정하지 않으면 파생 지표가 시스템별로 다르게 계산된다.
+    how_to_fix: TAT의 측정 주체를 Order, Specimen, Test 또는 Report 중 하나로 명시하고 다중 검체·부분 보고의
+      집계 규칙을 정의한다. 원천 시각과 공식 계산 규칙의 권위 위치도 하나로 정한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 통합 시스템에서 검사 처리시간 지표를 동일한 의미로 계산하는 목적
+      failure_condition: 주문에 검체나 보고서가 둘 이상 존재하거나 부분 보고가 발생할 때
+      impact: 동일 사례에 대해 EMR, LIS, 대시보드가 서로 다른 TAT를 산출할 수 있다.
+      evidence_refs:
+        - notes[1]
+        - "relations: Order→Specimen has_many"
+        - "relations: Order→Report produces"
+    causal_path:
+      root_cause_candidate: 파생 지표의 산식만 기록하고 지표의 관찰 단위와 다중값 선택 규칙을 정의하지 않았다.
+      root_cause_step_id: semantics-candidate-006.cause-002
+      steps:
+        - cause_id: semantics-candidate-006.cause-001
+          claim: TAT가 Specimen.collected_at과 Report.released_at의 차이로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - notes[1]
+            - entities.Specimen.attributes.collected_at
+            - entities.Report.attributes.released_at
+        - cause_id: semantics-candidate-006.cause-002
+          claim: Order는 여러 Specimen을 가질 수 있고 Report 생성 수도 단일로 제한되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "relations: Order→Specimen has_many"
+            - "relations: Order→Report produces"
+      unresolved_beyond_evidence: 부분 보고 또는 복수 보고 허용 여부와 원하는 집계 방식은 현재 자료로 확정할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 외부 임상검사 표준을 적용하지 않고 대상 문서 내부의 정의·관계·상태 일관성만 판단했다.
+  - EMR/LIS 통합의 개념 권위 문서는 동일 개념에 단일 권위 표현을 두고, 서로 다른 업무 범위의 상태와 사건을 구분해야 한다고
+    가정했다.
+validation:
+  unaddressable_candidates: []

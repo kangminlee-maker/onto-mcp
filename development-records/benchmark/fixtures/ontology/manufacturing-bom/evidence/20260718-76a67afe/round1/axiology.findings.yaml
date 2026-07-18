@@ -1,0 +1,173 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml — ECO/Part revision applicability
+    evidence_anchor: "Value authority:
+      .onto/review/20260718-76a67afe/execution-preparation/review-value-alignme\
+      nt-criteria.yaml:6-8 (PLM/MES 통합의 개념 기준 및 변경관리·제조 운영 위험 검토 목적). Target
+      evidence: materialized-input.md:20-21,69-75,93-96."
+    claim: ECO 발효 시점과 Part.rev 동기화 시점의 의도적 불일치가 통합 기준 문서의 변경관리 목적에 어긋난다.
+    what: 신규 리비전은 ECO.effective_date부터 생산에 적용하도록 규정하면서, MES가 참조할 Part.rev는 도면 관리대장
+      반영 후 주간 배치로 갱신한다.
+    why: 동일 문서가 발효일 이후 신규 리비전 사용을 요구하는 동시에 기준 속성이 일정 기간 구버전일 수 있음을 허용한다. 그 기간에는
+      생산오더가 어느 리비전을 사용해야 하는지 Part.rev만으로 결정할 수 없어 PLM/MES 간 일관된 변경 적용과 운영 안전이라는
+      선언 목적이 실패한다.
+    how_to_fix: Part.rev의 단일 최신값과 주간 복사를 생산 판단 기준으로 삼지 말고, ECO·품목·리비전의
+      effective-dated applicability를 명시적으로 모델링한다. 생산오더 생성 시점·수량 또는 lot/serial
+      범위에 따라 적용 리비전을 권위 원천에서 결정하고, 동기화 지연 중에는 생성 차단 또는 명시적 예외 승인을 규정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 변경 적용과 제조 실행이 동일한 리비전을 결정하게 하는 목적.
+      failure_condition: ECO.effective_date가 지났지만 주간 배치가 아직 Part.rev를 갱신하지 않은 기간에 생산오더를 생성하는 경우.
+      impact: 서로 다른 리비전으로 설계·생산 판단이 갈릴 수 있어 통합 기준의 신뢰성과 실제 생산 적합성이 직접 약화된다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:69-75
+        - materialized-input.md:93-96
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 변경 적용 권위가 effective-dated ECO와 지연 동기화되는 Part.rev 사이에 분산되어
+        있고 충돌 시 실행 우선순위가 없다.
+      root_cause_step_id: axiology-candidate-001.cause-002
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 발효일 이후 생산분은 신규 rev를 따라야 하지만 Part.rev는 주간 배치 전까지 이전 값을 유지할 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-96
+        - cause_id: axiology-candidate-001.cause-002
+          claim: Part.rev와 current_eco가 서로 다른 외부 원본을 가리키며 생산 시점의 적용 리비전을 직접 표현하는 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:69-75
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml — 운영 파라미터 권위와 단위 관리
+    evidence_anchor: "Value authority: review-value-alignment-criteria.yaml:6-8
+      (PLM/MES 통합 개념 기준과 제조 운영 위험). Target evidence:
+      materialized-input.md:19,35,63-67,98-100."
+    claim: 복사값·수기값·현장 환산을 정상 운영 방식으로 수용해 통합 기준이라는 전체 목적보다 기존 부서별 편의를 우선한다.
+    what: scrap_rate는 생산계획팀 엑셀 값을 복사하고, 표준원가는 MES 계산값과 수기 입력값을 분기별 대사하며, 작업장 능력 단위는
+      제각각이고 품목별 UOM 환산계수는 현장에서 처리한다.
+    why: 계획 수량, 능력, 시간, 원가의 핵심 입력이 서로 다른 비권위 사본과 암묵적 단위에 의존한다. 온톨로지가 이 상태를 단순 메모로
+      정당화하면 PLM/MES가 동일 의미와 값을 공유하게 하는 기준 역할보다 로컬 운영 편의를 보존하게 된다.
+    how_to_fix: 각 운영 파라미터에 권위 원천, 단위 차원, 유효기간, 갱신 책임자와 충돌 우선순위를 모델링한다. scrap_rate와
+      환산계수는 참조 가능한 마스터 개념으로 승격하고, 표준시간·원가의 파생 규칙과 수기 override의 승인·만료 조건을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅 정보를 PLM과 MES가 공통 의미로 해석하는 개념 기준 역할.
+      failure_condition: 계획·능력·원가 계산이 복사 시점이 다른 값 또는 단위가 명시되지 않은 값을 결합하는 경우.
+      impact: 동일 개념이 시스템·부서별로 다른 값과 단위를 갖게 되어 통합 결과를 재현하거나 신뢰하기 어렵다.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:35
+        - materialized-input.md:63-67
+        - materialized-input.md:98-100
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 운영 파라미터를 권위·단위·유효기간을 가진 공유 개념으로 모델링하지 않고 기존 로컬 사본과 수기 절차를 유지했다.
+      root_cause_step_id: axiology-candidate-002.cause-002
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 핵심 계산값이 엑셀 복사, 수기 입력, 현장 환산과 분기 대사에 의존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:98-100
+        - cause_id: axiology-candidate-002.cause-002
+          claim: capacity_per_shift에는 공통 단위가 없고 UOM 환산 마스터도 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:63-67
+            - materialized-input.md:100
+      unresolved_beyond_evidence: 실제 시스템별 원본 소유권과 동기화 SLA는 현재 경계에서 확인할 수 없다.
+  - candidate_id: axiology-candidate-003
+    target: manufacturing-bom-ontology.yaml — BOM 비순환성과 스크랩 재투입 예외
+    evidence_anchor: "Value authority: review-value-alignment-criteria.yaml:6-8 (BOM
+      개념 정합성과 제조 운영 위험). Target evidence: materialized-input.md:29-35,93-95."
+    claim: 재생 공정 표현의 국소 편의를 위해 BOM의 핵심 비순환 약속을 깨는 예외가 통합 기준의 안정성을 훼손한다.
+    what: BOM은 비순환이어야 한다고 선언하면서 스크랩 재투입은 Assembly가 자기 자신을 하위 품목으로 포함하도록 허용한다.
+    why: 제품 구성 관계에 공정상의 회수·재투입 흐름을 넣으면 동일 그래프에 상충하는 의미가 공존한다. 일반 BOM 전개, 소요량 계산 또는
+      순환 검증이 전역 비순환성을 신뢰할 수 없어 개념 기준으로서의 일관성과 소비자 안전이 약화된다.
+    how_to_fix: BOM 구성은 비순환 불변식으로 유지하고, 스크랩 회수·재투입은 Routing/Operation과 물질 흐름 또는
+      부산물·재투입 관계로 별도 모델링한다. 별도 순환 흐름이 필요한 소비자와 계산 규칙도 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 개념 정합성을 보장하고 PLM/MES 소비자가 일관된 구성 의미를 공유하게 하는 목적.
+      failure_condition: 스크랩 재투입이 있는 Assembly를 일반 BOM 전개나 소요량 계산에 투입하는 경우.
+      impact: 비순환이라는 핵심 계약을 소비자가 안전하게 가정할 수 없고, 제품 구성과 공정 물질 흐름이 혼합된다.
+      evidence_refs:
+        - materialized-input.md:29-35
+        - materialized-input.md:93-95
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 공정 물질 흐름을 위한 별도 개념 없이 제품 구성 관계를 재사용했다.
+      root_cause_step_id: axiology-candidate-003.cause-002
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 비순환 규칙과 자기 포함 예외가 하나의 integrity rule 안에 함께 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-95
+        - cause_id: axiology-candidate-003.cause-002
+          claim: BomLine은 상위 조립품이 하위 품목을 얼마나 사용하는지 나타내는 제품 구성 개념으로만 정의되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-004
+    target: axiology execution-preparation — canonical value authority binding
+    evidence_anchor: "Role contract: axiology prompt §Authoritative alignment input
+      and §Finding evidence requirements (canonical authority binding required;
+      missing authority requires insufficient-evidence finding). Execution
+      evidence: context-candidate-assembly.yaml:1-4;
+      review-value-alignment-criteria.yaml:5-20."
+    claim: 정식 목적·원칙 권위가 바인딩되지 않아 사용자 요청 목적을 넘어선 axiology 판단은 불확정이다.
+    what: context candidate assembly의 system_purpose_refs, role_definition_refs,
+      execution_rule_refs가 모두 비어 있으며, 제공된 alignment criterion은 사용자 요청 의도 하나뿐이다.
+    why: axiology 역할 계약은 core lexicon과 제품화·OaC·LLM-native·product-locality 원칙을 가치
+      판단의 권위 사슬로 요구한다. 현재 자료로는 통합 기준이라는 세션 목적에 대한 정렬은 판단할 수 있지만, 해당 상위 제품 원칙과의
+      정렬 여부를 근거 있게 평가할 수 없다.
+    how_to_fix: 실행 준비 단계에서 역할 계약에 열거된 순위 1~3 권위 문서를 실제 context source로 바인딩하고 안정적인
+      anchor/excerpt를 제공한 뒤 axiology lens를 재실행한다.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 개인적 해석이 아닌 canonical authority에 근거해 가치·목적 정렬을 평가하는 axiology 계약.
+      failure_condition: 제품 목적이나 OaC 등 상위 원칙에 대한 정렬 판단이 필요한 경우.
+      impact: 상위 가치에 대한 clean verdict 또는 위반 판단이 근거 없는 추론이 되어 리뷰 신뢰성이 약화된다.
+      evidence_refs:
+        - axiology prompt §Authoritative alignment input
+        - axiology prompt §Finding evidence requirements
+        - context-candidate-assembly.yaml:1-4
+        - review-value-alignment-criteria.yaml:5-20
+    causal_path:
+      root_cause_candidate: execution preparation이 axiology 역할에 필수인 canonical
+        authority source set을 context source로 materialize하지 않았다.
+      root_cause_step_id: axiology-candidate-004.cause-002
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: 현재 alignment 입력에는 사용자 요청 목적만 존재한다.
+          relation_to_previous: null
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:5-20
+        - cause_id: axiology-candidate-004.cause-002
+          claim: system_purpose_refs와 execution_rule_refs가 빈 목록이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - context-candidate-assembly.yaml:1-4
+      unresolved_beyond_evidence: 필수 권위 문서의 실제 존재 여부와 내용은 unit boundary 밖이므로 확인하지 않았다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 문서 헤더와 확인된 review criterion에 따라 이 파일은 PLM/MES 통합의 규범적 개념 기준으로 사용될 예정이다.
+  - PLM/MES 소비자는 문서에 선언된 integrity rule과 속성 의미를 공통 계약으로 사용할 수 있다.
+validation:
+  unaddressable_candidates: []

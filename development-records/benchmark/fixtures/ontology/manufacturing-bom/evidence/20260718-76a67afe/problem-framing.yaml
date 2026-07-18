@@ -1,0 +1,176 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 개정·효력·상태 사건과 조건별 적용 기준이 현재 객체에 결합되어 유효한 제조 정의와 과거 상태를 결정적으로 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: PLM/MES 통합 기준의 핵심인 시점·조건별 동일 정의 식별과 추적을 직접 막는 고심각도 모델 결손이며, 모든 참여 렌즈가
+      한정된 근본 원인에 합의했다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-005
+      - finding-006
+      - finding-007
+      - finding-011
+      - finding-013
+      - finding-016
+  - issue_id: issue-002
+    problem_definition: 운영 파라미터의 권위 원천·단위·유효기간이 공유 개념으로 정립되지 않아 시스템별 값과 해석의 우선순위를 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 공유 파라미터 구조의 부재는 확인되지만 로컬 사본·수기 입력·현장 관례라는 운영 원인 전체는 일부 렌즈의 직접 증거 범위를
+      넘어 추론된다. 구현 단계 전에 권위 계약을 대상 문서에 명시해야 한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 제품 구성과 순환 가능한 공정 물질 흐름이 BomLine에 함께 표현되어 BOM의 비순환 불변식이 일관되게 적용되지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 서로 다른 관계 종류를 동일 개념으로 표현한 직접적인 모델 경계 결함이다. 일반 BOM 전개와 소요량 계산을 구현하기 전에
+      구성 관계의 계약을 바로잡아야 한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 상위 가치·제품 원칙 정렬을 판정할 정식 권위 자료가 리뷰 문맥에 없어 해당 판단을 근거 있게 완료할 수 없다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 이는 온톨로지 자체의 결함이 아니라 axiology 판단 기반의 결손이다. 권위 자료를 바인딩하기 전에는 상위 원칙 정렬
+      여부를 확정해서는 안 되며, 관련 판단을 다음 단계로 넘기기 전에 증거를 보완해야 한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: ProductionOrder와 적용 BOM·Routing·ECO 개정을 연결하는 실행 개념이 없어 제조
+      정의를 실제 생산분에 고정하고 추적할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 선언된 무결성 규칙의 적용 대상과 설계-실행 추적 경로가 모두 빠진 고심각도 완전성 결손이다. PLM/MES 통합 기준이라는
+      현재 대상의 핵심 목적을 직접 막는다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-006
+    problem_definition: 수량의 값·측정 차원·단위·시점별 환산 규칙이 공통 모델로 분리되지 않아 수량과 능력을 결정적으로 검증·변환할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 무단위 숫자와 고정 열거값은 차원 검증, 환산 및 확장을 불가능하게 하는 직접적인 모델 결손이다. 계획·스케줄링 소비자가
+      구현되기 전에 대상 기준에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-009
+      - finding-012
+      - finding-019
+  - issue_id: issue-007
+    problem_definition: scrap_rate 복사값에 권위 원본·동기화 시점·유효기간을 연결하는 모델이 없어 계획 시점별 권위 값을 선택할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 실제 운영 원본이 무엇인지는 구조만으로 확정할 수 없지만, 권위와 시간 범위를 보존할 참조 구조의 부재는 확인되었다. 재현
+      가능한 계획을 위해 구현 전에 기준 문서에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: AlternatePart에 무조건적 대칭성과 one_way 방향성을 동시에 부여하여 허용 인스턴스가 관계 계약을 만족할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 동일 개념에 양립 불가능한 제약을 부여한 직접적인 논리 결함이다. 대체품 판단을 소비하는 시스템이 서로 다른 결과를 내기
+      전에 대상 계약을 수정해야 한다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-009
+    problem_definition: AlternatePart의 primary→alternate 역할과 direction이 alternate_of
+      단축 관계에 보존되지 않아 방향성 있는 허용 관계가 무방향 관계로 투영된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 심의에서 내부 대칭성 모순 및 정식 그래프 단절과 분리된 투영 규칙 결손으로 범위가 확정되었다. 승인되지 않은 역방향 대체를
+      유발할 수 있으므로 소비자 구현 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-010
+    problem_definition: 스크랩 발생·회수·재투입 흐름을 자기 참조 BomLine으로 표현하여 제품 구성 수량과 공정 회수량의 의미를 혼합한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 제품 구성과 공정 물질 흐름의 개념 경계를 분리하지 않은 의미 모델 결함이다. issue-003과 표면이 중복되지만 기존
+      이슈 경계와 상태를 변경하지 않고 별도 분류하며, BOM 계산 소비 전에 대상에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-011
+    problem_definition: scrap_rate 하나에 손실 비율·계획 계수·측정값·적용 산식을 결합하여 동일 입력에서 복수의 총소요량 계산을 허용한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 값의 의미와 계산 계약이 구분되지 않은 직접적인 개념 경계 결손이다. 권위·이력 문제와는 별개로 계산 결과의 정확성을
+      약화하므로 구현 전에 대상 문서에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-012
+    problem_definition: 정식 관계 그래프가 AlternatePart 노드를 우회하여 primary·alternate 역할과
+      direction을 보존하는 탐색 경로가 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 관계 엔티티와 정식 그래프 사이의 필수 연결이 누락된 구조적 완전성 결손이다. issue-009의 투영 의미 손실과
+      연관되지만 심의에서 별도 책임 범위로 유지되었으며, 통합 소비자 구현 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-020

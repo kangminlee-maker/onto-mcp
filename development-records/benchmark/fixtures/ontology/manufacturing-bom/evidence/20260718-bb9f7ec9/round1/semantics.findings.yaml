@@ -1,0 +1,240 @@
+schema_version: 1
+session_id: 20260718-bb9f7ec9
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: InspectionPlan 엔티티의 존재론적 유형
+    evidence_anchor: materialized-input.md — entities.InspectionPlan.definition 및
+      entities.InspectionPlan.is_a
+    claim: 검사 계획을 실제 공정 단계인 Operation의 하위 유형으로 분류해 계획과 실행 행위를 혼동한다.
+    what: "InspectionPlan은 검사 파라미터와 합격 기준을 담는 계획·명세 객체인데 `is_a: Operation`으로 선언되어
+      있다."
+    why: 계획은 실행되는 공정 자체가 아니다. 이 분류를 기준으로 PLM과 MES를 통합하면 검사 명세가 라우팅의 실행 단계로 취급되거나, 실행
+      단계의 속성이 계획 버전처럼 관리될 수 있다.
+    how_to_fix: InspectionPlan을 독립적인 계획/명세 엔티티로 두고 InspectionOperation 또는 Operation과
+      `specifies`/`governs` 관계로 연결한다. 실제 검사 단계가 필요하면 `InspectionOperation is_a
+      Operation`으로 별도 명명한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 공정과 검사 계획의 공통 개념 기준 제공
+      failure_condition: 상속 관계를 따라 InspectionPlan을 라우팅 단계 또는 실행 가능한 Operation으로 해석할 때
+      impact: 계획 데이터의 수명주기·버전과 공정 실행의 수명주기가 섞여 통합 매핑 및 제조 실행 의미가 달라진다.
+      evidence_refs:
+        - entities.InspectionPlan.definition
+        - "entities.InspectionPlan.is_a: Operation"
+        - entities.Routing.attributes.operations
+    causal_path:
+      root_cause_candidate: 검사 파라미터 확장을 표현하기 위해 계획 객체와 검사 실행 단계를 상속으로 동일시했다.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: InspectionPlan이 Operation의 하위 유형으로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.InspectionPlan.is_a
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 정의상 InspectionPlan은 실행 행위가 아니라 검사 파라미터와 합격 기준을 담는 계획 확장이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.InspectionPlan.definition
+            - entities.InspectionPlan.attributes.sampling_rule
+            - entities.InspectionPlan.attributes.acceptance_criteria
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: AlternatePart의 관계 의미와 방향성
+    evidence_anchor: materialized-input.md — entities.AlternatePart.definition 및
+      attributes.direction
+    claim: 대체 관계를 대칭 관계로 정의하면서 동일 엔티티에 단방향 의미와 기본값을 부여해 의미가 직접 충돌한다.
+    what: 정의는 A가 B의 대체품이면 B도 A의 대체품이라고 하지만 `direction`은 `one_way`를 허용하고 그 값을 기본으로
+      명시한다.
+    why: 동일 데이터가 정의에 따르면 양방향이고 속성에 따르면 단방향일 수 있다. 소비 시스템마다 어느 진술을 우선하는지 달라지면 승인되지 않은
+      역방향 대체가 허용되거나 유효한 대체가 누락될 수 있다.
+    how_to_fix: 대체 가능성을 본질적으로 방향성 있는 관계로 정의하고 `from_part`/`to_part`처럼 역할을 명확히 하며, 상호
+      대체는 역방향 관계를 함께 생성하거나 명시적 `bidirectional` 규칙으로 표현한다. 대칭 관계만 의도했다면
+      `direction`과 one-way 기본값을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES가 공유하는 부품 대체 가능성의 일관된 해석
+      failure_condition: one_way 인스턴스를 정의 또는 축약 관계의 대칭 의미로 해석할 때
+      impact: 자재 대체 방향이 뒤집혀 제조 투입 적합성 판단에 직접 영향을 줄 수 있다.
+      evidence_refs:
+        - entities.AlternatePart.definition
+        - entities.AlternatePart.attributes.direction.values
+        - entities.AlternatePart.attributes.direction.note
+        - relations Part-to-Part alternate_of
+    causal_path:
+      root_cause_candidate: 대칭적인 ‘상호 대체’ 개념과 방향성 있는 ‘대체 허용’ 개념을 하나의 AlternatePart로 합쳤다.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: AlternatePart의 정의와 direction 기본값이 서로 반대되는 방향성 의미를 부여한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.AlternatePart.definition
+            - entities.AlternatePart.attributes.direction.note
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 축약 관계 `alternate_of`도 어느 방향 의미를 보존하는지 구분하지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations Part-to-Part alternate_of.note
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: BomLine.scrap_rate 속성
+    evidence_anchor: materialized-input.md — entities.BomLine.attributes.scrap_rate
+    claim: "`scrap_rate`라는 비율명과 ‘공정 불량 감안 계수’라는 설명이 서로 다른 수치 의미를 가리킨다."
+    what: 값이 폐기율인지, 수율 손실 보정계수인지, 필요 수량에 곱하는 계수인지 정의되어 있지 않으며 범위와 산식도 없다.
+    why: 예를 들어 5% 손실은 폐기율로는 0.05지만 단순 보정계수로는 1.05일 수 있고, 수율 역산이면 약 1.0526이다. 같은 값
+      이름을 PLM과 MES가 다르게 해석하면 `qty_per` 기반 소요량이 달라진다.
+    how_to_fix: 의도에 따라 `scrap_fraction` 또는 `quantity_multiplier` 중 하나로 명명하고 단위·허용
+      범위·`qty_per` 적용 산식을 명시한다. 외부 원본 값을 복사한다면 원본의 의미와 동일한 정규화 규칙도 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 소요량을 PLM/MES 간 동일한 의미로 교환
+      failure_condition: 소비 시스템이 scrap_rate를 서로 다른 산식이나 수치 범위로 적용할 때
+      impact: 구매·생산 소요량과 계획 수량이 체계적으로 어긋날 수 있다.
+      evidence_refs:
+        - entities.BomLine.attributes.qty_per
+        - entities.BomLine.attributes.scrap_rate
+    causal_path:
+      root_cause_candidate: 비율과 수량 보정계수라는 서로 다른 수치 개념을 하나의 이름과 자유로운 number 값에 중첩했다.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: 속성명은 rate인데 설명은 coefficient로 되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.BomLine.attributes.scrap_rate
+        - cause_id: semantics-candidate-003.cause-002
+          claim: 두 해석을 구별할 단위, 범위 또는 적용 산식이 모델에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine.attributes.scrap_rate
+            - entities.BomLine.attributes.qty_per
+      unresolved_beyond_evidence: 실제 생산계획팀 원본 값이 폐기율과 보정계수 중 무엇인지는 현재 경계 안에서 확인할 수 없다.
+  - candidate_id: semantics-candidate-004
+    target: WorkCenter.capacity_per_shift 속성
+    evidence_anchor: materialized-input.md — entities.WorkCenter.attributes.capacity_per_shift
+    claim: 처리 수량과 가용 시간이라는 차원이 다른 측정치를 하나의 `capacity_per_shift` 의미로 혼합한다.
+    what: 동일 속성의 단위가 작업장마다 ‘개수 또는 시간’이라고 정의되어 있다.
+    why: 개수/교대는 처리량이고 시간/교대는 가용시간이다. 두 값은 이름이 같아도 직접 비교·합산할 수 없으며, 용량 산정에 필요한 처리율이나
+      표준시간과의 관계도 다르다.
+    how_to_fix: "`available_time_per_shift`와 `throughput_quantity_per_shift`를 구분하거나,
+      측정값에 명시적 quantity kind와 UOM을 부여한다. 처리량은 대상 품목/공정 조건도 함께 명시한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES 라우팅과 작업장 용량의 공통 의미 제공
+      failure_condition: 개수 기반 작업장과 시간 기반 작업장을 동일 capacity 필드로 스케줄링하거나 비교할 때
+      impact: 용량 계산의 차원 일관성이 깨져 작업장 부하와 생산 가능량을 잘못 해석할 수 있다.
+      evidence_refs:
+        - entities.WorkCenter.definition
+        - entities.WorkCenter.attributes.capacity_per_shift
+        - entities.Operation.attributes.std_time_min
+    causal_path:
+      root_cause_candidate: 처리량과 가용시간을 ‘capacity’라는 다의적 상위 용어 하나로 모델링했다.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: capacity_per_shift가 개수와 시간 중 어느 단위도 가질 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.WorkCenter.attributes.capacity_per_shift.note
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 개수와 시간은 서로 다른 물리적 차원과 계산 의미를 가진다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.WorkCenter.attributes.capacity_per_shift
+            - entities.Operation.attributes.std_time_min
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: Part.current_eco 속성
+    evidence_anchor: materialized-input.md — entities.Part.attributes.current_eco,
+      entities.ECO.attributes.status/effective_date 및 관련 integrity rule
+    claim: "`current_eco`가 최신 변경 문서인지 현재 유효한 변경인지 구분하지 않아 ‘current’의 의미가 모호하다."
+    what: 설명은 ‘최신 설계변경’이라고만 하며 ECO에는 open·approved·applied 상태와 effective_date가 공존한다.
+      따라서 생성 시각상 최신 ECO와 현재 적용 중인 ECO가 다를 수 있다.
+    why: PLM은 최신 변경 요청을 가리키고 MES는 승인·적용되어 효력이 발생한 변경을 기대할 수 있다. 특히 rev가 주간 배치로 늦게
+      갱신되는 동안 두 시스템의 현재 구성 판단이 달라질 수 있다.
+    how_to_fix: "`latest_eco`와 `effective_eco`를 구분하거나, current의 선정 규칙을 상태·효력일·리비전
+      기준으로 명시한다. Part의 현재 설계 상태는 적용된 revision/effectivity에서 결정되는 투영값으로 정의한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM 변경관리와 MES 생산 적용 상태의 일관된 기준 제공
+      failure_condition: 열린 최신 ECO와 승인·적용된 유효 ECO가 서로 다르거나 rev 동기화가 지연될 때
+      impact: 생산 시 적용해야 할 설계 상태와 변경 문서가 시스템별로 다르게 선택될 수 있다.
+      evidence_refs:
+        - entities.Part.attributes.current_eco
+        - entities.Part.attributes.rev
+        - entities.ECO.attributes.status
+        - entities.ECO.attributes.effective_date
+        - integrity_rules ECO.effective_date 이후 생산분
+    causal_path:
+      root_cause_candidate: 변경 문서의 시간상 최신성, 승인 상태, 효력 발생, 적용 완료를 하나의 ‘current’ 참조로 축약했다.
+      root_cause_step_id: semantics-candidate-005.cause-003
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: current_eco는 최신 ECO라고만 정의되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Part.attributes.current_eco
+        - cause_id: semantics-candidate-005.cause-002
+          claim: ECO에는 최신성과 별개인 상태 및 효력일 의미가 존재한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.ECO.attributes.status
+            - entities.ECO.attributes.effective_date
+        - cause_id: semantics-candidate-005.cause-003
+          claim: Part.rev는 별도 원본에서 주간 배치로 갱신되어 현재성 기준이 추가로 분리된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - entities.Part.attributes.rev
+            - integrity_rules Part.rev 갱신 주간 배치
+      unresolved_beyond_evidence: ECO 시스템에서 ‘최신’을 결정하는 실제 정렬·상태 규칙은 현재 경계 안에 없다.
+  - candidate_id: semantics-candidate-006
+    target: Part-to-Routing 관계 `manufactured_by`
+    evidence_anchor: materialized-input.md — entities.Routing.definition 및 relations
+      Part-to-Routing
+    claim: 라우팅 명세를 제조 행위자처럼 표현하는 `manufactured_by` 관계명이 실제 의미와 맞지 않는다.
+    what: Routing은 품목 제조의 공정 순서를 나타내는 정보 객체인데 관계는 Part가 Routing에 의해 제조된다고 표현한다.
+    why: 라우팅은 제조 방법을 규정하지만 실제 제조를 수행하는 행위자나 공정 실행이 아니다. 이 명칭을 기준으로 통합하면 계획 명세와 실제 생산
+      실행·설비 책임을 같은 관계로 오인할 수 있다.
+    how_to_fix: 명세 관계는 `has_routing` 또는 `manufactured_according_to`로 바꾸고, 실제 제조 수행
+      관계가 필요하면 생산 오더/공정 실행과 WorkCenter를 별도 관계로 표현한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM의 공정 명세와 MES의 제조 실행을 구분하는 공통 개념 기준 제공
+      failure_condition: "`manufactured_by`를 실제 제조 수행 또는 생산 이력 관계로 소비할 때"
+      impact: 공정 계획과 실행 실적의 의미가 혼합되어 잘못된 시스템 매핑과 추적성 해석을 유발한다.
+      evidence_refs:
+        - entities.Routing.definition
+        - relations Part-to-Routing manufactured_by
+        - entities.Operation.attributes.work_center
+    causal_path:
+      root_cause_candidate: 제조 방법을 지정하는 정보 객체와 실제 제조 행위자를 관계명에서 구분하지 않았다.
+      root_cause_step_id: semantics-candidate-006.cause-002
+      steps:
+        - cause_id: semantics-candidate-006.cause-001
+          claim: Part가 Routing에 의해 제조된다는 agentive 관계명이 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - relations Part-to-Routing manufactured_by
+        - cause_id: semantics-candidate-006.cause-002
+          claim: Routing의 정의는 제조 행위자가 아니라 공정 순서 명세이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Routing.definition
+            - entities.Routing.attributes.operations
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 일반적인 제조 개념에서 계획·명세 정보 객체와 실제 공정 실행은 서로 다른 존재론적 유형으로 해석했다.
+  - 비율, 수량 보정계수, 처리량, 가용시간은 수치가 같더라도 단위와 산식이 다른 별도 의미 개념으로 해석했다.
+  - 세션 도메인이 none이므로 특정 산업 표준의 규칙이나 외부 용어 매핑은 적용하지 않았다.
+validation:
+  unaddressable_candidates: []

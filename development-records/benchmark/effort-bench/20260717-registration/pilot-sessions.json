@@ -1,11 +1,12 @@
 {
-  "_comment": "P2 pilot session assignment (variance estimation ONLY — registered as non-confirmatory in preregistration.yaml). rep order = dispatch order. Excluded non-completed sessions: 20260718-52305e8a (halted_partial, provider capacity), 20260718-8cd44907 (completed_with_degradation, provider capacity), 20260718-6d2c65d5 (halted_partial, provider capacity) — strict status=completed only.",
+  "_comment": "P2 pilot session assignment (variance estimation ONLY — registered as non-confirmatory in preregistration.yaml; low zone added per pilot-amendment-1-low-probe.md, commit 40d7b46). rep order = dispatch order. Excluded non-completed sessions: 20260718-52305e8a (halted_partial, provider capacity), 20260718-8cd44907 (completed_with_degradation, provider capacity), 20260718-6d2c65d5 (halted_partial, provider capacity) — strict status=completed only. Caveat: low-arm rep-1 sessions ran across a machine-sleep window (2026-07-18 02:30→09:26 KST) — their wall-time cost fields include suspended time and must not be read as compute cost.",
   "effort": "medium",
   "registration": "development-records/benchmark/effort-bench/20260717-registration/preregistration.yaml",
   "arm_settings_dir": "development-records/benchmark/effort-bench/arm-settings",
   "score_capture_dirs": {
     "full": "development-records/benchmark/effort-bench/20260717-registration/pilot-score-full-medium",
-    "partial": "development-records/benchmark/effort-bench/20260717-registration/pilot-score-partial-medium"
+    "partial": "development-records/benchmark/effort-bench/20260717-registration/pilot-score-partial-medium",
+    "low": "development-records/benchmark/effort-bench/20260717-registration/pilot-score-low-medium"
   },
   "cells": [
     {
@@ -27,6 +28,16 @@
       "zone": "partial",
       "fixture": "manufacturing-bom",
       "sessions": ["20260718-ca026909", "20260718-6dc79b44", "20260718-ddf66b5d"]
+    },
+    {
+      "zone": "low",
+      "fixture": "clinical-lab-workflow",
+      "sessions": ["20260718-10efada9", "20260718-8de943b3", "20260718-0e0876e7"]
+    },
+    {
+      "zone": "low",
+      "fixture": "manufacturing-bom",
+      "sessions": ["20260718-76a67afe", "20260718-795bfbce", "20260718-bb9f7ec9"]
     }
   ]
 }

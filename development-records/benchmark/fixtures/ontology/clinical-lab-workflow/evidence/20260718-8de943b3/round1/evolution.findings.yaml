@@ -1,0 +1,168 @@
+schema_version: 1
+session_id: 20260718-8de943b3
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: Test·Assay 카탈로그 모델
+    evidence_anchor: materialized-input.md:46-60,108-119,126-127
+    claim: 새 검사 항목이나 검체 유형을 추가할 때 Test와 Assay를 함께 수정해야 하며, 두 카탈로그의 정체성·버전·매핑 연속성을
+      보장할 구조가 없다.
+    what: Test와 Assay가 별도 코드와 서로 다른 검체 표현을 사용하지만 상호 관계가 정의되지 않았고, 신규 항목을 양쪽에 등록하도록
+      명시한다.
+    why: 이중 등록은 카탈로그 확장 때 누락과 불일치를 허용한다. 특히 Test의 폐쇄형 검체 enum과 Assay의 자유 문자열 사이에 매핑이
+      없어 새 검체 유형이나 코드 개정 시 기존 주문·결과의 의미를 안정적으로 추적할 수 없다.
+    how_to_fix: 검사의 canonical identity를 단일 권위로 두고 Test와 Assay를 주문 가능 개념과 수행 구현으로
+      명시적으로 연결한다. 코드 체계, 버전, 유효기간, 검체 개념 매핑을 모델링하고 신규 항목 등록 경로를 한 곳으로 통합한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 카탈로그의 일관된 확장과 추적 가능성
+      failure_condition: 신규 검사·분석법·검체 유형을 추가하거나 한 시스템의 카탈로그 코드를 개정할 때
+      impact: 양쪽 시스템에서 서로 다른 항목이나 검체 의미로 해석되어 주문-수행-결과 연결의 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: 검사 개념의 canonical identity와 Test-Assay 간 버전형 매핑이 정의되지 않았다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 신규 항목은 Test와 Assay 두 곳 모두에 등록해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:126-127
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Test와 Assay는 별도 코드 및 서로 다른 검체 표현을 가지면서 관계 목록에는 양자를 연결하는 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 검사 카탈로그의 단일 권위, 버전, 매핑 수명주기가 모델링되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: Result·Report 상태 모델과 state_rules
+    evidence_anchor: materialized-input.md:62-84,121-124
+    claim: 상태 어휘와 전이 규칙이 고정 리터럴에 결합되어 있어 새 상태나 외부 상태 표준을 도입하면 기존 규칙과 이력 해석을 함께 수정해야
+      한다.
+    what: Result와 Report가 서로 다른 폐쇄형 상태 enum을 사용하고, 규칙은
+      final·corrected·finalized·amended 값을 직접 참조한다. 상태 간 대응의 버전이나 유효기간은 없다.
+    why: 새 중간 상태, 철회 상태 또는 명칭 변경을 수용할 때 enum, 동기화 규칙, 완료 조건을 동시에 수정해야 한다. 과거 레코드에
+      적용된 상태 의미와 새 의미를 구분할 장치도 없어 버전 변경 후 연속성이 깨질 수 있다.
+    how_to_fix: 상태를 버전 가능한 개념 체계로 정의하고 Result-Report 상태 대응표, 유효기간, 폐기·별칭 규칙을 둔다. 전이
+      규칙은 개별 문자열이 아니라 안정된 상태 의미나 상태군을 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 사이에서 결과와 보고 상태를 장기간 동일하게 해석하는 권위 계약
+      failure_condition: 새 상태가 추가되거나 기존 상태명·전이 정책이 개정될 때
+      impact: 완료 판정과 보고 상태 동기화가 기존 데이터에는 다른 의미로 적용되어 통합 규칙의 재현성과 이력 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:62-84
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: 상태 개념과 대응 규칙에 독립적인 버전·유효기간 모델이 없다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 완료 및 보고 동기화 규칙이 final, corrected, finalized, amended 리터럴에 직접 의존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Result와 Report의 상태는 서로 다른 폐쇄형 enum으로 내장되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 상태 체계의 버전, 유효기간, 교차 상태 매핑이 모델링되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: Patient·Test·Assay·Department 식별자
+    evidence_anchor: materialized-input.md:31-35,46-60,86-98
+    claim: 식별자가 발급 기관이나 원천 시스템 없이 단순 문자열로만 정의되어 다기관 또는 복수 EMR/LIS 통합 시 충돌을 흡수할 수 없다.
+    what: patient_id, mrn, test_code, assay_code, dept_code, staff_id에 namespace,
+      assigning authority, source system 또는 코드 버전이 없다.
+    why: 서로 다른 시스템이 같은 문자열을 다른 대상에 사용하면 현재 모델은 두 대상을 구분하거나 동일 대상을 교차 참조할 수 없다. 이후
+      namespace를 추가하려면 기존 식별자와 모든 참조의 마이그레이션이 필요하다.
+    how_to_fix: 공통 Identifier 개념을 도입해 value, system/issuer, version, validity를 함께
+      보존하고, 로컬 식별자와 통합 식별자의 대응 관계를 명시한다.
+    upstream_evidence_required: true
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 환자·검사·조직·인력 식별을 위한 개념 권위
+      failure_condition: 연결되는 두 시스템 또는 기관이 동일한 로컬 문자열을 서로 다른 대상에 사용하거나 코드 체계를 개정할 때
+      impact: 잘못된 환자·검사·부서 연결로 이어질 수 있으며, 문서만으로 충돌 해소 규칙을 결정할 수 없다.
+      evidence_refs:
+        - materialized-input.md:31-35
+        - materialized-input.md:46-60
+        - materialized-input.md:86-98
+    causal_path:
+      root_cause_candidate: 식별자 모델이 값만 보존하고 발급 권위와 수명주기를 보존하지 않는다.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 핵심 엔티티의 식별자와 코드가 모두 단순 string 속성이다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:31-35
+            - materialized-input.md:46-60
+            - materialized-input.md:86-98
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 식별자 속성에 issuer, namespace, source system 또는 version이 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:31-35
+            - materialized-input.md:46-60
+            - materialized-input.md:86-98
+      unresolved_beyond_evidence: 실제 연동 대상 시스템들이 전역 유일성을 보장하는지는 허용된 자료에서 확인할 수 없다.
+  - candidate_id: evolution-candidate-004
+    target: CriticalValue 확장 모델
+    evidence_anchor: materialized-input.md:100-106
+    claim: CriticalValue가 Test별 단일 숫자 경계와 boolean 통보 상태로 고정되어 있어 조건형·범주형 기준 추가 시 기존
+      구조를 재설계해야 한다.
+    what: 위험 기준 표현은 lower_bound와 upper_bound 숫자뿐이며 적용 조건, 단위, 기준 버전, 유효기간 또는 복합 판정식을
+      표현할 수 없다.
+    why: 향후 기준이 환자·검체·단위·시간 또는 비수치 결과에 따라 달라지는 경우 새 속성을 계속 추가하거나 별도 예외 모델을 만들어야 한다.
+      기준 변경 전후의 결과를 어떤 규칙으로 판정했는지도 보존되지 않는다.
+    how_to_fix: CriticalValue를 버전 가능한 판정 규칙으로 모델링하고 대상 검사, 조건, 연산자, 기준값과 단위, 유효기간을
+      구성 가능한 속성으로 분리한다. 통보 사실은 규칙 정의와 분리된 이벤트로 둔다.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 운영 정책 변경에도 유지되는 임상검사 워크플로 개념 모델
+      failure_condition: 숫자 구간 이외의 위험 판정이나 조건별·버전별 기준을 추가할 때
+      impact: 기존 CriticalValue 구조를 수정하거나 병렬 예외 구조를 도입해야 하므로 규칙 연속성과 결과 재현성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: 위험 판정 기준이 확장 가능한 규칙 개념이 아니라 고정된 숫자 속성으로 모델링되었다.
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: CriticalValue는 lower_bound와 upper_bound 숫자만으로 판정 범위를 표현한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 조건, 단위, 판정 연산자, 규칙 버전과 유효기간을 담는 구조가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: 실제 기관 정책에 조건형 또는 비수치 critical-value 규칙이 필요한지는 허용된 자료에서 확인할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - EMR/LIS 통합은 서로 독립적으로 관리되는 식별자·검사 코드·상태 어휘를 연결할 수 있다.
+  - 향후 검사 카탈로그, 검체 유형, 상태 정책 및 위험 판정 기준이 추가되거나 개정될 수 있다는 조건으로 변경 내성을 평가했다.
+validation:
+  unaddressable_candidates: []

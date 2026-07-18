@@ -1,0 +1,160 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+planned_issues:
+  - issue_id: issue-015
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-015.semantics
+      - issue-stance-matrix.yaml#stances.issue-015.axiology
+      - issue-stance-matrix.yaml#stances.issue-015.logic
+    conflict_summary: The semantics lens retains high severity because identical
+      substitution data can yield opposing authorization decisions, while the
+      axiology and logic lenses lower the issue to medium because they view the
+      demonstrated failure as important but conditional rather than
+      baseline-defeating.
+    resolution_question: Does the incompatible symmetric-versus-directional meaning
+      warrant high severity, or does the bounded failure condition support
+      medium severity?
+  - issue_id: issue-016
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+      - issue-stance-matrix.yaml#stances.issue-016.axiology
+    conflict_summary: The semantics lens retains high severity for conflating
+      product composition with process material flow, while the axiology lens
+      lowers it to medium because the harmful behavior arises only when the
+      documented self-reference pattern is used.
+    resolution_question: Is the material-flow/BOM conflation a high-severity
+      integration defect, or a medium-severity conditional calculation risk?
+  - issue_id: issue-004
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: The axiology lens keeps the issue at medium severity, while
+      the semantics lens raises severity because conflicting substitution
+      meanings can produce unsafe authorization decisions; both otherwise accept
+      the directional canonical-relation remedy.
+    resolution_question: Should the demonstrated risk of divergent
+      reverse-substitution decisions raise issue-004 above medium severity?
+  - issue_id: issue-019
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.structure
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+    conflict_summary: The structure lens keeps medium severity for the canonical
+      graph bypass, while the semantics lens raises severity because the bypass
+      loses authorization-relevant direction on a canonical traversal path.
+    resolution_question: Does loss of substitution direction on the canonical graph
+      path warrant severity above medium?
+  - issue_id: issue-014
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+    conflict_summary: The logic lens retains medium severity for the
+      universal-symmetry versus one-way contradiction, while the semantics lens
+      raises severity because the contradiction also produces opposing
+      substitution meanings for identical data.
+    resolution_question: Should the logical and semantic consequences of universal
+      symmetry combined with one-way direction be classified above medium
+      severity?
+  - issue_id: issue-013
+    priority: 5
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.evolution
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+    conflict_summary: The evolution lens keeps medium severity for future
+      proliferation of BOM-cycle exceptions, while the semantics lens raises
+      severity because each added exception compounds an existing category error
+      between product structure and material flow.
+    resolution_question: Does the accumulating semantic conflation justify severity
+      above medium, or is medium appropriate for the primarily future-facing
+      extensibility risk?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All applicable lenses support the root hypothesis, action, and high
+      severity; the logic lens is not applicable rather than opposed.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All applicable lenses agree that recovered-material flow should be
+      separated from the acyclic product BOM and retain medium severity.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: The evolution and structure lenses narrow their support to reusable
+      measurement structure within the accepted typed-measurement hypothesis;
+      this is complementary scope clarification, not a material disagreement.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All applicable lenses support independently versioned, effective-dated
+      BOM and routing structures at high severity.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All applicable lenses support complete event-based lifecycles and retain
+      medium severity.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All applicable lenses support immutable actor-attributed approval and
+      application events and retain medium severity.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: The structure lens limits its claim to the missing conversion-rule
+      object and relations, while the other lenses address factor and rounding
+      semantics; these positions are compatible with the proposed governed
+      conversion model.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All applicable lenses agree on the authority, provenance, freshness,
+      precedence, and derivation gap and retain medium severity.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: The supporting and narrowing stances converge on a minimal
+      ProductionOrder integration boundary or explicit external contract. The
+      semantics lens reports insufficient evidence about boundary placement but
+      does not oppose that bounded remedy.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All applicable lenses support a relationship-capable configuration
+      anchor connecting ECO, revision, BOM, routing, and effectivity at high
+      severity.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: The structure lens narrows its support to explicit Quantity/UOM objects
+      and relations, while semantics judges dimensional meaning; both fit the
+      same typed-capacity remedy without a material conflict.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: All applicable lenses support separating reusable inspection
+      specifications from executable inspection operations and retain medium
+      severity.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: The structure lens confines its judgment to identifying and linking
+      derived values, snapshots, and overrides, while other lenses determine
+      authority; the positions are complementary and support the same remedy.

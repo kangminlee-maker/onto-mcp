@@ -1,0 +1,703 @@
+schema_version: "1"
+producer: onto-review-runtime
+producer_version: review-runtime-settings-domain-axiology-plan-20260523
+settings_schema_version: settings.json/v3
+domain_registry_version: domain-docs/v1
+alignment_contract_version: review-value-alignment-criteria/v1
+lifecycle_state: dispatched
+session_id: 20260718-795bfbce
+target_refs:
+  - /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/manufacturing-bom-ontology.yaml
+domain_binding_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/domain-binding.yaml
+review_value_alignment_criteria_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/review-value-alignment-criteria.yaml
+actor_consumer_bindings_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/actor-consumer-bindings.yaml
+context_sources:
+  - context_source_id: materialized-input
+    source_kind: materialized_input
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/materialized-input.md
+    source_sha256: 1cb3b9634e22dc984bde0d34e30d095fa954e99e5c48caeb8780189512f2cd8e
+    required: true
+    sensitivity: internal
+    allowed_consumers: &a1
+      - teamlead
+      - lens:axiology
+      - lens:coverage
+      - lens:evolution
+      - lens:logic
+      - lens:semantics
+      - lens:structure
+      - deliberation:axiology
+      - deliberation:coverage
+      - deliberation:evolution
+      - deliberation:logic
+      - deliberation:semantics
+      - deliberation:structure
+      - issue-stance:axiology
+      - issue-stance:coverage
+      - issue-stance:evolution
+      - issue-stance:logic
+      - issue-stance:semantics
+      - issue-stance:structure
+      - issue-artifact:finding-ledger
+      - issue-artifact:finding-relation-graph
+      - issue-artifact:issue-ledger
+      - issue-artifact:issue-stance-matrix
+      - issue-artifact:deliberation-plan
+      - issue-artifact:problem-framing
+      - controlled-deliberation
+      - synthesize
+      - final-output
+      - review-record
+  - context_source_id: target-snapshot
+    source_kind: target_snapshot
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/target-snapshot.md
+    source_sha256: 87764928fafa1236b581d73e547da618d3d537bfff8eb012d7565a4f31f5816d
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: context-candidate-assembly
+    source_kind: context_candidate_assembly
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/context-candidate-assembly.yaml
+    source_sha256: 702eaf11c8862cd3146e41368a9eb240d58b9ee25e67ff2f87ea21f2eee3d3cf
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: review-target-profile
+    source_kind: review_target_profile
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/review-target-profile.yaml
+    source_sha256: 3e55d8422b719b6e10a24dce85a675e75d627318c62881929e00c469d4119dc2
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: review-value-alignment-criteria
+    source_kind: review_value_alignment_criteria
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/execution-preparation/review-value-alignment-criteria.yaml
+    source_sha256: 8e1098a9a0d0ed4426cf626a19afb96518d8f091bef783228817c6dfd2115e6c
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+derived_context_access_matrix:
+  teamlead:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:axiology: &a2
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:coverage: &a3
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:evolution: &a4
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:logic: &a5
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:semantics: &a6
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:structure: &a7
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:axiology:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:coverage:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:evolution:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:logic:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:semantics:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:structure:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:axiology:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:coverage:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:evolution:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:logic:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:semantics:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:structure:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:finding-ledger:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:finding-relation-graph:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:issue-ledger:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:issue-stance-matrix:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:deliberation-plan:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:problem-framing:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  controlled-deliberation:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  synthesize:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  final-output:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  review-record:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+packet_refs:
+  - consumer_id: lens:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/axiology.prompt.md
+    packet_sha256: 50950c92e444238eed147bc6cdeac28faa5556f9d015d9ee15344ec01943f60c
+    consumed_context_refs: *a2
+    forbidden_context_refs: []
+  - consumer_id: lens:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/coverage.prompt.md
+    packet_sha256: 3d17ff15bc5724eead4ee89e5efe407907a88b2d60e2014e087f9a6134aeca9e
+    consumed_context_refs: *a3
+    forbidden_context_refs: []
+  - consumer_id: lens:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/evolution.prompt.md
+    packet_sha256: a6767ec2987a37ff131114900595b31c7c99c9fecea57f8e521b5d3cc808e43f
+    consumed_context_refs: *a4
+    forbidden_context_refs: []
+  - consumer_id: lens:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/logic.prompt.md
+    packet_sha256: 91622354ebaae2afc6d54c1a06c0ccce411eabd17c5a709df3d0586ab9e7d1fa
+    consumed_context_refs: *a5
+    forbidden_context_refs: []
+  - consumer_id: lens:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/semantics.prompt.md
+    packet_sha256: 5d4902fa34701fbf107d5d484b88b017541c4380668dfc811c56d5222b94b1b4
+    consumed_context_refs: *a6
+    forbidden_context_refs: []
+  - consumer_id: lens:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/structure.prompt.md
+    packet_sha256: d07459dbe18b8d9ea9ad5ed1743a411f22eae9e46fa386c305f1bdf70c891702
+    consumed_context_refs: *a7
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:finding-ledger
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/finding-ledger.prompt.md
+    packet_sha256: d607712157368c8a5a8b9a24d344932e7b7912c9d603d433d93b11ed8dba835f
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:finding-relation-graph
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/finding-relation-graph.prompt.md
+    packet_sha256: 09359d95784edebb8d1c50134b8d0b66c9aeea9086139511776e9147cc7a4c29
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:issue-ledger
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-ledger.prompt.md
+    packet_sha256: 7f48ab39747ddb3b3673b5e5a1e3ab1008cb2c45f22dbb7ae37033348177548b
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-stance/coverage.prompt.md
+    packet_sha256: a7fb7aed31825b4efef0e74059f86d55901a75eaa17d3a2d794335fb994ab596
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-stance/evolution.prompt.md
+    packet_sha256: 0f44c1e4efcaa43beb0dd7eb47c40fef6eb6836efd2e981c9af23d49ea122f21
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-stance/semantics.prompt.md
+    packet_sha256: 36c7ad41be7756cb3aeae8e8b67e8e43dbfa7c4c46f7bf6e8986225648798557
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-stance/axiology.prompt.md
+    packet_sha256: e80f310a95546c1b327c6bf7162befff4c4d9d5b1c96533599cde741aca8d2dc
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-stance/logic.prompt.md
+    packet_sha256: 35c534a8b97b32651ec7649beb216bf18c5e7684beea75a7c60296ef8931d87d
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-stance/structure.prompt.md
+    packet_sha256: d8a12e0623b64870f109fa2a50fa3aa0390417f7fc890073a800518570680fac
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:issue-stance-matrix
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/issue-stance-matrix.prompt.md
+    packet_sha256: e3a9b47b88dd88df31defaf65f75ac64f70eefafbf728377b4548c168548258e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:deliberation-plan
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation-plan.prompt.md
+    packet_sha256: 7ccbb98b3d3ebeafec93f43413880cc75dbad74585776f20cf65dfb2805bb392
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-015/semantics.prompt.md
+    packet_sha256: 8bb1943d4b7bddf6dbb85e22b6e5423f3e9294b35cae38b0d332e21458cac009
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-015/axiology.prompt.md
+    packet_sha256: 3bb612df4eb5a1aaa4b0476fa24a70110e1e0153482870129943fd2ac2539e0b
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-015/logic.prompt.md
+    packet_sha256: 47df8f55dfceffc2ab5470fb619e4e58179a34709948db0c2f95b5b179261081
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-016/semantics.prompt.md
+    packet_sha256: a6ee2c6b6e02948a1f54cc127b9768a42d6fc2cfb1e962916ae37556a55f5b04
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-016/axiology.prompt.md
+    packet_sha256: 1ad9f93d6241821a48dd294667e144995605627a913d0f5c9545660833efc3d6
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-004/axiology.prompt.md
+    packet_sha256: b6aa0ee383201f125b2981ac03348e5f00f4b209aa07bc2093df100f9e16c773
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-004/semantics.prompt.md
+    packet_sha256: 3737677a7bc3ad18c1299730bc05434d52cab01bb6846998d7e0445da1ef6d26
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-019/structure.prompt.md
+    packet_sha256: dfb1dcbcf3acf63549a116a309acc9eb446c2131c93942bb75fdbe9f64fdec9e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-019/semantics.prompt.md
+    packet_sha256: d1e7111a2c8e031a535325a51c31ba42a132bb1b062f694cf3f692f57456447b
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-014/logic.prompt.md
+    packet_sha256: 85076697ee5666f6a8ce0f2c2da37140140d88c8ade210be014e06f92379101d
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-014/semantics.prompt.md
+    packet_sha256: bddb1792ff2f339349b84148f5c9ccdc37e051e1a419dc143f55b138ec81474d
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-013/evolution.prompt.md
+    packet_sha256: 8458bae542ec7f2339ad0fda9b8e89e80e7b0945bd2f9c47e71f0ac8fc6f25eb
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/deliberation/issue-013/semantics.prompt.md
+    packet_sha256: 0061f801d55176e2ba7b35961087c1792e0f00137fed2b83013998ca124e2c0a
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: controlled-deliberation
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/teamlead.deliberation.prompt.md
+    packet_sha256: 397625d827362c98c2f0047c7d57617aef44c4d6a3da052816ebdba042bd2eec
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:problem-framing
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/problem-framing.prompt.md
+    packet_sha256: 0d4da930225652d811a3e8474c65f296e6d6bdcca912f6f376b19869303cf729
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-008.prompt.md
+    packet_sha256: 39c3adc98e6500845119422f01b54060b94f26990f426f40f819eda55d537e9e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-005.prompt.md
+    packet_sha256: fdebcc9595d9dd1bf05a01ec90a392cd23968009fe4c0f17d13d855d1350955d
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-011.prompt.md
+    packet_sha256: 779759a34ad7b8ad552649c5ca73392f9dfb40d5f5a3b54788b1f384bc1ceba0
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-002.prompt.md
+    packet_sha256: 88fd199114e54088968cdda16015874e8f98755d40aa78932ef6c1f9a562d4d4
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-001.prompt.md
+    packet_sha256: 1d1aae9a1884d6b43214e77cd1a621b49cbf4e5e3a2e05446c6eb8427caa0e91
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-006.prompt.md
+    packet_sha256: 7de1130b36783c814b73b8dbc3f168db44c93e265e3101506ea62f73c5746c3a
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-003.prompt.md
+    packet_sha256: a2925a98bdc1dad93fd29e254ee946db69f66688f1644e1a64865d7110cef1ca
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-007.prompt.md
+    packet_sha256: c64f8214c61f16cb325b120f602b967ffb76ca6bd90f349bb8ef0f0b8b0f7006
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-010.prompt.md
+    packet_sha256: f4317d3bf64d1e68ff6126b0d7f6a6f7474dd17a2a066844ebf9ff72e1e023aa
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-012.prompt.md
+    packet_sha256: fc50d8ec0ef6f44cc27a53c9e4acf184db89973f45aae581359702573fe0fd56
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-018.prompt.md
+    packet_sha256: ae6150d5e3558c57ca91e22ba819ae384fe40152c64fe45d0c272c75e6326232
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-017.prompt.md
+    packet_sha256: 3f08eeca0e06faa2da6071edb17a344661e445119c4651cbb711129e45f681aa
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-TWHEhu/.onto/review/20260718-795bfbce/prompt-packets/synthesis/issue-009.prompt.md
+    packet_sha256: bc5b651d96ba2647a6631a0354686ccee800e97df0755619188822e0bb1aec60
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+validation_results:
+  - domain_binding_valid
+  - review_value_alignment_dispatch_allowed
+  - review_target_profile_admitted
+  - context_access_matrix_valid
+  - packet_refs_materialized
+  - generated_packet_ref_registered:issue-artifact:finding-ledger
+  - generated_packet_ref_registered:issue-artifact:finding-relation-graph
+  - generated_packet_ref_registered:issue-artifact:issue-ledger
+  - generated_packet_ref_registered:issue-stance:coverage
+  - generated_packet_ref_registered:issue-stance:evolution
+  - generated_packet_ref_registered:issue-stance:semantics
+  - generated_packet_ref_registered:issue-stance:axiology
+  - generated_packet_ref_registered:issue-stance:logic
+  - generated_packet_ref_registered:issue-stance:structure
+  - generated_packet_ref_registered:issue-artifact:issue-stance-matrix
+  - generated_packet_ref_registered:issue-artifact:deliberation-plan
+  - generated_packet_ref_registered:deliberation:semantics
+  - generated_packet_ref_registered:deliberation:axiology
+  - generated_packet_ref_registered:deliberation:logic
+  - generated_packet_ref_registered:deliberation:structure
+  - generated_packet_ref_registered:deliberation:evolution
+  - generated_packet_ref_registered:controlled-deliberation
+  - generated_packet_ref_registered:issue-artifact:problem-framing
+  - generated_packet_ref_registered:synthesize
+failure_record_refs: []
+embed_budget:
+  max_embed_lines_effective: 40
+  max_embed_lines_source: cli

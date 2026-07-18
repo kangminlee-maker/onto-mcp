@@ -1,0 +1,152 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: Part, BOM, Routing, ECO의 개정과 효력이 독립적인 시점별 적용 개념으로 모델링되지 않고 현재값
+      속성으로 축약되어 있다.
+    shared_cause: null
+    rationale: finding-001의 ECO 발효일과 Part.rev 동기화 불일치 및 finding-011의 후속 변경 이력 단절은 모두
+      생산 시점에 유효한 개정을 직접 식별하지 못하는 동일한 시간적 모델 결손으로 설명된다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: BOM 구성이 식별 가능한 개정과 효력 구간에 귀속되지 않아 현재 구성과 과거 구성을 구별할 수 없다.
+    shared_cause: null
+    rationale: finding-005는 BOM에 집중하고 finding-011은 BOM·Routing·Part 전반의 변경 연속성을
+      다루지만, 양쪽 모두 BOM 버전과 effectivity 부재를 직접 원인으로 제시한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-006
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: Routing과 Operation이 개정·효력 구간을 가진 일급 버전 객체가 아니라 변경 가능한 현재 정의로만 표현되어 있다.
+    shared_cause: null
+    rationale: finding-006의 라우팅 lifecycle·버전 결손은 finding-011이 지적한 후속 ECO 이후 과거 공정 구성
+      단절의 라우팅 측면에 해당한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-007
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 시간에 따라 변하는 제조 정의와 통제 행위가 버전 또는 사건 이력 대신 현재 상태값으로 축약되어 있다.
+    shared_cause: null
+    rationale: finding-007은 승인·릴리스 사건의 부재를, finding-011은 개정·효력 객체의 부재를 지적한다. 둘 다 과거
+      상태와 그 적용 근거를 재구성할 수 없는 current-state-only 모델의 결과이다.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-008
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: 버전이 식별되는 제조 정의를 개별 생산 실행에 고정하는 applicability chain이 온톨로지에 존재하지 않는다.
+    shared_cause:
+      cause_claim: 확정된 설계·BOM·Routing 개정을 ProductionOrder에 귀속시키는 일급 실행-적용 연결이 없다.
+      from_cause_ref: finding-008.cause-002
+      to_cause_ref: finding-011.cause-003
+    rationale: finding-008은 ProductionOrder와 적용 기준 참조의 부재를, finding-011은 참조 대상이 될 독립
+      개정·효력 개념의 부재를 제시한다. 두 결손은 함께 설계 변경에서 제조 실행까지의 시점별 추적 사슬을 끊는다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-003
+    to_finding_id: finding-017
+    relation: duplicates
+    root_hypothesis: 스크랩 재투입이라는 공정 물질 흐름을 별도 개념으로 두지 않고 자기 참조 BomLine으로 표현했다.
+    shared_cause: null
+    rationale: 두 finding은 동일한 무결성 예외와 BomLine 의미를 근거로 제품 구성과 스크랩 재투입 흐름의 혼합을 지적하며,
+      실패 조건과 권고 조치도 실질적으로 일치한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-014
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: AlternatePart에 무조건적 대칭성과 선택 가능한 one_way 방향성을 동시에 부여해 하나의 관계에 양립
+      불가능한 의미를 정의했다.
+    shared_cause: null
+    rationale: logic과 semantics 렌즈가 동일한 AlternatePart 정의·direction 충돌, 동일한 one_way
+      실패 조건, 동일한 역대체 위험을 각각 논리적·의미적 관점에서 보고했다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-015
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: 대체 관계의 방향성과 역할이 재구체화된 AlternatePart와 Part 간 단축 projection 사이에서
+      일관되게 보존되지 않는다.
+    shared_cause:
+      cause_claim: alternate_of 단축 간선이 AlternatePart가 보유한 primary/alternate 역할과
+        direction 정보를 명시적으로 연결하거나 보존하지 않는다.
+      from_cause_ref: finding-015.cause-003
+      to_cause_ref: finding-020.cause-002
+    rationale: finding-015는 방향 정보를 잃는 단축 관계를 의미 결손으로, finding-020은 AlternatePart를
+      우회하는 관계 그래프를 구조 결손으로 식별한다. 두 causal step은 같은 projection 연결 부재를 직접 가리킨다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-009
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: 수량의 단위와 시점별 환산 규칙이 재사용 가능한 마스터 개념으로 분리되지 않았다.
+    shared_cause: null
+    rationale: finding-009의 BOM 환산 불결정성과 finding-012의 신규 단위 확장 실패는 모두 품목별 환산 마스터와 공통
+      UnitOfMeasure/Quantity 모델의 부재에서 발생한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-012
+    to_finding_id: finding-019
+    relation: same_root_candidate
+    root_hypothesis: 측정값의 차원과 단위를 숫자 값에서 분리해 명시하는 공통 수량 모델이 없다.
+    shared_cause: null
+    rationale: finding-012는 단위 체계의 확장 불가능성을, finding-019는 capacity_per_shift가 수량과
+      시간을 구분하지 못하는 의미 불안정을 지적한다. 두 문제 모두 값·차원·단위의 미분리로 검증 가능하다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-002
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: 운영 파라미터가 권위, 측정 차원, 단위, 환산 규칙을 가진 공유 개념이 아니라 로컬 숫자와 관례로 유지된다.
+    shared_cause:
+      cause_claim: 공통 단위 및 환산 마스터가 없어 시스템과 현장이 동일 수량 의미를 결정적으로 공유하지 못한다.
+      from_cause_ref: finding-002.cause-002
+      to_cause_ref: finding-012.cause-003
+    rationale: finding-002가 통합 기준의 권위·단위 결손을 포괄적으로 지적하고 finding-012가 그 결손이 신규 단위
+      도입에서 만드는 진화 실패를 구체화한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-010
+    to_finding_id: finding-018
+    relation: shared_cause_candidate
+    root_hypothesis: scrap_rate가 명확한 의미, 계산 규칙, 권위 원천과 효력 구간을 가진 계획 또는 측정 개념으로 분리되지
+      않고 외부 숫자의 복사본으로 유지된다.
+    shared_cause:
+      cause_claim: 외부 엑셀에서 복사한 scrap_rate 숫자가 권위와 적용 의미를 함께 보존하지 못한다.
+      from_cause_ref: finding-010.cause-002
+      to_cause_ref: finding-018.cause-003
+    rationale: finding-010은 원본·적용 이력 부재를, finding-018은 비율/계수 의미와 측정값/계획값 구분 부재를
+      지적한다. 양쪽의 causal path가 동일한 외부 복사 구조를 명시한다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-006
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: Routing과 Operation이 시점·공장·자원 조건별 변형을 식별하는 applicability 객체 없이
+      하나의 현재 구성으로 결합되어 있다.
+    shared_cause: null
+    rationale: finding-006의 시간적 라우팅 버전 부재와 finding-013의 공장·대체자원·조건별 변형 부재는 적용 범위를 가진
+      RoutingVariant/Revision이 없다는 공통 모델 결손으로 설명된다.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-013
+    to_finding_id: finding-016
+    relation: same_root_candidate
+    root_hypothesis: Operation이 실행 단계, 규범적 사양, 자원 배정과 조건별 시간이라는 서로 다른 개념의 경계를 충분히 분리하지 못한다.
+    shared_cause: null
+    rationale: finding-013은 Operation에 work_center와 std_time을 직접 결합한 점을,
+      finding-016은 InspectionPlan을 Operation 하위 유형으로 결합한 점을 지적한다. 두 finding 모두
+      실행 단계가 관련 사양·배정을 참조하는 구조 대신 상속 또는 직접 소유로 의미를 합친 결과이다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-004
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

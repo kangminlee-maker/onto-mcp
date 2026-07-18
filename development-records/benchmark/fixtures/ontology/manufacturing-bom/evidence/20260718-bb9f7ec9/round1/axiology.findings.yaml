@@ -1,0 +1,178 @@
+schema_version: 1
+session_id: 20260718-bb9f7ec9
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml — ECO/revision effective-date contract
+    evidence_anchor: materialized-input.md:7 declares the artifact a PLM/MES
+      integration conceptual reference;
+      review-value-alignment-criteria.yaml:6-18 confirms integration suitability
+      and manufacturing risk as the purpose authority;
+      materialized-input.md:20-21 and 69-75 identify separate revision/ECO
+      authorities; materialized-input.md:96 requires the new revision after
+      effective_date while allowing weekly delayed Part.rev synchronization.
+      value_type=purpose; alignment_direction=misaligned.
+    claim: The effective-date rule permits MES-facing revision state to remain stale
+      after the ontology says the new revision is mandatory.
+    what: ECO.effective_date immediately changes the required production revision,
+      but Part.rev—the revision exposed on the integrated Part concept—is
+      updated only by a weekly batch from another source.
+    why: During the interval between effective date and batch synchronization, the
+      conceptual reference can simultaneously prescribe the new revision and
+      expose the old revision. A PLM/MES integration relying on Part.rev can
+      therefore release or execute production against obsolete design data,
+      defeating the declared purpose of providing a trustworthy integration
+      baseline.
+    how_to_fix: Represent revision applicability as an effective-dated,
+      authoritative relation tied to an approved/applied ECO, and require
+      production-order revision resolution from that authority. Make Part.rev an
+      explicitly derived projection with freshness state, or block release while
+      it is stale; define the precedence and synchronization-failure behavior in
+      the ontology.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serve as a conceptually consistent PLM/MES integration
+        reference for item and engineering-change control.
+      failure_condition: An ECO effective date passes before the weekly Part.rev
+        synchronization completes or succeeds.
+      impact: The reference can direct manufacturing to use a new revision while
+        exposing an old one, weakening trust in revision selection at production
+        release.
+      evidence_refs:
+        - materialized-input.md:7
+        - review-value-alignment-criteria.yaml:6-18
+        - materialized-input.md:20-21
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: The model splits effective-revision authority across ECO
+        effective_date, the drawing register, and a delayed Part.rev projection
+        without a precedence/freshness contract.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: After ECO.effective_date, the integrity rule requires production to
+            follow the new revision.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: axiology-candidate-001.cause-002
+          claim: Part.rev may still contain the old revision until a weekly
+            synchronization from the drawing register occurs.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:96
+        - cause_id: axiology-candidate-001.cause-003
+          claim: An integration consumer can observe contradictory required and exposed
+            revision states.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+        - cause_id: axiology-candidate-001.cause-004
+          claim: The contradiction is enabled by distributed authorities lacking an
+            explicit precedence and freshness contract.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:96
+      unresolved_beyond_evidence: The bounded artifact does not specify whether an
+        external production-order service independently resolves ECO
+        applicability; such behavior cannot be credited to this conceptual
+        reference.
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml — operational master-data authority
+    evidence_anchor: materialized-input.md:7 and
+      review-value-alignment-criteria.yaml:6-18 establish trustworthy PLM/MES
+      integration and manufacturing-risk control as the purpose;
+      materialized-input.md:35 copies scrap_rate from a planning spreadsheet,
+      lines 99-100 retain manually duplicated standard time and ad hoc UOM
+      conversion. value_type=tradeoff; alignment_direction=misaligned.
+    claim: The ontology normalizes copied and manually reconciled operational values
+      without defining authoritative ownership, freshness, or deterministic
+      conversion.
+    what: Scrap rate is copied from a separate spreadsheet, accumulated standard
+      time is duplicated by manual entry and reconciled quarterly, and required
+      UOM conversions have no item conversion master and are performed on the
+      shop floor.
+    why: These choices optimize local convenience while leaving integration-critical
+      quantities governed by copies and human intervention. PLM, MES, planning,
+      and costing can calculate different material requirements, capacities, and
+      costs from ostensibly shared concepts, so the artifact does not fulfill
+      its purpose as a reliable integration baseline.
+    how_to_fix: For each integration-critical value, designate one authoritative
+      source and model provenance, unit, effective period, and freshness.
+      Replace copied scrap_rate and manual accumulated-time entry with derived
+      or synchronized projections, and add item-specific UOM conversion entities
+      with validated factors and applicability. Define rejection behavior for
+      missing or stale values.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Provide a common PLM/MES conceptual basis that controls
+        manufacturing operational risk.
+      failure_condition: A copied value changes at its source, quarterly
+        reconciliation has not occurred, or production requires conversion
+        between incompatible UOMs.
+      impact: Integrated systems can plan or execute different quantities, capacity,
+        and cost from the same item/BOM/routing, making the conceptual reference
+        operationally non-authoritative.
+      evidence_refs:
+        - materialized-input.md:7
+        - review-value-alignment-criteria.yaml:6-18
+        - materialized-input.md:35
+        - materialized-input.md:53
+        - materialized-input.md:67
+        - materialized-input.md:99-100
+    causal_path:
+      root_cause_candidate: Integration-critical operational values are modeled as
+        local copies or manual practices instead of authoritative,
+        unit-qualified, effective-dated concepts.
+      root_cause_step_id: axiology-candidate-002.cause-004
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: scrap_rate is copied from a separately managed planning spreadsheet.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+        - cause_id: axiology-candidate-002.cause-002
+          claim: Standard-time totals are also manually duplicated in the costing system
+            and reconciled only quarterly, while UOM conversion is performed ad
+            hoc without a conversion master.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:99-100
+        - cause_id: axiology-candidate-002.cause-003
+          claim: These independent copies and conversions enable systems and operators to
+            derive different operational quantities and costs.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:53
+            - materialized-input.md:67
+            - materialized-input.md:99-100
+        - cause_id: axiology-candidate-002.cause-004
+          claim: The divergence is enabled by the absence of a single authority,
+            provenance/freshness contract, and deterministic unit-conversion
+            model.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:99-100
+      unresolved_beyond_evidence: Actual divergence frequency and financial or
+        production impact require operational records outside the bounded
+        evidence, but the ontology itself explicitly preserves the
+        divergence-enabling conditions.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The confirmed review intent and the target's own declaration make reliable
+    PLM/MES conceptual integration the governing purpose; no external
+    manufacturing-domain rule was assumed.
+  - A consumer may rely on the concepts and integrity rules exposed by this
+    artifact; unspecified external safeguards were not assumed.
+validation:
+  unaddressable_candidates: []

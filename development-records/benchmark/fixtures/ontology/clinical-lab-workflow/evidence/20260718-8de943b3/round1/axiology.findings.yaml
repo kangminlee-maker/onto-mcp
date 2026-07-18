@@ -1,0 +1,59 @@
+schema_version: 1
+session_id: 20260718-8de943b3
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: .onto/review/20260718-8de943b3/execution-preparation authority binding
+    evidence_anchor: "axiology role §Authoritative alignment input/§Finding evidence
+      requirements; context-candidate-assembly.yaml:1 (`system_purpose_refs:
+      []`); review-value-alignment-criteria.yaml:criteria[0]"
+    claim: 필수 가치 권위 문서가 바인딩되지 않아 온톨로지의 목적·가치 정렬 여부를 판단할 근거가 부족하다.
+    what: axiology 계약은 core lexicon과 제품·OaC·LLM-native·product-locality 원칙을 항상
+      바인딩하도록 요구하지만, 준비된 컨텍스트에는 system purpose reference가 없고 사용자 요청만 정렬 기준으로
+      제공된다.
+    why: 사용자 요청은 검토 목적을 설명하지만 canonical 개념 의미와 제품 원칙을 대신하지 못한다. 따라서 현재 경계에서 특정 모델링
+      결정을 aligned 또는 misaligned로 판정하면 개인 해석이 되며, 이 렌즈 결과의 신뢰성이 약화된다.
+    how_to_fix: 필수 순위 1~2 authority 문서를 실행 준비 단계에 명시적으로 바인딩하고 axiology 패킷에 주입한 뒤 이
+      렌즈를 다시 실행한다. 읽기 권한을 부여할 수 없다면 axiology 결과를 indeterminate로 표시한다.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 온톨로지의 목적·가치 정렬을 검증하는 axiology 리뷰
+      failure_condition: 필수 canonical authority chain 없이 사용자 요청과 대상 문서만으로 가치 판단을 수행할 때
+      impact: 정렬·위반 판단을 권위 근거에 추적할 수 없어 axiology 결과를 승인 또는 개선 결정의 근거로 신뢰하기 어렵다.
+      evidence_refs:
+        - "axiology role §Authoritative alignment input: 순위 1~3 authority는 항상
+          바인딩되어야 함"
+        - "axiology role §Finding evidence requirements: authority가 없으면
+          insufficient evidence로 처리"
+        - "context-candidate-assembly.yaml:1: system_purpose_refs: []"
+        - "review-value-alignment-criteria.yaml:criteria[0]: 사용자 요청만 포함"
+    causal_path:
+      root_cause_candidate: execution preparation이 axiology 계약상 필수인 canonical
+        authority source set을 바인딩하지 않았다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 현재 axiology 단위는 대상 온톨로지에 대한 근거 기반 가치 정렬 판정을 완료할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - axiology role §Finding evidence requirements
+            - review-value-alignment-criteria.yaml:criteria[0]
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 허용된 컨텍스트에 canonical system-purpose authority reference가 하나도 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "context-candidate-assembly.yaml:1: system_purpose_refs: []"
+            - review-context-manifest.yaml:context_sources
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 필수 authority 문서가 실행 준비 결과와 렌즈 소비 컨텍스트에 바인딩되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - axiology role §Authoritative alignment input/§Binding timing
+            - review-context-manifest.yaml:derived_context_access_matrix.lens:axiology
+      unresolved_beyond_evidence: 필수 authority 문서의 실제 내용과 대상 온톨로지의 정렬 여부는 현재 unit boundary 밖의 증거가 필요하다.
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

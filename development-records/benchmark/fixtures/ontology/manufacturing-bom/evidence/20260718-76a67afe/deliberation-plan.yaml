@@ -1,0 +1,80 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: 지원 입장들은 개정·효력·상태 사건·조건별 사양의 현재 객체 결합을 하나의 통합 원인으로 수용하지만,
+      진화·논리·의미론 입장들은 InspectionPlan의 범주 오류와 자원·시간 배정 결합이 시간적 버전·효력 결손만으로 설명되지
+      않는다고 본다.
+    resolution_question: issue-001의 근본 원인은 버전·효력·조건별 적용 모델 결손으로 한정해야 하는가, 아니면 실행 단계와
+      규범적 검사 사양 및 자원·시간 배정의 개념 경계 미분리까지 하나의 원인으로 포함해야 하는가?
+  - issue_id: issue-009
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - structure
+      - axiology
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+    conflict_summary: 의미론·논리·가치 입장들은 대칭성, primary→alternate 역할, 방향성 및 단축 관계의 불일치를
+      하나의 의미 보존 결손으로 보지만, 구조 입장은 AlternatePart와 alternate_of 사이의 역할·방향 정보 손실만 직접
+      지지한다. 이 범위는 issue-008의 대칭성 모순과 issue-012의 구조적 연결 단절과도 부분 중복된다.
+    resolution_question: issue-009는 대칭성 모순과 투영 정보 손실을 함께 다루는 독립 이슈로 유지해야 하는가, 아니면 의미
+      모순은 issue-008에, 구조적 투영 결손은 issue-012에 귀속하도록 범위를 좁히거나 재군집화해야 하는가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: 진화와 구조 렌즈의 narrow 입장은 각 렌즈의 직접 판단 범위를 시간적 적용 또는 공통 파라미터 구조 부재로 제한할 뿐, 공유
+      운영 파라미터 모델 결손이나 medium 심각도에 반대하지 않는다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 제품 구성과 공정 물질 흐름의 분리 필요성, 근본 원인 및 medium 심각도에 동의한다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: axiology 렌즈는 권위 자료 바인딩 결손을 지지하고 다른 렌즈들은 자신의 평가 범위 밖이라고 일관되게 판단하므로 상충하는
+      적용 가능 주장이 없다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 ProductionOrder와 적용 개정 연결 부재라는 근본 원인 및 high 심각도를 지지한다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 공통 Quantity·UnitOfMeasure와 시점별 환산 규칙의 부재라는 원인 및 medium 심각도를 지지한다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: 구조 렌즈는 실제 운영상의 권위 원본을 구조만으로 확정할 수 없다고 범위를 제한하지만, 원천 참조·유효기간·동기화 시각 구조의
+      부재와 medium 심각도에는 다른 렌즈들과 동의한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 무조건적 대칭성과 one_way 방향성의 양립 불가능성, 제안된 조건부 제약 또는 방향성 제거,
+      medium 심각도에 동의한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 제품 구성과 스크랩 재투입 흐름의 미분리라는 원인 및 medium 심각도를 지지한다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: 진화와 구조 렌즈의 narrow 입장은 시간적 재현성 또는 개념 경계 부재라는 자신의 직접 범위를 명시할 뿐,
+      scrap_rate의 의미·산식 결합이라는 핵심 원인과 medium 심각도에 반대하지 않는다.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 AlternatePart를 우회하는 정식 관계 그래프와 역할·방향 보존 경로 부재라는 구조적 원인 및
+      medium 심각도를 지지한다.

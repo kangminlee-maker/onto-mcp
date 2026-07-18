@@ -1,0 +1,227 @@
+schema_version: 1
+session_id: 20260718-0e0876e7
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: Order 및 StatOrder의 STAT 표현
+    evidence_anchor: materialized-input.md:15-29 — Order.priority에 stat,
+      Order.is_stat, StatOrder 하위 타입이 동시에 선언됨
+    claim: 동일한 STAT 의미가 값·불리언·하위 타입이라는 세 개의 독립 권위로 모델링되어 있다.
+    what: StatOrder 인스턴스가 routine priority 또는 is_stat=false를 가질 수 있는 등 상충 상태를 배제하는
+      의미 규칙이 없다.
+    why: STAT는 주문의 우선순위 지정인데도 경직된 하위 타입과 독립 속성으로 중복 표현된다. EMR과 LIS가 서로 다른 표현을 권위로
+      삼으면 긴급 라우팅 의미가 달라질 수 있다.
+    how_to_fix: priority를 단일 권위로 정하고 stat_reason을 priority=stat일 때의 조건부 속성으로 둔다.
+      StatOrder가 필요하면 독립 저장 타입이 아닌 해당 조건의 파생 뷰로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동의 주문 우선순위 개념 권위
+      failure_condition: 세 표현 중 둘 이상이 불일치하거나 시스템별로 서로 다른 표현을 소비할 때
+      impact: 동일 주문이 시스템에 따라 STAT 또는 일반 주문으로 해석되어 긴급 처리 신뢰를 훼손한다.
+      evidence_refs:
+        - materialized-input.md:21-29
+    causal_path:
+      root_cause_candidate: 상황적 우선순위인 STAT를 하나의 정규 속성으로 모델링하지 않고 값, 불리언, 하위 타입으로 중복 실체화했다.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: STAT 주문 여부를 나타내는 세 표현 사이에 불일치 가능한 상태가 존재한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:21-29
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 동일 의미를 세 개의 독립적으로 할당 가능한 모델 요소로 표현했다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:21-29
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: Result.status, Report.result_status 및 완료 상태 규칙
+    evidence_anchor: materialized-input.md:69-84, 117, 121-123 — 서로 다른 상태 어휘를 '동일
+      정보'라고 하며 보고서가 여러 결과를 포함하고 야간 동기화함
+    claim: 결과 검증 상태와 보고서 발행·정정 상태를 동일 정보로 취급해 서로 다른 의미 수준을 혼합한다.
+    what: Result는 preliminary/final/corrected를 사용하고 Report는
+      prelim/finalized/amended를 사용한다. 보고서 하나가 여러 결과를 포함하는데 단일
+      Report.result_status를 각 결과 상태와 동일하다고 선언하며, corrected는 Order 완료 조건의 final에도
+      포함되지 않는다.
+    why: 개별 결과의 검증 상태와 집합 보고서의 발행 상태는 일대일 동의어가 아니다. 현재 모델은 혼합 상태의 집계 의미가 없고, 정정된 최종
+      결과를 미완료처럼 해석할 수 있으며, 야간 동기화 동안 임상의가 신뢰하는 값이 원천 결과와 불일치한다.
+    how_to_fix: Result의 검증/정정 상태와 Report의 발행/개정 상태를 별도 개념으로 정의한다. 명시적 집계 전이표를 두고
+      corrected를 최종성 여부와 분리하며, 임상의 노출 권위와 동기화 원칙을 하나로 정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 결과와 보고 상태에 대한 EMR/LIS 공통 해석
+      failure_condition: 한 보고서에 상태가 다른 결과가 있거나 최종 결과가 정정된 후 야간 배치 전일 때
+      impact: 완료 여부와 임상의에게 보이는 결과의 최종성·정정 여부가 시스템별로 달라져 임상 의사결정 신뢰를 약화한다.
+      evidence_refs:
+        - materialized-input.md:69-84
+        - materialized-input.md:117
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 개별 Result의 임상 검증 상태와 집합 Report의 발행 상태를 하나의 '동일 정보'로 간주했다.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: 두 상태 필드는 서로 다른 어휘와 전이 조건을 가지면서 동일 정보라고 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-84
+            - materialized-input.md:123
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 여러 Result를 포함하는 Report에 결과별 상태를 단일 값으로 투영하는 의미 규칙이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:117
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: Test와 Assay 개념 및 카탈로그 운영
+    evidence_anchor: materialized-input.md:46-60, 62-73, 126-127 — 주문 가능 단위와 수행 단위를
+      구분하지만 신규 항목을 양쪽에 중복 등록함
+    claim: Test와 Assay는 서로 다른 의미 수준인데도 양쪽 등록 항목의 동일성·대응 의미가 정의되지 않았다.
+    what: Test는 주문 가능한 카탈로그 단위, Assay는 분석기 수행 단위로 정의되지만 둘 사이의 대응 관계가 없고 신규 항목은 두
+      카탈로그에 모두 등록된다. Result는 Test만 참조한다.
+    why: 하나의 주문 항목이 여러 assay로 수행되거나 여러 주문 항목이 같은 assay를 공유할 수 있는데, 단순 중복 등록은 코드 동일성이
+      개념 동일성을 뜻하는지 판단할 수 없게 한다. 수행법과 결과 provenance의 의미도 소실된다.
+    how_to_fix: 두 개념을 유지하되 OrderableTest와 AssayDefinition처럼 역할을 명확히 하고
+      performs/implemented_by 관계와 대응 cardinality를 정의한다. 코드 동일성을 매핑 근거로 사용하지 않는다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR 주문 카탈로그와 LIS 수행 카탈로그 간 의미 보존 매핑
+      failure_condition: 양쪽 카탈로그 항목이 변경되거나 일대다·다대일 대응이 발생할 때
+      impact: 주문한 검사와 실제 수행법 또는 산출 결과의 의미적 동일성을 검증할 수 없다.
+      evidence_refs:
+        - materialized-input.md:46-73
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: 주문 단위와 수행 단위를 구분했지만 두 개념 사이의 정식 의미 관계 대신 중복 등록 절차를 사용했다.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: Test와 Assay가 구별되어 있으나 대응 관계 없이 두 곳에 함께 등록된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-127
+        - cause_id: semantics-candidate-003.cause-002
+          claim: Result가 Test만 참조하여 실제 Assay 수행 의미가 결과에 연결되지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:62-73
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: Test.requires_specimen_type와 Assay.specimen_kind
+    evidence_anchor: materialized-input.md:46-60 — Test는 blood/urine/tissue/swab
+      열거형, Assay는 WB/Serum/Urine-random 문자열을 사용함
+    claim: 두 속성이 모두 검체 종류처럼 명명됐지만 서로 다른 분류 축과 세분도를 표현한다.
+    what: Test의 값은 넓은 채취물 범주인 반면 Assay 예시는 전혈, 혈청, 무작위뇨처럼 더 구체적인 재료·처리 상태를 나타낸다. 둘
+      사이 의미 관계가 정의되지 않았다.
+    why: blood가 WB나 Serum과 동일하다고 간주되면 분석에 부적합한 검체도 호환되는 것으로 해석될 수 있다. 반대로 문자열 차이를 단순
+      불일치로 처리하면 유효한 상위·하위 관계도 잃는다.
+    how_to_fix: 채취원/기초 검체와 분석용 specimen matrix를 별도 개념으로 명명하고, 통제 어휘 및 상위·하위 또는 허용 변환
+      관계를 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR 주문 요구 검체와 LIS assay 요구 재료의 호환성 판단
+      failure_condition: 광범위한 Test 검체 값과 세부 Assay matrix를 직접 동등 비교할 때
+      impact: 부적합 검체 수용 또는 유효 검체 거부로 이어질 수 있어 연동 규칙의 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:46-60
+    causal_path:
+      root_cause_candidate: 채취물 범주와 분석용 검체 matrix를 하나의 'specimen type/kind' 의미로 취급했다.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: 두 속성의 값 집합이 서로 다른 세분도와 분류 의미를 보인다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:52
+            - materialized-input.md:60
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 서로 다른 검체 분류 축을 구별하는 개념이나 매핑이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:46-60
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: CriticalValue 엔티티
+    evidence_anchor: materialized-input.md:100-106 — 위험 값 범위 정의에 통보 완료 여부를 함께 저장함
+    claim: 공유 임계값 규칙과 개별 결과 통보 상태가 하나의 엔티티로 혼합되어 있다.
+    what: CriticalValue는 test_ref와 상·하한으로 정의된 정책성 범위이지만 notified는 특정 환자 결과 발생에 대한 통보
+      완료 상태다.
+    why: 임계값 정의는 여러 결과에 재사용되지만 통보 여부는 결과 발생마다 달라진다. 하나의 notified 값으로 결합하면 임계값 자체가
+      통보됐다는 부정확한 의미가 되며 개별 통보 이력을 표현할 수 없다.
+    how_to_fix: CriticalValueThreshold 같은 규칙 개념과
+      CriticalResultOccurrence/Notification 같은 사건 개념을 분리하고, 사건을
+      Result·임계값·수신자·통보 시각에 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 위험 결과 판정과 통보 책임의 개념 권위
+      failure_condition: 같은 임계값에 해당하는 환자 결과가 둘 이상 발생하거나 재통보가 필요할 때
+      impact: 한 결과의 통보 상태가 다른 결과에도 적용된 것으로 해석되어 미통보 위험 결과를 놓칠 수 있다.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: 재사용되는 임계값 정책과 발생별 통보 사건의 존재론적 유형을 구분하지 않았다.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: 범위 정의 엔티티에 발생별 boolean 통보 상태가 포함되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: semantics-candidate-005.cause-002
+          claim: 제도적 규칙과 시간적 사건을 동일 개체의 속성으로 모델링했다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-006
+    target: Specimen–Result 관계의 produces 의미
+    evidence_anchor: materialized-input.md:118-119 — Result derived_from Specimen과
+      Specimen produces Result를 동시에 선언함
+    claim: 물리적 검체를 결과의 생산 주체로 명명해 재료 provenance와 수행 행위를 혼동한다.
+    what: 검체는 결과가 유래한 입력 재료이지만 produces 관계는 검체 자체가 결과 생성 행위를 수행한다는 의미를 부여한다.
+    why: Assay라는 수행 단위가 별도로 정의되어 있는데도 결과 생산 주체가 Specimen으로 기록되면 실제 검사 수행과 재료 계보를 구별할
+      수 없다.
+    how_to_fix: Specimen에는 derived_from 또는 input_specimen 관계만 사용하고, Result의
+      produced_by는 실제 assay 수행 사건을 가리키도록 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 검사 결과의 재료 및 수행 provenance에 대한 공통 의미
+      failure_condition: 결과 생성 원인이나 수행법을 추적해야 할 때
+      impact: 검체 재료와 검사 행위가 동일한 원인으로 해석되어 감사·재현·정정 시 provenance가 모호해진다.
+      evidence_refs:
+        - materialized-input.md:54-60
+        - materialized-input.md:118-119
+    causal_path:
+      root_cause_candidate: 입력 재료와 결과 생성 행위를 구분하는 수행 사건 없이 물리적 검체에 생산 관계를 부여했다.
+      root_cause_step_id: semantics-candidate-006.cause-002
+      steps:
+        - cause_id: semantics-candidate-006.cause-001
+          claim: Specimen이 Result를 produces하면서 Result는 같은 Specimen에서 derived_from으로 선언된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:118-119
+        - cause_id: semantics-candidate-006.cause-002
+          claim: 재료 유래와 행위 생산이라는 서로 다른 관계 의미를 동일 엔티티 쌍에 부여했다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:118-119
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - STAT는 주문의 지속적 본질이 아니라 처리 우선순위 지정으로 해석했다.
+  - corrected 결과는 정정됐지만 여전히 최종적으로 검증·발행 가능한 결과라는 일반적 워크플로 의미를 적용했다.
+  - WB, Serum, Urine-random은 blood, urine 같은 넓은 채취물 범주보다 구체적인 분석용 검체 matrix로
+    해석했다.
+  - 위험값 임계 범위는 재사용되는 규칙이고 통보 완료 여부는 개별 결과 발생에 귀속되는 사건 상태로 해석했다.
+validation:
+  unaddressable_candidates: []

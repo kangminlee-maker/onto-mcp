@@ -1,0 +1,142 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml — revision and effectivity model
+    evidence_anchor: .onto/review/20260718-76a67afe/execution-preparation/materialized-input.md:20-21,27-35,55-61,69-75,96
+    claim: 후속 ECO가 BOM 또는 라우팅을 변경하면 과거 구성의 연속성을 보존할 수 없다.
+    what: Part에는 현재 rev와 current_eco만 있고, BomLine·Routing·Operation에는 개정 식별자나 유효 기간이
+      없다. ECO도 단일 effective_date만 제공한다.
+    why: 두 번째 이상의 변경이 적용되면 BOM 라인과 라우팅이 어느 품목 개정에 유효했는지 표현할 연결점이 없다. 따라서 과거 생산 시점의
+      설계·BOM·공정 구성을 재구성하거나 PLM 변경 이력을 MES 실행 이력과 안정적으로 대응하기 어렵다.
+    how_to_fix: PartRevision을 독립 엔티티로 두고 ECO가 생성·승인한 개정을 연결한다. BOM 및 Routing에도
+      revision/effectivity를 부여하고 생산 오더가 사용한 확정 개정 참조를 보존한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리의 PLM/MES 통합 기준과 변경 이후 데이터 연속성
+      failure_condition: 동일 품목에 둘 이상의 ECO가 순차 적용되고 BOM 또는 라우팅이 개정될 때
+      impact: 과거 생산분의 적용 설계와 공정을 판별할 수 없어 추적성, 변경 영향 분석, 재현 가능한 제조 기준에 대한 신뢰가 훼손된다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:27-35
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: 개정과 유효성이 독립적인 일급 개념으로 모델링되지 않았다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 후속 변경 뒤에는 BOM 라인과 라우팅이 어느 개정에 적용되었는지 식별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:27-35
+            - materialized-input.md:55-61
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Part가 현재 rev/current_eco만 보유하고 ECO는 단일 effective_date만 보유한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 개정과 유효성이 독립적인 일급 개념으로 모델링되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:14-35
+            - materialized-input.md:55-75
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml — 단위 체계 확장
+    evidence_anchor: .onto/review/20260718-76a67afe/execution-preparation/materialized-input.md:19,63-67,100
+    claim: 새 측정 단위나 작업장 능력 단위를 추가할 때 기존 스키마 수정 또는 외부 관례가 필요하다.
+    what: Part.uom은 ea·kg·m의 폐쇄 enum이며, WorkCenter.capacity_per_shift는 단위를 속성으로 갖지
+      않는다. 품목별 환산계수도 모델 밖의 현장 처리로 남아 있다.
+    why: 통합 시스템이 다른 단위의 품목이나 작업장을 도입하면 기존 enum을 변경해야 하고, 능력 값은 동일 필드에서 의미가 달라진다. 기존
+      값과 신규 값의 비교·변환 연속성도 환산 규칙이 없어서 유지되지 않는다.
+    how_to_fix: UnitOfMeasure와 Quantity를 재사용 가능한 개념으로 분리하고 차원·단위 코드·환산 규칙을 모델링한다.
+      capacity_per_shift도 값, 단위, 기준 교대 또는 시간 구간을 명시하도록 확장한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 서로 다른 PLM/MES 데이터의 품목 수량 및 생산능력 의미를 지속적으로 통합하는 기준
+      failure_condition: ea·kg·m 이외의 단위 또는 기존 작업장과 다른 능력 단위를 가진 품목·작업장을 추가할 때
+      impact: 스키마 변경이나 비표준 현장 환산에 의존하게 되어 신규 데이터 수용성과 기존 데이터 비교 가능성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:63-67
+        - materialized-input.md:100
+    causal_path:
+      root_cause_candidate: 수량의 값·차원·단위·환산 규칙이 공통 확장 개념으로 분리되지 않았다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 단위는 Part.uom enum 수정이 필요하고 작업장 능력 값의 단위는 레코드만으로 판별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:63-67
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 환산은 품목별 마스터 없이 현장에서 처리하도록 되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 수량의 값·차원·단위·환산 규칙이 공통 확장 개념으로 분리되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:67
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml — 라우팅 및 자원 변형 모델
+    evidence_anchor: .onto/review/20260718-76a67afe/execution-preparation/materialized-input.md:47-67,87-89
+    claim: 신규 공장, 대체 설비 또는 시점별 표준시간을 수용하려면 Routing·Operation 구조를 수정해야 한다.
+    what: Routing은 Part와 하나의 순서 목록만 연결하고, Operation은 단일 WorkCenter와 단일 std_time_min을
+      직접 보유한다. 사이트, 대체 자원, 적용 조건 또는 시간 유효성 개념이 없다.
+    why: 동일 품목을 공장별로 다른 순서로 생산하거나 한 공정을 여러 설비에서 수행하게 되면 기존 속성만으로 변형 간 적용 범위를 구분할 수
+      없다. 레코드 복제로 우회하면 어느 라우팅이나 자원이 실제 조건에 유효한지 표현되지 않는다.
+    how_to_fix: RoutingVariant 또는 RoutingRevision에 site와 effectivity를 두고,
+      OperationStep과 ResourceAssignment를 분리하여 우선순위·대체 가능성·적용 조건·조건별 표준시간을 표현한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES가 확장된 생산 환경에서도 품목별 유효 라우팅과 실행 자원을 일관되게 선택하도록 하는 통합 기준
+      failure_condition: 동일 품목에 공장별 라우팅, 대체 작업장 또는 시점별 표준시간 변형을 추가할 때
+      impact: 기존 구조 수정이나 의미가 불명확한 중복 레코드가 필요해져 확장성과 실행 기준의 결정성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:47-67
+        - materialized-input.md:87-89
+    causal_path:
+      root_cause_candidate: 공정 단계의 정의와 조건별 자원 배정·시간·라우팅 변형이 분리되지 않았다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 공장별 또는 대체 자원별 변형을 기존 필드로 구분하거나 선택할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:47-67
+        - cause_id: evolution-candidate-003.cause-002
+          claim: Operation이 단일 work_center와 std_time_min을 직접 소유하고 Routing은 조건 없는
+            ordered_list만 소유한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:52-53
+            - materialized-input.md:55-61
+            - materialized-input.md:87-89
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 공정 단계의 정의와 조건별 자원 배정·시간·라우팅 변형이 분리되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:47-67
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 여러 설계변경 이후에도 과거 생산 시점의 구성과 공정을 재구성할 수 있어야 한다.
+  - 신규 품목·공장·설비를 도입하면 현재 열거되지 않은 단위와 라우팅 또는 자원 변형이 생길 수 있다.
+validation:
+  unaddressable_candidates: []

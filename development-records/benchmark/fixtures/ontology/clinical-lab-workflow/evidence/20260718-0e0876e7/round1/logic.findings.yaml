@@ -1,0 +1,105 @@
+schema_version: 1
+session_id: 20260718-0e0876e7
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml — Report.result_status 및 state_rules
+    evidence_anchor: .onto/review/20260718-0e0876e7/execution-preparation/materialized-input.md:80-84,121-123
+    claim: released_at 기록과 Result.status=corrected가 겹치면 단일 Report.result_status에
+      finalized와 amended가 동시에 요구된다.
+    what: Report.result_status는 단일 enum 값인데, 상태 규칙은 보고서 공개 시 finalized를 요구하고 Result가
+      corrected이면 amended를 요구하면서 두 조건의 우선순위나 상호배타 조건을 정의하지 않습니다.
+    why: "corrected 상태의 Result를 포함한 Report에 released_at가 기록되는 경우를 금지하는 규칙이 없으므로 두
+      조건이 동시에 참일 수 있습니다. 이때 하나의 enum 속성은 finalized와 amended를 동시에 가질 수 없어 규칙 집합을
+      함께 만족시킬 수 없습니다. 야간 1회 동기화 규정은 corrected 조건 성립 후에도 권위 값이 finalized로 남을 수 있는
+      경로까지 허용합니다. Verdict: fail. conflict_pair: materialized-input.md:123의 첫 번째
+      조건과 같은 줄의 corrected 조건. satisfiability_note: inter-claim — 중첩 가능한 조건들이 서로
+      다른 단일값 상태를 의무화합니다. modality_note: obligatory 충돌이며 예외 우선순위가 형식화되지 않았습니다.
+      boundary_handoff_note: 상태명의 대응 의미는 semantics 검토 대상이지만, 이름을 명확히 해도 단일 필드에
+      대한 동시 상태 의무 충돌은 남습니다."
+    how_to_fix: "하나의 배타적 전이 규칙으로 합치십시오. 예: released_at 기록 시 관련 Result 중 corrected가
+      있으면 amended, 그렇지 않으면 finalized로 정하고, 이후 correction은 즉시 amended로 전이하도록
+      우선순위와 적용 시점을 명시합니다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 임상의가 신뢰할 Report.result_status의 개념 권위 제공
+      failure_condition: released_at 기록 시점에 관련 Result가 corrected이거나, 공개 후 correction이
+        발생하고 야간 동기화 전인 경우
+      impact: 동일한 권위 속성에 상충하는 상태가 요구되어 구현체별 우선순위가 달라지고 임상의에게 노출되는 최종성 판단을 신뢰할 수 없게 됩니다.
+      evidence_refs:
+        - materialized-input.md:80-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 중첩 가능한 상태 조건을 단일값 enum에 연결하면서 배타 조건, 전이 우선순위, 적용 시점을 정의하지 않았습니다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 허용된 한 상태에서 Report.result_status가 finalized와 amended를 동시에 만족해야 합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:80-84
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-002
+          claim: 공개 조건과 correction 조건 사이의 우선순위·상호배타성·동기화 완료 시점이 정의되지 않았습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:123
+      unresolved_beyond_evidence: ‘단’이 corrected 조건의 명시적 우선순위를 뜻하는지, 야간 배치가 의무 충족의 허용
+        기한인지가 형식화되지 않아 대안 해석은 남습니다.
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml — Order 완료 규칙
+    evidence_anchor: .onto/review/20260718-0e0876e7/execution-preparation/materialized-input.md:23,69-72,121-123
+    claim: Order.completed 판정이 이후 corrected로 바뀔 수 있는 Result.status에 의존하지만 완료 취소·재개
+      규칙이 없다.
+    what: 모든 Result가 final이면 Order가 completed로 전이하지만, 같은 모델은 Result가 corrected로 바뀌는
+      후속 사건을 허용합니다. 이 사건 뒤에는 완료 조건이 더 이상 성립하지 않는데 Order의 상태를 어떻게 처리할지 정의되어 있지
+      않습니다.
+    why: "final인 Result들로 completed에 진입한 뒤 하나가 corrected가 되는 경로가 명시적으로 허용됩니다.
+      completed가 지속 상태라면 완료 상태와 완료 조건이 충돌하고, 전이 순간에만 조건을 검사하는 의미라면 completed가 더
+      이상 현재 결과 집합을 보증하지 못합니다. Verdict: insufficient evidence for strict
+      unsatisfiability because terminality and reopening semantics are absent;
+      nevertheless the temporal constraint set cannot establish stable
+      completion. conflict_pair: materialized-input.md:122와
+      materialized-input.md:123의 corrected 전이. satisfiability_note: inter-claim
+      temporal interaction. modality_note: necessary completion guard와 possible
+      later correction의 mixed 축. boundary_handoff_note: 전이 그래프 부재는 structure에도
+      이관할 수 있으나, 가역 조건에 의존한 완료 판정의 시간적 양립 가능성이 본 finding의 핵심입니다."
+    how_to_fix: 완료 의미를 명시하십시오. corrected도 완료된 결과로 인정하도록 완료 술어를 정의하거나, correction 발생
+      시 Order를 in_progress/reopened로 되돌린 뒤 재완료하는 전이와 Report 상태 연계를 추가합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order부터 Report까지 일관된 상태 모델을 EMR/LIS 통합의 개념 권위로 제공
+      failure_condition: Order가 completed가 된 후 연결된 Result 중 하나가 corrected로 전이하는 경우
+      impact: 시스템마다 completed를 유지하거나 되돌리는 선택이 달라져 주문 완료 여부와 후속 정정 처리의 상호운용성이 깨집니다.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:69-72
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 완료 판정에 가역적인 Result.status를 사용하면서 후속 correction에 대한 Order 전이를 정의하지 않았습니다.
+      root_cause_step_id: logic-candidate-002.cause-002
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 후속 correction 뒤에는 completed Order가 더 이상 ‘모든 Result가 final’ 조건을 만족하지 않을 수
+            있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:122-123
+        - cause_id: logic-candidate-002.cause-002
+          claim: Order lifecycle에는 상태 이름만 있고 correction 시 재개·재완료 또는 completed 유지 조건이 없습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:122-123
+      unresolved_beyond_evidence: completed가 종결 상태인지, 전이 순간에만 guard를 검사하는지, corrected를
+        완료로 간주하는지는 대상 문서 안에서 결정할 수 없습니다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - enum 속성은 한 시점에 하나의 값만 갖는 단일값 속성으로 해석했습니다.
+  - lifecycle의 상태 이름은 엔티티의 현재 상태를 나타내며, 명시되지 않은 재개 전이는 자동으로 추론하지 않았습니다.
+validation:
+  unaddressable_candidates: []

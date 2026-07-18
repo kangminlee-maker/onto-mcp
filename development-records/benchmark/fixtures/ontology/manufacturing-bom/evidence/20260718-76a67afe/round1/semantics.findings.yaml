@@ -1,0 +1,208 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart 및 alternate_of 관계
+    evidence_anchor: AlternatePart.definition, AlternatePart.direction,
+      relations[Part→Part alternate_of]
+    claim: 대체품 관계를 대칭 관계와 방향성 관계로 동시에 정의해 의미가 모순됩니다.
+    what: 정의는 “A의 대체가 B이면 B의 대체도 A”라고 단정하지만, direction은 one_way를 허용하며 기본값도
+      one_way입니다. 단축 관계명 alternate_of도 방향성을 드러내지 않습니다.
+    why: 동일한 대체 관계가 소비자에 따라 상호 대체 또는 단방향 대체로 해석될 수 있습니다. PLM의 승인 대체품을 MES가 역방향으로
+      사용하면 허용되지 않은 부품 투입으로 이어질 수 있어 개념 기준 문서의 신뢰를 약화합니다.
+    how_to_fix: AlternatePart를 방향성 있는 ‘허용 대체’ 관계로 정의하고 primary→alternate 방향을 명시하십시오.
+      bidirectional은 두 방향 관계의 축약임을 규정하고, 단축 관계에도 방향 또는 대칭 여부가 보존되게 하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM과 MES가 동일한 부품 대체 가능성 및 방향을 해석하도록 하는 개념 기준
+      failure_condition: direction=one_way인 AlternatePart를 정의문이나 alternate_of 단축 관계에
+        따라 대칭 관계로 해석할 때
+      impact: 승인되지 않은 역방향 대체를 허용할 수 있어 자재 투입 판단과 추적성의 신뢰가 약화됩니다.
+      evidence_refs:
+        - "manufacturing-bom-ontology.yaml: AlternatePart.definition"
+        - "manufacturing-bom-ontology.yaml: AlternatePart.direction"
+        - "manufacturing-bom-ontology.yaml: relations alternate_of"
+    causal_path:
+      root_cause_candidate: 대체 가능성의 방향성을 하나의 관계에서 일관되게 정의하지 않았습니다.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: 대체 관계의 정의는 대칭성을 필수로 선언합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: AlternatePart.definition"
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 같은 엔티티가 one_way를 허용하고 이를 기본값으로 둔 것은 정의와 충돌하는 증상입니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: AlternatePart.direction"
+        - cause_id: semantics-candidate-001.cause-003
+          claim: alternate_of 단축 관계가 방향 정보를 보존하지 않는 것도 동일한 의미 모델 부재의 증상입니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: relations alternate_of"
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: manufacturing-bom-ontology.yaml — InspectionPlan
+    evidence_anchor: InspectionPlan.definition 및 InspectionPlan.is_a
+    claim: 검사 계획이라는 정보·규범 객체를 실행 공정 단계인 Operation의 하위 유형으로 분류했습니다.
+    what: "InspectionPlan은 sampling_rule과 acceptance_criteria를 보유한 계획/사양이지만 is_a:
+      Operation으로 선언되어 라우팅 단계 자체와 동일한 존재론적 유형이 됩니다."
+    why: 검사를 수행하는 Operation과 그 수행 방법·합격 기준을 규정하는 InspectionPlan은 서로 다른 개념입니다. 현재
+      모델에서는 하나의 계획이 공정 순서 항목, 작업장, 표준시간을 상속하는 것으로 해석되어 PLM 품질 사양과 MES 실행 단계의 식별이
+      혼동됩니다.
+    how_to_fix: InspectionPlan을 독립된 사양 엔티티로 만들고 검사 Operation이 해당 계획을 references 또는
+      governed_by 하도록 연결하십시오. 검사 공정 유형이 필요하면 InspectionOperation을 Operation의 하위
+      유형으로 별도 정의하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품질 계획과 제조 실행 단계를 일관되게 교환하는 PLM/MES 개념 기준
+      failure_condition: InspectionPlan 인스턴스를 Operation 하위 유형으로 직렬화하거나 라우팅 공정으로 소비할 때
+      impact: 계획 문서의 버전·승인 의미와 실행 공정의 순서·자원 의미가 섞여 시스템 간 객체 식별과 변경 영향 판단이 불명확해집니다.
+      evidence_refs:
+        - "manufacturing-bom-ontology.yaml: Operation.definition"
+        - "manufacturing-bom-ontology.yaml: InspectionPlan.definition"
+        - "manufacturing-bom-ontology.yaml: InspectionPlan.is_a"
+    causal_path:
+      root_cause_candidate: 검사 행위와 그 행위를 규정하는 검사 사양을 구분하지 않았습니다.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: InspectionPlan이 Operation의 하위 유형으로 선언되어 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: InspectionPlan.is_a"
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 그러나 고유 속성은 샘플링 규칙과 합격 기준으로, 실행 단계가 아니라 규범적 사양의 의미를 가집니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: InspectionPlan.attributes"
+        - cause_id: semantics-candidate-002.cause-003
+          claim: 정의가 ‘Operation의 검사 파라미터 확장’이라고 표현한 것은 두 개념을 한 상속 체계로 합친 원인을 직접 보여줍니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: InspectionPlan.definition"
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: manufacturing-bom-ontology.yaml — BOM 비순환 규칙의 스크랩 재투입 예외
+    evidence_anchor: integrity_rules[0]
+    claim: 공정의 스크랩 재투입 흐름을 제품 구성 관계인 자기 하위 포함으로 표현해 서로 다른 의미를 혼합했습니다.
+    what: BOM은 상위 품목이 하위 품목을 사용하는 제품 구조로 정의되어 있지만, 재생 원료 회수라는 공정 물류 흐름을 Assembly가 자기
+      자신을 포함하는 BomLine으로 모델링하도록 합니다.
+    why: 자기 포함은 동일 품목의 구성 의미를 만들며 재투입 원료의 발생·회수·수율·투입 흐름을 표현하지 못합니다. BOM 전개 소비자는 이를
+      실제 구성 순환으로 해석할 수 있어 수량 전개와 자재 소요 판단이 불명확해집니다.
+    how_to_fix: BOM 구성 관계는 비순환으로 유지하고, 스크랩 발생 및 재투입은 Operation 또는 Routing 사이의 별도
+      material_flow/rework/recycle 관계와 수량·수율 속성으로 모델링하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 제품 구조와 제조 공정 흐름을 PLM/MES 사이에서 동일하게 해석하는 개념 기준
+      failure_condition: 스크랩 재투입을 표현한 자기 참조 BomLine을 일반 BOM 전개 또는 소요량 계산이 소비할 때
+      impact: 구성 수량과 공정 회수량이 같은 관계로 해석되어 BOM 전개 및 자재 계획의 의미적 신뢰가 약화됩니다.
+      evidence_refs:
+        - "manufacturing-bom-ontology.yaml: BomLine.definition"
+        - "manufacturing-bom-ontology.yaml: BomLine.parent_ref/child_ref"
+        - "manufacturing-bom-ontology.yaml: integrity_rules[0]"
+    causal_path:
+      root_cause_candidate: 제품 구성과 공정 내 물질 흐름을 별도 관계로 모델링하지 않았습니다.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: 비순환 BOM 규칙이 스크랩 재투입에 한해 자기 포함을 요구합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: integrity_rules[0]"
+        - cause_id: semantics-candidate-003.cause-002
+          claim: 스크랩 재투입이라는 공정 흐름이 BomLine의 상위-하위 구성 관계로 대체 표현된 결과입니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: BomLine.definition"
+            - "manufacturing-bom-ontology.yaml: integrity_rules[0]"
+      unresolved_beyond_evidence: 재투입량 계산 방식과 실제 소비자의 순환 처리 방식은 경계 내 자료에 없습니다.
+  - candidate_id: semantics-candidate-004
+    target: manufacturing-bom-ontology.yaml — BomLine.scrap_rate
+    evidence_anchor: BomLine.attributes.scrap_rate
+    claim: scrap_rate라는 비율과 ‘공정 불량 감안 계수’를 동일시하고 외부 값을 독립 입력으로 복사해 의미와 권한이 불명확합니다.
+    what: 속성명은 비율을 뜻하지만 설명은 계수라고 하며, 값은 생산계획팀 엑셀에서 복사됩니다. 비율의 범위, 단위, 적용 산식과 기준 공정도
+      정의되지 않습니다.
+    why: 예를 들어 10%를 0.1의 비율로 볼지 1.1 등의 소요계수로 볼지에 따라 자재 소요량이 달라집니다. 또한 공정 성과에서 파생되는
+      값과 복사된 계획 입력이 구분되지 않아 원천 변경 시 드리프트할 수 있습니다.
+    how_to_fix: 의도에 따라 scrap_fraction 또는 gross_up_factor 중 하나로 명명하고 값 범위·단위·qty_per
+      적용 산식을 명시하십시오. 공정별 파생값이면 원천 측정값과 계산 규칙을 모델링하고, 계획 기준값이면 별도 권한·유효기간을 가진
+      planning_scrap_factor로 구분하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 수량과 공정 손실을 일관되게 해석하여 자재 소요를 교환하는 개념 기준
+      failure_condition: PLM 또는 MES가 scrap_rate를 서로 다른 비율/계수 산식으로 qty_per에 적용하거나 복사본이 원천과 달라질 때
+      impact: 동일 BOM에서 서로 다른 총소요량이 계산될 수 있어 계획 및 실행 데이터의 정합성이 약화됩니다.
+      evidence_refs:
+        - "manufacturing-bom-ontology.yaml: BomLine.qty_per"
+        - "manufacturing-bom-ontology.yaml: BomLine.scrap_rate"
+    causal_path:
+      root_cause_candidate: 공정 손실의 측정 비율, 계획 계수, BOM 적용 결과를 하나의 독립 숫자 속성으로 합쳤습니다.
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: scrap_rate가 단위·범위·산식 없는 number로 정의되어 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: BomLine.scrap_rate"
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 설명은 이를 rate가 아닌 ‘공정 불량 감안 계수’라고 부릅니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: BomLine.scrap_rate note"
+        - cause_id: semantics-candidate-004.cause-003
+          claim: 외부 엑셀 값을 복사한다는 권한 구조는 측정값과 계획 입력의 미분리를 지속시킵니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: BomLine.scrap_rate note"
+      unresolved_beyond_evidence: 생산계획팀 엑셀 값의 실제 정의와 적용 산식은 경계 내 자료에 없습니다.
+  - candidate_id: semantics-candidate-005
+    target: manufacturing-bom-ontology.yaml — WorkCenter.capacity_per_shift
+    evidence_anchor: WorkCenter.attributes.capacity_per_shift
+    claim: 서로 차원이 다른 수량과 시간을 하나의 capacity_per_shift 숫자로 표현해 속성명이 일정한 의미를 갖지 못합니다.
+    what: 동일 속성이 작업장마다 개수 또는 시간을 뜻한다고 명시되어 있지만 단위나 용량 유형을 함께 보유하지 않습니다.
+    why: 처리 가능 수량과 가용 시간은 직접 대체 가능한 값이 아니며 계산식도 다릅니다. PLM/MES 소비자는 숫자만으로 의미를 판별할 수
+      없어 작업장 용량 비교나 일정 계산에서 잘못된 해석이 가능합니다.
+    how_to_fix: 용량 모델을 quantity_capacity와 available_time처럼 차원별로 분리하거나,
+      capacity_value와 필수 capacity_measure_type/uom을 함께 정의하십시오. 교대 길이와 대상 품목·공정별
+      처리율이 필요한 경우 별도 속성으로 표현하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 작업장 용량을 MES 계획·스케줄링에 일관되게 전달하는 개념 기준
+      failure_condition: 단위 정보 없이 capacity_per_shift를 시스템 간 교환하거나 서로 다른 작업장의 값을 비교·계산할 때
+      impact: 수량과 시간의 의미가 뒤바뀌어 용량 계산과 공정 배정 결과의 신뢰가 약화됩니다.
+      evidence_refs:
+        - "manufacturing-bom-ontology.yaml: WorkCenter.definition"
+        - "manufacturing-bom-ontology.yaml: WorkCenter.capacity_per_shift"
+    causal_path:
+      root_cause_candidate: 용량의 값과 측정 차원·단위를 하나의 무단위 숫자 속성에 결합했습니다.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: capacity_per_shift는 number 하나로 선언되어 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: WorkCenter.capacity_per_shift"
+        - cause_id: semantics-candidate-005.cause-002
+          claim: 설명에서 그 숫자가 개수일 수도 시간일 수도 있다고 명시한 것은 속성 의미가 인스턴스마다 달라지는 증상입니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: WorkCenter.capacity_per_shift
+              note"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - BOM의 상위-하위 관계는 제품 구성 및 기준 소요량을 나타내며 공정 내 회수·재투입 흐름과 구별되어야 한다고 가정했습니다.
+  - Operation은 실행 가능한 라우팅 단계이고 InspectionPlan은 그 실행을 규정하는 사양·계획 객체라고 해석했습니다.
+  - rate는 차원 없는 비율이고 factor는 특정 산식에 적용되는 계수이므로 이름과 적용 규칙이 구분되어야 한다고 가정했습니다.
+  - 용량 수량과 가용 시간은 서로 다른 측정 차원이므로 단위 또는 측정 유형 없이 동일 숫자 속성으로 교환할 수 없다고 가정했습니다.
+validation:
+  unaddressable_candidates: []

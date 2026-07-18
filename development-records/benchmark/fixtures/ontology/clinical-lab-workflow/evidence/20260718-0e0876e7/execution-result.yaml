@@ -1,0 +1,1322 @@
+session_id: 20260718-0e0876e7
+session_root: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7
+execution_realization: worker
+host_runtime: codex
+review_mode: core-axis
+execution_status: completed
+execution_started_at: 2026-07-18T09:54:48+09:00
+execution_completed_at: 2026-07-18T10:11:03+09:00
+total_duration_ms: 974547
+max_concurrent_lenses: 4
+observed_dispatch_width: 4
+planned_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 6
+synthesis_executed: true
+deliberation_status: performed
+halt_reason: null
+error_log_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/error-log.md
+lens_completion_barrier_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/lens-completion-barrier.yaml
+lens_execution_results:
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/round1/axiology.findings.yaml
+    status: completed
+    started_at: 2026-07-18T09:54:48+09:00
+    completed_at: 2026-07-18T09:56:51+09:00
+    duration_ms: 122562
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 23710
+    output_bytes: 14937
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/round1/coverage.findings.yaml
+    status: completed
+    started_at: 2026-07-18T09:54:50+09:00
+    completed_at: 2026-07-18T09:56:35+09:00
+    duration_ms: 105173
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19964
+    output_bytes: 16256
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/round1/evolution.findings.yaml
+    status: completed
+    started_at: 2026-07-18T09:54:51+09:00
+    completed_at: 2026-07-18T09:56:19+09:00
+    duration_ms: 87328
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18893
+    output_bytes: 11188
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/round1/logic.findings.yaml
+    status: completed
+    started_at: 2026-07-18T09:54:53+09:00
+    completed_at: 2026-07-18T09:56:27+09:00
+    duration_ms: 94174
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 24097
+    output_bytes: 7997
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/round1/semantics.findings.yaml
+    status: completed
+    started_at: 2026-07-18T09:56:19+09:00
+    completed_at: 2026-07-18T09:58:33+09:00
+    duration_ms: 134501
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19570
+    output_bytes: 15495
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/round1/structure.findings.yaml
+    status: completed
+    started_at: 2026-07-18T09:56:27+09:00
+    completed_at: 2026-07-18T09:57:43+09:00
+    duration_ms: 75736
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18434
+    output_bytes: 6800
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/finding-ledger.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/finding-ledger.yaml
+    status: completed
+    started_at: 2026-07-18T09:58:33+09:00
+    completed_at: 2026-07-18T09:58:33+09:00
+    duration_ms: 26
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 854
+    output_bytes: 80446
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-07-18T09:58:33+09:00
+    completed_at: 2026-07-18T09:59:41+09:00
+    duration_ms: 67110
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 95347
+    output_bytes: 8661
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-ledger.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/issue-ledger.yaml
+    status: completed
+    started_at: 2026-07-18T09:59:41+09:00
+    completed_at: 2026-07-18T10:01:50+09:00
+    duration_ms: 129711
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15889
+    output_bytes: 32140
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/issue-stance-matrix.yaml
+    status: completed
+    started_at: 2026-07-18T10:01:50+09:00
+    completed_at: 2026-07-18T10:03:49+09:00
+    duration_ms: 118829
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 726
+    output_bytes: 63226
+    child_result_count: 6
+    child_results:
+      - unit_id: issue-stance:axiology
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/axiology.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/stance-responses/axiology.yaml
+        status: completed
+        started_at: 2026-07-18T10:01:50+09:00
+        completed_at: 2026-07-18T10:02:47+09:00
+        duration_ms: 56574
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 81592
+        output_bytes: 9660
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:coverage
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/coverage.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/stance-responses/coverage.yaml
+        status: completed
+        started_at: 2026-07-18T10:01:50+09:00
+        completed_at: 2026-07-18T10:03:22+09:00
+        duration_ms: 91762
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 81592
+        output_bytes: 9972
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:evolution
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/evolution.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/stance-responses/evolution.yaml
+        status: completed
+        started_at: 2026-07-18T10:01:50+09:00
+        completed_at: 2026-07-18T10:03:01+09:00
+        duration_ms: 70321
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 81606
+        output_bytes: 10871
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:logic
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/logic.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/stance-responses/logic.yaml
+        status: completed
+        started_at: 2026-07-18T10:01:50+09:00
+        completed_at: 2026-07-18T10:02:56+09:00
+        duration_ms: 66070
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 81550
+        output_bytes: 9614
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:semantics
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/semantics.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/stance-responses/semantics.yaml
+        status: completed
+        started_at: 2026-07-18T10:02:47+09:00
+        completed_at: 2026-07-18T10:03:43+09:00
+        duration_ms: 55713
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 81606
+        output_bytes: 10060
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:structure
+        unit_kind: issue_artifact
+        packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/structure.prompt.md
+        output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/stance-responses/structure.yaml
+        status: completed
+        started_at: 2026-07-18T10:02:56+09:00
+        completed_at: 2026-07-18T10:03:49+09:00
+        duration_ms: 52648
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 81606
+        output_bytes: 8599
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation-plan
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation-plan.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation-plan.yaml
+    status: completed
+    started_at: 2026-07-18T10:03:49+09:00
+    completed_at: 2026-07-18T10:04:59+09:00
+    duration_ms: 69965
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 125057
+    output_bytes: 8174
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: problem-framing
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/problem-framing.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/problem-framing.yaml
+    status: completed
+    started_at: 2026-07-18T10:08:10+09:00
+    completed_at: 2026-07-18T10:09:01+09:00
+    duration_ms: 51240
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 135830
+    output_bytes: 14181
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+deliberation_execution_results:
+  - unit_id: deliberation:issue-002:axiology
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-002/axiology.yaml
+    status: completed
+    started_at: 2026-07-18T10:04:59+09:00
+    completed_at: 2026-07-18T10:05:22+09:00
+    duration_ms: 22432
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16315
+    output_bytes: 1971
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-002/coverage.yaml
+    status: completed
+    started_at: 2026-07-18T10:04:59+09:00
+    completed_at: 2026-07-18T10:05:14+09:00
+    duration_ms: 14597
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16315
+    output_bytes: 1967
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:evolution
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-002/evolution.yaml
+    status: completed
+    started_at: 2026-07-18T10:04:59+09:00
+    completed_at: 2026-07-18T10:05:25+09:00
+    duration_ms: 26145
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16323
+    output_bytes: 2159
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-002/logic.yaml
+    status: completed
+    started_at: 2026-07-18T10:04:59+09:00
+    completed_at: 2026-07-18T10:05:28+09:00
+    duration_ms: 28417
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16293
+    output_bytes: 2067
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-002/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:14+09:00
+    completed_at: 2026-07-18T10:05:31+09:00
+    duration_ms: 17631
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16321
+    output_bytes: 1930
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-002:structure
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-002/structure.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:22+09:00
+    completed_at: 2026-07-18T10:05:38+09:00
+    duration_ms: 15832
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16325
+    output_bytes: 1974
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-012:axiology
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-012/axiology.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:25+09:00
+    completed_at: 2026-07-18T10:05:39+09:00
+    duration_ms: 13376
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16804
+    output_bytes: 1863
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-012:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-012/coverage.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:28+09:00
+    completed_at: 2026-07-18T10:05:46+09:00
+    duration_ms: 18394
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16802
+    output_bytes: 1867
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-012:evolution
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-012/evolution.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:31+09:00
+    completed_at: 2026-07-18T10:05:47+09:00
+    duration_ms: 15499
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16810
+    output_bytes: 2264
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-012:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-012/logic.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:38+09:00
+    completed_at: 2026-07-18T10:05:59+09:00
+    duration_ms: 21273
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16780
+    output_bytes: 2056
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-012:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-012/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:39+09:00
+    completed_at: 2026-07-18T10:05:56+09:00
+    duration_ms: 17518
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16810
+    output_bytes: 2085
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-012:structure
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-012/structure.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:46+09:00
+    completed_at: 2026-07-18T10:06:01+09:00
+    duration_ms: 15275
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16812
+    output_bytes: 1775
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-019:axiology
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-019/axiology.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:47+09:00
+    completed_at: 2026-07-18T10:06:04+09:00
+    duration_ms: 17247
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16387
+    output_bytes: 2141
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-019:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-019/coverage.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:56+09:00
+    completed_at: 2026-07-18T10:06:12+09:00
+    duration_ms: 15459
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16385
+    output_bytes: 2152
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-019:evolution
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-019/evolution.yaml
+    status: completed
+    started_at: 2026-07-18T10:05:59+09:00
+    completed_at: 2026-07-18T10:06:13+09:00
+    duration_ms: 14644
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16395
+    output_bytes: 1787
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-019:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-019/logic.yaml
+    status: completed
+    started_at: 2026-07-18T10:06:01+09:00
+    completed_at: 2026-07-18T10:06:15+09:00
+    duration_ms: 13922
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16363
+    output_bytes: 1501
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-019:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-019/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T10:06:04+09:00
+    completed_at: 2026-07-18T10:06:38+09:00
+    duration_ms: 33564
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16393
+    output_bytes: 1685
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-019:structure
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-019/structure.yaml
+    status: completed
+    started_at: 2026-07-18T10:06:12+09:00
+    completed_at: 2026-07-18T10:06:30+09:00
+    duration_ms: 17813
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16395
+    output_bytes: 1434
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-018:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-018/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-018/semantics.yaml
+    status: completed
+    started_at: 2026-07-18T10:06:13+09:00
+    completed_at: 2026-07-18T10:06:27+09:00
+    duration_ms: 13520
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15728
+    output_bytes: 2169
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-018:structure
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-018/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-018/structure.yaml
+    status: completed
+    started_at: 2026-07-18T10:06:15+09:00
+    completed_at: 2026-07-18T10:06:36+09:00
+    duration_ms: 21037
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15728
+    output_bytes: 1929
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-018:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-018/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation/responses/issue-018/coverage.yaml
+    status: completed
+    started_at: 2026-07-18T10:06:27+09:00
+    completed_at: 2026-07-18T10:06:43+09:00
+    duration_ms: 16385
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 15722
+    output_bytes: 2186
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: controlled-deliberation
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/teamlead.deliberation.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/deliberation-resolution.yaml
+    status: completed
+    started_at: 2026-07-18T10:06:43+09:00
+    completed_at: 2026-07-18T10:08:10+09:00
+    duration_ms: 86143
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 99318
+    output_bytes: 17331
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+synthesize_execution_result:
+  unit_id: synthesize
+  unit_kind: synthesize
+  packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis-work-items.yaml
+  output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis-ledger.yaml
+  status: completed
+  started_at: 2026-07-18T10:09:01+09:00
+  completed_at: 2026-07-18T10:11:03+09:00
+  duration_ms: 121896
+  timestamp_provenance: runner_wallclock
+  failure_message: null
+  failure_kind: null
+  attempt_count: 1
+  packet_bytes: 256707
+  output_bytes: 186760
+  executor_host_runtime: codex
+  child_result_count: 19
+  child_results:
+    - unit_id: synthesis:issue-001
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-001.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-001.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:01+09:00
+      completed_at: 2026-07-18T10:09:29+09:00
+      duration_ms: 27730
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 30779
+      output_bytes: 3036
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-006
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-006.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-006.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:01+09:00
+      completed_at: 2026-07-18T10:09:40+09:00
+      duration_ms: 39118
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23383
+      output_bytes: 2416
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-007
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-007.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-007.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:01+09:00
+      completed_at: 2026-07-18T10:09:24+09:00
+      duration_ms: 23374
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22539
+      output_bytes: 2723
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-009
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-009.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-009.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:01+09:00
+      completed_at: 2026-07-18T10:09:23+09:00
+      duration_ms: 21678
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22653
+      output_bytes: 2836
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-011
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-011.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-011.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:23+09:00
+      completed_at: 2026-07-18T10:09:58+09:00
+      duration_ms: 34982
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23460
+      output_bytes: 2720
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-017
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-017.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-017.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:24+09:00
+      completed_at: 2026-07-18T10:09:45+09:00
+      duration_ms: 20221
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 21912
+      output_bytes: 2615
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-020
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-020.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-020.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:29+09:00
+      completed_at: 2026-07-18T10:09:45+09:00
+      duration_ms: 16525
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22022
+      output_bytes: 2458
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-022
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-022.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-022.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:40+09:00
+      completed_at: 2026-07-18T10:10:05+09:00
+      duration_ms: 25230
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24242
+      output_bytes: 2176
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-002
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-002.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-002.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:45+09:00
+      completed_at: 2026-07-18T10:10:09+09:00
+      duration_ms: 24318
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 25071
+      output_bytes: 3185
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-003
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-003.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-003.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:45+09:00
+      completed_at: 2026-07-18T10:10:27+09:00
+      duration_ms: 41339
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24326
+      output_bytes: 2779
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-005
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-005.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-005.yaml
+      status: completed
+      started_at: 2026-07-18T10:09:58+09:00
+      completed_at: 2026-07-18T10:10:16+09:00
+      duration_ms: 17936
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23067
+      output_bytes: 2421
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-008
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-008.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-008.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:05+09:00
+      completed_at: 2026-07-18T10:10:26+09:00
+      duration_ms: 20659
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 21997
+      output_bytes: 2650
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-010
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-010.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-010.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:09+09:00
+      completed_at: 2026-07-18T10:10:34+09:00
+      duration_ms: 24688
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22260
+      output_bytes: 2784
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-013
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-013.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-013.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:16+09:00
+      completed_at: 2026-07-18T10:10:37+09:00
+      duration_ms: 21575
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 23316
+      output_bytes: 2895
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-014
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-014.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-014.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:26+09:00
+      completed_at: 2026-07-18T10:10:47+09:00
+      duration_ms: 20446
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22435
+      output_bytes: 2664
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-015
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-015.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-015.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:27+09:00
+      completed_at: 2026-07-18T10:10:50+09:00
+      duration_ms: 23046
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 26218
+      output_bytes: 2859
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-016
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-016.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-016.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:34+09:00
+      completed_at: 2026-07-18T10:10:51+09:00
+      duration_ms: 16916
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 25709
+      output_bytes: 2668
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-018
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-018.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-018.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:37+09:00
+      completed_at: 2026-07-18T10:10:56+09:00
+      duration_ms: 18825
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 29293
+      output_bytes: 2997
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-021
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-021.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/synthesis/responses/issue-021.yaml
+      status: completed
+      started_at: 2026-07-18T10:10:47+09:00
+      completed_at: 2026-07-18T10:11:03+09:00
+      duration_ms: 16295
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 22607
+      output_bytes: 2677
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+  artifact_generation_realization: live
+  semantic_quality_evidence:
+    status: not_evaluated
+    applicability: real_semantic_path_only
+    reason: live semantic path output requires a separate semantic quality gate
+      before quality is claimed
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000
+  salvage:
+    enabled: true
+    delta_completion: unit_llm
+  resubmit:
+    enabled: true
+  dispatch_breaker:
+    enabled: true
+    systemic_threshold: 3
+    per_call_max_attempts: 3
+    backoff_initial_ms: 3000
+    backoff_cap_ms: 30000

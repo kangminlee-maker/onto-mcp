@@ -1,0 +1,151 @@
+schema_version: 1
+session_id: 20260718-0e0876e7
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: Report 상태를 correction-aware 단일 전이로 계산하지 않고 독립 저장·지연 동기화한 설계를
+      제거하면 상태 지연과 동시 의무 충돌이 함께 사라진다.
+    shared_cause:
+      cause_claim: 정정 상태 전파에 원자적이고 우선순위가 명확한 전이가 없다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-015.cause-002
+    rationale: 두 finding 모두 corrected 이후 Report.result_status를 언제 어떤 우선순위로 amended로
+      바꿀지 정의하지 않은 동일 상태 전이 결손을 지적한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-015
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: correction 이후 Order와 Report를 재평가하는 명시적 전이표를 추가하면 두 상태 안정성 문제를 함께 해소할 수 있다.
+    shared_cause:
+      cause_claim: 후속 correction에 대한 상위 객체의 상태 전이와 완료 의미가 정의되지 않았다.
+      from_cause_ref: finding-015.cause-002
+      to_cause_ref: finding-016.cause-002
+    rationale: 하나는 Report의 충돌 상태를, 다른 하나는 Order의 불안정한 완료 상태를 보이지만 둘 다 후속 correction
+      처리 규칙 부재에서 발생한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: Result 검증 상태와 Report 발행 상태의 권위·집계 규칙을 분리해 단일화하면 야간 동기화 불일치와 의미 혼합이 함께 제거된다.
+    shared_cause: null
+    rationale: finding-001의 지연된 중복 권위는 finding-018이 지적한 서로 다른 상태 의미를 동일 정보처럼 취급한 설계의
+      운영상 발현이다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-006
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: 상태 변경과 매핑을 버전·유효기간이 있는 사건/규칙으로 모델링하면 정정 이력 결손과 향후 상태 어휘 변경의 소급
+      해석 문제가 함께 해소된다.
+    shared_cause:
+      cause_claim: 변경 가능한 상태와 전이 규칙을 버전 없는 현재값 구조로만 표현했다.
+      from_cause_ref: finding-006.cause-002
+      to_cause_ref: finding-013.cause-002
+    rationale: finding-006은 인스턴스 변경 이력, finding-013은 상태 규칙의 진화 이력을 다루지만 양쪽 모두 시간·버전
+      경계 부재를 원인으로 한다.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: 두 finding을 하나의 CriticalValueNotification 사건·증거 결손 이슈로 합쳐도 고유한
+      실패 조건이나 조치가 소실되지 않는다.
+    shared_cause: null
+    rationale: 두 finding 모두 notified 불리언과 연결되지 않은 외부 전화 대장 때문에 통보 완료를 검증·감사할 수 없다는
+      동일 결함을 기술한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-021
+    to_finding_id: finding-007
+    relation: causes
+    root_hypothesis: 재사용 임계값 정책과 결과별 통보 사건을 분리하면 finding-007의 불리언 기반 감사 증거 결손이 구조적으로 제거된다.
+    shared_cause: null
+    rationale: finding-021의 정책과 사건 유형 혼합 때문에 발생별 통보 엔티티가 존재하지 않으며, 이것이 finding-007의
+      검증 불가능한 notified 플래그를 직접 낳는다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-021
+    to_finding_id: finding-024
+    relation: causes
+    root_hypothesis: CriticalValue를 정책과 결과별 사건으로 분리하면 notified를 Result·수신자·외부 기록에
+      연결하지 못하는 구조 결손이 사라진다.
+    shared_cause: null
+    rationale: finding-024의 연결 부재는 finding-021이 식별한 임계값 정책과 발생별 통보 상태의 존재론적 혼합에서 직접 파생된다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-008
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 두 finding을 버전·유효기간 없는 CriticalValue 정책 이슈 하나로 합쳐도 과거 판정 재현성에 관한
+      증거와 조치가 모두 보존된다.
+    shared_cause: null
+    rationale: 둘 다 동일한 CriticalValue 상·하한 구조에서 정책 버전과 적용 기간이 없어 과거 기준을 재구성할 수 없음을 지적한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-003
+    to_finding_id: finding-019
+    relation: duplicates
+    root_hypothesis: 두 finding을 Test–Assay 정식 대응 관계 없이 이중 등록하는 문제로 합쳐도 별도 실패 조건이 남지 않는다.
+    shared_cause: null
+    rationale: 두 finding 모두 주문 단위와 수행 단위를 유지하면서 의미 관계 대신 중복 등록을 사용해 동일성과 대응을 판정할 수
+      없다는 결함을 기술한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-009
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: 두 finding을 버전·권위가 없는 Test–Assay 병행 카탈로그 이슈 하나로 합치면 현재 불일치와 진화 시
+      분기 위험을 함께 표현할 수 있다.
+    shared_cause: null
+    rationale: finding-009와 finding-011은 같은 이중 등록 정책과 매핑 부재를 각각 현재 추적성과 변경 지속성 관점에서 기술한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-019
+    to_finding_id: finding-023
+    relation: same_root_candidate
+    root_hypothesis: Test와 Assay 사이에 cardinality가 명시된 realization 관계를 추가하면 의미적 동일성
+      결손과 워크플로 구조 단절이 동시에 해소된다.
+    shared_cause: null
+    rationale: finding-019는 대응 의미의 부재를, finding-023은 대응 edge의 부재를 지적하며 둘 다 정식
+      Test–Assay 관계 없이 병행 카탈로그를 유지한 결정에 근거한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-022
+    to_finding_id: finding-023
+    relation: shared_cause_candidate
+    root_hypothesis: Assay 수행 사건과 그 workflow edge를 모델에 추가하면 Specimen을 생산 주체로 오인하는
+      관계와 Test–Assay 실행 단절이 함께 해소된다.
+    shared_cause:
+      cause_claim: 결과를 생성하는 수행 사건/단위가 workflow provenance에 연결되지 않았다.
+      from_cause_ref: finding-022.cause-002
+      to_cause_ref: finding-023.cause-001
+    rationale: 수행 주체가 빠지자 finding-022에서는 재료인 Specimen이 생산 관계를 떠맡고, finding-023에서는
+      Assay가 주문-결과 흐름에서 고립된다.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-012
+    to_finding_id: finding-020
+    relation: conflicts_with
+    root_hypothesis: Test.requires_specimen_type과 Assay.specimen_kind가 동일한 분류축인지,
+      채취물 범주와 분석 matrix라는 별도 축인지 실제 값 의미와 허용 매핑으로 검증해야 한다.
+    shared_cause: null
+    rationale: finding-012는 중복 표현을 하나의 공유 SpecimenType 권위로 통합하도록 제안하지만, finding-020은
+      두 속성이 서로 다른 분류축이므로 분리해야 한다고 판단한다. 어느 해석이 맞는지 확정하지 않으면 통합 조치가 의미를 손상할 수 있다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-004
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-005
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-010
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-017
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

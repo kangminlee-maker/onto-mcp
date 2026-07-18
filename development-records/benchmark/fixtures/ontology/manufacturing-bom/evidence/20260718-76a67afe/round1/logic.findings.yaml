@@ -1,0 +1,46 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart 정의와 direction 속성
+    evidence_anchor: .onto/review/20260718-76a67afe/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart의 필수 대칭성 정의와 기본 one_way 방향 설정은 one_way 인스턴스에서 동시에 만족될 수 없다.
+    what: 정의는 모든 대체 관계가 역방향으로도 성립한다고 선언하지만, direction은 one_way를 허용하며 기본값으로 지정한다.
+    why: 충돌 쌍은 materialized-input.md:38과 :42-45이다. 이는 inter-claim 충돌이며, one_way 관계에서
+      필수 대칭성과 허용된 비대칭 상태가 충돌하는 mixed modality 오류다. PLM과 MES가 서로 다른 선언을 기준으로 대체
+      가능 방향을 해석하면 역대체 허용 여부가 일관되지 않게 된다.
+    how_to_fix: 방향성을 유지하려면 정의를 `direction=bidirectional일 때만 역관계가 성립한다`로 수정하고
+      one_way에는 역관계가 암시되지 않는다는 제약을 명시한다. 모든 대체가 대칭이어야 한다면 direction 속성과 one_way
+      값을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목 대체 관계를 PLM/MES 통합의 일관된 개념 기준으로 제공하는 목적
+      failure_condition: direction=one_way인 AlternatePart가 생성되거나 기본값이 적용될 때
+      impact: 동일 관계를 한 시스템은 양방향, 다른 시스템은 단방향으로 처리할 수 있어 대체품 선택과 제조 실행 판단의 신뢰성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:37-45
+    causal_path:
+      root_cause_candidate: 하나의 AlternatePart 개념에 무조건적 대칭성 정의와 선택 가능한 방향성을 함께 부여했다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: one_way 상태에서는 정의가 요구하는 역방향 대체 성립 여부가 충돌한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 충돌은 대칭성을 무조건적 정의로 선언하면서 one_way를 허용하고 기본화한 모델링에서 발생한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:38-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 엔티티 definition은 해당 엔티티의 모든 인스턴스에 적용되는 선언적 제약으로 해석했다.
+  - direction의 one_way는 역방향 관계를 필수로 만들지 않는 허용 상태로 해석했다.
+validation:
+  unaddressable_candidates: []

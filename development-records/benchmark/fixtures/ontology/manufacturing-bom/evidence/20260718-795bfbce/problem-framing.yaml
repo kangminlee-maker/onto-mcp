@@ -1,0 +1,307 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Part revision meanings and production effectivity are
+      conflated without an authoritative effective-configuration anchor.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The accepted evidence identifies a baseline authority defect that can
+      make PLM and MES select different production configurations. Applicable
+      lenses agree on the root cause and high severity.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-017
+  - issue_id: issue-002
+    problem_definition: Cyclic recovered-material flow is represented inside the
+      acyclic product BOM.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The documented self-child pattern mixes process flow with product
+      structure and makes standard BOM calculations unsafe. The root cause and
+      medium severity are uncontested.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: Operational scalar values lack typed measurement semantics,
+      including arithmetic meaning, denominator, unit, authority, and validity.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The missing shared measurement contract directly permits materially
+      different calculations from contract-compliant values. Lens narrowing only
+      clarified the reusable structure and did not dispute the root cause.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-018
+  - issue_id: issue-004
+    problem_definition: Alternate-part data has incompatible reciprocal-equivalence
+      and directional-permission interpretations, compounded by a lossy
+      shortcut.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The semantic conflict and directional remedy are accepted, but
+      severity remains unresolved because actual reverse-substitution scope,
+      control bypass, and the applicable authorization threshold are not
+      evidenced.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: BOM and routing structures lack authoritative versions,
+      effectivity, lifecycle state, and explicit change linkage.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Without independently versioned and effective configurations,
+      historical and scheduled production structures cannot be selected or
+      reconstructed. Applicable lenses consistently retain high severity.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Core lifecycles are incomplete current-state values rather
+      than auditable histories of terminal, superseding, and corrective
+      transitions.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The ontology cannot express required termination and correction
+      outcomes without overwriting or losing history. The event-history root
+      cause and medium severity are consistently supported.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: ECO status values lack immutable, actor-attributed evidence
+      of approval and application transitions.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Current status alone cannot prove who executed a change control,
+      when, or against which configuration and evidence. Applicable lenses agree
+      that this is a material auditability gap.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: The quantity model lacks authoritative part- and
+      effectivity-specific UOM conversion rules.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Unit labels cannot determine cross-unit quantities without governed
+      factors, rounding, validity, and authority. This high-severity gap can
+      directly cause incorrect material and inventory calculations.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Parallel manufacturing reference values lack modeled
+      authority, provenance, freshness, precedence, and derivation status.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: When replicas diverge, the baseline provides no rule for selecting
+      the governing value. All applicable lenses accept this authority defect
+      and its medium severity.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Production-order rules have no explicit boundary connecting
+      immutable design configurations to MES execution evidence.
+    issue_role: enabler
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: A minimal ProductionOrder or external integration contract is needed
+      to enable operational traceability, but the exact internal-versus-external
+      boundary is not established. The bounded remedy is accepted without
+      requiring a full MES ontology in the target.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: Revision is a Part string rather than a traversable
+      configuration anchor linking ECO, BOM, routing, and effectivity.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The missing relationship-capable anchor prevents effective
+      configuration selection and historical reconstruction. Applicable lenses
+      consistently classify this structural defect as high severity.
+    related_surface_finding_ids:
+      - finding-011
+      - finding-023
+  - issue_id: issue-012
+    problem_definition: The closed measurement model conflates available-time
+      capacity with throughput capacity and cannot extend safely to new units or
+      sites.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Dimensionally different capacity meanings share an implicit scalar
+      representation, creating both calculation ambiguity and schema-extension
+      pressure. Structural narrowing complements rather than disputes the
+      accepted remedy.
+    related_surface_finding_ids:
+      - finding-012
+      - finding-019
+  - issue_id: issue-013
+    problem_definition: Future recovery, rework, and co-product flows depend on
+      proliferating cycle exceptions in the product BOM.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The product-structure/material-flow category error and separation
+      remedy are accepted, but the severity of cumulative future risk remains
+      disputed pending evidence of actual or imminent exception proliferation
+      and calculation impairment.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-014
+    problem_definition: AlternatePart's universal symmetry rule contradicts its
+      allowed and default one-way direction.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The contradiction and directional remedy are established, but its
+      severity remains disputed because the breadth of affected default paths
+      and a higher-impact threshold are not evidenced.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-015
+    problem_definition: AlternatePart prose and direction data assign incompatible
+      substitution permissions to the same instance.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All participating lenses accept the semantic conflict and remedy,
+      while severity remains disputed between high and medium pending evidence
+      of real authorization reversals, baseline-wide control impact, and an
+      explicit threshold.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-016
+    problem_definition: A manufacturing material-flow event is modeled as a BOM
+      product-composition relationship.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The category error and dedicated material-flow remedy are accepted,
+      but severity is unresolved because actual use of the self-reference
+      pattern and consumer calculation behavior have not been demonstrated.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-017
+    problem_definition: InspectionPlan conflates a reusable, revisable specification
+      with the executable routing operation that applies it.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Inheritance couples two roles with different lifecycle and execution
+      semantics, weakening PLM-to-MES interpretation. Applicable lenses
+      consistently support separation at medium severity.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-018
+    problem_definition: Routing-derived cumulative standard time and a manual
+      cost-system value share an undefined identity and precedence.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Distinct derived, snapshot, and override values can appear equally
+      authoritative, preventing traceable reconciliation of manufacturing and
+      cost calculations. The authority remedy and medium severity are
+      uncontested.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-019
+    problem_definition: The canonical substitution graph bypasses the AlternatePart
+      node and loses direction on its authoritative traversal path.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The structural bypass and direction-preserving remedy are accepted,
+      but severity remains disputed until actual canonical-path consumers,
+      affected authorization scope, and compensating controls are evidenced.
+    related_surface_finding_ids:
+      - finding-022
