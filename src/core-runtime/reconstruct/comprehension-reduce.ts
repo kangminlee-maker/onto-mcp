@@ -4,6 +4,15 @@ import type {
   IntraTileNote,
 } from "../spreadsheet-structure-observer.js";
 import type { ComprehensionBoundaryWitness } from "./comprehension-artifact.js";
+import {
+  assertContiguousChildrenCore,
+  assertHonestyFoldCore,
+  canonicalBoundariesCore,
+  foldLeavesCore,
+  foldLeavesWithTraceCore,
+  mergeNodesCore,
+  type ReduceCoordAdapter,
+} from "./comprehension-reduce-core.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // comprehension-reduce (P1-C2-C · Layer-1 결정론 코어) — the same-schema UNION monoid that folds a
@@ -77,33 +86,14 @@ function canonicalWitness(b: ComprehensionBoundaryWitness): ComprehensionBoundar
   };
 }
 
-const cmpStr = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
-
+// Dedup + total-order sort both derive from SPREADSHEET_REDUCE_ADAPTER.witnessOrderTuple (the same
+// 7 fields the pre-extraction dedup key held), so sort ⊇ dedup holds by construction (review
+// R8-CANON-BOUND-SORT / F1-det; multi-artifact 리뷰 inv-F1) — byte-identical output to the
+// pre-extraction implementation.
 function canonicalBoundaries(
   boundaries: ComprehensionBoundaryWitness[],
 ): ComprehensionBoundaryWitness[] {
-  const seen = new Set<string>();
-  const out: ComprehensionBoundaryWitness[] = [];
-  for (const b of boundaries) {
-    const k = `${b.sheet}|${b.column_index}|${b.boundary_kind}|${b.first_new_format_row}|${b.last_prev_format_row}|${b.prev_shape}|${b.new_shape}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(canonicalWitness(b));
-  }
-  // The sort key MUST be a superset of the dedup key (review R8-CANON-BOUND-SORT / F1-det): dedup keeps
-  // 7 fields, so ties on a shorter sort key fall back to input order = grouping-VARIANT hash. Ordering
-  // by all 7 dedup fields is a TOTAL order (dedup guarantees the tuple is unique).
-  out.sort(
-    (a, b) =>
-      cmpStr(a.sheet, b.sheet) ||
-      a.column_index - b.column_index ||
-      a.first_new_format_row - b.first_new_format_row ||
-      a.last_prev_format_row - b.last_prev_format_row ||
-      cmpStr(a.boundary_kind, b.boundary_kind) ||
-      cmpStr(a.prev_shape, b.prev_shape) ||
-      cmpStr(a.new_shape, b.new_shape),
-  );
-  return out;
+  return canonicalBoundariesCore(SPREADSHEET_REDUCE_ADAPTER, boundaries);
 }
 
 /** The canonical GROUND of a node — the byte-stable subject a resume key hashes. Contains only
@@ -133,11 +123,85 @@ export function reduceNodeGroundHash(node: ComprehensionReduceNode): string {
   return createHash("sha256").update(JSON.stringify(reduceNodeGround(node))).digest("hex");
 }
 
-// ── canonical child-partition (contiguous only) + fail-closed validator ───────
+// ── coordinate adapter (multi-artifact design 20260718 §2 DD1/DD2) ────────────
+// The signal-agnostic monoid/fold algorithm lives in comprehension-reduce-core.ts; this adapter is
+// the spreadsheet realization — every literal construction, node-key format, witness tuple, and
+// violation message is reproduced verbatim so the extraction is byte-invariant (G-SS).
 
-function sortCanonical(children: ComprehensionReduceNode[]): ComprehensionReduceNode[] {
-  return [...children].sort((a, b) => a.region.row_start - b.region.row_start);
-}
+const SPREADSHEET_REDUCE_ADAPTER: ReduceCoordAdapter<
+  ComprehensionReduceNode,
+  ComprehensionReduceRegion,
+  ComprehensionBoundaryWitness
+> = {
+  moduleTag: "comprehension-reduce",
+  region: (n) => n.region,
+  clusters: (n) => n.format_clusters,
+  boundaries: (n) => n.boundaries,
+  edgeFirstSignal: (n) => n.edge_first_shape,
+  edgeLastSignal: (n) => n.edge_last_shape,
+  distinctIsLowerBound: (n) => n.distinct_is_lower_bound,
+  boundariesAreLowerBound: (n) => n.boundaries_are_lower_bound,
+  segmentsCapped: (n) => n.segments_capped,
+  limitingWitness: (n) => n.limiting_witness,
+  limitingWitnessPos: (w) => (w as NonNullable<ComprehensionReduceNode["limiting_witness"]>).row,
+  containerEquals: (a, b) => a.sheet === b.sheet && a.column_index === b.column_index,
+  spanStart: (r) => r.row_start,
+  spanEnd: (r) => r.row_end,
+  nodeKey: (r) => reduceNodeKey(r),
+  cloneRegion: (r) => ({ sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end }),
+  canonicalWitness: (w) => canonicalWitness(w),
+  witnessOrderTuple: (w) => [
+    w.sheet,
+    w.column_index,
+    w.first_new_format_row,
+    w.last_prev_format_row,
+    w.boundary_kind,
+    w.prev_shape,
+    w.new_shape,
+  ],
+  makeSeamWitness: (left, right) => ({
+    sheet: left.region.sheet,
+    column_index: left.region.column_index,
+    boundary_kind: "value_shape",
+    prev_shape: left.edge_last_shape as string,
+    new_shape: right.edge_first_shape as string,
+    last_prev_format_row: left.region.row_end,
+    first_new_format_row: right.region.row_start,
+  }),
+  makeParent: ({ first, last, clusters, boundaries, distinctLB, boundsLB, capped, limitingWitness }) => ({
+    region: {
+      sheet: first.region.sheet,
+      column_index: first.region.column_index,
+      row_start: first.region.row_start,
+      row_end: last.region.row_end,
+    },
+    format_clusters: clusters,
+    boundaries,
+    edge_first_shape: first.edge_first_shape,
+    edge_last_shape: last.edge_last_shape,
+    distinct_is_lower_bound: distinctLB,
+    boundaries_are_lower_bound: boundsLB,
+    segments_capped: capped,
+    limiting_witness: (limitingWitness as ComprehensionReduceNode["limiting_witness"]) ?? null,
+  }),
+  groundHash: (n) => reduceNodeGroundHash(n),
+  messages: {
+    emptyChildren: () => "reduce requires ≥1 child",
+    invertedRange: (r) => `inverted range [${r.row_start},${r.row_end}] (row_start > row_end)`,
+    mixedRegion: (c, first) =>
+      `all children must share sheet+column_index (got ${c.sheet}#${c.column_index} vs ${first.sheet}#${first.column_index}) — per-column reduce`,
+    overlap: (a, b) =>
+      `children overlap/interleave: [${a.row_start},${a.row_end}] then [${b.row_start},${b.row_end}] — a non-contiguous partition silently drops seams (R8)`,
+    honestyDropped: (flag) =>
+      flag === "distinct"
+        ? "parent dropped a child's distinct_is_lower_bound (R9)"
+        : flag === "bounds"
+          ? "parent dropped a child's boundaries_are_lower_bound (R9)"
+          : "parent dropped a child's segments_capped (R9)",
+  },
+};
+
+// ── canonical child-partition (contiguous only) + fail-closed validator ───────
 
 export interface PartitionViolation {
   code:
@@ -155,44 +219,7 @@ export interface PartitionViolation {
 export function assertContiguousChildren(
   children: ComprehensionReduceNode[],
 ): PartitionViolation[] {
-  const firstNode = children[0];
-  if (!firstNode) return [{ code: "empty", message: "reduce requires ≥1 child" }];
-  const first = firstNode.region;
-  for (const c of children) {
-    if (c.region.row_start > c.region.row_end) {
-      return [
-        {
-          code: "inverted_range",
-          message: `inverted range [${c.region.row_start},${c.region.row_end}] (row_start > row_end)`,
-        },
-      ];
-    }
-    if (c.region.sheet !== first.sheet || c.region.column_index !== first.column_index) {
-      return [
-        {
-          code: "mixed_region",
-          message: `all children must share sheet+column_index (got ${c.region.sheet}#${c.region.column_index} vs ${first.sheet}#${first.column_index}) — per-column reduce`,
-        },
-      ];
-    }
-  }
-  const sorted = sortCanonical(children);
-  const violations: PartitionViolation[] = [];
-  for (let i = 0; i + 1 < sorted.length; i += 1) {
-    const an = sorted[i];
-    const bn = sorted[i + 1];
-    if (!an || !bn) continue;
-    const a = an.region;
-    const b = bn.region;
-    // b must start strictly after a ends (gap allowed). b.row_start <= a.row_end ⇒ overlap/interleave.
-    if (b.row_start <= a.row_end) {
-      violations.push({
-        code: "overlap_or_interleave",
-        message: `children overlap/interleave: [${a.row_start},${a.row_end}] then [${b.row_start},${b.row_end}] — a non-contiguous partition silently drops seams (R8)`,
-      });
-    }
-  }
-  return violations;
+  return assertContiguousChildrenCore(SPREADSHEET_REDUCE_ADAPTER, children);
 }
 
 /** Fail-closed honesty (R9 §5.4): a parent may never UNDERSTATE a child's lower bound. Returns []
@@ -201,17 +228,7 @@ export function assertHonestyFold(
   parent: ComprehensionReduceNode,
   children: ComprehensionReduceNode[],
 ): PartitionViolation[] {
-  const anyDistinctLB = children.some((c) => c.distinct_is_lower_bound);
-  const anyBoundsLB = children.some((c) => c.boundaries_are_lower_bound);
-  const anyCapped = children.some((c) => c.segments_capped);
-  const bad: PartitionViolation[] = [];
-  if (anyDistinctLB && !parent.distinct_is_lower_bound)
-    bad.push({ code: "overlap_or_interleave", message: "parent dropped a child's distinct_is_lower_bound (R9)" });
-  if (anyBoundsLB && !parent.boundaries_are_lower_bound)
-    bad.push({ code: "overlap_or_interleave", message: "parent dropped a child's boundaries_are_lower_bound (R9)" });
-  if (anyCapped && !parent.segments_capped)
-    bad.push({ code: "overlap_or_interleave", message: "parent dropped a child's segments_capped (R9)" });
-  return bad;
+  return assertHonestyFoldCore(SPREADSHEET_REDUCE_ADAPTER, parent, children);
 }
 
 // ── the UNION monoid ──────────────────────────────────────────────────────────
@@ -223,82 +240,7 @@ export function assertHonestyFold(
 export function mergeReduceNodes(
   children: ComprehensionReduceNode[],
 ): ComprehensionReduceNode {
-  const violations = assertContiguousChildren(children);
-  if (violations.length > 0) {
-    throw new Error(
-      `comprehension-reduce: invalid child-partition — ${violations.map((v) => v.message).join("; ")}`,
-    );
-  }
-  const sorted = sortCanonical(children);
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  if (!first || !last) throw new Error("comprehension-reduce: empty partition after validation (unreachable)");
-
-  const clusters = new Set<string>();
-  const boundaries: ComprehensionBoundaryWitness[] = [];
-  for (const c of sorted) {
-    for (const f of c.format_clusters) clusters.add(f);
-    for (const b of c.boundaries) boundaries.push(b);
-  }
-  // Seam: a NEW value-shape boundary at a child junction, ONLY when the two children are row-adjacent
-  // AND their touching edge shapes differ. A gap ⇒ no seam (the contiguity validator already rejected
-  // overlap/interleave, so only adjacency vs gap remains here).
-  for (let i = 0; i + 1 < sorted.length; i += 1) {
-    const a = sorted[i];
-    const b = sorted[i + 1];
-    if (!a || !b) continue;
-    const adjacent = a.region.row_end + 1 === b.region.row_start;
-    if (
-      adjacent &&
-      a.edge_last_shape !== null &&
-      b.edge_first_shape !== null &&
-      a.edge_last_shape !== b.edge_first_shape
-    ) {
-      boundaries.push({
-        sheet: a.region.sheet,
-        column_index: a.region.column_index,
-        boundary_kind: "value_shape",
-        prev_shape: a.edge_last_shape,
-        new_shape: b.edge_first_shape,
-        last_prev_format_row: a.region.row_end,
-        first_new_format_row: b.region.row_start,
-      });
-    }
-  }
-
-  // Honesty fold (R9): OR the lower-bound / capped flags; localize the limiting witness to the
-  // lowest-row capped child.
-  const distinctLB = sorted.some((c) => c.distinct_is_lower_bound);
-  const boundsLB = sorted.some((c) => c.boundaries_are_lower_bound);
-  const capped = sorted.some((c) => c.segments_capped);
-  const witnessCandidates = sorted
-    .map((c) => c.limiting_witness)
-    .filter((w): w is NonNullable<ComprehensionReduceNode["limiting_witness"]> => w !== null)
-    .sort((x, y) => x.row - y.row);
-
-  const parent: ComprehensionReduceNode = {
-    region: {
-      sheet: first.region.sheet,
-      column_index: first.region.column_index,
-      row_start: first.region.row_start,
-      row_end: last.region.row_end,
-    },
-    format_clusters: [...clusters].sort(),
-    boundaries: canonicalBoundaries(boundaries),
-    edge_first_shape: first.edge_first_shape,
-    edge_last_shape: last.edge_last_shape,
-    distinct_is_lower_bound: distinctLB,
-    boundaries_are_lower_bound: boundsLB,
-    segments_capped: capped,
-    limiting_witness: witnessCandidates[0] ?? null,
-  };
-
-  // Redundant guard (structurally can't fail given the ORs above, but catches a future regression).
-  const honesty = assertHonestyFold(parent, sorted);
-  if (honesty.length > 0) {
-    throw new Error(`comprehension-reduce: honesty fold violated — ${honesty.map((v) => v.message).join("; ")}`);
-  }
-  return parent;
+  return mergeNodesCore(SPREADSHEET_REDUCE_ADAPTER, children);
 }
 
 /** Fold an ordered list of leaves into a single root. `fanin` controls tree shape: undefined / ≥ N →
@@ -308,27 +250,7 @@ export function reduceColumnLeaves(
   leaves: ComprehensionReduceNode[],
   fanin?: number,
 ): ComprehensionReduceNode {
-  const only = leaves[0];
-  if (!only) throw new Error("comprehension-reduce: no leaves");
-  if (leaves.length === 1) return only;
-  const f = fanin && fanin >= 2 ? fanin : leaves.length;
-  let level = sortCanonical(leaves);
-  while (level.length > 1) {
-    const next: ComprehensionReduceNode[] = [];
-    for (let i = 0; i < level.length; i += f) {
-      const group = level.slice(i, i + f);
-      const single = group[0];
-      if (group.length === 1 && single) {
-        next.push(single);
-        continue;
-      }
-      next.push(mergeReduceNodes(group));
-    }
-    level = next;
-  }
-  const root = level[0];
-  if (!root) throw new Error("comprehension-reduce: empty tree (unreachable)");
-  return root;
+  return foldLeavesCore(SPREADSHEET_REDUCE_ADAPTER, leaves, fanin);
 }
 
 // ── ReduceTopologyTrace (Layer-2 §13.1) — the ADDITIVE, non-ground tree the Layer-2 accumulated
@@ -374,46 +296,10 @@ export function reduceColumnLeavesWithTrace(
   trace: ReduceTopologyTrace;
   nodesByKey: Map<SemanticNodeKey, ComprehensionReduceNode>;
 } {
-  const only = leaves[0];
-  if (!only) throw new Error("comprehension-reduce: no leaves");
-  const nodes = new Map<SemanticNodeKey, ReduceTopologyTraceNode>();
-  const nodesByKey = new Map<SemanticNodeKey, ComprehensionReduceNode>();
-  const register = (node: ComprehensionReduceNode, childKeys: SemanticNodeKey[]): SemanticNodeKey => {
-    const r = node.region;
-    const key = reduceNodeKey(r);
-    nodes.set(key, {
-      node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
-      ground_hash: reduceNodeGroundHash(node),
-      child_keys: childKeys,
-    });
-    nodesByKey.set(key, node);
-    return key;
-  };
-  // Register every leaf FIRST (F4): leaves and pass-through nodes never go through mergeReduceNodes.
-  for (const leaf of leaves) register(leaf, []);
-  if (leaves.length === 1) {
-    return { root: only, trace: { nodes, root_key: reduceNodeKey(only.region) }, nodesByKey };
-  }
-  const f = fanin && fanin >= 2 ? fanin : leaves.length;
-  let level = sortCanonical(leaves);
-  while (level.length > 1) {
-    const next: ComprehensionReduceNode[] = [];
-    for (let i = 0; i < level.length; i += f) {
-      const group = level.slice(i, i + f);
-      const single = group[0];
-      if (group.length === 1 && single) {
-        next.push(single); // pass-through — already registered; identity, no new node.
-        continue;
-      }
-      const parent = mergeReduceNodes(group);
-      register(parent, group.map((c) => reduceNodeKey(c.region)));
-      next.push(parent);
-    }
-    level = next;
-  }
-  const root = level[0];
-  if (!root) throw new Error("comprehension-reduce: empty tree (unreachable)");
-  return { root, trace: { nodes, root_key: reduceNodeKey(root.region) }, nodesByKey };
+  // Trace registration now carries the core's fail-closed node-key collision guard (multi-artifact
+  // 리뷰 inv-F3): valid same-column span partitions never collide (goldens/suite prove the no-op),
+  // but a future non-injective key space can no longer silently last-wins-overwrite a real node.
+  return foldLeavesWithTraceCore(SPREADSHEET_REDUCE_ADAPTER, leaves, fanin);
 }
 
 // ── leaf construction from real value tiles (LLM-free) ────────────────────────
