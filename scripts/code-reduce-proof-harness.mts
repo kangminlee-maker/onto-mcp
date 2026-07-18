@@ -94,6 +94,29 @@ interface LeafSpec {
   lineEnd: number;
   kind: string;
   symbolNames: string[];
+  /** O-5 보강 필드 (설계 DD6 v4): 저자 서술 목적 1줄 + 선언/문장 첫 줄 (각 유계). */
+  docFirstLine: string | null;
+  signatureLine: string | null;
+}
+
+const BOUND_CHARS = 140;
+const bound = (s: string): string => (s.length > BOUND_CHARS ? `${s.slice(0, BOUND_CHARS)}…` : s);
+
+/** doc 첫 줄: (a) 직전 인접 주석 노드의 첫 의미 줄, (b) Python docstring 첫 줄. */
+function docFirstLineOf(lang: "ts" | "py", item: TsNode, prevSibling: TsNode | null): string | null {
+  if (prevSibling && prevSibling.type === "comment" && prevSibling.endPosition.row + 1 >= item.startPosition.row) {
+    const line = prevSibling.text.split("\n").find((l) => l.replace(/^[/*\s#-]+/, "").trim().length > 0);
+    return line ? bound(line.replace(/^[/*\s#]+/, "").trim()) : null;
+  }
+  if (lang === "py") {
+    const body = item.childForFieldName?.("body");
+    const first = body?.namedChildren?.[0];
+    if (first?.type === "expression_statement" && first.namedChildren[0]?.type === "string") {
+      const line = first.namedChildren[0]!.text.split("\n").map((l) => l.replace(/^["'\s]+|["'\s]+$/g, "")).find((l) => l.length > 0);
+      return line ? bound(line) : null;
+    }
+  }
+  return null;
 }
 interface HierNode {
   leaf?: LeafSpec;
@@ -137,6 +160,7 @@ function partitionItems(
   const leaves: LeafSpec[] = [];
   const nodes: { spec: LeafSpec; astNode: TsNode; kind: string }[] = [];
   let cursor = ownStart;
+  let prevItem: TsNode | null = null;
   for (const item of items) {
     const { kind, inner } = mapKind(lang, item);
     const startLine = item.startPosition.row + 1;
@@ -148,6 +172,7 @@ function partitionItems(
       prev.lineEnd = Math.max(prev.lineEnd, endLine);
       if (name) prev.symbolNames.push(name);
       cursor = prev.lineEnd + 1;
+      prevItem = item;
       continue;
     }
     const spec: LeafSpec = {
@@ -155,10 +180,13 @@ function partitionItems(
       lineEnd: endLine,
       kind,
       symbolNames: name ? [name] : [],
+      docFirstLine: docFirstLineOf(lang, inner, prevItem),
+      signatureLine: bound(item.text.split("\n")[0] ?? ""),
     };
     leaves.push(spec);
     nodes.push({ spec, astNode: inner, kind });
     cursor = endLine + 1;
+    prevItem = item;
   }
   const last = leaves[leaves.length - 1];
   if (last && last.lineEnd < ownEnd) last.lineEnd = ownEnd; // 트레일링 라인 귀속
@@ -200,11 +228,11 @@ function extractHierarchy(lang: "ts" | "py", root: TsNode, lineCount: number): H
       continue;
     }
     const sub: HierNode[] = [];
-    sub.push({ leaf: { lineStart: spec.lineStart, lineEnd: firstMemberLine - 1, kind: "decl_header", symbolNames: spec.symbolNames } });
+    sub.push({ leaf: { lineStart: spec.lineStart, lineEnd: firstMemberLine - 1, kind: "decl_header", symbolNames: spec.symbolNames, docFirstLine: spec.docFirstLine, signatureLine: spec.signatureLine } });
     const memberPart = partitionItems(lang, members, firstMemberLine, lastMemberLine);
     for (const m of memberPart.leaves) sub.push({ leaf: m });
     if (lastMemberLine < spec.lineEnd) {
-      sub.push({ leaf: { lineStart: lastMemberLine + 1, lineEnd: spec.lineEnd, kind: "decl_footer", symbolNames: [] } });
+      sub.push({ leaf: { lineStart: lastMemberLine + 1, lineEnd: spec.lineEnd, kind: "decl_footer", symbolNames: [], docFirstLine: null, signatureLine: null } });
     }
     children.push({ kind: meta.kind, symbolName: spec.symbolNames[0] ?? null, children: sub });
   }
@@ -437,7 +465,7 @@ async function main(): Promise<void> {
       // P7: DD6 코드 봉투 preview — 실심볼명으로 인스턴스화.
       const seams = hierRoot.boundaries.map((b) => ({ line: b.first_new_format_row, prev_kind: b.prev_shape, new_kind: b.new_shape }));
       const envelopes = specs
-        .filter((s) => s.symbolNames.length > 0)
+        .filter((s) => s.kind !== "comment_block") // O-5: 이름 없는 leaf(재수출·실행문)도 카드가 됨
         .slice(0, 12)
         .map((s) => ({
           target_material_kind: "code",
@@ -446,6 +474,8 @@ async function main(): Promise<void> {
           signal_clusters: [s.kind],
           symbol_seams: seams.filter((x) => x.line >= s.lineStart && x.line <= s.lineEnd),
           symbol_names: [...s.symbolNames].sort(),
+          doc_comment_first_line: s.docFirstLine,
+          signature_line: s.signatureLine,
           child_summaries: [],
         }));
       await fs.writeFile(
@@ -481,8 +511,8 @@ async function main(): Promise<void> {
 
   // P4: negative controls — 게이트가 실패 가능함을 증명.
   const ncBase = [
-    leafNode("nc.ts", { lineStart: 1, lineEnd: 10, kind: "import", symbolNames: [] }),
-    leafNode("nc.ts", { lineStart: 11, lineEnd: 20, kind: "class_decl", symbolNames: [] }),
+    leafNode("nc.ts", { lineStart: 1, lineEnd: 10, kind: "import", symbolNames: [], docFirstLine: null, signatureLine: null }),
+    leafNode("nc.ts", { lineStart: 11, lineEnd: 20, kind: "class_decl", symbolNames: [], docFirstLine: null, signatureLine: null }),
   ];
   let ncOverlap = false;
   try {
