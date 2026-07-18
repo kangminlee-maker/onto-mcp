@@ -2145,3 +2145,117 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
     await fs.rm(sessionRoot, { recursive: true, force: true });
   });
 });
+
+// ── step 6 교차검증 xver-gf F1: code-kind resume/recovery 반증 커버리지 ──────────────────────────────
+
+describe("semantic-map resume with a retained CODE row (step 6 — xver-gf F1 negative controls)", () => {
+  async function seedPriorArtifacts(): Promise<{
+    sessionRoot: string;
+    sourceObservations: Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+  }> {
+    const inventory = await codeInventory();
+    const sourceObservations = mixedObservationsArtifact({
+      code: { structural: { code_structure_inventory: inventory } },
+    });
+    const { author } = mockCodeAuthor();
+    const sessionRoot = await tempRoot();
+    // A REAL prior run (breaker ON, both observations complete) writes the census/sidecar the
+    // recovery validates — no hand-forged rows, so a fingerprint-derivation regression cannot be
+    // masked by a fixture that mirrors the same bug.
+    await runSemanticMapStage({
+      sourceObservations,
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+      dispatchBreaker: BREAKER,
+    });
+    // Re-shape the end state into a TRIPPED partition: the code observation completed (retained),
+    // the spreadsheet observation still owed.
+    await writeYamlFixture(dispatchIncompleteArtifactPath(sessionRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: { tripped: true, failure_class: "rate_limit", consecutive_item_count: 3, threshold: 3 },
+      completed_item_ids: ["obs-code"],
+      dead_letter: [],
+      incomplete_item_ids: ["obs-sheet"],
+    });
+    return { sessionRoot, sourceObservations };
+  }
+
+  function prepare(args: {
+    sessionRoot: string;
+    sourceObservations: Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+    codeEligible: boolean;
+    codePromptSha?: string;
+  }) {
+    return prepareSemanticMapResumeContext({
+      sessionId: "session-1",
+      sessionRoot: args.sessionRoot,
+      attemptId: "attempt-1",
+      sourceObservations: args.sourceObservations,
+      resumeMode: "reuse_existing_authored_artifacts",
+      dispatchBreaker: BREAKER,
+      preImageBase: PRE_IMAGE_BASE,
+      codeEligible: args.codeEligible,
+      codePreImageBase: { ...CODE_PRE_IMAGE_BASE, reduce_prompt_sha256: args.codePromptSha ?? CODE_PRE_IMAGE_BASE.reduce_prompt_sha256 },
+      verifyModelIdentity: "mock/none",
+      config: CONFIG,
+    });
+  }
+
+  it("retains a code row via the CODE fingerprint re-derivation and replays its sidecar projection without re-dispatch", async () => {
+    const { sessionRoot, sourceObservations } = await seedPriorArtifacts();
+    const context = await prepare({ sessionRoot, sourceObservations, codeEligible: true });
+    expect(context).not.toBeNull();
+    // The retained row matched ⇔ semanticMapCodeObservationFingerprint(codePreImageBase) re-derived
+    // it — a regression to the spreadsheet fingerprint fn makes this null and fails here.
+    expect(context!.retainedRowsByObservationId.has("obs-code")).toBe(true);
+    expect(context!.retainedSidecarByObservationId.has("obs-code")).toBe(true); // renderability passed the "code" noteKind branch.
+    expect(context!.incompleteItemIds).toEqual(["obs-sheet"]);
+
+    const { author, counters } = mockCodeAuthor();
+    const result = await runSemanticMapStage({
+      sourceObservations,
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+      dispatchBreaker: BREAKER,
+      recoveryContext: context,
+    });
+    expect(counters.codeSynthesize).toBe(0); // retained — the code observation was NOT re-dispatched…
+    expect(counters.synthesize).toBeGreaterThan(0); // …while the incomplete spreadsheet one was.
+    const codeRow = result.census!.by_observation.find((r) => r.observation_id === "obs-code");
+    expect(codeRow?.target_material_kind).toBe("code");
+    expect(codeRow?.map_present).toBe(true);
+    const replayed = result.projectionByObservation.get("obs-code");
+    expect(replayed).toBeDefined();
+    expect((replayed!.nodes[0]!.node_ref as { file?: string }).file).toBe(CODE_FILE); // sidecar replay kept the code projection.
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("negative control: a rotated code prompt-contract sha REJECTS the retained code row (DD6 rotation semantics)", async () => {
+    const { sessionRoot, sourceObservations } = await seedPriorArtifacts();
+    await expect(
+      prepare({ sessionRoot, sourceObservations, codeEligible: true, codePromptSha: "code-p-ROTATED" }),
+    ).rejects.toThrow(/retained fingerprints\/skip reasons do not match/);
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("negative control: code no longer eligible → the prior partition no longer matches the eligible set (fail-loud, no stale reuse)", async () => {
+    const { sessionRoot, sourceObservations } = await seedPriorArtifacts();
+    await expect(
+      prepare({ sessionRoot, sourceObservations, codeEligible: false }),
+    ).rejects.toThrow(/outside current eligible observations|exactly match the current sorted eligible observation id set/);
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+});
