@@ -1,6 +1,12 @@
 # semantic-map(재귀llm) multi-artifact 확장 설계 SSOT (2026-07-15)
 
-> 상태: **Design SSOT — 프레임·결정 확정, 상세 설계는 다음 세션 계속**
+> 상태: **Design SSOT — 프레임·결정 확정. Phase 1 상세 설계 =
+> [20260718-semantic-map-multi-artifact-phase1-detailed-design.md](20260718-semantic-map-multi-artifact-phase1-detailed-design.md)
+> (Phase 0 재확증 결과 포함)**
+> 정정 (2026-07-18 재확증): §1 표의 `comprehension-reduce.ts` "~1098 L"은 오기 — 실제 498 L
+> (1098 L은 `comprehension-semantic-map.ts`). §6 "관찰은 이미 멀티-artifact"는 scout/profile
+> 층 한정 — code/document 관찰의 structural_data는 generic raw-text 통계뿐이라 per-position
+> 신호는 관찰 측 신규 생산이 필요하다(상세 설계 §0·§3.1).
 > 소유: reconstruct comprehension 확장 (백로그 B "symmetric artifact accessibility"의 구체 실현)
 > 성격: 이번 세션에서 owner와 수렴한 **설계 결정·아키텍처·현 상태·미결 항목**을 고정한다.
 > 상세 구현 설계와 N=1 de-risk는 다음 세션이 이 문서에서 착수한다.
