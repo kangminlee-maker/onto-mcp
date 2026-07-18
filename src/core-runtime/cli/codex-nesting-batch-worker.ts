@@ -31,6 +31,7 @@
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import { awaitChildExit } from "../child-process-exit.js";
 import {
   buildNestingBatchWorkerPrompt,
   parseNestingBatchSummary,
@@ -195,24 +196,15 @@ export async function spawnOuterCodex(
     child.kill("SIGKILL");
   }, options.timeout_ms);
 
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", (err: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      if (err.code === "ENOENT") {
-        reject(
-          new Error(
+  const exitCode = await awaitChildExit(child, {
+    onSettled: () => clearTimeout(timer),
+    mapError: (err) =>
+      err.code === "ENOENT"
+        ? new Error(
             `codex binary not found at "${options.codex_bin}". ` +
               "Install codex and run `codex login`, or set a non-default codex_bin.",
-          ),
-        );
-      } else {
-        reject(err);
-      }
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(code ?? 1);
-    });
+          )
+        : err,
   });
 
   // Flush & close real-time tee streams before returning. Calling .end()

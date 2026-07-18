@@ -167,6 +167,7 @@ import { parseRuntimeIssueDeliberationSchemaContext } from "./runtime-submit-con
 import { parseRuntimeIssueStanceSchemaContext } from "./runtime-submit-context.js";
 import { parseRuntimeIssueSynthesisSchemaContext } from "./runtime-submit-context.js";
 import { salvageInputPathFor, type SalvageInput } from "./submit-salvage.js";
+import { awaitChildExit } from "../child-process-exit.js";
 import {
   DispatchBreakerState,
   TRANSIENT_TRANSPORT_MESSAGE_PATTERNS,
@@ -1606,6 +1607,14 @@ function failureKindFromError(error: unknown): ReviewUnitFailureKind {
 const TRANSIENT_EXECUTOR_FAILURE_PATTERNS = [
   ...TRANSIENT_TRANSPORT_MESSAGE_PATTERNS,
   "responses_retry",
+  // Provider pre-dispatch refusals. These arrive as text appended to the
+  // worker's echoed output, so they MUST be classified here — the
+  // output_contract substring scan below would otherwise match contract
+  // keywords echoed from the packet body and mislabel a capacity/quota
+  // refusal as an output-format violation (observed live 2026-07-18:
+  // "Selected model is at capacity" runs recorded as output_contract).
+  "at capacity",
+  "usage limit",
 ];
 
 function isTransientExecutorFailureMessage(message: string): boolean {
@@ -2558,22 +2567,16 @@ async function invokeExecutor(
     }
   };
 
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    const timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      terminateChild("SIGTERM");
-      forceKillTimer = setTimeout(() => terminateChild("SIGKILL"), 2_000);
-    }, timeoutMs);
-    child.on("error", (error) => {
+  const timeoutTimer = setTimeout(() => {
+    timedOut = true;
+    terminateChild("SIGTERM");
+    forceKillTimer = setTimeout(() => terminateChild("SIGKILL"), 2_000);
+  }, timeoutMs);
+  const exitCode = await awaitChildExit(child, {
+    onSettled: () => {
       clearTimeout(timeoutTimer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeoutTimer);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      resolve(code ?? 1);
-    });
+    },
   });
   appendRuntimeStreamEventSync({
     pipeline: "review",

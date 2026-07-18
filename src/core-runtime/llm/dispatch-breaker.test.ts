@@ -40,6 +40,16 @@ describe("classifySystemicDispatchFailure", () => {
     expect(
       classifySystemicDispatchFailure("You have hit your session limit for opus"),
     ).toBe("rate_limit");
+    // Provider capacity shedding (codex/openai refusal observed live
+    // 2026-07-18) — systemic rate_limit class, same as "overloaded".
+    expect(
+      classifySystemicDispatchFailure(
+        "ERROR: Selected model is at capacity. Please try a different model.",
+      ),
+    ).toBe("rate_limit");
+    expect(
+      classifySystemicDispatchFailure("You've hit your usage limit."),
+    ).toBe("rate_limit");
     expect(
       classifySystemicDispatchFailure(
         '[model-call] claude call FAILED: exit_code=1 message="claude: not logged in"',

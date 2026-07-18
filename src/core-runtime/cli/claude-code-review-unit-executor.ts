@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import { awaitChildExit } from "../child-process-exit.js";
 import {
   appendRuntimeStreamChunkSync,
   appendRuntimeStreamEventSync,
@@ -475,25 +476,17 @@ async function runClaudeWorker(args: {
     }, args.timeoutMs);
   }
 
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", (err: NodeJS.ErrnoException) => {
+  const exitCode = await awaitChildExit(child, {
+    onSettled: () => {
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
-      if (err.code === "ENOENT") {
-        reject(
-          new Error(
+    },
+    mapError: (err) =>
+      err.code === "ENOENT"
+        ? new Error(
             `Claude Code CLI not found (${CLAUDE_BIN}). Install/login claude or set ONTO_CLAUDE_BIN.`,
-          ),
-        );
-      } else {
-        reject(err);
-      }
-    });
-    child.on("close", (code) => {
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      resolve(code ?? 1);
-    });
+          )
+        : err,
   });
 
   if (timedOut) {

@@ -65,6 +65,36 @@ function gate(
   });
 }
 
+describe("provider refusal classification — transient wins over echoed contract keywords", () => {
+  // The wedge that produced the live mislabel (2026-07-18): a capacity/quota
+  // refusal arrives with the worker's echoed packet text in the message, and
+  // that echo contains contract keywords (schema_version, boundary_notes, …)
+  // that failureKindFromMessage would classify output_contract (terminal).
+  // The transient scan runs first, so the refusal must be retryable even with
+  // resubmit OFF — and must not depend on gate eligibility.
+  const CAPACITY_WITH_ECHOED_PACKET =
+    "codex worker did not produce structured output json.\n" +
+    "schema_version: onto-review/1\nboundary_notes: ...\n" +
+    "ERROR: Selected model is at capacity. Please try a different model.";
+  const USAGE_LIMIT_WITH_ECHOED_PACKET =
+    "claude worker reported failure: You've hit your usage limit.\n" +
+    "issue_id: issue-001\nschema_version: onto-review/1";
+
+  it("capacity refusal is retryable (executor_exit), not terminal output_contract", () => {
+    expect(gate("issue-synthesis-response", CAPACITY_WITH_ECHOED_PACKET, false)).toBe(true);
+  });
+
+  it("usage-limit refusal is retryable (executor_exit), not terminal output_contract", () => {
+    expect(gate("issue-stance-response", USAGE_LIMIT_WITH_ECHOED_PACKET, false)).toBe(true);
+  });
+
+  it("the echoed-packet keywords alone (no refusal) stay terminal — the discriminating control", () => {
+    const echoOnly =
+      "codex worker did not produce structured output json.\nschema_version: onto-review/1";
+    expect(gate("issue-synthesis-response", echoOnly, false)).toBe(false);
+  });
+});
+
 describe("structural retry gate — shouldRetryUnitFailure (§4-2c)", () => {
   it("OFF (resubmit disabled): output_contract stays terminal for every unit (byte-identical)", () => {
     // Confirms each message is output_contract to begin with: OFF must be
