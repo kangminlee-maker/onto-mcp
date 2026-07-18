@@ -1,6 +1,6 @@
 # semantic-map multi-artifact 확장 — Phase 1 (코드/AST) 상세 설계 (2026-07-18)
 
-> 상태: **설계 초안 — 적대적 리뷰 반영, owner 승인 대기 (구현 미착수)**
+> 상태: **설계 v2 — 독립 적대적 3-렌즈 리뷰 15건 반영 완료 (§9), owner 승인 대기 (구현 미착수)**
 > 상위 SSOT: [20260715-semantic-map-multi-artifact-extension-design.md](20260715-semantic-map-multi-artifact-extension-design.md)
 > — 원리(§2)·owner 확정 결정 D1~D4(§3)·목표 형상(§4)·착수 순서(§5)는 SSOT가 소유한다.
 > 이 문서 소유: **Phase 0 재확증 결과 + Phase 1 상세 설계 결정(DD1~DD9) + 검증 계획 + 구현 순서.**
@@ -26,8 +26,10 @@ SSOT §1·§6의 앵커를 전건 재확증했다. 결론: **프레임 유효, O
 `ComprehensionBoundaryWitness {sheet, column_index, boundary_kind, prev/new_shape, *_row}`,
 `RawSemanticBoundary.row`, envelope의 `REGION_KEYS`/`SEAM_KEYS` exact-key 가드,
 node key 포맷 `${sheet}#${column_index}:${row_start}-${row_end}`.
-반면 monoid/honesty fold·trace·frontier 분할·epoch 재귀·N1~N6 검증기·seed projection은
-**key-string과 정수 위치만 소비**한다. 따라서 "좌표 어댑터" 한 층으로 제네릭화가 성립한다 (§2).
+반면 monoid/honesty fold·trace·frontier 분할·epoch 재귀·N1~N6 검증기·seed projection의 **로직**은
+key-string과 정수 위치만 소비한다. 다만 좌표 접점은 L2의 소비 표면(§DD9 — projection 렌더러·
+merge 키잉·sidecar)까지 이어지므로, "좌표 어댑터" 한 층 + 소비 표면의 per-artifact 분기까지가
+제네릭화의 전체 범위다 (§2·§DD9).
 
 ## 1. 목표 / 완료 기준 (falsifiable)
 
@@ -36,14 +38,29 @@ Phase 1(코드) 완료 = 아래 게이트 전부 통과. 각 게이트는 **비�
 
 - **G-SS (스프레드시트 불변, 하드 게이트)**: 리팩터 전 채집한 골든과 바이트 동일 —
   (a) 기존 fixture들의 `reduceNodeGroundHash` 전건, (b) `semanticMapObservationFingerprint`,
-  (c) `scripts/reduce-proof-harness.mts` 6/6, (d) 기존 스위트 전건 green
-  (`comprehension-reduce/semantic-map/stage.test.ts`가 곧 불변 스위트).
-- **G-CODE (코드 byte-stable reduce)**: N=1 프로브 — 실제 TS 파일 ≥ 2개에서
-  leaf partition → {flat, AST 계층, fanin-3} 3개 grouping의 root ground **바이트 동일**,
-  negative control 2종(overlap 주입 → reject, honesty understate 주입 → reject) 통과.
+  (c) `scripts/reduce-proof-harness.mts` 6/6, (d) 기존 스위트 전건 green,
+  **(e) L2 경계 골든** (리뷰 inv-F5): 기존 fixture에 대한 per-node 합성/verify 입력의
+  `stableJson` 바이트(LLM-facing 정확 바이트) + seed projection + `semantic-map` sidecar 스냅샷.
+  (a)~(b)만으로는 self-consistent한 L2 구성 회귀(입력 필드 순서·seam sort·child-summary 순서
+  변경)가 green으로 통과하므로 (e)가 L2 절반의 바이트 동일을 잠근다.
+- **G-CODE (코드 byte-stable reduce + 분할 건전성)**: N=1 프로브(§7 step 2) — 실제 TS 파일
+  ≥ 2개 + **적대적 형상 파일**(배럴 re-export·대형 단일 union 타입·top-level 스크립트·깊은
+  중첩) 각 1개에서:
+  (i) leaf partition → {flat, AST 계층, fanin-3} 3개 grouping의 root ground **바이트 동일**,
+  (ii) negative control 3종 — overlap 주입 → reject, honesty understate 주입 → reject,
+  **한 줄 다중 선언 fixture**(리뷰 inv-F2)가 유효 분할로 처리됨,
+  (iii) **분할 비퇴화 지표**: 최대 leaf span 점유율·seam 밀도·vacuous-leaf 비율을 산출·보고
+  (임계 미달 형상은 go/no-go 판단 자료).
   실패 시 **재설계 스톱** (SSOT §5 Phase 1-1).
-- **G-L2 (재귀 생존)**: 코드 trace 위 mock-author `accumulateSemanticMap`이 N1~N6 전 검증기
-  통과 + seed projection 산출 (노드 수 > 0 단언).
+- **G-L2 (재귀 생존)**: 프로브 내 mock-author `accumulateSemanticMap`이 코드 trace 위에서
+  N1~N6 전 검증기 통과 + seed projection 산출 (노드 수 > 0 단언) + **실파일 기준 envelope
+  dump**(LLM이 받게 될 실제 입력 문자열) 산출.
+- **G-SEM (의미 게이트, 리뷰 gf-F1 — live N=1의 수용 기준)**: 재귀 seed projection이 같은
+  파일의 **결정론 flat 심볼 outline(대조군)** 대비, 코드의 구조·목적에 관한 질문 ≥ k(기본 3)개를
+  추가로 답할 수 있어야 한다 — 블라인드 평정(owner 또는 독립 judge, 어느 쪽인지 기록).
+  코드에는 flat leaf-reader 경로가 없어(leaf-reader.ts는 spreadsheet 전용 import) 재귀 맵이
+  코드 이해의 전부이므로, 이 게이트 없이는 "outline 재발명"이 전 게이트 green으로 통과한다.
+  **실패 시 DD6 fallback 트리거 발동** (봉투 확장 후 재시도, §DD6).
 - **G-OFF (default-off 증명)**: code 관찰이 존재해도 (i) settings 옵트인 부재 또는 (ii) author
   kind 광고 부재면 code 경로 0 호출 + 정직한 skip census, spreadsheet 산출물 바이트 동일.
 
@@ -69,17 +86,23 @@ interface ComprehensionCoordAdapter<R, W> {
   makeParentRegion(first: R, last: R): R;    // 기존 literal 구성 그대로 (필드 순서 보존)
   nodeKey(r: R): SemanticNodeKey;            // 기존 reduceNodeKey 포맷 보존
   cloneRegion(r: R): R;
-  // witness 접점 (canonical sort/dedup/직렬화가 아티팩트별 필드명을 가짐)
+  // witness 접점 — 정렬·중복제거는 하나의 순서-튜플에서 함께 도출 (리뷰 inv-F1:
+  // sort 키 ⊇ dedup 키 결합을 어댑터 계약에 구조로 인코딩. cmp = 튜플 사전식,
+  // dedup 키 = 튜플 join — 두 키 집합이 정의상 동일해 grouping-variant tie가 불가능).
   witnessKind(w: W): string;
   witnessPrevSignal(w: W): string; witnessNewSignal(w: W): string;
   witnessLastPrevPos(w: W): number; witnessFirstNewPos(w: W): number;
   makeSeamWitness(a: R, b: R, prevSignal: string, newSignal: string): W;
   canonicalWitness(w: W): W;                 // 고정 필드 순서 재키잉 (기존 canonicalWitness)
-  witnessCmp(a: W, b: W): number;            // 기존 7-필드 total order와 동일 의미
-  witnessDedupKey(w: W): string;
+  witnessOrderTuple(w: W): (string | number)[]; // 스프레드시트 = 기존 7-필드 sort 순서 그대로
   anchorTolerance: number;                   // DD8: v1 전 어댑터 1
 }
 ```
+
+스프레드시트 어댑터의 `witnessOrderTuple`은 기존 sort 순서(sheet, column_index,
+first_new_format_row, last_prev_format_row, boundary_kind, prev_shape, new_shape)를 그대로
+쓴다 — dedup 키 문자열의 필드 배열 순서는 바뀌지만 dedup 의미(동일 필드 집합의 유일성)와
+출력 바이트(sort 결과·first-occurrence 유지)는 불변.
 
 ### DD2. 모듈 분해 (L1)
 
@@ -87,6 +110,8 @@ interface ComprehensionCoordAdapter<R, W> {
   generic node 형상(`region: R`, `signal_clusters`, `boundaries: W[]`, `edge_first/last_signal`,
   honesty 3-플래그, `limiting_witness`), `assertContiguousChildren`/`assertHonestyFold`/
   `mergeNodes`/`foldWithTrace`(fanin)/`foldHierarchyWithTrace`(신규, §3.4)를 `<R, W>`로 소유.
+  제네릭 `canonicalBoundaries<W>`는 코어가 소유하고 `witnessOrderTuple`에서 cmp·dedup를 함께
+  도출한다 (DD1).
 - **`comprehension-reduce.ts` (기존, 스프레드시트 어댑터화)**: 공개 API·타입·ground 직렬화
   (`reduceNodeGround`/`reduceNodeGroundHash`/`reduceNodeKey`)·`buildColumnLeaves` **시그니처
   불변**. `mergeReduceNodes` 등은 코어 + `SPREADSHEET_COORD_ADAPTER` 호출로 위임하는 thin
@@ -97,17 +122,19 @@ interface ComprehensionCoordAdapter<R, W> {
 
 ### DD3. 모듈 분해 (L2)
 
-`comprehension-semantic-map.ts`의 성분 분류(재확증 §0)에 따라:
-- **이미 좌표-불가지 (이동만, 의미 무변경)**: epoch allowlist/`reduceNodeEpochContribution`,
-  `computeSubtreeLeafCounts`/`classifyFrontier`/`assertReduceTopologyIsTree`(key-string 기반),
-  taint 산술(N6), 검증 상태기계(N3), `assertChildJudgmentCoverage`(N5), enum 표면.
+`comprehension-semantic-map.ts`의 성분 분류(재확증 §0 + 리뷰 inv-F4 정정)에 따라:
+- **좌표-불가지 (이동만, 의미 무변경)**: epoch allowlist/`reduceNodeEpochContribution`,
+  `computeSubtreeLeafCounts`/`classifyFrontier`(key-string 기반), taint 산술(N6), 검증
+  상태기계(N3), `assertChildJudgmentCoverage`(N5), enum 표면.
   → `comprehension-semantic-map-core.ts`로 추출, 기존 모듈이 re-export (공개 표면 불변).
-- **어댑터 접점 (파라미터화)**: `reconcileBoundaries`(seam 위치·`witnessCmp`),
-  `canonicalValueShapeSeams`(kind 필터·pos 필드), node_ref clone 사이트, trace `node_ref` 타입.
+- **어댑터 접점 (파라미터화 — 이동이 아니라 시그니처 변경)**: `reconcileBoundaries`(seam
+  위치·`witnessOrderTuple`), `canonicalValueShapeSeams`(kind 필터·pos 필드), node_ref clone
+  사이트, trace `node_ref` 타입, **`assertReduceTopologyIsTree`** — `:587-589`의 정규-키 재계산
+  검증이 `reduceNodeKey`(좌표 특정)를 소비하므로 `adapter.nodeKey` 파라미터가 필요하다
+  (리뷰 inv-F4: 초안의 "이동만" 분류는 이 검증기에 대해 오류였음).
 - **아티팩트별 잔존 (스프레드시트 모듈 소유 유지)**: `SemanticSynthesisInput`/`REGION_KEYS`/
   `SEAM_KEYS` exact-key 가드, `buildSynthesisInputForNode`, seed projection의 node_ref 직렬화.
-  코드 아티팩트는 자기 envelope을 갖는다 (§3.5) — envelope은 **LLM-facing 계약**이라
-  아티팩트별로 명시적인 것이 옳다 (제네릭 봉투 1개로 합치면 spreadsheet 봉투 바이트가 변함).
+  코드 아티팩트는 자기 envelope(§DD6)과 자기 projection 표면(§DD9)을 갖는다.
 
 `semanticMapGateLogicSha256`(gate 로직 tautological digest)은 코어 함수 소스를 해시하게
 되므로 **추출 시 값이 회전한다** — 이는 "로직 변경 시 회전"의 의도된 동작이며 reuse 키
@@ -122,43 +149,64 @@ spreadsheet 패턴 미러: `buildReconstructSourceObservation`(materialize-prepa
 spreadsheet 분기와 대칭)에서 code kind를 **`code-structure-observer.ts`(신설, spreadsheet-
 structure-observer.ts와 동급 위치)**로 라우팅, `structural_data.code_structure_inventory`를
 생산한다. stage-시 재파싱은 TOCTOU(content_sha256 채집 시점과 불일치)·레이어 위반으로 기각.
-관찰 옵트인: §3.6의 settings 키가 꺼져 있으면 기존 generic raw-text 관찰과 **바이트 동일**
-(G-OFF의 관찰 측 절반).
+관찰 옵트인: §DD7의 settings 키가 꺼져 있으면 기존 generic raw-text 관찰과 **바이트 동일**
+(G-OFF의 관찰 측 절반). **미지원 언어**(v1 = TS/JS 외)는 spreadsheet의 unsupported 강등과
+달리 generic raw-text 관찰을 그대로 유지하되(기존 flat 경로 유효), 옵트인이 켜져 있으면
+`structural_data.code_structure_unsupported = { reason: "language not supported: <ext>" }`를
+함께 기록해 스테이지 census가 실패와 미지원을 결정론적으로 구별하게 한다 (리뷰 gf-F5).
+
+**파서 의존 (리뷰 ct-F1 — owner 결정 O-4)**: `typescript`는 현재 **devDependency**다
+(package.json:103; 런타임 deps에 없음). 제품 코드(`src/`)에서 import하면 npm 설치 사용자에게
+`ERR_MODULE_NOT_FOUND`로 즉사하므로, 구현 전에 **`typescript`를 dependencies로 승격**(설치
+용량 수 MB 증가)해야 한다. 추천: 승격 (AST 권위 원리상 진짜 파서가 옳고, 대안인 경량
+토크나이저는 AST authority를 훼손, 파서 번들링은 유지비 과다). 초안의 "신규 의존 0" 표기는
+**오류였음** — 정정.
 
 ### DD5. per-position 신호·leaf partition·AST 계층
 
-- **파서**: TypeScript compiler API (기존 devDependency, 신규 의존 0). v1 대상 = `.ts/.tsx/.js/.mjs/.cjs`.
-  타 언어는 어댑터 뒤 후속 (per-artifact 플러그 원리 그대로).
-- **위치 단위**: 1-based 라인. container = 파일 (1a에서 파일 1개 = 관찰 1개 = 트리 1개).
+- **파서**: TypeScript compiler API. v1 대상 = `.ts/.tsx/.js/.mjs/.cjs`. 타 언어는 어댑터 뒤
+  후속 (per-artifact 플러그 원리 그대로). 의존 승격은 O-4 (DD4).
+- **위치 단위 = 1-based 라인, 분할 규칙 = 라인-소유권 분할 (리뷰 inv-F2/F3 정정)**:
+  문자-공간 full-start 타일링을 라인으로 사영하면 같은 줄의 인접 선언
+  (`export const a = 1; export const b = 2;`, 한 줄 클래스)이 `row_start == 직전.row_end`가
+  되어 `assertContiguousChildren`(comprehension-reduce.ts:188)을 위반한다 — 초안의 "비중첩
+  그대로 만족" 주장은 **오류였음**. 정정: **추출기가 모든 라인을 정확히 하나의 leaf에
+  할당한다.** 같은 줄을 공유하는 AST 형제들은 하나의 leaf로 합쳐지고(kind = 첫 선언 kind,
+  심볼 이름은 전부 수집), `decl_header`/`decl_footer` leaf는 멤버가 소유하지 않는 라인을
+  ≥ 1개 소유할 때만 생성된다(한 줄 컨테이너 선언 = leaf 1개, header/footer 없음). 이 규칙이
+  엄격 비중첩 분할과 (아래) node-key 단사성을 동시에 보장한다. 라인이 코드 앵커의 자연
+  단위이므로 좌표를 문자 오프셋으로 바꾸는 대안은 기각 (봉투·seed 가독성).
 - **신호 토큰** = 그 라인을 덮는 최심 선언의 kind: `import | export_stmt | type_alias |
   interface_decl | class_decl | function_decl | const_decl | enum_decl | member_method |
   member_prop | decl_header | decl_footer | comment_block | directive | other`.
   (`boundary_kind: "symbol_kind"` — 코드 witness의 kind 어휘; spreadsheet의 닫힌 enum
   `value_shape|display_format`은 무변경.)
-- **leaf partition은 gapless**: 노드 span은 full-start(선행 trivia 포함)를 쓴다 — 주석/공백이
-  다음 선언에 붙어 파일 전체가 빈틈없이 타일링된다. ⇒ 모든 kind 전이가 인접 seam이 되어
-  N1 reconcile이 spreadsheet와 동일하게 작동한다.
 - **AST 계층 → 명시적 span-tree**: 컨테이너 선언(class/interface/enum/namespace)은
-  `decl_header` leaf(선언 시작~본문 첫 멤버 직전) + 멤버 서브트리들 + `decl_footer` leaf
-  (마지막 멤버 다음~닫는 brace)로 자식을 구성한다 ⇒ merge 결과 span = 선언 full span이
-  성립하고 monoid 계약(같은 container·연속·비중첩) 그대로 만족. 깊이 v1 = 2
-  (파일 → top-level 선언 → 멤버); 그 이하는 leaf로 접는다.
+  `decl_header` leaf + 멤버 서브트리들 + `decl_footer` leaf(존재 시)로 자식을 구성 ⇒ merge
+  결과 span = 선언 full span. 깊이 v1 = 2 (파일 → top-level 선언 → 멤버); 그 이하는 leaf로
+  접는다. 선행 주석/공백은 다음 선언의 라인-소유에 귀속 (gapless).
 - **`foldHierarchyWithTrace`(코어 신규)**: fanin 윈도우 대신 **호출자가 준 span-tree**를
   따라 bottom-up으로 `mergeNodes`를 적용하고 trace를 기록한다. 자식 수 > fanin인 노드는
   canonical 순서로 fanin-크기 중간 merge를 삽입해 fan-out을 유계로 (trace는 여전히 트리).
-  ground의 grouping-invariance(monoid 정리)에 의해 **root ground는 계층 형태와 무관** —
-  G-CODE 프로브가 이를 실증한다.
+  **단일-자식 노드는 기존 pass-through 규칙**(reduceColumnLeavesWithTrace:404-406 — 새 노드
+  등록 없음)을 따르고, **trace register에 fail-closed 키-충돌 가드**(`nodes.has(key) ⇒ throw`)를
+  코어에 추가한다 (리뷰 inv-F3: 라인-소유권 분할 + pass-through + ≥2-자식 merge의 span 상이
+  성질로 등록 노드의 key 단사성이 성립하지만, 가드가 이를 구조로 봉인 — Map.set last-wins
+  조용한 유실 클래스 제거. 기존 spreadsheet fold에도 동일 가드가 적용되며 유효 입력에서
+  no-op임을 G-SS-(d)가 증명).
+- **ground grouping-invariance**: 유효한 비중첩 분할 위에서 root ground가 계층 형태와 무관함은
+  monoid 성질로 성립(리뷰 inv 렌즈 clean 확인) — G-CODE-(i)가 실증한다.
 - **인벤토리 스키마**: `code_structure_inventory { schema_version, language, line_count,
   content_sha256, extractor_logic_sha256, symbol_tiles: { spans: [{line_start, line_end,
   kind, symbol_name|null, depth}], hierarchy: [{key, child_keys}] } }`.
   `extractor_logic_sha256` = 추출기 소스 tautological digest (semanticMapGateLogicSha256 패턴)
-  — fingerprint에 접혀 추출기 수정이 reuse 키를 자동 회전.
+  — code fingerprint에 접혀 추출기 수정이 reuse 키를 자동 회전.
 
-### DD6. L2 envelope (code 변형) — identifier-only source-safety
+### DD6. L2 envelope (code 변형) — identifier-only source-safety + 명시적 출력 경계
 
 ```ts
 interface CodeSemanticSynthesisInput {
-  artifact_kind: "code";                       // 판별자 (spreadsheet 봉투에는 추가 안 함)
+  target_material_kind: "code";                // 판별자 — 기존 canonical 어휘 재사용 (gf-F6)
   node_ref: { file: string; line_start: number; line_end: number };
   symbol_path: string[];                       // 예: ["class AccumulateEngine", "method visit"]
   signal_clusters: string[];                   // kind 토큰 집합 (sorted)
@@ -168,42 +216,84 @@ interface CodeSemanticSynthesisInput {
 }
 ```
 
+- **출력·경계 어휘 (리뷰 gf-F6 — 초안 미정의 정정)**: 코드의 synthesis **출력** boundary =
+  `{ line, character_before, character_after }` (spreadsheet의 `row` → `line`;
+  `character_*`는 "경계 전/후 내용의 의미적 성격"이라는 아티팩트-중립 개념이라 유지).
+  verify 입력·seed boundary도 동형(`CodeSemanticBoundaryVerifyInput`, `line` 기반).
+  disposition 어휘(`structural_location_only | adversarial_confirmed`)는 그대로 재사용.
 - **source-safety 규칙 (spreadsheet 규율의 코드 번역)**: 식별자(심볼 이름·경로)는 leaf-reader의
   "header label = 컬럼 IDENTITY" 선례에 따라 허용; **선언 본문 라인은 v1 봉투에 넣지 않는다**.
-  근거: (i) 봉투가 유계·결정론이어야 exact-key 가드가 성립, (ii) 본문 주입은 §5.3 캐싱 재개
-  조건과 묶인 별도 결정. 품질이 부족하면 그때 "공유 파일 소스 prefix + cache_control"을
-  한 쌍으로 재검토한다 (SSOT §7 캐싱 항목의 재개 조건과 일치).
-- verify 입력도 동형 변형(`CodeSemanticBoundaryVerifyInput`, boundary.row → boundary.line).
-- 프롬프트: `CODE_SEMANTIC_MAP_SYNTHESIZE/VERIFY_SYSTEM_PROMPT` 2종 신설 (spreadsheet 상수
-  무변경 — resume 키·fingerprint 불변). authoring-prompt 카탈로그(CG-1)에 등록해 수정 시
-  회전.
+  **fallback 트리거 (리뷰 gf-F1 — 명시화)**: G-SEM 실패 시 봉투에 (i) doc-comment 첫 줄,
+  (ii) 선언 signature 한 줄(bounded chars)을 추가 승인하고 G-SEM을 재실행한다. 이 확장은
+  "공유 파일-소스 prefix + cache_control"(§5.3 캐싱 재개 조건)과 별개의 유계 확장이다.
+- **프롬프트 등록 (리뷰 ct-F2 — 초안의 "fingerprint 불변" 주장 정정)**:
+  `CODE_SEMANTIC_MAP_SYNTHESIZE/VERIFY_SYSTEM_PROMPT` 2종은 기존 CG-1 카탈로그
+  (`RECONSTRUCT_AUTHORING_PROMPT_CONTRACT`, run.ts:10451)에 넣지 **않는다** —
+  `authoringPromptContractSha256`(run.ts:10556)는 카탈로그 전체를 해시해 `reduce_prompt_sha256`
+  (run.ts:15365)로 **spreadsheet fingerprint에 접히므로**, 거기 등록하면 G-SS-(b)가 깨지고
+  진행 중 spreadsheet resume이 `source_ref_mismatch`로 실패한다. 대신 **code 전용 프롬프트
+  계약**(`CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT`, 동일 구조·동일 edit-회전 테스트)을
+  신설하고 그 sha는 **code 관찰 fingerprint에만** 접는다. code fingerprint는 aggregate
+  fingerprint를 거쳐 seed reuse 키에 도달하므로(run.ts:15437-15440 — 스테이지가 reuse-match
+  조립보다 선행) 회전 커버리지는 완전하다. 개념 분리 근거: fingerprint 격리라는 런타임 동작
+  차이 (concept split 기준 충족).
 
 ### DD7. capability 표면 — 단일 메서드 + kind 광고 + settings 옵트인
 
 - **메서드는 그대로 1쌍**: `synthesizeSemanticMapNode(input: SemanticSynthesisInput |
   CodeSemanticSynthesisInput)` — spreadsheet 변형의 형상은 무변경(판별자 필드도 추가하지
-  않는다; 기존 author·cert 계약 바이트 불변). `verifySemanticMapBoundary` 동형.
+  않는다; 기존 author·cert 계약 바이트 불변. 광고 없는 author에게 code 변형이 도달하는
+  경로는 구조적으로 없음 — 스테이지 라우팅이 유일한 공급자, 리뷰 ct 렌즈 clean 확인).
+  `verifySemanticMapBoundary` 동형.
 - **kind 광고 (신규 optional)**: `supportedSemanticMapKinds?: readonly TargetMaterialKind[]`.
   부재 = `["spreadsheet"]` — 이는 코드 기본값이 아니라 **기존 계약의 명시적 해석**(광고
-  없는 구 author가 실제로 지원하는 집합)이므로 INV-CFG-1 비접촉. `resolveSemanticMapCapability`
+  없는 구 author가 실제로 지원하는 집합)이므로 INV-CFG-1 비접촉 (G2 스캐너 범위는
+  model/effort/auth/retry 리터럴 한정 — 리뷰 ct 렌즈 확인). `resolveSemanticMapCapability`
   pair 규칙 유지 + kind 광고를 반환에 포함.
-- **settings 옵트인 (신규 키, default-off)**: `reconstruct.execution.semantic_map_artifact_kinds`
-  (배열). **부재 = `["spreadsheet"]`** — 기존 `dispatch_fallback.enabled === true` 패턴과 동일한
-  옵트인 해석(absent = 현행 동작). 유효 kind = settings ∩ author 광고. INV-CFG-1의 G2/G4
-  스캐너 접촉 여부는 구현 시 `check:spec-defaults` 실행으로 확정하고, 걸리면 waiver가 아니라
-  키 설계를 재검토한다. **owner 확인 항목 O-1** (§7).
+- **settings 옵트인 (신규 키, default-off — 리뷰 ct-F4로 형상 추천 반전)**:
+  `reconstruct.execution.semantic_map_code` (boolean, 부재 = off). 근거: reconstruct execution
+  스칼라 메커니즘(`RECONSTRUCT_EXECUTION_SCALAR_KEYS` + `reconstructExecutionScalarsShape`,
+  settings-chain.ts:486-531)이 **boolean 단일-소스**라 per-kind boolean은 키 1줄 추가로
+  안착하고 F19 silent-strip 클래스도 구조로 닫힌다. 초안의 배열 키
+  (`semantic_map_artifact_kinds`)는 V3/Normalized strict 스키마·normalize 복사 등 4개 사이트
+  bespoke 배선이 필요해 "additive" 주장이 반대였음 — **정정**. document kind는 Phase 2에서
+  `semantic_map_document`로 동일 패턴. 유효 kind = settings ∩ author 광고. **owner 확인
+  항목 O-1** (§7).
 - 스테이지 라우팅: run.ts:3448의 spreadsheet 필터를 "유효 kind 집합 필터 + kind별 인벤토리
-  추출"로 확장. code 관찰: `code_structure_inventory` 부재 시 `no_code_inventory` skip census
-  (기존 `no_workbook_inventory` 대칭). census 행에 kind 컬럼 추가(스키마 additive).
-- fingerprint/sidecar/resume: 기존 per-observation 메커니즘 그대로 — fingerprint 입력에
-  code 인벤토리 identity(`content_sha256` + `extractor_logic_sha256`)와 신설 프롬프트 sha가
-  접힌다. spreadsheet 관찰의 fingerprint 값은 불변 (G-SS-b).
+  추출"로 확장. census `skip_reason` union(artifact-types.ts:2570)에
+  `no_code_inventory`(옵트인 이후 관찰 부재)와 **`code_extraction_unsupported`**(미지원 언어,
+  skip_detail에 언어 — 리뷰 gf-F5: 둘을 구별해야 "v1 정상 동작"과 "고장"이 census에서
+  분간된다)를 추가하고, resume 분류기(run.ts:2764-2765)와 census doc의 "spreadsheet
+  observations의 complete partition" 문구도 함께 확장한다 (리뷰 ct 렌즈 제약 확인). census
+  행에 kind 컬럼 추가(스키마 additive — schema_version "1" 유지 가능, 기존 optional 필드
+  선례).
+- fingerprint/sidecar/resume: **제어 흐름은 재사용, payload 타입은 per-artifact** (리뷰
+  ct-F3로 초안의 "그대로" 표현 정정 — 구체 표면은 §DD9). code fingerprint는 spreadsheet
+  fingerprint와 같은 골격에 code 인벤토리 identity(`content_sha256` +
+  `extractor_logic_sha256`)와 code 프롬프트 계약 sha(DD6)를 접는다. spreadsheet 관찰의
+  fingerprint 값은 불변 (G-SS-b).
 
 ### DD8. anchor tolerance = 1 유지 (전 어댑터)
 
 코드 seam은 AST-정확하므로 0도 가능하나, LLM의 1-based/0-based 혼동 off-by-one이 anchored
 (위치만 확증, 내용 미검증)로 흡수되는 편이 verify 비용·소음 대비 안전하다. 어댑터 상수로
 두되 v1은 전 어댑터 1. 라이브 데이터 후 재검토.
+
+### DD9. 코드 seed projection 소비 표면 (리뷰 ct-F3 — 초안 미정의 정정)
+
+W4 주입 경로(run.ts:15926 `setSemanticMapProjection`)의 하류 5개 사이트가 spreadsheet
+node_ref에 하드타이핑되어 있다 — `renderSemanticMapProjection`(run.ts:2254/2271 —
+`node_ref.sheet/column_index/...` 직접 렌더), `projectSemanticMapToSeed`
+(comprehension-semantic-map.ts:1070/1081), `mergeSemanticSeedProjections`(run.ts:2387/2390 —
+`reduceNodeKey` 키잉), sidecar 저장/재생(run.ts:3389-3394), resume 수집(run.ts:3094 —
+spreadsheet 전용 필터). node_ref를 느슨한 union으로 넓히면 code projection이
+`"undefined#undefined:..."`로 **조용히 seed 프롬프트를 오염**시키므로:
+- projection 타입은 per-artifact 변형(`CodeSemanticSeedProjection` — node_ref
+  `{file, line_start, line_end}`, boundary `line` 기반)으로 분기하고,
+- 렌더러·merge 키잉·seed projection은 `adapter.nodeKey`/per-artifact 직렬화로 파라미터화,
+- sidecar 레코드에 `target_material_kind` 판별자를 추가(신규 code sidecar에만 — spreadsheet
+  sidecar 바이트 불변, 판별자 부재 = spreadsheet로 해석), resume 수집을 kind-aware로 확장.
+컴파일러가 분기 누락을 잡도록 판별 union + exhaustive switch로 작성한다.
 
 ## 4. 멀티파일 relational-seam 티어 (Phase 1b — 별도 PR, 1a 착지 후)
 
@@ -214,8 +304,12 @@ interface CodeSemanticSynthesisInput {
   to_specifier, resolved_in_set|null}]`), set 노드 ground에 정렬·중복제거로 접고, synthesis
   입력에 유계 `relations`로 노출. §5.6 유예 헤더가 약속한 "별개 concern"의 활성화 지점.
 - **조립**: per-observation 파일 트리들을 경로 계층으로 graft한 combined trace 위에 동일
-  L2 walk. frontier/X7 캡·epoch 재귀는 그대로 작동(leaf 수만 커짐). aggregate fingerprint =
-  per-observation fingerprint들 + set 위상 + import 에지 + config.
+  L2 walk. aggregate fingerprint = per-observation fingerprint들 + set 위상 + import 에지 +
+  config.
+- **예산 (리뷰 gf-F4 — 1b 설계의 필수 항목)**: per-observation X7 preflight는 combined
+  tree의 fan-out을 못 막는다 — 1b는 **set-tier preflight 캡**(combined tree 전체의 synthesize
+  수요 대비 예산)을 정의해야 하며, SSOT §7의 동시성·output-budget 상호작용 검토와 **live
+  2-파일 수용 기준**이 1b 완료 조건에 포함된다 (O-3).
 - 1a와 분리하는 이유: cross-observation 조립·sidecar 신설은 리스크 축이 다르다 — 1a가
   패턴을 확립한 뒤 별도 diff로 검증한다 (INV-SCOPE-1 예방).
 
@@ -231,45 +325,63 @@ interface CodeSemanticSynthesisInput {
   등록 필요) — Phase 2 설계에서 다룬다.
 - **5.3 prompt caching(#8)**: v1 code 봉투에 대형 공유 prefix 없음(DD6) ⇒ **계속 접음**.
   재개 조건 = "본문/파일-소스 공유 블록을 봉투에 넣는 결정"과 동시 — 그때 sealed:417
-  anthropic arm의 그 블록에 `cache_control`을 부여한다.
-- **5.4 INV 접촉 목록**: INV-CFG-1(신규 settings 키 — 옵트인 패턴, O-1 owner 확인),
-  INV-MOCK-1(코드 author mock은 `mock-llm-realization.ts` boundary에만),
+  anthropic arm의 그 블록에 `cache_control`을 부여한다. (DD6의 G-SEM fallback — doc-comment
+  첫 줄·signature 한 줄 — 은 per-node 소량이라 캐싱 재개 조건이 아니다.)
+- **5.4 멀티파일 스케일 (리뷰 gf-F4 — 초안의 침묵 누락 정정)**: SSOT §7의 "동시성/토큰
+  예산(max_concurrent_lenses·output-budget) 상호작용" 검토는 **1b로 명시 이월**한다 — §4의
+  set-tier preflight 캡 + live 2-파일 수용 기준이 그 이월분이며, O-3는 시점 결정이 아니라
+  이 범위·검증을 포함한 scope 결정이다.
+- **5.5 INV 접촉 목록**: INV-CFG-1(신규 settings 키 — 옵트인 패턴, G2 비접촉 확인됨, O-1
+  owner 확인), INV-MOCK-1(코드 author mock은 `mock-llm-realization.ts`의
+  `withMockSemanticMapCapability` 옆 sibling으로 — boundary 적합 확인됨),
   INV-TEST-1(골든은 명세 근거 커밋 메시지 필수), INV-BENCH-1(N=1 프로브는 결정론 속성
   검증이지 비교 벤치가 아님 — grouping 변형 ≥ 3으로 속성 자체는 반복 입증),
-  INV-SCOPE-1(1a/1b 분해·재설계 스톱 조건 명시), INV-SCHEMA-1(envelope 타입 단일 source,
-  스키마 게이트에서 참조).
+  INV-SCOPE-1(1a/1b 분해·재설계 스톱 조건 명시), INV-SCHEMA-1(envelope 타입 단일 source;
+  G8 prompt-projection-parity는 비접촉 — semantic-map 프롬프트는 projection contract가 아닌
+  authoring 카탈로그 소관, 리뷰 ct 렌즈 확인).
 
 ## 6. 검증 계획 (Verification Menu: code + config/data)
 
 1. **골든 채집 (리팩터 전 선행 커밋)**: 기존 fixture에서 (a) 컬럼별 root/interior
-   `reduceNodeGroundHash` 전건, (b) observation fingerprint, (c) stage census를 골든
+   `reduceNodeGroundHash` 전건, (b) observation fingerprint, (c) stage census, **(d) per-node
+   합성/verify 입력 stableJson + seed projection + sidecar (G-SS-e, 리뷰 inv-F5)**를 골든
    파일로 채집. 채집 스크립트도 커밋 (재현 가능).
 2. **정적**: `tsc`·lint·`check:import-boundary`(코어→아티팩트 역방향 금지 추가)·
    `check:spec-defaults`·`check:invariant-drift`.
-3. **단위/불변식**: 코어 추출 후 G-SS-(a,c,d); G-CODE 프로브(음성 대조 2종 포함);
-   G-L2 mock accumulate; envelope exact-key 가드 위반 주입 테스트; kind 라우팅 G-OFF 테스트
-   (code 관찰 + 광고 부재 → skip census 행 존재 단언 — 카디널리티 > 0).
+3. **단위/불변식**: 코어 추출 후 G-SS 전건; G-CODE 프로브(음성 대조 3종 + 비퇴화 지표);
+   G-L2 mock accumulate + envelope dump; envelope exact-key 가드 위반 주입 테스트; trace
+   register 충돌 가드 주입 테스트; kind 라우팅 G-OFF 테스트(code 관찰 + 광고/옵트인 부재 →
+   skip census 행 존재 단언 — 카디널리티 > 0).
 4. **E2E (mock)**: 2-파일 code fixture로 reconstruct 전 구간 (INV-MOCK-1 boundary 내
-   mock author) — seed projection에 code 노드 > 0 단언.
-5. **E2E (live, owner-spend)**: N=1 — 소형 실파일 1개, live author로 1a 경로. **owner 결정
-   항목 O-2** (§7). 실패해도 G-OFF에 의해 제품 경로 무손상.
+   mock author) — seed projection에 code 노드 > 0 단언 + DD9 렌더러 출력 스냅샷.
+5. **E2E (live, owner-spend)**: N=1 — 소형 실파일 1개, live author로 1a 경로, **수용 기준 =
+   G-SEM**(대조군 blind 평정). **owner 결정 항목 O-2** (§7). 실패 시 DD6 fallback 트리거 →
+   재실행; 재실패 시 재설계 스톱. G-OFF에 의해 제품 경로는 어느 경우에도 무손상.
 
 ## 7. 구현 순서 (커밋 단위) · owner 결정 항목
 
+리뷰 gf-F2/F3 반영: **script-local 코드 E2E 증명(2단계)이 검증된 스프레드시트 경로를 건드리는
+3단계보다 선행**하며, 3단계 착수는 2단계 산출물(분할 비퇴화 + envelope dump)의 owner 확인을
+게이트로 한다 — 제네릭화 비용을 지불하기 전에 코드 트랙의 실물 가치를 먼저 보인다.
+
 | 순서 | 커밋 단위 | 게이트/스톱 |
 |---|---|---|
-| 1 | 골든 채집 스크립트 + 골든 커밋 | 골든 파일 비어 있지 않음 |
-| 2 | **N=1 프로브** `scripts/code-reduce-proof-harness.mts` — script-local AST 프로토타입 (제품 코드 무접촉) | **G-CODE 실패 시 재설계 스톱** (SSOT §5) |
-| 3 | L1 코어 추출 + 스프레드시트 façade | G-SS 전건 |
-| 4 | `code-structure-observer.ts` + 관찰 배선 (옵트인 뒤) | 관찰 G-OFF 절반 |
+| 1 | 골든 채집 스크립트 + 골든 커밋 (G-SS-e 포함) | 골든 파일 비어 있지 않음 |
+| 2 | **N=1 프로브** `scripts/code-reduce-proof-harness.mts` — script-local AST 프로토타입 (제품 코드 무접촉): 라인-소유권 분할 + 계층 fold byte-stability + 비퇴화 지표 + **mock-L2 accumulate + seed projection + envelope dump** | **G-CODE·G-L2 실패 시 재설계 스톱**; envelope dump owner 확인 후 3단계 진행 |
+| 3 | L1 코어 추출 + 스프레드시트 façade (+ trace 충돌 가드) | G-SS 전건 |
+| 4 | O-4 승격 + `code-structure-observer.ts` + 관찰 배선 (옵트인 뒤) | 관찰 G-OFF 절반 |
 | 5 | `foldHierarchyWithTrace` + 코드 L1 어댑터 (제품화) | 프로브를 제품 코어로 재실행 |
-| 6 | L2 코어 추출 + 코드 envelope/프롬프트/광고/스테이지 라우팅 (1a) | G-L2·G-OFF 전건 |
-| 7 | E2E mock → (O-2 승인 시) live N=1 | §6-4·6-5 |
-| 8 | Phase 1b set-tier (별도 PR) | §4 |
+| 6 | L2 코어 추출 + 코드 envelope/프롬프트 계약/광고/스테이지 라우팅 + **DD9 projection 표면** (1a) | G-L2·G-OFF 전건 |
+| 7 | E2E mock → (O-2 승인 시) live N=1 | §6-4·6-5 (G-SEM) |
+| 8 | Phase 1b set-tier (별도 PR) | §4 (set-tier 캡 + live 2-파일) |
 
-**owner 결정 항목**: **O-1** settings 키 형상(`semantic_map_artifact_kinds` 배열 vs kind별
-boolean) — 추천: 배열(개념 1개, additive). **O-2** live N=1 spend 시점. **O-3** 1b 착수
-시점(1a 검증 완료 후 즉시 vs 문서 트랙과 우선순위 비교).
+**owner 결정 항목**:
+- **O-1** settings 키 형상 — 추천: **per-kind boolean `semantic_map_code`** (기존 boolean
+  스칼라 메커니즘에 1줄 안착; 배열 대안은 4-사이트 bespoke 배선 필요 — 리뷰 ct-F4).
+- **O-2** live N=1 spend 시점 (수용 기준 = G-SEM).
+- **O-3** 1b 착수 — 시점만이 아니라 **set-tier 예산 캡 + live 2-파일 수용 기준을 포함한
+  scope 승인** (리뷰 gf-F4).
+- **O-4** `typescript` dependencies 승격 (설치 용량 수 MB 증가 수용 — 리뷰 ct-F1). 추천: 승격.
 
 ## 8. 리스크 / 열린 문제
 
@@ -278,9 +390,39 @@ boolean) — 추천: 배열(개념 1개, additive). **O-2** live N=1 spend 시�
   라이브 N=1에서 실측 후 kind 어휘 세분화(예: 선언명 전이도 seam)로 재조정.
 - **파일 크기 스케일**: 대형 파일(수천 라인)의 leaf 수 → frontier가 흡수하지만 synthesize
   호출 수는 트리 크기에 비례 — X7 preflight가 관찰 단위로 fail-closed (기존 메커니즘).
-- **언어 커버리지**: v1 TS/JS 한정. 타 언어 파일은 code kind여도 인벤토리 부재 → 정직한
-  skip (G-OFF 경로와 동일 census 어휘 재사용).
-- **`semanticMapGateLogicSha256` 회전** (§2 DD3): 코어 추출 시 1회 회전 — reuse 캐시 무효화
-  1회. 예상된 동작이나 릴리스 노트에 명기.
+- **언어 커버리지**: v1 TS/JS 한정. 미지원 언어는 `code_extraction_unsupported`로 정직 공시
+  (DD4·DD7) — 실사용 레포는 이 행이 다수가 될 수 있음(v1 한계의 가시화이지 고장 아님).
+- **reuse 키 회전 1회** (§2 DD3): 코어 추출 시 `semanticMapGateLogicSha256` 회전 — 예상된
+  동작, 릴리스 노트에 명기. (code 프롬프트는 DD6의 별도 계약으로 spreadsheet fingerprint
+  회전을 **일으키지 않는다** — 초안에서 이 축의 누락을 리뷰 ct-F2가 적발.)
 - **미결(1b로 이월)**: import 에지의 미해석 specifier(외부 패키지) 표기; 디렉터리 계층이
-  개념 계층과 다른 레포(모노레포)의 set-tier 형상.
+  개념 계층과 다른 레포(모노레포)의 set-tier 형상; set-tier preflight 캡 형상 (§4·§5.4).
+
+## 9. 적대적 리뷰 기록 (2026-07-18)
+
+독립 3-렌즈(불변식/정확성 · 계약/capability/배선 · 목표적합/실행가능성) subagent 리뷰,
+severity floor medium+, 실코드 앵커 필수. **15건 접수 → 전건 실코드 재검증 후 15건 반영**
+(기각 0 — 전건 앵커 확증됨). 반영 지도:
+
+| 렌즈-ID | Sev | 내용 → 반영처 |
+|---|---|---|
+| inv-F2 | HIGH | 라인 좌표가 같은 줄 형제에서 비중첩 분할 위반 → DD5 라인-소유권 분할 |
+| inv-F3 | HIGH | node-key 비단사 + trace last-wins 조용한 유실 → DD5 단사성 논증 + 충돌 가드 |
+| inv-F1 | MED | sort⊇dedup 결합이 어댑터 분리로 소실 → DD1 `witnessOrderTuple` 단일 도출 |
+| inv-F4 | MED | `assertReduceTopologyIsTree` 좌표-불가지 오분류 → DD3 어댑터 접점 재분류 |
+| inv-F5 | MED | G-SS가 L2 경계 바이트 미커버 → G-SS-(e) L2 골든 신설 |
+| ct-F1 | HIGH | typescript devDep-only — 제품 import 시 설치 사용자 즉사 → DD4 정정 + O-4 |
+| ct-F2 | HIGH | CG-1 카탈로그 전역 sha라 code 프롬프트 등록이 spreadsheet fingerprint 회전 → DD6 code 전용 프롬프트 계약 분리 |
+| ct-F3 | MED | projection/렌더/merge/sidecar/resume 5사이트 spreadsheet 하드타이핑 → DD9 신설 |
+| ct-F4 | MED | 배열 settings 키는 4-사이트 bespoke — "additive" 반대 → DD7·O-1 boolean으로 반전 |
+| gf-F1 | HIGH | 전 게이트가 구조적 — 의미 없는 seed도 green → G-SEM 신설 + DD6 fallback 트리거 명시 |
+| gf-F2 | HIGH | 프로브 귀무가설이 자명 — 실 리스크 미검증 → G-CODE 비퇴화 지표 + 프로브에 mock-L2/seed/envelope dump 포함 |
+| gf-F3 | MED | 스프레드시트 리팩터가 코드 E2E 증명보다 선행 → §7 순서 재편(2단계 게이트) |
+| gf-F4 | MED | SSOT §7 멀티파일 예산 침묵 누락 → §5.4 명시 이월 + §4 캡 요구 + O-3 승격 |
+| gf-F5 | MED | 미지원 언어와 실패의 census 혼동 → DD4/DD7 `code_extraction_unsupported` 분리 |
+| gf-F6 | MED | 출력/seed 경계 어휘 미정의 + 판별자 어휘 → DD6 출력 경계 명시 + `target_material_kind` 재사용 |
+
+각 렌즈의 "checked clean" 확인(대표): ground grouping-invariance 정리 성립(유효 분할 조건부),
+DD1 region 리터럴 바이트 동일 건전, G2 스캐너 비접촉, 관찰 semantic-key 스캔 비충돌,
+observation_id/delta 안정, G8 비접촉, census additive 가능(단 partition 문구·skip union·resume
+분류기 확장 필요 — DD7 반영), mock boundary 적합.
