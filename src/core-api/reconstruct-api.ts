@@ -1036,6 +1036,14 @@ export function createOntoReconstructCoreApi(
       const targetRefs = request.targetRefs.map((targetRef) =>
         resolveFromBase(projectRoot, targetRef)
       );
+      // semantic_map_code opt-in (design 20260718 DD4/DD7): pure settings projection — the
+      // supported-model gate stays a live-execution-boundary concern (INV-MODEL-1 unchanged).
+      const prepareSettings = await resolveSettingsChain(
+        ontoHome ?? projectRoot,
+        projectRoot,
+      );
+      const codeStructureObservation =
+        prepareSettings.reconstruct?.execution?.semantic_map_code === true;
       const preparationRefs = await materializeReconstructPreparationArtifacts({
         sessionRoot,
         targetRefs,
@@ -1043,6 +1051,7 @@ export function createOntoReconstructCoreApi(
         filesystemAllowedRoots:
           request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
           [projectRoot],
+        ...(codeStructureObservation ? { codeStructureObservation: true } : {}),
       });
       const targetMaterialProfileValidationPath = path.join(
         sessionRoot,
@@ -1564,6 +1573,9 @@ export function createOntoReconstructCoreApi(
             // 설계 B: settings가 유일 권위(INV-CFG-1) — 기본 OFF, 완성값은
             // settings chain이 채운다.
             dispatchBreaker: dispatchBreakerSettings,
+            ...(settings.reconstruct?.execution?.semantic_map_code === true
+              ? { codeStructureObservation: true }
+              : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
                   dispatchFallback:

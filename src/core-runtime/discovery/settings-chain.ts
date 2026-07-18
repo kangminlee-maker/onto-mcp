@@ -485,6 +485,9 @@ export type ReconstructActorKey = (typeof RECONSTRUCT_ACTOR_KEYS)[number];
  */
 export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   "semantic_map_authoring",
+  // Multi-artifact code path opt-in (design 20260718 DD7 / owner O-1): absent = off — the code
+  // structure observer + semantic-map code routing stay dormant, spreadsheet path byte-identical.
+  "semantic_map_code",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

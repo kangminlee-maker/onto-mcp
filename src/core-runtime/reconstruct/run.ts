@@ -978,6 +978,9 @@ export interface RunReconstructParams {
   dispatchBreaker?: DispatchBreakerPolicy;
   dispatchFallback?: DispatchFallbackSettings;
   dispatchFallbackRuntime?: ReconstructDispatchFallbackRuntime;
+  /** reconstruct.execution.semantic_map_code opt-in (multi-artifact design 20260718 DD4/DD7):
+   *  code FILE observations carry the deterministic structure inventory. Absent = off. */
+  codeStructureObservation?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -13988,6 +13991,7 @@ async function observeAcceptedFrontierRefs(args: {
   sourceInventory: ReconstructSourceInventoryArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsPath: string;
+  codeStructureObservation?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
   const observedSourceRefs = new Set(
     args.sourceObservations.observations.map((observation) =>
@@ -14034,7 +14038,7 @@ async function observeAcceptedFrontierRefs(args: {
       observationBatchId:
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
-    });
+    }, args.codeStructureObservation === true ? { codeStructureObservation: true } : undefined);
     // A null observation (vanished ref) and an unsupported workbook format
     // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
     // un-observable by the current runtime. Site 2 graceful terminal (design site2 §9): this is a
@@ -14090,6 +14094,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   sourceInventory: ReconstructSourceInventoryArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsPath: string;
+  codeStructureObservation?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
   const observedSourceRefs = new Set(
     args.sourceObservations.observations.map((observation) =>
@@ -14145,7 +14150,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       observationBatchId:
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
-    });
+    }, args.codeStructureObservation === true ? { codeStructureObservation: true } : undefined);
     // Unsupported workbook formats are un-observable like a vanished ref — no
     // evidence to admit (mirrors the materialize-loop demotion and F1).
     if (!observation || spreadsheetUnsupportedReason(observation)) {
@@ -15146,6 +15151,7 @@ export async function runReconstruct(
     targetRefs,
     profilesRoot: path.resolve(params.profilesRoot),
     filesystemAllowedRoots,
+    ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
   });
   const targetMaterialProfile =
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
@@ -16282,6 +16288,7 @@ export async function runReconstruct(
       sourceInventory,
       sourceObservations,
       sourceObservationsPath: preparationRefs.source_observations,
+      ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     });
     // Reached this line ⇒ the round observed successfully; drop the context so it cannot be read
     // stale by a later graceful terminal that forgets to set its own.
@@ -17800,6 +17807,7 @@ export async function runReconstruct(
       sourceInventory,
       sourceObservations,
       sourceObservationsPath: preparationRefs.source_observations,
+      ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     });
     sourceObservationDeltaPath = path.join(
       maturationRoundRoot,

@@ -22,6 +22,7 @@ import {
   validateSourceObservationBoundary,
   type ReconstructSourceObservation,
 } from "./source-observations.js";
+import { observeCodeStructure } from "../code-structure-observer.js";
 import { buildDeterministicComprehensionArtifact } from "./comprehension-artifact.js";
 import {
   loadReconstructSourceProfiles,
@@ -42,6 +43,9 @@ export interface MaterializeReconstructPreparationArtifactsParams {
   targetRefs: string[];
   profilesRoot: string;
   filesystemAllowedRoots?: string[];
+  /** reconstruct.execution.semantic_map_code opt-in (design 20260718 DD4/DD7): when true, code
+   *  FILE observations additionally carry the deterministic structure inventory. Absent = off. */
+  codeStructureObservation?: boolean;
 }
 
 const CONCRETE_TARGET_MATERIAL_KINDS = new Set<TargetMaterialKind>([
@@ -439,7 +443,12 @@ export async function buildReconstructSourceObservation(
   // is_runtime_target_source from this so source-safety can grant the
   // material_claim/public_output tiers by provenance without leaking to
   // non-target sources.
-  options?: { isRuntimeTargetSource?: boolean },
+  // codeStructureObservation (multi-artifact design 20260718 DD4, opt-in
+  // reconstruct.execution.semantic_map_code): when true, a code-kind FILE ref
+  // additionally carries the deterministic per-position structure inventory
+  // (or an explicit unsupported reason) in structural_data. Absent/false ⇒
+  // byte-identical to the pre-extension generic observation (G-OFF).
+  options?: { isRuntimeTargetSource?: boolean; codeStructureObservation?: boolean },
 ): Promise<ReconstructSourceObservation | null> {
   if (!detection.exists || !isConcreteTargetMaterialKind(detection.kind)) {
     return null;
@@ -481,6 +490,24 @@ export async function buildReconstructSourceObservation(
     content_excerpt: null,
     excerpt_truncated: false,
   };
+  // Code per-position structure (DD4, opt-in): additive keys only — with the opt-in off this
+  // object is empty and the observation bytes are unchanged.
+  let codeStructural: Record<string, unknown> = {};
+  if (options?.codeStructureObservation === true && detection.kind === "code" && stat.isFile()) {
+    let text: string | null = null;
+    try {
+      text = await fs.readFile(detection.ref, "utf8");
+    } catch {
+      text = null; // TOCTOU vanish — the generic observation still stands; no inventory.
+    }
+    if (text !== null) {
+      const structure = await observeCodeStructure({ ref: detection.ref, text });
+      codeStructural =
+        structure.status === "ok"
+          ? { code_structure_inventory: structure.inventory }
+          : { code_structure_unsupported: { reason: structure.reason } };
+    }
+  }
   const observation: ReconstructSourceObservation = {
     observation_id: stableObservationId({
       sourceRef: detection.ref,
@@ -507,6 +534,7 @@ export async function buildReconstructSourceObservation(
       content_sha256: stats.content_sha256,
       content_excerpt: stats.content_excerpt,
       excerpt_truncated: stats.excerpt_truncated,
+      ...codeStructural,
     },
   };
 
@@ -786,6 +814,7 @@ export async function materializeReconstructPreparationArtifacts(
     // refs (the initial target inventory), so they are runtime-target sources.
     const observation = await buildReconstructSourceObservation(refDetection, undefined, {
       isRuntimeTargetSource: true,
+      ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     });
     if (observation) {
       const unsupportedReason = spreadsheetUnsupportedReason(observation);
