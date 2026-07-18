@@ -1,0 +1,102 @@
+schema_version: 1
+session_id: 20260717-aa03f0e2
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — ECO/BOM/Routing 변경 연결 구조
+    evidence_anchor: materialized-input.md:20-21, 55-61, 69-75, 84-96
+    claim: ECO의 변경 유효성 경로가 Part에서 끝나며, 적용 대상 BOM 및 Routing 구성으로 연결되지 않는다.
+    what: ECO는 affected_parts와 effective_date를 가지며 관계 목록에도 ECO→Part만 존재한다. 그러나 신규
+      rev 적용 규칙이 참조할 구체적인 BomLine 또는 Routing 버전과 ECO 사이에는 관계가 없다.
+    why: 유효일 이후 신규 rev를 사용하라는 규칙만으로는 MES가 어느 BOM 구성과 라우팅을 선택해야 하는지 구조적으로 추적할 수 없다.
+      외부 시스템이 별도로 보완하지 않으면 PLM 변경 결과와 MES 실행 구성이 서로 다른 상태가 될 수 있어 개념 기준 문서의 통합
+      목적을 약화한다.
+    how_to_fix: ECO가 변경하는 정확한 BOM 및 Routing 구성과 그 구성이 적용되는 Part.rev를 명시적으로 연결하라. 버전
+      엔티티를 도입하지 않는다면 최소한 BomLine·Routing의 버전 식별자와 ECO/effective_date 관계를 정의하라.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목·BOM·라우팅·변경관리 개념 기준 제공
+      failure_condition: ECO가 BOM 또는 라우팅을 변경하고 effective_date 이후 MES가 적용 구성을 선택해야 할 때
+      impact: 온톨로지만으로 변경된 제조 구성을 식별할 수 없어 구 BOM 또는 구 라우팅으로 생산할 위험이 생긴다.
+      evidence_refs:
+        - materialized-input.md:6-7
+        - materialized-input.md:20-21
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:84-96
+    causal_path:
+      root_cause_candidate: 변경관리가 Part의 스칼라 rev 및 일반적인 ECO→Part 관계로만 모델링되어 구성별 변경 연결이 정의되지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: ECO 관계는 Part까지만 연결되고 BomLine 또는 Routing으로 이어지는 변경 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-001.cause-002
+          claim: 신규 rev 적용 규칙과 실제 BOM·Routing 구성 사이에 추적 가능한 경로가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:55-61
+            - materialized-input.md:93-96
+        - cause_id: structure-candidate-001.cause-003
+          claim: 변경 모델이 구성 버전 연결 없이 Part 수준에 한정되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:69-75
+            - materialized-input.md:84-96
+      unresolved_beyond_evidence: 외부 PLM 또는 MES가 별도 매핑으로 이 연결을 보완하는지는 현재 경계에서 확인할 수
+        없지만, 대상 온톨로지 자체에는 해당 구조가 없다.
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml — AlternatePart 관계 엔티티
+    evidence_anchor: materialized-input.md:37-45, 84-91
+    claim: AlternatePart가 명시적 관계 그래프에서 고아이며, 이를 경유한다는 Part→Part 단축 관계와 연결되지 않는다.
+    what: AlternatePart는 primary_ref, alternate_ref, direction을 가진 관계 엔티티로 선언되지만
+      relations 목록에는 AlternatePart가 한 번도 등장하지 않는다. 대신 Part→Part alternate_of만
+      있고, 주석으로만 AlternatePart를 통해 표현한다고 설명한다.
+    why: 관계 그래프를 소비하는 PLM/MES 통합 경로는 실제 관계 엔티티와 direction 속성에 도달할 수 없다. 단축 관계만 소비하면
+      대체 방향과 관계 레코드의 정체성이 누락될 수 있다.
+    how_to_fix: AlternatePart→Part의 primary 및 alternate 역할 관계를 명시하고, Part→Part
+      alternate_of는 그 관계에서 파생되는 투영임을 정의하라. direction도 이 정규 관계의 속성으로 소비되도록 연결하라.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 대체품 관계를 포함한 PLM/MES 공통 개념 그래프 제공
+      failure_condition: 통합 소비자가 relations 목록을 통해 대체품 관계와 방향 정보를 탐색할 때
+      impact: 대체 관계 엔티티와 direction에 도달하지 못해 단방향·양방향 대체 판단이 소실될 수 있다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: 정규 관계 엔티티 대신 파생 Part→Part 단축 관계만 명시적 관계 목록에 등록되었다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: AlternatePart는 두 Part 참조와 direction을 갖지만 relations 목록에서 누락되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-002.cause-002
+          claim: 명시적 관계 그래프는 AlternatePart를 우회하는 Part→Part alternate_of만 제공한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-002.cause-003
+          claim: 파생 단축 관계가 정규 관계 엔티티의 연결을 대신하고 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - relations 목록은 PLM/MES 소비자가 탐색하는 명시적 개념 관계 그래프이다.
+  - 상속(is_a)은 구조적 연결로 간주하므로 InspectionPlan은 고아로 판단하지 않았다.
+validation:
+  unaddressable_candidates: []

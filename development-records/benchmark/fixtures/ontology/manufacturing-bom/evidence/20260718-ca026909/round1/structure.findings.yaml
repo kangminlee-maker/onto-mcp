@@ -1,0 +1,96 @@
+schema_version: 1
+session_id: 20260718-ca026909
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart 및 relations
+    evidence_anchor: AlternatePart.attributes(primary_ref, alternate_ref,
+      direction); relations의 Part→Part alternate_of 항목과 “AlternatePart를 통해 표현되는
+      관계의 단축 표기” note
+    claim: AlternatePart가 명시적 관계 그래프에서 고아가 되어 대체품 관계의 구조적 경로가 끊겨 있다.
+    what: AlternatePart는 두 Part와 방향성을 결합하는 관계 엔티티로 정의됐지만 relations에는 AlternatePart를
+      출발점이나 도착점으로 하는 연결이 없다. 대신 Part→Part 단축 관계만 선언되어 있다.
+    why: relations를 기준으로 탐색하거나 통합 스키마를 생성하는 소비자는 AlternatePart에 도달할 수 없으며, 대체 방향을 가진
+      관계 인스턴스와 두 Part 사이의 연결을 재구성할 수 없다. 이는 설계 의도와 명시적 연결 구조의 불일치다.
+    how_to_fix: Part→AlternatePart 역할 관계와 AlternatePart→Part 역할 관계를 명시하고, Part→Part
+      alternate_of는 그 경로에서 파생되는 projection으로 표시하거나 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 대체품 구조를 일관되게 전달하는 목적
+      failure_condition: 통합 소비자가 relations를 권위 있는 관계 그래프로 사용해 대체품 연결과 방향성을 변환하거나 조회할 때
+      impact: 대체품 엔티티가 누락되거나 방향 정보 없는 Part 간 연결로 축약되어 자재 대체 판단의 신뢰성과 실행 가능성이 약화된다.
+      evidence_refs:
+        - "manufacturing-bom-ontology.yaml: AlternatePart 정의와
+          primary_ref/alternate_ref/direction 속성"
+        - "manufacturing-bom-ontology.yaml: relations의 Part→Part alternate_of 단축
+          표기"
+    causal_path:
+      root_cause_candidate: 대체품 관계의 권위 있는 연결을 AlternatePart의 역할별 간선으로 모델링하지 않고 Part→Part 단축 관계로 대체했다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: 명시적 relations 그래프에 AlternatePart를 연결하는 간선이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: relations 전체 목록"
+        - cause_id: structure-candidate-001.cause-002
+          claim: AlternatePart가 보유한 primary_ref, alternate_ref, direction 구조가 Part→Part
+            alternate_of 단축 표기에 연결되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: AlternatePart.attributes"
+            - "manufacturing-bom-ontology.yaml: Part→Part alternate_of relation
+              note"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml — ECO, Part.rev 및 변경 효력 integrity rule
+    evidence_anchor: Part.attributes.rev/current_eco;
+      ECO.attributes.affected_parts/effective_date/status; integrity_rules의
+      “ECO.effective_date 이후 생산분은 신규 rev를 따른다”
+    claim: ECO에서 적용 대상 신규 리비전으로 이어지는 필수 구조적 연결이 없다.
+    what: ECO는 영향받는 Part와 효력일만 연결하고 Part는 현재 rev를 문자열로 보유한다. ECO가 어느 기존 리비전을 어느 신규
+      리비전으로 변경하는지 나타내는 관계나 속성이 없다.
+    why: 명시된 변경 효력 규칙을 적용하려면 ECO, 대상 품목, 적용 전후 리비전 사이의 경로가 필요하다. 현재 구조에서는 효력일 이후 따라야
+      할 ‘신규 rev’를 온톨로지만으로 식별할 수 없어 PLM 변경정보를 MES 제조 기준으로 연결할 수 없다.
+    how_to_fix: PartRevision 같은 리비전 개념을 도입하고 ECO에서 적용 전후 리비전으로 명시적으로 연결한다. 최소 수정으로는
+      ECO에 affected_part별 from_rev/to_rev를 담는 변경 라인 엔티티를 추가하고 Part 및 ECO와 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 품목·변경관리 개념을 연결하여 PLM/MES 통합 기준과 제조 적용 리비전을 제공하는 목적
+      failure_condition: ECO 효력일 이후 MES가 대상 품목에 적용할 구체적인 신규 리비전을 결정해야 할 때
+      impact: 온톨로지의 명시적 경로만으로 적용 리비전을 결정할 수 없어 변경 적용이 외부 추정이나 배치 시점에 의존하며, 구 리비전 생산
+        위험을 구조적으로 통제하지 못한다.
+      evidence_refs:
+        - "manufacturing-bom-ontology.yaml: Part.rev 및 Part.current_eco"
+        - "manufacturing-bom-ontology.yaml:
+          ECO.affected_parts/effective_date/status"
+        - "manufacturing-bom-ontology.yaml: 신규 rev 적용 integrity rule"
+    causal_path:
+      root_cause_candidate: 리비전을 독립된 연결 가능 개념이나 ECO 변경 라인으로 모델링하지 않고 Part의 단일 문자열 속성으로만 두었다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: ECO 효력 규칙이 요구하는 ‘신규 rev’로 연결되는 간선이나 매핑이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: ECO.effective_date 이후 신규 rev를
+              따른다는 integrity rule"
+            - "manufacturing-bom-ontology.yaml: relations 전체 목록"
+        - cause_id: structure-candidate-002.cause-002
+          claim: ECO는 affected_parts만 참조하고 Part는 rev 문자열과 current_eco만 보유하여 적용 전후 리비전 쌍을
+            표현하지 못한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "manufacturing-bom-ontology.yaml: ECO.attributes"
+            - "manufacturing-bom-ontology.yaml: Part.attributes.rev/current_eco"
+      unresolved_beyond_evidence: 도면 관리대장이나 ECO 시스템이 전후 리비전 매핑을 별도로 제공하는지는 경계 밖이지만, 해당
+        매핑이 이 개념 기준 문서에 연결되지 않았다는 구조적 결함은 경계 내에서 확인된다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - relations 섹션은 통합 소비자가 사용할 명시적 관계 그래프이며, attributes의 ref 선언과 구조적으로 일치해야 한다.
+  - integrity_rules에 선언된 규칙은 온톨로지의 개념과 관계를 통해 필요한 대상을 식별할 수 있어야 한다.
+validation:
+  unaddressable_candidates: []

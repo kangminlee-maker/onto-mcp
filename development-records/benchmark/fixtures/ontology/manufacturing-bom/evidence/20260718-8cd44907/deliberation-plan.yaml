@@ -1,0 +1,276 @@
+schema_version: 1
+session_id: 20260718-8cd44907
+planned_issues:
+  - issue_id: issue-007
+    priority: 12
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - logic
+      - structure
+      - axiology
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+    conflict_summary: Coverage, axiology, evolution, and semantics treat the missing
+      execution, result, and genealogy axis as a high-severity scope failure,
+      while logic and structure support only the narrower, directly evidenced
+      ProductionOrder and Routing-path gap; logic also lowers severity.
+    resolution_question: Should this issue remain a high-severity omission of the
+      full MES execution, result, and genealogy axis, or be narrowed to the
+      directly evidenced ProductionOrder and Routing-path contract gap?
+  - issue_id: issue-014
+    priority: 11
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - structure
+      - logic
+      - axiology
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+    conflict_summary: The broad stance treats ambiguous relationship meaning and
+      missing graph authority as one high-severity canonical-relation failure,
+      while logic and structure each support only one component and lower
+      severity.
+    resolution_question: Do relationship-modality ambiguity and the missing path to
+      the relationship entity constitute one shared-root high-severity issue, or
+      should they be separated or narrowed with lower severity?
+  - issue_id: issue-012
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - logic
+      - axiology
+      - coverage
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+    conflict_summary: Axiology, coverage, and structure accept one root cause
+      spanning process identity, routing and plant execution specifications, and
+      inspection-plan typing, while evolution, logic, and semantics support
+      different narrower portions; evolution also lowers severity.
+    resolution_question: Is the overloading of Operation one shared high-severity
+      type-boundary defect, or must process reuse and
+      InspectionPlan-versus-execution defects be narrowed or separated?
+  - issue_id: issue-020
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-020.structure
+      - issue-stance-matrix.yaml#stances.issue-020.coverage
+      - issue-stance-matrix.yaml#stances.issue-020.axiology
+      - issue-stance-matrix.yaml#stances.issue-020.evolution
+      - issue-stance-matrix.yaml#stances.issue-020.logic
+      - issue-stance-matrix.yaml#stances.issue-020.semantics
+    conflict_summary: Most lenses treat the undefined ProductionOrder and missing
+      Routing path as an independent medium issue, whereas coverage replaces its
+      root hypothesis and classifies it as a surface symptom of issue-007's
+      broader execution-domain omission.
+    resolution_question: Should the missing ProductionOrder contract remain an
+      independent material issue, or be represented only as a surface finding
+      under issue-007?
+  - issue_id: issue-019
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.structure
+      - issue-stance-matrix.yaml#stances.issue-019.coverage
+      - issue-stance-matrix.yaml#stances.issue-019.axiology
+      - issue-stance-matrix.yaml#stances.issue-019.evolution
+      - issue-stance-matrix.yaml#stances.issue-019.logic
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+    conflict_summary: Most lenses treat the missing traversable
+      ECO-to-revisioned-configuration path as an independent high-severity
+      structural issue, while coverage considers it only a structural surface of
+      issue-006's version-and-effectivity gap.
+    resolution_question: Should the missing ECO-to-revisioned-BOM-and-Routing path
+      remain an independent material issue, or be absorbed as a surface finding
+      of issue-006?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - evolution
+      - logic
+      - axiology
+      - coverage
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+    conflict_summary: Five lenses attribute the limitation to using a single
+      current_eco pointer in place of history and conditional effectivity, while
+      logic narrows the root cause to missing multivalued effectivity conditions
+      and priority rules rather than the pointer itself.
+    resolution_question: Is the current_eco pointer itself the material modeling
+      error, or is the decisive root cause specifically the absence of
+      multivalued effectivity and priority contracts?
+  - issue_id: issue-015
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-015.semantics
+      - issue-stance-matrix.yaml#stances.issue-015.axiology
+    conflict_summary: Semantics keeps high severity because BomLine conflates
+      product structure with process material flow, while axiology lowers it to
+      medium because the stated operational failure depends on consumers
+      mishandling the documented exception.
+    resolution_question: Does the type-boundary violation itself justify high
+      severity, or does the exception-dependent failure condition limit the
+      issue to medium severity?
+  - issue_id: issue-004
+    priority: 5
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: Both lenses accept the same root cause and remedy, but
+      axiology keeps medium severity while semantics raises it because the
+      relationship-type conflation directly corrupts expansion and requirement
+      meaning.
+    resolution_question: Should the self-referential BomLine material-flow exception
+      be classified as medium or high severity given its potential to corrupt
+      BOM expansion and requirements?
+  - issue_id: issue-005
+    priority: 4
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+    conflict_summary: Both lenses agree that the canonical substitution meaning is
+      undecided, but axiology keeps medium severity and semantics raises it due
+      to the risk of unauthorized reverse substitution.
+    resolution_question: Does the unresolved symmetric-versus-directional
+      substitution contract warrant medium or high severity?
+  - issue_id: issue-008
+    priority: 3
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+    conflict_summary: Coverage and evolution keep medium severity for the closed UOM
+      and conversion-model gap, while axiology raises severity because arbitrary
+      field conversions directly destabilize material and capacity decisions.
+    resolution_question: Is the UOM and conversion-authority gap primarily a medium
+      completeness and extensibility weakness, or a high-severity operational
+      decision risk?
+  - issue_id: issue-013
+    priority: 2
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+    conflict_summary: Logic keeps medium severity for the explicit contradiction
+      between mandatory symmetry and allowed one-way instances, while semantics
+      raises it because the contradiction can enable unsafe substitution
+      decisions.
+    resolution_question: Should the contradictory AlternatePart modality contract
+      remain medium severity or be raised to high based on its operational
+      substitution consequences?
+  - issue_id: issue-016
+    priority: 1
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+      - issue-stance-matrix.yaml#stances.issue-016.axiology
+    conflict_summary: Semantics keeps medium severity for mixing throughput and
+      available-time dimensions in capacity_per_shift, while axiology raises it
+      because the value directly drives production-capacity planning.
+    resolution_question: Does the dimensional ambiguity in capacity_per_shift
+      warrant medium severity, or high severity because it can directly misstate
+      production load and availability?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All six lenses support the issue, accept its root hypothesis, and keep
+      high severity.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All six lenses support the issue, accept its root hypothesis, and keep
+      medium severity.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: All six lenses support the issue, accept its root hypothesis, and keep
+      high severity.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All six lenses support the issue, accept its root hypothesis, and keep
+      high severity.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All six lenses support the issue, accept its root hypothesis, and keep
+      medium severity.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: All six lenses support the shared-root issue, accept its root
+      hypothesis, and keep high severity.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: All six lenses support the issue, accept its root hypothesis, and keep
+      high severity.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: Structure narrows its claim to the structural absence of authority and
+      derivation links while leaving formula semantics to the semantic contract;
+      this is complementary evidentiary scope, not a conflicting material
+      conclusion.

@@ -1,0 +1,202 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml — ECO 효력과 Part 리비전 적용 규칙
+    evidence_anchor: "materialized-input.md:7; materialized-input.md:20-21;
+      materialized-input.md:69-75; materialized-input.md:96;
+      review-value-alignment-criteria.yaml:6-18 (value_type=purpose,
+      alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준
+      문서…변경관리 개념의 정합성과 제조 운영 위험을 중심으로”)"
+    claim: ECO 효력일과 주간 리비전 동기화의 불일치가 통합 기준의 변경 적용 시점을 모호하게 만든다.
+    what: 규칙은 effective_date 이후 생산분에 신규 rev를 요구하면서도 Part.rev는 주간 배치로 늦게 갱신하도록 허용한다.
+      생산 오더가 어느 리비전을 고정해야 하는지, 배치 지연 중 어떤 값이 우선하는지가 없다.
+    why: 효력일 이후부터 다음 동기화까지 ECO와 Part.rev가 서로 다른 답을 줄 수 있다. 이 상태에서는 PLM과 MES가 동일 생산분에
+      서로 다른 설계 리비전을 적용할 수 있어 변경관리 정합성과 제조 실행 안전이라는 선언 목적을 직접 약화한다.
+    how_to_fix: 유효기간을 가진 PartRevision과 ECO 적용 관계를 모델링하고, 생산 오더가 생성 시점의 적용 리비전을 명시적으로
+      고정하도록 한다. 배치 동기화 상태와 무관하게 effective_date 기준 조회가 단일 결과를 반환하도록 우선순위와 실패 규칙도
+      정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준으로서 변경관리 정합성과 제조 운영 위험 통제
+      failure_condition: ECO effective_date가 지났지만 Part.rev 주간 동기화가 아직 수행되지 않은 기간에 생산 오더가 생성되는 경우
+      impact: 동일 생산분의 적용 설계 리비전이 시스템별로 달라져 구형 설계 생산, 추적성 상실 또는 재작업 판단 오류가 가능하다.
+      evidence_refs:
+        - materialized-input.md:7
+        - materialized-input.md:20-21
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: 변경 효력의 권위가 effective-dated revision 객체가 아니라 비동기 갱신되는
+        Part.rev와 ECO에 분산되어 있다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 효력일 이후 신규 rev 적용을 요구하지만 Part.rev 갱신은 주간 배치 이후에만 이루어진다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 생산 오더가 적용 리비전을 직접 참조하거나 고정하는 모델이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:14-21
+            - materialized-input.md:69-75
+            - materialized-input.md:93-96
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 변경 효력과 현재 리비전의 권위가 별도 원본 및 비동기 필드에 분산되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:96
+      unresolved_beyond_evidence: 실제 PLM/MES의 보완 통제 존재 여부는 현재 경계에서 확인할 수 없지만, 개념 기준 문서
+        자체에는 해당 통제가 표현되지 않는다.
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml — BOM 순환 금지와 스크랩 재투입 예외
+    evidence_anchor: "materialized-input.md:7; materialized-input.md:23-35;
+      materialized-input.md:93-94; review-value-alignment-criteria.yaml:6-18
+      (value_type=tradeoff, alignment_direction=misaligned; authority excerpt:
+      “BOM/공정 온톨로지가 PLM/MES 통합의 개념 기준 문서로 적절한지…BOM…정합성과 제조 운영 위험을 중심으로”)"
+    claim: 재생 원료 흐름을 자기 참조 BOM으로 표현하는 국소 편의가 BOM 전개의 안전성과 의미를 훼손한다.
+    what: BOM은 비순환이어야 한다고 선언하면서 스크랩 재투입은 Assembly가 자기 하위에 자신을 포함하도록 예외 처리한다.
+    why: 제품 구성 구조와 공정 중 회수·재투입 흐름은 목적과 계산 방식이 다르다. 이를 동일 BOM 계층에 넣으면 BOM 폭발, 소요량 계산,
+      원가 누적 또는 순환 검증이 예외별 동작에 의존하게 되어 통합 개념 기준의 예측 가능성을 잃는다.
+    how_to_fix: BOM은 비순환 제품 구성 구조로 유지하고, 스크랩 발생·회수·재투입은 Operation 또는 별도의
+      MaterialRecovery/MaterialFlow 관계로 분리한다. 재투입률과 질량수지 규칙을 해당 흐름에 배치한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES가 공유할 일관된 BOM 및 공정 개념 기준
+      failure_condition: 스크랩 재투입을 포함한 Assembly를 BOM 전개, 소요량 계산 또는 원가 누적에 사용하는 경우
+      impact: 종료 조건이나 예외 처리가 없는 소비자는 무한 전개 또는 중복 수량 계산을 할 수 있고, 소비자마다 예외 해석이 달라질 수 있다.
+      evidence_refs:
+        - materialized-input.md:7
+        - materialized-input.md:23-35
+        - materialized-input.md:93-94
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: 제품 구성과 공정 물질 흐름이라는 서로 다른 목적의 개념을 BomLine 하나로 통합했다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 비순환 BOM 원칙과 자기 포함 예외가 같은 무결성 규칙에 공존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-94
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 스크랩 재투입이 별도 흐름 관계가 아니라 Assembly의 child BomLine으로 표현된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23-35
+            - materialized-input.md:93-94
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 제품 구성 구조와 공정 회수 흐름을 구분하는 개념이 모델에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12-100
+      unresolved_beyond_evidence: 각 연계 시스템의 순환 방지 구현은 경계 밖이지만, 이 문서는 소비자가 공유할 종료 의미나 계산 규칙을 제공하지 않는다.
+  - candidate_id: axiology-candidate-003
+    target: manufacturing-bom-ontology.yaml — 품목 UOM과 현장 환산
+    evidence_anchor: "materialized-input.md:7; materialized-input.md:19;
+      materialized-input.md:29-35; materialized-input.md:100;
+      review-value-alignment-criteria.yaml:6-18 (value_type=commitment,
+      alignment_direction=misaligned; authority excerpt: “PLM/MES 통합의 개념 기준
+      문서…제조 운영 위험을 중심으로”)"
+    claim: 환산계수 없이 현장 판단에 맡긴 단위 변환은 BOM 수량을 시스템 간 공통 의미로 만들지 못한다.
+    what: Part.uom은 ea, kg, m 중 하나이고 BomLine.qty_per는 단위 정보를 별도로 갖지 않으며, kg↔ea 등의
+      변환은 마스터 없이 현장에서 수행한다.
+    why: 동일 qty_per가 어느 단위를 기준으로 해석되는지와 변환 근거가 통합 데이터로 재현되지 않는다. 특히 개수와 질량 간 환산은 품목별
+      물성에 의존하므로 현장별 계산 차이가 자재 소요량, 불출량 및 재고 정합성을 훼손할 수 있다.
+    how_to_fix: BomLine 수량에 명시적 UOM을 부여하고, 품목별 기준 UOM 및 유효기간·출처를 가진 변환 규칙을 권위 있는
+      마스터로 모델링한다. 필요한 변환이 없거나 차원이 맞지 않으면 생산 또는 인터페이스 처리를 실패시키도록 규정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 간 품목·BOM 수량의 일관된 의미와 제조 운영 위험 통제
+      failure_condition: BOM 수량 단위와 실행·재고 단위가 다르거나 ea와 kg처럼 품목별 환산이 필요한 경우
+      impact: 시스템이나 작업자별 환산 결과가 달라져 과소·과다 불출, 계획 오차 및 재고 불일치로 이어질 수 있다.
+      evidence_refs:
+        - materialized-input.md:7
+        - materialized-input.md:19
+        - materialized-input.md:29-35
+        - materialized-input.md:100
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: 수량 단위와 변환 규칙을 통합 모델의 권위 있는 개념으로 두지 않았다.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 품목별 환산계수 마스터가 없고 변환을 현장에서 수행한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100
+        - cause_id: axiology-candidate-003.cause-002
+          claim: BomLine.qty_per에는 자체 단위 또는 기준 단위 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 모델은 Part.uom 열거만 제공하고 단위 변환의 권위·유효성·실패 규칙을 제공하지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:29-35
+            - materialized-input.md:100
+      unresolved_beyond_evidence: 실제 현장에서 사용하는 환산표의 존재 여부는 확인할 수 없으나, 존재하더라도 현재 개념 기준에는 권위와 추적성이 표현되지 않는다.
+  - candidate_id: axiology-candidate-004
+    target: manufacturing-bom-ontology.yaml — BomLine.scrap_rate의 복사본 관리
+    evidence_anchor: "materialized-input.md:7; materialized-input.md:29-35;
+      materialized-input.md:47-61; review-value-alignment-criteria.yaml:6-18
+      (value_type=principle, alignment_direction=misaligned; authority excerpt:
+      “PLM/MES 통합의 개념 기준 문서…BOM·라우팅…정합성과 제조 운영 위험을 중심으로”)"
+    claim: 공정 불량 계수를 BOM 줄의 엑셀 복사본으로 관리하면 BOM과 라우팅 간 권위 및 변경 정합성이 깨진다.
+    what: scrap_rate는 공정 불량을 반영하는 값이지만 BomLine에 있고, 생산계획팀 엑셀 값을 복사해 둔다. 값이 어느
+      Operation, Routing 리비전, 유효기간 또는 원본 레코드에 대응하는지 없다.
+    why: 공정 조건이 변경되어도 BOM 복사본이 함께 갱신된다는 보장이 없으며 동일 부품도 공정별 불량률이 다를 수 있다. 이 절충은 편리한
+      수량 계산 대신 통합 기준의 추적성·재현성과 자재계획 정확도를 희생한다.
+    how_to_fix: scrap/yield를 해당 Operation과 자재 투입 관계에 귀속하고 Routing 또는 공정 리비전 및 유효기간과
+      연결한다. 외부 계획 시스템이 원본이라면 복사값 대신 source identifier, 동기화 상태, 갱신 규칙과 불일치 처리 정책을
+      모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM·라우팅 정합성을 갖춘 PLM/MES 통합 개념 기준
+      failure_condition: 공정, 라우팅 또는 계획 엑셀의 불량률이 변경되었지만 BomLine 복사본이 동기화되지 않거나 한 부품이 여러 공정을 거치는 경우
+      impact: 필요 수량과 자재 계획이 실제 공정 수율과 달라지고, 어느 시스템 값이 기준인지 감사하거나 재현하기 어렵다.
+      evidence_refs:
+        - materialized-input.md:7
+        - materialized-input.md:29-35
+        - materialized-input.md:47-61
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: 공정 수율 개념의 권위와 생명주기를 공정/라우팅이 아니라 BomLine의 비추적 복사본에 배치했다.
+      root_cause_step_id: axiology-candidate-004.cause-003
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: BomLine.scrap_rate가 생산계획팀 엑셀 값을 복사하여 보유한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+        - cause_id: axiology-candidate-004.cause-002
+          claim: scrap_rate는 특정 Operation이나 Routing과 연결되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-61
+        - cause_id: axiology-candidate-004.cause-003
+          claim: 복사본의 원본 식별자, 유효기간, 동기화 상태 및 충돌 처리 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+      unresolved_beyond_evidence: 외부 동기화 절차가 실제로 존재할 가능성은 있으나 현재 문서에는 통합 계약으로 표현되지 않는다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 제조 도메인 규정은 사용하지 않았고, 명시된 사용자 목적과 대상 문서의 ‘PLM/MES 통합의
+    개념 기준 문서’ 선언만 가치 권위로 사용했다.
+  - 실제 PLM·MES·도면 관리대장·ECO 시스템·현장 절차의 보완 통제는 현재 경계에서 검증하지 않았으며, 문서 자체가 통합 기준으로
+    제공하는 계약만 평가했다.
+validation:
+  unaddressable_candidates: []

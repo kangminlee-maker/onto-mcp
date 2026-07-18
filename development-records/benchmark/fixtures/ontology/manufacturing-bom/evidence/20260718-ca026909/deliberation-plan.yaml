@@ -1,0 +1,102 @@
+schema_version: 1
+session_id: 20260718-ca026909
+planned_issues:
+  - issue_id: issue-013
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+      - issue-stance-matrix.yaml#stances.issue-013.axiology
+      - issue-stance-matrix.yaml#stances.issue-013.coverage
+    conflict_summary: semantics는 BOM 자기 의존과 계산 위험을 근거로 high를 유지하지만, axiology와
+      coverage는 issue-003과 동일한 결함이며 추가 경계 증거가 없다고 보아 medium으로 낮춘다.
+    resolution_question: issue-013을 issue-003과 구별되는 high 심각도 문제로 유지할 근거가 있는가, 아니면 동일
+      결함으로 통합하고 severity를 medium으로 조정해야 하는가?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: axiology는 스크랩 재투입의 BOM 자기 포함 문제를 medium으로 유지하지만, semantics는 의미
+      혼동이 무한 전개와 잘못된 소요량으로 이어질 수 있어 severity를 높여야 한다고 판단한다.
+    resolution_question: 확인된 실패 조건과 영향이 issue-003의 severity를 medium보다 높게 분류할 만큼 충분한가?
+  - issue_id: issue-008
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+    conflict_summary: evolution은 반복 변경 후 구성 연속성 상실을 직접적인 진화성 결함으로 지지하지만, coverage는
+      이를 독립 원인이 아니라 issue-004의 시간·버전 모델 결함이 반복 변경에서 드러난 경우로 좁힌다.
+    resolution_question: issue-008은 독립적인 material issue로 유지해야 하는가, 아니면 issue-004의 실패 양상으로 통합해야 하는가?
+  - issue_id: issue-009
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+    conflict_summary: evolution은 새 단위와 capacity 산정 방식의 확장 실패를 직접적인 진화성 결함으로 보지만,
+      coverage는 이를 issue-007의 Unit·Quantity·ConversionRule 부재가 낳은 확장 결과로 좁힌다.
+    resolution_question: issue-009은 독립적인 확장성 문제로 유지해야 하는가, 아니면 issue-007의 결과 및 범위로 통합해야 하는가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: semantics의 좁힘은 Part.rev 의미 중첩을 직접 기여 원인으로 한정한 것이며, 다른 렌즈가 지지하는 더 넓은
+      시간·권한 모델 결손과 양립한다.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 근본 가설과 medium severity를 일관되게 지지한다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 불변 revision·효력구간 및 ECO 연결 부재라는 원인과 high severity를 일관되게 지지한다.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: 좁힘 입장도 실행 영역 전체를 내부에 포함할 필요는 없지만 외부 실행 온톨로지와의 명시적 연결 계약은 필수라는 제안된 대안 범위에
+      동의한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: logic의 좁힘은 lifecycle 사건과 감사 행위가 서로 다른 필수 속성과 통제를 가진다는 보완이며, 사건 기반 모델과 제안
+      조치를 부정하지 않는다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 독립적인 단위·측정 차원·환산 규칙 부재와 medium severity를 일관되게 지지한다.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: logic의 좁힘은 규칙 엔티티와 단축 관계 사이의 권위 불명확성을 핵심으로 정교화한 것이며, 다른 렌즈의 원인 및 제안 조치와
+      양립한다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: structure의 insufficient_evidence는 렌즈 적용 한계이며 반대 근거가 아니다. 나머지 렌즈는 대칭성과
+      one_way의 모순 및 medium severity에 합의한다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: logic은 고위험 결과의 실행 조건을 명시하고 structure는 존재론적 판단을 유보했을 뿐이다. 이는 명시된
+      failure_condition과 양립하며 다른 렌즈의 결론을 반박하지 않는다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: structure의 insufficient_evidence는 의미·논리 판단에 대한 렌즈 한계이며 반대 입장이 아니다. 적용
+      가능한 다른 렌즈들은 원인과 medium severity에 합의한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: logic은 단일 rev 축약 외에 별도 권위·대응·효력 규칙 부재도 직접 원인이라고 보완하며, 제안된 근본 가설과 조치에
+      실질적으로 부합한다.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 capacity 측정 차원의 중첩이라는 원인과 medium severity를 일관되게 지지한다.
+  - issue_id: issue-017
+    reason_code: non_material_issue
+    reason: severity가 low이고 material_issue가 false이며, 현재 경계 증거에서 물질적 실패 조건이 확인되지 않았다.

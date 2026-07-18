@@ -1,0 +1,506 @@
+schema_version: 1
+session_id: 20260718-8de943b3
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: 실행 준비가 axiology 계약상 필수인 canonical authority source set을
+      바인딩하지 않아 가치 정렬 판단의 권위 근거가 사라졌다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 필수 가치 권위 문서가 바인딩되지 않아 온톨로지의 목적·가치 정렬 여부를 신뢰성 있게 판단할 수 없다.
+    proposed_action: 필수 순위 1~2 authority 문서를 실행 준비 단계와 axiology 패킷에 바인딩한 뒤 렌즈를
+      재실행하고, 접근할 수 없다면 결과를 indeterminate로 표시한다.
+    affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 온톨로지의 목적·가치 정렬을 검증하는 axiology 리뷰
+    failure_condition: 필수 canonical authority chain 없이 사용자 요청과 대상 문서만으로 가치 판단을 수행할 때
+    impact: 정렬·위반 판단을 권위 근거에 추적할 수 없어 axiology 결과를 승인 또는 개선 결정의 근거로 신뢰하기 어렵다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/axiology.findings.yaml#axiology-candidate-001
+      - "axiology role §Authoritative alignment input: 순위 1~3 authority는 항상
+        바인딩되어야 함"
+      - "axiology role §Finding evidence requirements: authority가 없으면
+        insufficient evidence로 처리"
+      - "context-candidate-assembly.yaml:1: system_purpose_refs: []"
+      - "review-value-alignment-criteria.yaml:criteria[0]: 사용자 요청만 포함"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime projection: no accepted semantic relation covered
+      this causal-analysis finding."
+  - issue_id: issue-002
+    root_cause_hypothesis: Specimen lifecycle 범위를 정상 분석 경로에만 한정해 예외 및 종결 상태가 모델에서 누락되었다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 검체 lifecycle이 채취 완료부터 분석 완료까지만 다뤄 채취 실패·접수 거부·재채취·보관·폐기를 표현하지 못한다.
+    proposed_action: 필요한 예외·종결 상태와 전이 사유·시각을 포함하는 Specimen lifecycle 및 SpecimenEvent를 정의한다.
+    affected_purpose: Order부터 Report까지의 EMR/LIS 통합 상태 모델을 개념 권위로 제공하는 목적
+    failure_condition: 채취 실패, 검체 부적합, 재채취 또는 분석 후 보관·폐기가 발생할 때
+    impact: 통합 시스템이 공통 상태와 종결 의미를 교환할 수 없어 주문 진행 여부와 검체 처리 결과를 일관되게 판단할 수 없다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:6-8
+      - materialized-input.md:37-44
+      - materialized-input.md:121-124
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-021과 shared_cause_candidate 관계만 있으며 동일 root로 병합할 근거는 없다.
+  - issue_id: issue-003
+    root_cause_hypothesis: 검증·배포·정정·통보 행위를 독립 사건과 감사 증거로 보존하지 않고 부분 속성이나 외부 대장에 분산했다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 검증·보고·정정·중요결과 통보의 행위자·시각·근거를 함께 보존하는 감사 증거 개념이 없다.
+    proposed_action: 대상, 행위자, 시각, 근거, 수신자 및 결과를 보존하는 개별 통제 사건 또는 공통 AuditEvent를 도입한다.
+    affected_purpose: 임상의가 신뢰할 결과·보고 상태와 중요결과 통보를 EMR/LIS 통합 권위로 제공하는 목적
+    failure_condition: 결과 검증, 보고서 배포, 결과 정정 또는 중요결과 통보의 책임과 완료 증명을 확인해야 할 때
+    impact: 권위 문서에서 통제 행위의 실행 증거를 재구성할 수 없어 임상 전달 상태와 감사 가능성에 대한 신뢰가 크게 약화된다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:6-8
+      - materialized-input.md:62-84
+      - materialized-input.md:100-106
+      - materialized-input.md:121-124
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-004 및 finding-015와 shared_cause_candidate 관계만 있으며 동일
+      root로 병합할 근거는 없다.
+  - issue_id: issue-004
+    root_cause_hypothesis: Result와 Report를 시간순 버전이나 불변 정정 사건이 아닌 가변 단일 레코드와 현재 상태로 모델링했다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 최종 결과 이후의 정정·재발행 이력이 없어 과거 시점에 임상적으로 노출된 값을 재구성할 수 없다.
+    proposed_action: ResultVersion·ReportVersion 또는 불변 Correction/Amendment 사건과
+      유효기간, 대체 관계, 사유, 작성자 및 배포 시각을 모델링한다.
+    affected_purpose: 임상의가 신뢰하는 보고 상태를 포함한 EMR/LIS 개념 권위 제공
+    failure_condition: 최종 결과가 정정되고 보고서가 amended로 재발행될 때 과거 또는 현재 유효 버전을 판단해야 하는 경우
+    impact: 과거에 실제 전달된 값과 현재 값의 계보를 재구성할 수 없어 정정 동기화와 임상 기록 해석의 신뢰가 손상된다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/coverage.findings.yaml#coverage-candidate-003
+      - materialized-input.md:62-84
+      - materialized-input.md:121-124
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-003과 shared_cause_candidate 관계만 있으며 동일 root로 병합할 근거는 없다.
+  - issue_id: issue-005
+    root_cause_hypothesis: 별도 Test·Assay 카탈로그를 두면서 canonical authority, 대응 관계, 버전 및 유효기간을 모델링하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 병행 관리되는 Test와 Assay 카탈로그에 단일 권위, 대응 관계, 버전 및 유효기간이 없다.
+    proposed_action: Test와 Assay의 역할을 구분하고 명시적 매핑, 시스템 소유자, canonical authority, 버전,
+      유효기간 및 폐기 상태를 정의한다.
+    affected_purpose: EMR 주문 카탈로그와 LIS 수행 카탈로그 간 개념 권위를 제공하는 목적
+    failure_condition: 신규 항목 등록, 코드 변경, 검체 요건 변경 또는 항목 단종이 두 카탈로그에 서로 다르게 반영될 때
+    impact: 어느 정의와 시점별 항목을 신뢰해야 하는지 결정할 수 없어 코드 매핑과 결과 귀속이 불안정해진다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/coverage.findings.yaml#coverage-candidate-004
+      - materialized-input.md:6-8
+      - materialized-input.md:46-60
+      - materialized-input.md:126-128
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-007과 duplicates 관계만 있으며, same_root_candidate로 연결되지 않아
+      이 issue에는 병합하지 않았다.
+  - issue_id: issue-006
+    root_cause_hypothesis: 카탈로그 개념인 Assay만 정의하고 실제 수행 발생을 독립 엔티티로 모델링하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 주문된 Test가 실제 Assay 수행을 거쳐 Result를 생성하는 실행 발생 개념이 누락되어 있다.
+    proposed_action: Specimen, Assay, Result, 수행자, 분석기, 시각 및 상태를 연결하고 반복·재검을 표현하는
+      AssayRun 또는 LaboratoryExecution을 추가한다.
+    affected_purpose: Order부터 Report까지의 임상검사 파이프라인을 EMR/LIS 통합 개념 모델로 제공하는 목적
+    failure_condition: 반복 측정, 재검, 수행 실패 또는 결과 생성 근거를 교환·추적해야 할 때
+    impact: 카탈로그 항목과 실제 검사 수행 사이의 발생 기록이 없어 결과 계보와 작업 진행 상태를 통합 모델에서 나타낼 수 없다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/coverage.findings.yaml#coverage-candidate-005
+      - materialized-input.md:6-8
+      - materialized-input.md:54-73
+      - materialized-input.md:108-119
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-017과 duplicates 관계만 있으며, same_root_candidate로 연결되지 않아
+      이 issue에는 병합하지 않았다.
+  - issue_id: issue-007
+    root_cause_hypothesis: Test와 Assay가 동의어인지 주문 개념과 수행 구현인지에 대한 canonical 결정과 그 관계가
+      없어 의미 경계와 카탈로그 진화가 함께 불안정하다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-007
+      - finding-013
+    relation_refs:
+      - rel-005
+    raised_by_lens_ids:
+      - evolution
+      - semantics
+    issue_statement: Test–Assay의 의미 경계, canonical identity 및 버전형 매핑이 정의되지 않아 양쪽
+      카탈로그를 일관되게 확장하거나 해석할 수 없다.
+    proposed_action: Test와 Assay의 의미적 역할을 결정한 뒤 canonical identity, 정의, 식별자, 카디널리티,
+      버전, 유효기간 및 검체 매핑을 갖는 명시적 관계를 모델링한다.
+    affected_purpose: EMR/LIS 연동에서 주문 카탈로그와 수행 카탈로그를 일관되게 매핑·확장하는 개념 권위 제공
+    failure_condition: 신규 검사·분석법·검체 유형을 추가하거나 Test와 Assay를 독립 등록·개정할 때
+    impact: 시스템별로 서로 다른 개념 또는 식별자가 주문·수행·결과에 연결되어 통합 매핑과 변경 이력의 신뢰가 크게 약화된다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/evolution.findings.yaml#evolution-candidate-001
+      - materialized-input.md:46-60
+      - materialized-input.md:108-119
+      - materialized-input.md:126-127
+      - .onto/review/20260718-8de943b3/round1/semantics.findings.yaml#semantics-candidate-001
+      - entities.Test.definition
+      - entities.Assay.definition
+      - notes[0]
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-008
+    root_cause_hypothesis: 상태 개념과 Result–Report 대응 규칙에 독립적인 버전·유효기간 모델이 없다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 상태 어휘와 전이 규칙이 고정 리터럴에 결합되어 상태 추가·개정 시 기존 규칙과 이력 해석까지 바뀐다.
+    proposed_action: 상태를 버전 가능한 개념 체계로 만들고 Result–Report 대응표, 유효기간, 폐기·별칭 규칙을 정의하며
+      전이 규칙이 안정된 상태 의미를 참조하게 한다.
+    affected_purpose: EMR/LIS 사이에서 결과와 보고 상태를 장기간 동일하게 해석하는 권위 계약
+    failure_condition: 새 상태가 추가되거나 기존 상태명·전이 정책이 개정될 때
+    impact: 완료 판정과 보고 상태 동기화가 기존 데이터에 다른 의미로 적용되어 통합 규칙의 재현성과 이력 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/evolution.findings.yaml#evolution-candidate-002
+      - materialized-input.md:62-84
+      - materialized-input.md:121-124
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-012와 shared_cause_candidate 관계만 있으며 동일 root로 병합할 근거는 없다.
+  - issue_id: issue-009
+    root_cause_hypothesis: 식별자 모델이 값만 보존하고 발급 권위와 수명주기를 보존하지 않는다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 식별자가 발급 기관이나 원천 시스템 없는 단순 문자열이어서 다기관·복수 시스템 통합 시 충돌을 흡수할 수 없다.
+    proposed_action: value, system 또는 issuer, version, validity를 보존하는 공통 Identifier와
+      로컬·통합 식별자 간 대응 관계를 정의한다.
+    affected_purpose: EMR/LIS 통합에서 환자·검사·조직·인력 식별을 위한 개념 권위
+    failure_condition: 연결되는 시스템이나 기관이 동일한 로컬 문자열을 서로 다른 대상에 사용하거나 코드 체계를 개정할 때
+    impact: 잘못된 환자·검사·부서 연결로 이어질 수 있으며 문서만으로 충돌 해소 규칙을 결정할 수 없다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/evolution.findings.yaml#evolution-candidate-003
+      - materialized-input.md:31-35
+      - materialized-input.md:46-60
+      - materialized-input.md:86-98
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: "Runtime projection: no accepted semantic relation covered
+      this causal-analysis finding."
+  - issue_id: issue-010
+    root_cause_hypothesis: 재사용 가능한 위험 판정 정책과 시간에 발생하는 결과별 통보 사건을 하나의 CriticalValue 유형으로 모델링했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-010
+      - finding-015
+    relation_refs:
+      - rel-011
+    raised_by_lens_ids:
+      - evolution
+      - semantics
+    issue_statement: CriticalValue가 확장 불가능한 임계값 규칙과 개별 위험 결과의 통보 상태를 혼합해 규칙 진화와 결과별
+      통보 추적을 모두 약화한다.
+    proposed_action: 버전 가능한 CriticalThreshold 또는 CriticalRule을 특정 Result에 연결되는
+      CriticalResult/Notification 사건과 분리하고 조건, 연산자, 값·단위, 유효기간, 통보 시각·수신자·상태를 각
+      권위에 배치한다.
+    affected_purpose: 운영 정책 변경에도 위험 결과 판정과 통보를 의미 손실 없이 교환하는 EMR/LIS 개념 모델
+    failure_condition: 조건형·범주형 또는 버전별 기준을 추가하거나 동일 임계값에 해당하는 여러 Result의 통보 상태를 구분해야 할 때
+    impact: 규칙 연속성과 결과 재현성이 약화되고, 규칙 상태와 환자별 통보 이력을 구분하지 못해 미통보 건을 완료로 오인할 수 있다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/evolution.findings.yaml#evolution-candidate-004
+      - materialized-input.md:100-106
+      - .onto/review/20260718-8de943b3/round1/semantics.findings.yaml#semantics-candidate-003
+      - entities.CriticalValue.definition
+      - entities.CriticalValue.attributes.test_ref
+      - entities.CriticalValue.attributes.lower_bound
+      - entities.CriticalValue.attributes.upper_bound
+      - entities.CriticalValue.attributes.notified
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-011
+    root_cause_hypothesis: Order 완료 판정이 변경 가능한 Result.status에 의존하면서 정정 이후의 Order 전이 정책을 정의하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: completed 이후 Result가 corrected로 바뀔 때 Order 완료 상태와 완료 조건이 충돌할 수 있다.
+    proposed_action: corrected를 완료 유지 상태에 포함하거나 정정 시 Order를 재개방한 뒤 재완료하도록 하는 명시적 전이표를 정의한다.
+    affected_purpose: EMR/LIS 통합에서 Order 상태를 일관된 개념 권위로 사용하는 목적
+    failure_condition: completed 전이 후 포함 Result 중 하나가 corrected로 변경되는 경우
+    impact: 두 시스템이 동일 사건 뒤에도 Order 완료 여부를 다르게 계산해 상태 기반 처리와 감사 결과의 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/logic.findings.yaml#logic-candidate-001
+      - materialized-input.md:23
+      - materialized-input.md:71-72
+      - materialized-input.md:122-123
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-021과 enables 관계만 있으며 동일 root로 병합할 근거는 없다.
+  - issue_id: issue-012
+    root_cause_hypothesis: 하나의 결과 상태 사실을 Result와 Report에 중복 저장하면서 동기화 지연과 일관성 양상을 정의하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: Result–Report 상태 일치 불변조건과 corrected 이후 야간 배치 전까지의 비동기 상태 허용 규칙이
+      동시에 만족될 수 없다.
+    proposed_action: 상태 권위를 하나로 통합해 실시간 파생하거나, 비동기 복제를 유지한다면 eventual consistency,
+      최대 지연시간, 정정 대기 상태 및 임상 노출 권위를 명시한다.
+    affected_purpose: 임상의와 EMR/LIS가 신뢰할 수 있는 단일 결과 상태 권위를 제공하는 목적
+    failure_condition: Result가 야간 동기화 이후 다음 배치 전에 corrected로 변경되는 경우
+    impact: 권위로 선언된 Report가 실제 정정을 반영하지 않아 소비 시스템과 임상의가 상반된 상태를 관찰할 수 있다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/logic.findings.yaml#logic-candidate-002
+      - materialized-input.md:69-72
+      - materialized-input.md:80-84
+      - materialized-input.md:123
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-008과 shared_cause_candidate, finding-014와 duplicates
+      관계만 있으며 same_root_candidate로 연결되지 않았다.
+  - issue_id: issue-013
+    root_cause_hypothesis: 개별 Result의 검증·정정 상태와 집합 문서인 Report의 발행·개정 상태를 독립 개념으로 분리하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 범위가 다른 Result와 Report 상태를 동일 정보로 취급해 값 체계와 권위를 이중화했다.
+    proposed_action: Result 상태와 Report 상태를 별도 개념으로 정의하고 상태 투영 규칙, 전이 사건 및 각 개념의 단일 권위 원천을 지정한다.
+    affected_purpose: EMR이 임상의에게 전달할 결과 및 보고 상태를 LIS와 의미적으로 일관되게 해석하는 목적
+    failure_condition: Result가 corrected로 바뀐 뒤 야간 동기화 전이거나 여러 Result가 서로 다른 상태인 보고서를 교환할 때
+    impact: 정정된 결과가 포함된 보고서를 최종본으로 오인하거나 서로 다른 상태 코드를 동의어로 잘못 매핑할 수 있다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/semantics.findings.yaml#semantics-candidate-002
+      - entities.Result.attributes.status
+      - entities.Report.attributes.result_status
+      - state_rules[1]
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-012와 duplicates 관계만 있으며, same_root_candidate로 연결되지 않아
+      이 issue에는 병합하지 않았다.
+  - issue_id: issue-014
+    root_cause_hypothesis: 변경 가능한 우선순위 속성을 불리언 파생값과 하위 타입으로 중복 모델링했다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-016
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: STAT 분류가 enum 값, 불리언 및 하위 타입이라는 세 독립 표현으로 존재해 권위가 불명확하다.
+    proposed_action: priority를 권위 속성으로 정하고 is_stat을 파생값으로 만들며, StatOrder가 필요하다면
+      priority=stat 제약을 가진 뷰나 명시적 분류로 정의한다.
+    affected_purpose: EMR/LIS가 주문 우선순위를 동일하게 해석하고 라우팅하는 목적
+    failure_condition: priority, is_stat, StatOrder 타입 중 일부만 갱신되거나 시스템별로 다른 표현을 권위로 사용할 때
+    impact: 응급 주문의 분류와 처리 우선순위가 시스템 간 달라질 수 있다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/semantics.findings.yaml#semantics-candidate-004
+      - entities.Order.attributes.priority
+      - entities.Order.attributes.is_stat
+      - entities.StatOrder
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime projection: no accepted semantic relation covered
+      this causal-analysis finding."
+  - issue_id: issue-015
+    root_cause_hypothesis: 물리적 입력인 Specimen과 Result를 생성하는 분석 수행 사건을 구분하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-017
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 물리적 검체가 결과를 생산한다고 표현해 결과 생성 행위와 입력 재료의 의미가 혼동된다.
+    proposed_action: Specimen–Result를 출처 관계로 한정하고 AssayExecution 같은 수행 개념을 Test 또는
+      Assay, Specimen 및 Result에 연결한다.
+    affected_purpose: LIS 결과의 검체 및 수행 계보를 EMR에 정확히 전달하는 목적
+    failure_condition: 한 검체에서 여러 분석이 수행되거나 동일 Test가 서로 다른 Assay로 수행될 때
+    impact: 결과를 생성한 실제 수행 단위를 식별할 수 없어 추적성과 결과 해석이 약화된다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/semantics.findings.yaml#semantics-candidate-005
+      - "relations: Specimen→Result produces"
+      - "relations: Result→Specimen derived_from"
+      - entities.Assay.definition
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-006과 duplicates 관계만 있으며, same_root_candidate로 연결되지 않아
+      이 issue에는 병합하지 않았다.
+  - issue_id: issue-016
+    root_cause_hypothesis: TAT 산식만 기록하고 지표의 관찰 단위와 다중값 선택·집계 규칙을 정의하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-018
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: TAT의 시작·종료 시각은 제시됐지만 어떤 업무 단위를 측정하는지 정의되지 않았다.
+    proposed_action: TAT의 측정 주체를 명시하고 다중 검체·부분 보고의 집계 규칙, 원천 시각 및 공식 계산 규칙의 권위 위치를 정한다.
+    affected_purpose: 통합 시스템에서 검사 처리시간 지표를 동일한 의미로 계산하는 목적
+    failure_condition: 주문에 검체나 보고서가 둘 이상 존재하거나 부분 보고가 발생할 때
+    impact: 동일 사례에 대해 EMR, LIS 및 대시보드가 서로 다른 TAT를 산출할 수 있다.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/semantics.findings.yaml#semantics-candidate-006
+      - notes[1]
+      - "relations: Order→Specimen has_many"
+      - "relations: Order→Report produces"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime projection: no accepted semantic relation covered
+      this causal-analysis finding."
+  - issue_id: issue-017
+    root_cause_hypothesis: 별도 주문·수행 카탈로그 개념을 선언하면서 워크플로를 잇는 canonical 관계를 정의하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-019
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Test–Assay 또는 Result–Assay 관계가 없어 Assay가 order-to-result 워크플로에서 단절되어 있다.
+    proposed_action: 카디널리티가 있는 canonical Test–Assay 실행 매핑을 추가하고 추적성이 필요하면 Result를
+      수행된 Assay에 연결하며 동기화 또는 소유권 규칙을 명시한다.
+    affected_purpose: Using the ontology as the conceptual authority for EMR/LIS
+      integration from Order through Report.
+    failure_condition: Whenever an ordered Test must be translated into an analyzer
+      execution unit or an emitted Result must be traced to that unit.
+    impact: The core order-to-execution path cannot be derived from the authority
+      document, forcing divergent out-of-band mappings between systems.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/structure.findings.yaml#structure-candidate-001
+      - materialized-input.md:46-60
+      - materialized-input.md:108-119
+      - materialized-input.md:126-127
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-013과 duplicates 관계만 있으며, same_root_candidate로 연결되지 않아
+      이 issue에는 병합하지 않았다.
+  - issue_id: issue-018
+    root_cause_hypothesis: 결과별 통보 발생과 그 필수 관계가 온톨로지에서 누락되었다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-020
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: CriticalValue 임계값을 특정 Result 발생 및 통보 기록에 연결할 관계가 없다.
+    proposed_action: CriticalValue를 임계값 구성으로 유지하고 Result, 적용 임계값, 통보자, 수신자 및 시각에
+      연결되는 결과별 notification occurrence를 추가한다.
+    affected_purpose: Serving as an operational EMR/LIS conceptual authority,
+      including the declared immediate-notification workflow.
+    failure_condition: When multiple Results are evaluated against the same critical
+      range or systems must exchange or audit a notification.
+    impact: The integration contract cannot associate notification state with a
+      particular clinical result or its actors, making the declared workflow
+      non-actionable and non-traceable.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/structure.findings.yaml#structure-candidate-002
+      - materialized-input.md:100-106
+      - materialized-input.md:108-119
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-015와 duplicates 관계만 있으며, same_root_candidate로 연결되지 않아
+      이 issue에는 병합하지 않았다.
+  - issue_id: issue-019
+    root_cause_hypothesis: 상태 노드는 정의했지만 전이 간선 스키마와 완전한 전이 집합을 정의하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-021
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Lifecycle 상태 목록에 구조적으로 완전한 전이 그래프가 없다.
+    proposed_action: 모든 lifecycle 상태에 대해 from-state, to-state, trigger 및 guard를 갖는
+      엔티티별 전이를 정의하고 Report lifecycle 표현을 일관되게 결정한다.
+    affected_purpose: Providing an authoritative shared state model for EMR/LIS
+      workflow integration.
+    failure_condition: Whenever either system must validate, emit, consume, or
+      reconcile a transition other than the few narrative cases currently
+      stated.
+    impact: The authority document cannot determine legal state progression, so
+      interoperating systems may accept different sequences or become unable to
+      reconcile workflow state.
+    evidence_refs:
+      - .onto/review/20260718-8de943b3/round1/structure.findings.yaml#structure-candidate-003
+      - materialized-input.md:15-23
+      - materialized-input.md:37-44
+      - materialized-input.md:75-84
+      - materialized-input.md:121-124
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-002와 shared_cause_candidate, finding-011과 enables 관계만
+      있으며 same_root_candidate로 연결되지 않았다.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-002
+      - issue-019
+    relation_refs:
+      - rel-001
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (상태 노드와 전이 간선을 포괄하는 lifecycle schema가 불완전하여 Specimen의
+      예외·종결 상태와 그 전이가 모두 누락되었다.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-004
+    relation_refs:
+      - rel-002
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (시간에 발생하는 통제·정정 행위를 독립 사건 및 버전으로 보존하지 않고 현재 레코드의 부분
+      속성과 상태로만 표현했다.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-010
+    relation_refs:
+      - rel-003
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (결과별 통보 발생을 actor·recipient·time과 함께 보존하는 first-class
+      notification event가 없고 통보 정보가 규칙 속성 및 외부 대장에 분산되었다.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-008
+      - issue-012
+    relation_refs:
+      - rel-008
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Result와 Report의 중복 상태 표현 사이에 독립적으로 버전되고 일관성 양상을 규정하는
+      권위 있는 mapping contract가 없다.)."
+validation:
+  unclustered_finding_ids: []

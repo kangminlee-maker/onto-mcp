@@ -1,0 +1,93 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart 연결 구조
+    evidence_anchor: materialized-input.md:37-45, 84-91
+    claim: AlternatePart가 정식 관계 그래프에서 우회되어 관계 속성이 연결되지 않는다.
+    what: AlternatePart는 두 Part 참조와 direction을 보유하지만, relations에는 AlternatePart를
+      경유하는 간선이 없고 Part→Part의 alternate_of 간선만 존재한다.
+    why: 대체 관계의 탐색 경로가 속성을 보유한 AlternatePart에 도달하지 않으므로 direction이 실제 대체 관계와 결합되지
+      않는다. PLM과 MES가 relations를 기준으로 통합하면 방향 정보를 사용할 수 없는 구조가 된다.
+    how_to_fix: alternate_of의 정식 구조를 Part→AlternatePart→Part로 연결하고 direction을 해당 관계
+      인스턴스의 속성으로 유지한다. Part→Part 단축 관계는 이 구조에서 파생되는 투영으로 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목 및 대체부품 관계의 개념 기준 제공
+      failure_condition: 소비자가 relations 그래프를 기준으로 대체부품 관계와 방향을 해석할 때
+      impact: 정식 관계 경로에서 대체 방향을 복원할 수 없어 시스템 간 대체 가능성 전달이 불완전해진다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: 속성을 가진 AlternatePart 관계 엔티티와 직접 Part→Part 관계가 서로 연결되지 않은 두 표현으로 분리되어 있다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: relations의 alternate_of 간선은 AlternatePart를 포함하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-001.cause-002
+          claim: 따라서 AlternatePart.direction은 해당 alternate_of 간선에서 도달할 수 없는 속성이 된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml — ECO·리비전·BOM·라우팅 연결
+    evidence_anchor: materialized-input.md:20-21, 27-35, 55-61, 69-75, 84-96
+    claim: 변경 효력 규칙을 BOM과 라우팅 구성에 연결하는 구조가 없다.
+    what: ECO는 Part에만 연결되고 Part.rev는 문자열 속성이다. BomLine과 Routing에는 적용 리비전 또는 ECO를
+      가리키는 관계가 없어 변경 전후 구성의 연결 경로가 존재하지 않는다.
+    why: 문서는 effective_date 이후 신규 rev를 따르도록 요구하지만, 어떤 BOM 구성과 라우팅이 그 신규 rev에 속하는지
+      구조적으로 선택할 수 없다. BOM 또는 공정이 변경되는 경우 PLM의 변경 결과를 MES의 실행 구성으로 전달하는 기준이 닫히지
+      않는다.
+    how_to_fix: 리비전별 BOM 및 라우팅을 식별하는 버전/효력 개념을 두고, ECO→변경 리비전, 리비전→BomLine,
+      리비전→Routing 관계를 추가한다. effective_date 이후 선택할 실행 구성이 이 경로로 결정되도록 무결성 규칙을
+      연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리를 일관된 PLM/MES 통합 기준으로 제공
+      failure_condition: ECO가 BOM 구성이나 제조 라우팅에 영향을 주고 effective_date 기준으로 신규 구성을 선택해야 할 때
+      impact: 온톨로지만으로 변경 이후 적용할 BOM과 라우팅을 식별할 수 없어 제조 실행 구성의 신뢰성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:27-35
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:84-96
+    causal_path:
+      root_cause_candidate: 리비전이 Part의 단일 문자열 속성으로만 모델링되어 BOM 및 라우팅 구성의 관계 기준점으로 사용되지 않는다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: effective_date 이후 신규 rev를 적용하도록 규정하지만 BomLine과 Routing에는 리비전 또는 효력 관계가
+            없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:27-35
+            - materialized-input.md:55-61
+            - materialized-input.md:93-96
+        - cause_id: structure-candidate-002.cause-002
+          claim: ECO의 연결 대상도 Part에 한정되어 변경된 BOM 또는 라우팅으로 이어지는 경로가 형성되지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:84-90
+        - cause_id: structure-candidate-002.cause-003
+          claim: 이는 rev를 관계 가능한 구성 개념이 아니라 Part의 문자열 속성으로만 둔 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+      unresolved_beyond_evidence: 실제 PLM 또는 MES가 별도 버전 연결을 보유하는지는 경계 밖이지만, 현재 개념 기준 문서에는 그 연결이 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - ECO가 품목의 구성 또는 제조 방법을 변경할 수 있는 경우에는 변경 전후 BOM과 라우팅을 식별할 연결이 필요하다고 보았다.
+validation:
+  unaddressable_candidates: []

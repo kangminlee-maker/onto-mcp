@@ -1,0 +1,123 @@
+schema_version: 1
+session_id: 20260718-3119806d
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — entities.AlternatePart
+    evidence_anchor: materialized-input.md:37-45
+    claim: "Fail: AlternatePart의 필수 대칭성 정의와 허용·기본값인 one_way 방향은 동시에 만족될 수 없다."
+    what: 정의는 A가 B의 대체품이면 B도 A의 대체품이라고 규정하지만, direction은 one_way를 허용하고 기본값으로 지정한다.
+    why: one_way가 역방향 대체를 배제한다면 동일 관계가 반드시 대칭이어야 하면서 대칭이 아니어도 되는 상태가 된다. 이는
+      necessary와 possible 양상이 충돌하는 inter-claim 모순이며, 대체품 판정이 PLM과 MES에서 반대로 해석될
+      수 있다.
+    how_to_fix: 대체 관계를 항상 대칭으로 유지하고 direction을 제거하거나, 정의를 direction에 따른 조건부 규칙으로 바꿔
+      bidirectional일 때만 역관계를 의무화한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체품 관계의 단일 개념 기준을 제공하는 목적
+      failure_condition: direction=one_way인 AlternatePart가 생성되거나 기본값이 적용되는 경우
+      impact: 한 시스템은 역방향 대체를 허용하고 다른 시스템은 금지할 수 있어 잘못된 자재 대체와 생산 투입을 유발한다.
+      evidence_refs:
+        - materialized-input.md:38
+        - materialized-input.md:42-45
+    causal_path:
+      root_cause_candidate: 대체 관계의 대칭성 규칙과 방향성 속성이 서로 다른 양상을 선언한다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: one_way 인스턴스는 대칭성 정의와 충돌한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:44-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: 필수 대칭성 정의와 비대칭을 허용하는 방향 모델이 한 엔티티에 병존한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: manufacturing-bom-ontology.yaml — integrity_rules[0] 및 BOM 구조
+    evidence_anchor: materialized-input.md:23-35,93-94
+    claim: "Fail: 보편적 비순환 제약과 자기참조 모델링 허용을 구분할 형식 조건이 없어 두 규칙을 동시에 집행할 수 없다."
+    what: BOM은 비순환이어야 한다고 선언하면서 재생 원료 회수 공정은 Assembly가 자기 자신을 하위 품목으로 포함하도록 규정한다.
+      그러나 Assembly나 BomLine에는 해당 예외를 식별하는 속성이 없다.
+    why: 자기참조는 길이 1의 순환이다. 예외 의도는 자연어로 표시되지만 검증기가 적용할 수 있는 조건 predicate가 없어, 모든 BOM에
+      비순환을 적용하면 예외가 거부되고 자기참조를 허용하면 선언된 보편 제약이 위반된다. 구조 부재가 직접 모순을 발생시키므로
+      structure lens에도 인계가 필요한 사안이다.
+    how_to_fix: BomLine 또는 별도 회수 흐름 엔티티에 명시적인 recycling 예외 유형을 추가하고, 제약을 'recycling이
+      아닌 BOM은 비순환'으로 조건화한다. 가능하면 회수 흐름은 제품 구성 BOM과 분리한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES가 공통으로 집행할 수 있는 BOM 무결성 기준 제공
+      failure_condition: 스크랩 재투입 자기참조가 존재하거나 BOM 순환 검증을 수행하는 경우
+      impact: 통합 시스템이 동일 BOM을 유효와 무효로 다르게 판정하거나, 전개·소요량 계산에서 무한 순환을 일으킬 수 있다.
+      evidence_refs:
+        - materialized-input.md:23-35
+        - materialized-input.md:93-94
+    causal_path:
+      root_cause_candidate: 비순환 예외를 표현하는 모델 속성 없이 자연어 예외와 보편 무결성 규칙을 함께 선언했다.
+      root_cause_step_id: logic-candidate-002.cause-002
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 재생 원료 BOM의 자기참조가 비순환 제약과 충돌한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:94
+        - cause_id: logic-candidate-002.cause-002
+          claim: 예외 적용 대상을 식별할 predicate가 Assembly와 BomLine 구조에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23-35
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-003
+    target: manufacturing-bom-ontology.yaml — Part.rev 및 integrity_rules[2]
+    evidence_anchor: materialized-input.md:20-21,69-75,93-96
+    claim: "Insufficient evidence: ECO 발효 후 신규 rev 의무와 주간 Part.rev 동기화 사이의 시간적 충돌을
+      현재 모델만으로 해소할 수 없다."
+    what: effective_date 이후 생산분은 신규 rev를 따라야 하지만, 온톨로지의 Part.rev는 도면 관리대장 반영 후 주간
+      배치로 늦게 갱신된다.
+    why: 발효 시점과 다음 배치 사이에는 생산 의무상 신규 rev와 저장된 Part.rev가 다를 수 있다. 다만 생산 오더가 Part.rev를
+      읽는지 외부 도면 관리대장을 직접 읽는지 선언되지 않아 직접적인 unsatisfiability는 경계 내에서 확정할 수 없다.
+    how_to_fix: 생산 오더가 참조하는 유효 리비전의 권위 원천과 시점 선택 규칙을 명시하고, effective_date 기준의
+      revision/effectivity 레코드를 모델링한다. Part.rev를 사용한다면 발효 전에 동기화를 완료하도록 전이 제약을
+      추가한다.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM 변경 효력과 MES 생산 리비전을 일관되게 연결하는 개념 기준 제공
+      failure_condition: ECO.effective_date가 지난 뒤 Part.rev 주간 동기화가 완료되기 전에 생산 오더가 생성되는 경우
+      impact: 실제 소비 경로에 따라 구 리비전으로 생산될 가능성이 있어 변경관리 기준에 대한 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: ECO 효력 시점과 Part.rev 갱신 시점 사이의 권위·선택 규칙이 선언되지 않았다.
+      root_cause_step_id: logic-candidate-003.cause-002
+      steps:
+        - cause_id: logic-candidate-003.cause-001
+          claim: 발효 후 신규 rev 의무와 지연된 Part.rev 값이 시간 창에서 불일치할 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:96
+        - cause_id: logic-candidate-003.cause-002
+          claim: 생산 오더가 어느 리비전 원천을 읽는지 모델에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+            - materialized-input.md:93-96
+      unresolved_beyond_evidence: MES 생산 오더의 실제 revision 조회 경로와 도면 관리대장 연계 계약이 허용된 증거 범위에 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - direction=one_way는 역방향 대체 가능성을 배제하고 bidirectional과 상호 배타적이라는 enum의 통상적 의미를
+    적용했다.
+  - Assembly가 자기 자신을 직접 하위 품목으로 포함하면 길이 1의 BOM 순환이 성립한다고 해석했다.
+  - integrity_rules는 PLM/MES 통합 구현에서 집행 가능한 제약을 선언하는 구성 계약으로 해석했다.
+validation:
+  unaddressable_candidates: []

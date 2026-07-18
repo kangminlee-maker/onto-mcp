@@ -1,0 +1,96 @@
+schema_version: 1
+session_id: 20260718-8075d1c7
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml의 Test–Assay 수행 경로
+    evidence_anchor: materialized-input.md:15-20, 46-60, 108-119, 126-127
+    claim: 주문 가능한 Test와 실제 수행 단위 Assay 사이의 관계가 누락되어 Assay가 검사 워크플로에서 운영상 고립되어 있다.
+    what: Order는 Test를 주문하고 Assay는 분석기 수행 단위로 정의되지만, Test와 Assay를 연결하는 속성이나 관계가 없다.
+      Assay의 유일한 참조는 Department이며 relations 목록에도 Assay가 전혀 등장하지 않는다.
+    why: EMR의 주문 항목을 LIS 또는 분석기의 수행 항목으로 연결할 구조적 경로가 없다. 두 카탈로그에 신규 항목을 모두 등록한다는 메모도
+      동일 항목 여부를 표현하지 못하므로, 코드 매핑의 누락·오매핑과 결과 귀속 불일치를 온톨로지로 검증할 수 없다.
+    how_to_fix: "Test와 Assay 사이에 명시적인 수행 매핑 관계를 추가하고 cardinality를 정의한다. 예: Test
+      `realized_by` Assay 및 Assay `realizes` Test. 다대다라면 별도 매핑 엔티티에 유효기간과 매핑
+      식별자를 둔다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Order부터 Report까지의 임상검사 파이프라인을 EMR/LIS 통합의 개념 권위 문서로 제공하는 목적
+      failure_condition: EMR의 주문 Test를 LIS/분석기의 Assay로 변환하거나 수행 결과를 원 주문 항목에 귀속해야 할 때
+      impact: 핵심 주문-수행 경로가 온톨로지에서 닫히지 않아 구현체별 비공식 매핑이 권위를 대신하고, 통합 결과의 일관성과 검증 가능성이
+        약화된다.
+      evidence_refs:
+        - materialized-input.md:15-20
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: 주문 카탈로그 단위 Test와 수행 카탈로그 단위 Assay 사이의 정식 관계가 모델링되지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Order에서 Assay까지 이어지는 명시적 구조 경로가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15-20
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-002
+          claim: Assay는 수행 단위로 정의됐지만 Department 참조만 가지며, 전체 relations 목록에 Assay가 한 번도 나타나지
+            않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:54-60
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-003
+          claim: Test와 Assay를 양쪽에 등록한다는 운영 메모만 있고 두 등록을 동일 검사로 연결하는 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml의 lifecycle 및 state_rules
+    evidence_anchor: materialized-input.md:15-23, 37-44, 62-84, 121-124
+    claim: 상태는 열거되어 있지만 상태 간 전이 관계가 없어 상태 모델의 경로가 구조적으로 완결되지 않았다.
+    what: Order와 Specimen의 lifecycle은 상태 이름의 평면 목록일 뿐 전이 간선이 없다. Result와 Report도 상태
+      값을 열거하지만, state_rules는 Order 완료와 Report finalized/amended 조건 일부만 서술하며 시작
+      상태, 허용 전이, 취소·정정 경로를 연결하지 않는다.
+    why: 각 시스템이 어떤 상태 변경을 허용하거나 거부해야 하는지 동일한 그래프로 해석할 수 없다. 따라서 EMR/LIS가 서로 다른 전이
+      순서를 구현해도 이 권위 문서로 구조적 적합성을 판정할 수 없다.
+    how_to_fix: 각 상태 보유 엔티티에 명시적 transition 구조를 추가해 from, to, trigger/guard를 정의하고 모든
+      선언 상태가 최소 하나의 유효 경로에 연결되는지 검증한다. 기존 state_rules는 해당 전이의 guard로 귀속한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS가 공유할 엔티티·관계·상태 모델의 개념 권위 제공
+      failure_condition: 연동 시스템이 상태 이벤트를 수신해 전이 유효성, 순서 또는 후속 처리를 결정해야 할 때
+      impact: 상태 이름은 공유되더라도 허용 경로가 공유되지 않아 구현 간 상태 불일치와 잘못된 완료·정정 처리를 권위 문서로 탐지할 수 없다.
+      evidence_refs:
+        - materialized-input.md:15-23
+        - materialized-input.md:37-44
+        - materialized-input.md:62-84
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: 상태 모델이 전이 그래프가 아니라 상태 열거와 일부 자연어 조건으로만 표현되었다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: 선언된 상태 사이의 전이 간선과 경로가 존재하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15-23
+            - materialized-input.md:37-44
+            - materialized-input.md:62-84
+        - cause_id: structure-candidate-002.cause-002
+          claim: state_rules는 일부 완료·정정 조건만 담고 각 lifecycle의 전체 상태를 전이 관계로 연결하지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: 각 시스템이 실제로 허용하는 전이 순서와 이벤트 목록은 현재 경계의 자료에 없으므로 구체적인 전이 그래프 내용은 확정할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 속성의 ref와 is_a도 엔티티 간 구조적 연결로 간주했다.
+  - EMR/LIS 통합의 개념 권위 문서는 주문 단위에서 수행 단위까지의 경로와 상태 간 허용 전이를 명시적으로 표현해야 한다고 보았다.
+validation:
+  unaddressable_candidates: []

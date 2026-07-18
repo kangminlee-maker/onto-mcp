@@ -1,0 +1,637 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: Separating drawing revision, manufacturing revision, and
+      production effectivity and binding them in one authoritative configuration
+      would eliminate both the weekly synchronization conflict and
+      revision-meaning ambiguity.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+      - finding-017
+    relation_refs:
+      - rel-001
+    raised_by_lens_ids:
+      - axiology
+      - semantics
+    issue_statement: Part.rev conflates separately governed revision meanings and
+      cannot reliably identify the production-effective configuration.
+    proposed_action: Introduce an authoritative effective-configuration concept and
+      separate drawing and manufacturing revision projections.
+    affected_purpose: Ensure PLM and MES select the same production-effective
+      revision under change control.
+    failure_condition: An ECO becomes effective before weekly Part.rev
+      synchronization completes, or a change affects more than the drawing
+      revision.
+    impact: Consumers can select an obsolete or semantically wrong revision while
+      believing they follow the shared integration baseline.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:20-21
+      - materialized-input.md:93-96
+      - review-value-alignment-criteria.yaml:6-18
+      - .onto/review/20260718-795bfbce/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:14-21
+      - materialized-input.md:69-75
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-002
+    root_cause_hypothesis: The self-child exception would be unnecessary if
+      recovered-material flow were modeled separately from product structure.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: The ontology overloads the acyclic product BOM to represent
+      cyclic material-recovery flow.
+    proposed_action: Keep product structure acyclic and introduce a canonical
+      recovered-material flow concept.
+    affected_purpose: Provide a coherent BOM and routing model usable across PLM and MES.
+    failure_condition: Scrap reintroduction or recovered-material processing uses
+      the documented self-child BOM pattern.
+    impact: Standard BOM consumers cannot distinguish invalid cycles from process
+      returns, weakening interoperability and calculation safety.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:93-94
+      - review-value-alignment-criteria.yaml:6-18
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Related findings are connected only by duplicate relations,
+      not by a same_root_candidate relation permitted for multi-finding
+      clustering.
+  - issue_id: issue-003
+    root_cause_hypothesis: Typed measurements with explicit arithmetic meaning,
+      denominator, unit, authority, and validity would eliminate both the broad
+      quantitative ambiguity and the scrap-rate interpretation defect.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-003
+      - finding-018
+    relation_refs:
+      - rel-010
+    raised_by_lens_ids:
+      - axiology
+      - semantics
+    issue_statement: Operational scalar fields lack a shared measurement contract,
+      with scrap_rate exposing the resulting ambiguity between a rate and a
+      multiplier.
+    proposed_action: Define canonical typed measurements and give scrap adjustment
+      one explicit formula, range, and authority.
+    affected_purpose: Provide reliable quantitative semantics for PLM/MES planning,
+      costing, capacity, and material calculations.
+    failure_condition: Consumers interpret or calculate documented operational
+      values across systems, including scrap_rate as either a percentage or
+      factor.
+    impact: Syntactically valid values can produce materially different operational
+      results while appearing contract-compliant.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:35
+      - materialized-input.md:53
+      - materialized-input.md:63-67
+      - materialized-input.md:98-100
+      - review-value-alignment-criteria.yaml:6-18
+      - .onto/review/20260718-795bfbce/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:29-35
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-004
+    root_cause_hypothesis: Choosing one authoritative directional substitution
+      meaning and treating reciprocity as an instance property would remove the
+      conflicting interpretations.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: AlternatePart conflates reciprocal equivalence with directional
+      substitution permission and exposes a lossy shortcut.
+    proposed_action: Adopt one canonical substitution relation carrying direction,
+      approval, context, and effectivity.
+    affected_purpose: Provide coherent and safe alternate-part semantics across PLM and MES.
+    failure_condition: One consumer follows the symmetric definition or shortcut
+      while another honors the default one-way direction.
+    impact: Systems can disagree about reverse substitution, enabling unauthorized
+      material use or rejecting an approved substitute.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/axiology.findings.yaml#axiology-candidate-004
+      - materialized-input.md:37-45
+      - materialized-input.md:91
+      - review-value-alignment-criteria.yaml:6-18
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Duplicate and enables relations exist, but no
+      same_root_candidate relation authorizes merging this finding with their
+      endpoints.
+  - issue_id: issue-005
+    root_cause_hypothesis: Independently versioned and effective-dated BOM and
+      routing structures would make historical and scheduled configurations
+      reconstructable.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: BOM and routing structures have no authoritative version or
+      effectivity model.
+    proposed_action: Introduce BOM and Routing version entities with effectivity,
+      lifecycle state, and explicit ECO linkage.
+    affected_purpose: Provide a trustworthy part, BOM, and routing baseline for
+      PLM/MES integration.
+    failure_condition: A consumer must query, synchronize, or audit configurations
+      before and after an engineering change.
+    impact: Systems can use different current snapshots and cannot prove which
+      structure governed historical production.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:20-35
+      - materialized-input.md:55-61
+      - materialized-input.md:69-75
+      - materialized-input.md:96
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Its relation to finding-011 is duplicates rather than
+      same_root_candidate, so the multi-finding merge contract is not satisfied.
+  - issue_id: issue-006
+    root_cause_hypothesis: A complete lifecycle defined through immutable transition
+      events would support terminal, superseding, and corrective outcomes
+      without overwriting state.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Core lifecycle models stop at current active states and omit
+      termination, withdrawal, supersession, and post-completion correction.
+    proposed_action: Define complete lifecycles and separate correction or reissue
+      events for Part, BOM/Route versions, and ECOs.
+    affected_purpose: Provide consistent lifecycle meaning for part, routing, and
+      change management.
+    failure_condition: A part is obsoleted, a route is retired, an ECO is cancelled,
+      or an applied change requires correction.
+    impact: Consumers may treat terminated objects as valid or overwrite history,
+      weakening state consistency and auditability.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:14-21
+      - materialized-input.md:55-61
+      - materialized-input.md:69-75
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The only relation is shared_cause_candidate, which must remain
+      dependency context rather than cause a merge.
+  - issue_id: issue-007
+    root_cause_hypothesis: Immutable actor-attributed transition and approval events
+      would make ECO approval and application independently auditable.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: ECO current status lacks the event evidence needed to prove
+      approval and application controls.
+    proposed_action: Model approval and application as immutable transition events
+      with actor, time, rationale, evidence, and affected configuration.
+    affected_purpose: Ensure conceptual integrity and traceability of PLM/MES change control.
+    failure_condition: A reviewer must establish who approved or applied a change,
+      when it occurred, and on what evidence.
+    impact: Status values cannot prove control execution, making unauthorized or
+      delayed changes difficult to detect retrospectively.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/coverage.findings.yaml#coverage-candidate-003
+      - materialized-input.md:69-75
+      - materialized-input.md:90
+      - materialized-input.md:96
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The only relation is shared_cause_candidate, which must remain
+      dependency context rather than cause a merge.
+  - issue_id: issue-008
+    root_cause_hypothesis: A governed part- and effectivity-specific UOM conversion
+      master would make cross-unit BOM quantities deterministic.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: The model provides quantity and unit labels but omits
+      authoritative part-specific conversion rules.
+    proposed_action: Add governed UOM conversion rules with factors, rounding,
+      validity, and source authority.
+    affected_purpose: Provide one shared meaning for BOM quantities across PLM and MES.
+    failure_condition: BOM, production, and inventory units differ or require
+      part-specific conversions such as kg to each.
+    impact: Local conversion choices can cause shortages, overconsumption, and
+      inventory discrepancies.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/coverage.findings.yaml#coverage-candidate-004
+      - materialized-input.md:19
+      - materialized-input.md:29-35
+      - materialized-input.md:100
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Its relation to the extensibility finding is
+      shared_cause_candidate and therefore remains dependency context.
+  - issue_id: issue-009
+    root_cause_hypothesis: Assigning each manufacturing reference value one
+      authority, version, synchronization time, validity interval, and
+      derivation status would resolve replica conflicts.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Parallel manufacturing reference values lack modeled authority,
+      provenance, freshness, and precedence.
+    proposed_action: Declare authoritative sources and derivation semantics,
+      treating manual copies as non-authoritative projections or explicit
+      overrides.
+    affected_purpose: Establish consistent authority for PLM/MES manufacturing reference values.
+    failure_condition: A copied value differs from its source or an MES-derived
+      value differs from a manually maintained cost value.
+    impact: The conceptual baseline cannot determine which value governs planning,
+      cost, or performance calculations.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/coverage.findings.yaml#coverage-candidate-005
+      - materialized-input.md:35
+      - materialized-input.md:47-53
+      - materialized-input.md:99
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Relations to broader measurement and cumulative-time findings
+      are shared_cause_candidate and cannot justify merging.
+  - issue_id: issue-010
+    root_cause_hypothesis: An explicit ProductionOrder boundary referencing
+      immutable Part, BOM, and Routing configurations would connect design
+      definitions to MES execution evidence.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: The ontology invokes production-order rules without modeling
+      the orders, execution records, or traceability contract that consume them.
+    proposed_action: Define a minimal ProductionOrder integration boundary and
+      either model execution traceability or specify an explicit external
+      ontology contract.
+    affected_purpose: Use BOM and routing definitions as an operational PLM/MES
+      integration baseline.
+    failure_condition: A released routing must be applied to an actual production
+      order or traced to manufacturing execution afterward.
+    impact: The model cannot verify that design criteria reached MES operations or
+      identify the configuration used for production.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/coverage.findings.yaml#coverage-candidate-006
+      - materialized-input.md:7
+      - materialized-input.md:12-82
+      - materialized-input.md:95
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph explicitly identifies this finding as
+      having no accepted semantic relation.
+  - issue_id: issue-011
+    root_cause_hypothesis: Promoting revision from a Part string to a
+      relationship-capable configuration/version entity linked to ECO, BOM, and
+      routing would make effective structures traversable and reconstructable.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-011
+      - finding-023
+    relation_refs:
+      - rel-004
+    raised_by_lens_ids:
+      - evolution
+      - structure
+    issue_statement: Revision is not modeled as a structural configuration anchor
+      connecting ECO effectivity to versioned BOM and routing content.
+    proposed_action: Introduce versioned BOM and Routing configurations and connect
+      ECO, revision, structure, and effectivity through explicit relations.
+    affected_purpose: Provide an evolvable and structurally complete PLM/MES
+      baseline for part, BOM, routing, and change management.
+    failure_condition: ECO-era structures must coexist, be reconstructed
+      historically, or be selected by effective date for execution.
+    impact: The ontology cannot determine or prove which BOM and routing
+      configuration applied to a production interval.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/evolution.findings.yaml#evolution-candidate-001
+      - materialized-input.md:20-21
+      - materialized-input.md:29-35
+      - materialized-input.md:55-61
+      - materialized-input.md:69-75
+      - materialized-input.md:96
+      - .onto/review/20260718-795bfbce/round1/structure.findings.yaml#structure-candidate-002
+      - materialized-input.md:27-35
+      - materialized-input.md:84-96
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-012
+    root_cause_hypothesis: A typed capacity measurement that distinguishes available
+      time from throughput and requires explicit units would resolve both
+      extensibility pressure and dimensional ambiguity.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-012
+      - finding-019
+    relation_refs:
+      - rel-011
+    raised_by_lens_ids:
+      - evolution
+      - semantics
+    issue_statement: The closed and implicit measurement model conflates
+      dimensionally different capacity meanings and cannot safely accommodate
+      new units or sites.
+    proposed_action: Introduce extensible Quantity and UOM concepts and distinguish
+      available-time capacity from throughput capacity.
+    affected_purpose: Provide a common PLM/MES calculation basis across diverse
+      materials, work centers, and sites.
+    failure_condition: New units, part-specific conversions, or work centers using
+      count-based and time-based capacity are integrated or compared.
+    impact: Schema changes and local interpretation become necessary, and capacity
+      or quantity calculations can differ across systems.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/evolution.findings.yaml#evolution-candidate-002
+      - materialized-input.md:19
+      - materialized-input.md:34-35
+      - materialized-input.md:53
+      - materialized-input.md:67
+      - materialized-input.md:100
+      - .onto/review/20260718-795bfbce/round1/semantics.findings.yaml#semantics-candidate-005
+      - materialized-input.md:63-67
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-013
+    root_cause_hypothesis: Separating product structure from material flow would
+      allow new recovery and rework scenarios without expanding BOM cycle
+      exceptions.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-013
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: Encoding recovered-material flow as BOM self-reference makes
+      future recovery scenarios depend on proliferating acyclicity exceptions.
+    proposed_action: Keep BOM acyclic and model scrap recovery, reintroduction,
+      rework, and co-product flow separately.
+    affected_purpose: Provide extensible BOM and process concepts with safe
+      manufacturing calculations.
+    failure_condition: Multi-stage recovery, rework, co-product, or by-product flows
+      are added beyond the current scrap exception.
+    impact: Cycle exceptions accumulate and undermine confidence that BOM explosion
+      and cost or requirement calculations terminate consistently.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/evolution.findings.yaml#evolution-candidate-003
+      - materialized-input.md:29-35
+      - materialized-input.md:93-95
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Relations to equivalent observations are duplicates rather
+      than same_root_candidate relations.
+  - issue_id: issue-014
+    root_cause_hypothesis: Defining AlternatePart as directional and deriving
+      reciprocity only for bidirectional instances would remove the logical
+      contradiction.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: AlternatePart's universal symmetry contradicts its allowed and
+      default one-way direction.
+    proposed_action: Choose directional semantics with conditional reciprocity, or
+      remove one-way values if universal symmetry is intended.
+    affected_purpose: Provide a logically consistent alternate-part contract for
+      PLM/MES integration.
+    failure_condition: A one-way AlternatePart is created or receives the default direction.
+    impact: Consumers can reach opposite conclusions about reverse substitution,
+      causing unauthorized use or rejection of valid alternates.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/logic.findings.yaml#logic-candidate-001
+      - materialized-input.md:37-45
+      - materialized-input.md:91
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Relations to matching axiology and semantics findings are
+      duplicates, not same_root_candidate relations.
+  - issue_id: issue-015
+    root_cause_hypothesis: One authoritative directional meaning for substitution
+      would prevent the definition and direction field from producing divergent
+      decisions.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-015
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: AlternatePart's prose definition and direction property assign
+      incompatible meanings to the same substitution data.
+    proposed_action: Define substitution direction canonically and specify
+      bidirectionality as an explicit derived or constrained case.
+    affected_purpose: Ensure common and safe interpretation of alternate parts
+      across PLM and MES.
+    failure_condition: One system follows the symmetric definition while another
+      follows direction=one_way.
+    impact: Identical data produces opposing authorization decisions and may permit
+      an incorrect component to be installed.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:37-45
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Relations to matching logic and axiology findings are
+      duplicates, not same_root_candidate relations.
+  - issue_id: issue-016
+    root_cause_hypothesis: A separate material-flow relation with yield and recovery
+      semantics would prevent process flow from being interpreted as product
+      composition.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-016
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: The ontology conflates a manufacturing material-flow event with
+      a BOM composition relationship.
+    proposed_action: Represent scrap generation, recovery, and reintroduction
+      through dedicated operation input/output or material-flow concepts.
+    affected_purpose: Keep PLM product structure distinct from MES process-input flow.
+    failure_condition: A BOM explosion or requirements calculator treats the
+      self-reference exception as product composition.
+    impact: Consumers can produce cyclic expansion, duplicated requirements, or
+      incorrect production-input quantities.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:29-35
+      - materialized-input.md:93-94
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Its relations to corresponding axiology and evolution
+      observations are duplicates rather than same_root_candidate relations.
+  - issue_id: issue-017
+    root_cause_hypothesis: Separating an inspection specification from the routing
+      operation that applies it would support independent reuse, revision, and
+      execution semantics.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-020
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: InspectionPlan conflates a reusable specification object with
+      an executable routing operation through inheritance.
+    proposed_action: Model InspectionOperation as the executable subtype and have it
+      reference a separate InspectionPlan or InspectionSpecification.
+    affected_purpose: Map PLM quality specifications clearly to MES inspection operations.
+    failure_condition: An inspection standard is revised or reused, or MES executes
+      InspectionPlan as a routing step.
+    impact: Specification lifecycle and operation execution properties become
+      coupled, risking incorrect routing or inspection criteria.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/semantics.findings.yaml#semantics-candidate-006
+      - materialized-input.md:47-53
+      - materialized-input.md:77-82
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph explicitly identifies this finding as
+      having no accepted semantic relation.
+  - issue_id: issue-018
+    root_cause_hypothesis: Defining cumulative standard time as a version-bound
+      routing derivation and separately identifying approved snapshots or
+      overrides would eliminate the authority ambiguity.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-021
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: A routing-derived cumulative standard time and an independently
+      entered cost-system value share one undefined identity and precedence.
+    proposed_action: Make the derived value authoritative and name any snapshot or
+      override separately with basis, time, and approval provenance.
+    affected_purpose: Align routing standard time with standard-cost time and
+      preserve traceability.
+    failure_condition: Routing or operation time changes before the next quarterly
+      reconciliation and the manual cost value is used.
+    impact: Cost and manufacturing-performance analysis can rely on different
+      standard times while both appear authoritative.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/semantics.findings.yaml#semantics-candidate-007
+      - materialized-input.md:47-60
+      - materialized-input.md:98-99
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Its relation to the broader authority finding is
+      shared_cause_candidate and therefore remains dependency context.
+  - issue_id: issue-019
+    root_cause_hypothesis: Making AlternatePart the canonical relationship node and
+      deriving any Part-to-Part shortcut from it would preserve direction on
+      every traversable substitution path.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-022
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The canonical relations graph bypasses the AlternatePart entity
+      that carries substitution direction.
+    proposed_action: Connect Part through AlternatePart to the substitute Part and
+      treat any direct edge as a constrained projection.
+    affected_purpose: Provide a structurally complete alternate-part relationship
+      contract for PLM/MES integration.
+    failure_condition: A consumer traverses the relations graph to determine
+      alternate parts and substitution direction.
+    impact: Direction cannot be recovered from the canonical path, so systems
+      receive incomplete or unsafe substitution semantics.
+    evidence_refs:
+      - .onto/review/20260718-795bfbce/round1/structure.findings.yaml#structure-candidate-001
+      - materialized-input.md:37-45
+      - materialized-input.md:84-91
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation to the semantic substitution issue is enables,
+      not same_root_candidate, so it cannot support a multi-finding cluster.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-005
+    relation_refs:
+      - rel-002
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (The ontology represents change through separately
+      sourced current revision/effective-date fields without an authoritative,
+      versioned configuration binding for BOM and routing.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-012
+    relation_refs:
+      - rel-007
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Operational measurements are distributed across
+      untyped scalar fields and local conventions instead of a shared extensible
+      quantity-and-unit contract.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-009
+    relation_refs:
+      - rel-008
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Operational values lack a modeled authority,
+      provenance, freshness, and derivation contract, allowing copied or
+      manually maintained replicas to act as peer facts.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-008
+      - issue-012
+    relation_refs:
+      - rel-009
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (The ontology models numeric quantities and limited
+      unit labels but lacks an extensible governed UOM and conversion
+      contract.)."
+  - dependency_id: dep-005
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-009
+      - issue-018
+    relation_refs:
+      - rel-012
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (A derived routing value and a manually maintained
+      cost-system value coexist without distinct identities, provenance, or
+      precedence.)."
+  - dependency_id: dep-006
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-006
+      - issue-007
+    relation_refs:
+      - rel-016
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Lifecycle control is represented mainly as current
+      state values rather than as a complete, auditable state-transition
+      history.)."
+validation:
+  unclustered_finding_ids: []

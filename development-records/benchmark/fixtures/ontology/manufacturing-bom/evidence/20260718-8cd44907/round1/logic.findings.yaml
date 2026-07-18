@@ -1,0 +1,58 @@
+schema_version: 1
+session_id: 20260718-8cd44907
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart 정의 및 direction 속성
+    evidence_anchor: materialized-input.md:37-45; 단축 관계 표기는 materialized-input.md:91
+    claim: "[fail] AlternatePart 관계는 필수적으로 대칭이어야 한다는 정의와 one_way 관계를 허용·기본화하는 규칙이
+      동시에 만족될 수 없다."
+    what: 충돌 쌍은 materialized-input.md:38의 대칭성 정의와 materialized-input.md:42-45의
+      direction 규칙이다. 전자는 A→B이면 B→A도 성립해야 한다고 선언하지만, 후자는 비대칭인 one_way를 유효값이자
+      기본값으로 둔다.
+    why: 이는 여러 claim 사이의 inter-claim 충돌이며 modality는 mixed이다. 정의는 역방향 관계를 necessary로
+      만들지만 direction 규칙은 역방향이 없는 상태를 possible로 만든다. 특히 direction이 생략되어 기본
+      one_way가 적용되거나 명시적으로 one_way가 선택된 AlternatePart 인스턴스에서는 두 규칙을 함께 준수할 수 없다.
+      용어의 의미를 달리 해석해야만 충돌을 피할 수 있으므로, 현재 명시된 계약 자체로는 PLM과 MES가 대체품의 역방향 사용 가능성을
+      일관되게 판정할 수 없다.
+    how_to_fix: 대체성의 정식 양상을 하나로 통일한다. 대칭 관계만 필요하면 direction을 제거하고 모든 AlternatePart에
+      역관계를 강제한다. 방향성이 필요하면 정의를 'direction에 따라 단방향 또는 양방향'으로 고치고, bidirectional일
+      때만 역관계를 강제하는 조건부 무결성 규칙을 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목·BOM·라우팅 개념 기준 문서로서의 일관된 대체품 계약
+      failure_condition: AlternatePart.direction이 생략되어 기본 one_way가 적용되거나 one_way로 명시된 경우
+      impact: 동일 데이터에 대해 한 소비자는 역방향 대체를 의무로, 다른 소비자는 금지 또는 미보장으로 해석할 수 있어 통합 기준의 결정성과
+        검토 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: AlternatePart의 관계 양상을 하나의 정식 규칙으로 결정하지 않고 필수 대칭성과 허용된 단방향성을 함께 선언했다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: AlternatePart 소비자는 역방향 대체 관계가 항상 성립하는지 일관되게 결정할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: 대칭성 정의는 B→A를 필수로 요구하지만 one_way 기본값은 B→A가 없는 상태를 허용한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:44-45
+        - cause_id: logic-candidate-001.cause-003
+          claim: 동일한 AlternatePart 개념에 necessary 대칭성과 possible 비대칭성을 동시에 부여했다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 문서 자체의 enum 값과 설명에 따라 one_way를 A→B만 성립하고 B→A는 요구하지 않는 방향성으로 해석했다.
+validation:
+  unaddressable_candidates: []

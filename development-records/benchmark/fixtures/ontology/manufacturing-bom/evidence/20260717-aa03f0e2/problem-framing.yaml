@@ -1,0 +1,258 @@
+schema_version: 1
+session_id: 20260717-aa03f0e2
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 생산 적용 리비전의 시점별 권위와 오더 선택 규칙이 없어 ECO 효력일 이후에도 지연된 Part.rev가 구 리비전 생산을 허용한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 효력일과 동기화 사이의 통제 공백이 직접 확인되었고 모든 적용 가능 렌즈가 high 영향을 유지했다. PLM/MES 변경
+      기준으로 사용하기 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: BOM 수량에 공통 측정 단위와 품목별 환산 권위가 없어 PLM과 MES가 동일 수량을 결정적으로 계산할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 더 넓은 UOM·환산 모델 부재가 BOM 수량 계산에서 드러난 직접적인 실행 결함이다. 모든 적용 가능 렌즈가 high
+      영향을 지지한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 파생 제조 기준값의 산식, 단위, 권위 원천과 동기화 계약이 없어 시스템별 계산 결과의 의미와 기준값을 일치시킬 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 산식 의미 문제와 provenance·동기화 누락을 하나의 권위 계약 부재로 통합한 원인은 인과적 추론이지만 렌즈 간 반박은
+      없다. 구현 단계 전 공통 계산 계약을 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-020
+  - issue_id: issue-004
+    problem_definition: 스크랩 재투입을 일반 BOM 관계로 표현해 비순환 제품구조와 공정 물질흐름의 경계 및 종료 조건이 불명확하다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 관계 의미 혼합과 분리 필요성은 확인됐지만 일반 소비 경로에서 무한·중복 전개가 실제 발생하는지 없어 medium과 high
+      판단이 남아 있다. 소비 경로 증거가 다음 단계 전에 필요하다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 구성 리비전과 확장 가능한 효과성 범위가 독립적으로 모델링되지 않아 시점·공장·로트·오더별 적용 구성을 판정할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 현재값과 단일 날짜로 효과성을 축약한 구조가 여러 변경·추적 결함의 공통 원인이다. 모든 적용 가능 렌즈가 high 영향을 지지한다.
+    related_surface_finding_ids:
+      - finding-005
+      - finding-012
+  - issue_id: issue-006
+    problem_definition: 생산 오더, 공정 실행, 적용 구성과 투입·산출 계보의 최소 경계가 없어 설계 정의와 실제 제조를 연결할 수 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: PLM/MES 통합 목적에 필요한 실행 그래프가 범위에서 직접 누락됐고 다른 이슈에 종속되지 않는다. 이 경계 없이는 선언된
+      통합 목적을 달성할 수 없다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 핵심 객체를 현재 상태값으로만 표현해 승인·적용 증거와 종결·취소·정정 이력을 보존할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 사건 기반 lifecycle 부재가 감사 증거와 종결 이력 누락을 함께 설명하며 모든 적용 가능 렌즈가 high 영향에 동의했다.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-009
+  - issue_id: issue-008
+    problem_definition: 병행 관리되는 값의 속성별 권위, 원천 버전, 동기화 상태와 불일치 처리 계약이 없어 기준값을 판정할 수 없다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 이 provenance·대사 계약은 여러 제조 기준값의 일관된 소비를 가능하게 하는 공통 기반이다. 결함과 medium
+      영향에 렌즈들이 일치한다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 측정 단위와 환산을 폐쇄형 enum 및 무단위 숫자로 표현해 현재 계산의 비교 가능성과 새로운 단위·차원의 확장을 모두 제한한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 확장 가능한 UOM·환산 기준의 부재는 BOM 수량과 능력값 결함의 공통 기반이며, 현재 정확성과 향후 진화를 함께 약화한다.
+    related_surface_finding_ids:
+      - finding-010
+      - finding-014
+  - issue_id: issue-010
+    problem_definition: BOM과 Routing 자체의 불변 리비전 및 유효기간이 없어 변경 전후 구성의 시간적 정체성을 보존할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Part의 현재 rev로 구성 정체성을 축약한 사실이 직접 확인됐고 모든 적용 가능 렌즈가 high 영향에 동의했다. 기준
+      문서 내에서 해소해야 한다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-011
+    problem_definition: Routing의 정규 구조가 선형 목록에 한정되어 분기·병렬·선택·재작업 전이를 표현할 수 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 현재 선형 경로는 가능하지만 제조 유형 확장 시 스키마와 소비자 재설계가 필요해 medium 수준의 진화성 결함이다. 고급
+      라우팅 범위를 명시해 다음 단계에서 닫을 수 있다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-012
+    problem_definition: AlternatePart의 무조건 대칭 불변조건과 one_way 값이 동일 인스턴스에 상반된 방향 의미를 부여한다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 논리 모순과 최소 medium 영향은 확인됐지만 실제 역방향 대체 실행에 따른 high 영향은 입증되지 않았다. 모순 자체는
+      기준 문서에서 즉시 제거하되 최종 영향 판정에는 실행 증거가 필요하다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-013
+    problem_definition: 대체 관계의 정규 권위가 정의·direction·단축 관계에 분산되고 정규 엔티티가 관계 그래프에서 고립되어
+      소비 경로별 방향 의미가 달라진다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 내부 방향 충돌과 그래프 고립을 정규 권위 분산이라는 하나의 원인으로 통합한 판단이 숙의에서 해결됐고, 모든 참여 렌즈가
+      high 이슈로 수용했다.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-024
+  - issue_id: issue-014
+    problem_definition: 도면 문서 개정과 생산 적용 제조 개정을 Part.rev 하나로 결합해 MES가 적용할 제조 리비전을 확정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-001과 원인 맥락을 공유하지만 개정 대상과 lifecycle의 의미 혼합이라는 별도 근본 결함이다. 적용 가능
+      렌즈가 high 영향을 유지했다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-015
+    problem_definition: 검사 명세 정보 객체와 검사 실행 단계를 동일한 Operation 유형으로 분류해 라우팅 및 실행 의미를 혼동한다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 잘못된 상속 구조가 직접 확인됐고 렌즈들이 medium 영향과 분리 필요성에 일치한다. 실행 모델을 구축하기 전에 타입
+      의미를 바로잡아야 한다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-016
+    problem_definition: 제품 구성과 스크랩 재투입 흐름을 동일한 BomLine 관계로 표현해 제품구조와 공정 물질흐름의 의미를 혼합한다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 의미 혼합과 별도 관계 필요성은 확인됐지만 실제 지원 경로가 자기참조를 소비해 목적 달성을 차단하는지는 입증되지 않아
+      medium과 high가 미결이다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-017
+    problem_definition: 서로 다른 능력 차원을 단일 무단위 capacity_per_shift로 표현해 작업장 간 비교와 부하 대조가 일관되지 않는다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 확장 가능한 측정 차원·UOM 모델 부재가 능력계획에서 드러난 구체적 증상이다. 모든 적용 가능 렌즈가 medium 영향을 유지했다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-018
+    problem_definition: Part에 포괄 품목과 말단 부품의 의미를 동시에 부여해 Assembly 상속과 Part의 최소성 정의가 충돌한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 정의와 타입 계층의 충돌이 직접 확인됐으며 렌즈별 범위 차이는 원인이나 조치를 반박하지 않는다. 인터페이스 타입 계약 전에
+      닫아야 한다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-019
+    problem_definition: ECO 변경 경로가 Part에서 끝나 대상 BOM·Routing 구성과 변경 전후 버전을 식별하지 못한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 독립 구성 버전과 효과성 권위 부재가 ECO 추적 경로에서 드러난 직접적인 구조 결함이다. 모든 적용 가능 렌즈가 high
+      영향을 지지해 기준 문서 내 폐쇄가 필요하다.
+    related_surface_finding_ids:
+      - finding-023

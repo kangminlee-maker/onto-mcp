@@ -1,0 +1,176 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml — Part, BomLine, Routing, ECO 및 변경 적용 규칙
+    evidence_anchor: entities.Part.attributes.rev/current_eco;
+      entities.BomLine.attributes; entities.Routing.attributes;
+      entities.ECO.attributes.effective_date/status; integrity_rules[2]
+    claim: BOM·라우팅의 개정과 유효구간이 모델링되지 않아 설계변경 후 구성 이력을 연속적으로 보존할 수 없다.
+    what: 변경 식별자는 Part의 현재 rev와 current_eco에만 있고, BomLine과 Routing에는 개정 번호, 유효
+      시작·종료, 승인 기준선 또는 ECO 적용 연결이 없다. 그런데 규칙은 effective_date 이후 생산분에 신규 rev를
+      적용하도록 요구한다.
+    why: ECO 적용 시점별 BOM과 라우팅을 식별할 구조가 없으므로 기존 객체를 덮어쓰거나 별도 관행으로 복제해야 한다. 그러면 과거 생산분의
+      적용 BOM·공정과 향후 변경분을 동일 모델에서 안정적으로 조회할 수 없고, 변경을 추가할수록 PLM/MES 간 기준선 연속성이
+      약해진다.
+    how_to_fix: PartRevision, BomRevision, RoutingRevision 같은 명시적 버전 개념을 두고 각 버전에
+      immutable 식별자, 상태, valid_from/valid_to 또는 effectivity 조건, 적용 ECO를 연결한다. 생산
+      오더는 현재 Part가 아니라 확정된 BOM·라우팅 버전을 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준으로서 품목·BOM·라우팅·변경관리의 변경 연속성을 제공하는 목적
+      failure_condition: 동일 품목에 ECO가 순차 적용되거나 적용일 전후 생산 이력을 함께 유지해야 할 때
+      impact: 생산 시점의 정확한 설계·BOM·라우팅 기준선을 재현할 수 없어 변경 적용, 추적성, 재작업 판단의 신뢰가 크게 저하된다.
+      evidence_refs:
+        - entities.Part.attributes.rev/current_eco
+        - entities.BomLine.attributes
+        - entities.Routing.attributes
+        - entities.ECO.attributes.effective_date/status
+        - integrity_rules[2]
+    causal_path:
+      root_cause_candidate: 현재 상태와 버전별 기준선을 구분하는 시간·개정 모델이 BOM과 라우팅에 없다.
+      root_cause_step_id: evolution-candidate-001.cause-002
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: ECO 규칙은 적용일 이후 신규 rev 사용을 요구하지만 BomLine과 Routing에는 개정 또는 유효구간 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.BomLine.attributes
+            - entities.Routing.attributes
+            - integrity_rules[2]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 변경 전후 구성을 별개 기준선으로 식별할 수 없다는 현상은 Part의 현재 rev/current_eco만 보유하는 단일 현재상태
+            모델의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Part.attributes.rev/current_eco
+            - entities.ECO.attributes.effective_date/status
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml — 단위와 수량 모델
+    evidence_anchor: entities.Part.attributes.uom;
+      entities.BomLine.attributes.qty_per;
+      entities.WorkCenter.attributes.capacity_per_shift; notes[1]
+    claim: 폐쇄형 UOM 열거와 환산 모델 부재 때문에 새 단위·복합 단위·시스템별 단위를 수용할 때 기존 스키마와 소비 로직을 수정해야 한다.
+    what: Part.uom은 ea, kg, m 세 값으로 고정되어 있고 qty_per에는 별도 단위가 없다. 작업장
+      capacity_per_shift의 단위는 작업장마다 개수 또는 시간으로 달라지며, kg↔ea 환산은 마스터 없이 현장에서 처리한다.
+    why: 새 품목 단위나 PLM/MES의 다른 단위 코드를 추가할 때 enum 변경이 필요하고, BOM 수량과 생산능력의 차원 및 환산 근거를
+      기계적으로 보존할 수 없다. 통합 범위가 넓어질수록 현장 환산과 시스템별 예외가 누적된다.
+    how_to_fix: UnitOfMeasure와 UnitConversion을 독립 기준 개념으로 만들고 코드 체계, 차원, 기준 단위, 품목별
+      환산계수, 유효기간을 모델링한다. qty_per와 capacity_per_shift가 자신의 단위 또는 측정량 객체를 명시적으로
+      참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 간 BOM 수량과 제조 능력을 확장 가능한 공통 개념으로 교환하는 목적
+      failure_condition: ea·kg·m 이외 단위, 품목별 질량 환산, 또는 서로 다른 능력 단위를 가진 작업장을 통합할 때
+      impact: 확장마다 스키마와 변환 로직을 변경해야 하며, 단위가 암묵적인 수치의 오해가 계획·소요량 계산의 신뢰를 약화한다.
+      evidence_refs:
+        - entities.Part.attributes.uom
+        - entities.BomLine.attributes.qty_per
+        - entities.WorkCenter.attributes.capacity_per_shift
+        - notes[1]
+    causal_path:
+      root_cause_candidate: 측정 단위와 환산을 독립적인 확장 가능 기준 개념으로 모델링하지 않았다.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 허용 UOM이 세 enum 값으로 닫혀 있고 qty_per 및 capacity_per_shift의 단위 표현이 불완전하다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Part.attributes.uom
+            - entities.BomLine.attributes.qty_per
+            - entities.WorkCenter.attributes.capacity_per_shift
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 새 단위 수용에 enum 수정과 현장 환산이 필요한 현상은 단위·환산 마스터 부재의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml — Operation과 WorkCenter 배정
+    evidence_anchor: entities.Operation.attributes.work_center/std_time_min;
+      entities.Routing.attributes.operations; relations Routing→Operation and
+      Operation→WorkCenter
+    claim: 공정 정의에 작업장과 표준시간이 직접 고정되어 다공장·대체설비·시점별 능력 변경을 확장하려면 Operation 복제나 기존 구조
+      변경이 필요하다.
+    what: Routing은 Operation 참조의 순서만 보유하고, 각 Operation은 단일 work_center와 단일
+      std_time_min을 가진다. 라우팅별·사업장별 자원 배정이나 유효기간별 표준시간을 표현하는 중간 개념이 없다.
+    why: 동일 공정 단계가 공장, 설비, 제품 변형 또는 기간에 따라 다른 자원과 시간을 사용할 경우 하나의 Operation을 재사용할 수
+      없다. 확장 시 공정 의미와 실행 파라미터를 함께 복제하게 되어 변경 전파와 시스템 간 매핑이 취약해진다.
+    how_to_fix: OperationDefinition과 RoutingOperation을 분리한다. RoutingOperation에 순서,
+      사이트/자원 요구 또는 후보 WorkCenter, 표준시간, 유효구간을 두고 공통 공정 정의를 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅 개념을 PLM의 공정 정의와 MES의 실행 자원 배정 사이에서 확장 가능한 기준으로 사용하는 목적
+      failure_condition: 동일 공정을 여러 공장·작업장·대체설비 또는 서로 다른 표준시간으로 운영할 때
+      impact: Operation 복제와 예외 매핑이 증가해 공정 정의의 동일성과 변경 전파를 신뢰하기 어렵다.
+      evidence_refs:
+        - entities.Operation.attributes.work_center/std_time_min
+        - entities.Routing.attributes.operations
+        - relations Routing→Operation and Operation→WorkCenter
+    causal_path:
+      root_cause_candidate: 재사용 가능한 공정 정의와 라우팅 문맥의 실행 배정을 하나의 Operation 객체에 결합했다.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Operation 하나가 단일 WorkCenter와 표준시간을 직접 보유한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Operation.attributes.work_center/std_time_min
+            - relations Operation→WorkCenter
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 라우팅별 배정 차이를 표현할 수 없는 현상은 Routing이 Operation 참조 순서만 보유하고 배정 속성을 둘 중간 개념이
+            없는 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Routing.attributes.operations
+            - relations Routing→Operation
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: manufacturing-bom-ontology.yaml — 스크랩 재투입 예외 규칙
+    evidence_anchor: integrity_rules[0]; entities.BomLine.attributes.parent_ref/child_ref
+    claim: 재생 원료 흐름을 BOM 자기순환으로 표현하면 향후 회수·재작업 유형을 추가할수록 비순환 BOM 소비자에 예외 수정이 확산된다.
+    what: 일반 BOM은 비순환이어야 하지만 스크랩 재투입은 Assembly가 자기 자신을 하위에 포함하는 동일 구조로 모델링한다. 재투입의
+      흐름, 수율, 횟수 또는 종료 조건을 구분하는 별도 개념은 없다.
+    why: BOM 전개, 소요량 계산, 원가 누적 같은 소비자는 자기순환이 정상 재투입인지 잘못된 BOM인지 구조만으로 판별할 수 없다. 새로운
+      회수·재작업 패턴이 생기면 각 소비자가 별도 예외와 순환 종료 규칙을 추가해야 한다.
+    how_to_fix: 제품 구조 BOM은 비순환으로 유지하고, 스크랩 회수·재투입은 MaterialFlow, ByproductFlow 또는
+      ReworkLoop 같은 공정 흐름 개념으로 분리해 수율, 투입 지점, 최대 반복 또는 종료 조건을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM과 제조 공정을 여러 PLM/MES 소비자가 안정적으로 확장·해석할 수 있는 공통 기준을 제공하는 목적
+      failure_condition: 스크랩 재투입 외에 재작업, 부산물 회수 또는 다단계 재순환을 추가하거나 일반 BOM 전개를 수행할 때
+      impact: 모든 소비자에 순환 예외 로직이 퍼지고 신규 회수 유형마다 수정 범위가 커져 확장 내성과 계산 안전성이 저하된다.
+      evidence_refs:
+        - integrity_rules[0]
+        - entities.BomLine.attributes.parent_ref/child_ref
+    causal_path:
+      root_cause_candidate: 제품 구성 관계와 제조 물질 순환이라는 서로 다른 수명주기 개념을 BomLine 하나로 표현했다.
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 동일 규칙이 BOM 비순환을 요구하면서 스크랩 재투입에는 자기 하위 포함을 허용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - integrity_rules[0]
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 순환의 의미와 종료 조건을 구조적으로 구분할 수 없는 현상은 재투입 흐름을 일반 parent-child BomLine으로 인코딩한
+            것의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine.attributes.parent_ref/child_ref
+            - integrity_rules[0]
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 변경 전후의 승인된 제품 구성과 라우팅을 함께 식별할 수 있어야 한다.
+  - 통합 범위가 확대되면 현재 열거에 없는 측정 단위와 여러 사업장·대체 자원 구성이 추가될 수 있다.
+  - 일반 BOM 전개 소비자는 명시적인 별도 의미가 없는 자기순환을 안전하게 처리하기 어렵다.
+validation:
+  unaddressable_candidates: []

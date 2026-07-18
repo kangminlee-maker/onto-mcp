@@ -1,0 +1,270 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: ECO 효력일과 비동기 Part.rev가 변경 효력의 권위를 나누어 생산 적용 revision을 유일하게 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 직접 실패 조건과 high 영향이 다수 렌즈에서 지지되었다. 더 넓은 형상 기준선 결손과의 관계는 미확정이지만 독립 결함으로
+      해결되었다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 제품 구성과 회수·재투입 흐름을 같은 BomLine으로 표현해 비순환 구성 규칙과 순환 예외가 충돌한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 일반 BOM 전개와 수량 계산의 안전성을 직접 훼손하는 high 결함이며 모든 참여 렌즈가 개념 혼합이라는 원인에 동의했다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 품목별 UOM과 권위 있는 환산 규칙이 없어 BOM 수량의 공통 계산 의미가 성립하지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 단위가 다른 지원 입력에서 환산 결과를 결정할 수 없는 high 결함으로 일관되게 확인되었다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: scrap_rate가 의미·산식·권위·유효기간이 없는 복사 스칼라이므로 소요량 계산과 변경 재현이 불확정적이다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 두 표면 finding이 하나의 정규화되지 않은 값 모델에서 발생하며 계산 일관성과 감사 가능성을 의미 있게 약화한다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-019
+  - issue_id: issue-005
+    problem_definition: 품목·BOM·라우팅의 revision과 effectivity 기준선이 없어 생산 시점 형상을 선택하거나 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 시점별 제조 구성을 결정하지 못하는 high 결함으로 모든 렌즈가 합의했으며 통합 기준 문서의 핵심 목적을 직접 저해한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: ECO가 현재 상태만 보존해 예외 lifecycle과 승인·적용의 감사 증거를 재현할 수 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 변경 통제의 책임성과 재현성을 약화하는 합의된 medium 결함이지만 핵심 형상 선택 자체를 즉시 차단하지는 않는다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 수량과 능력 값에 측정 차원·UOM·변환 규칙이 없어 BOM 소요량과 작업장 부하를 결정적으로 계산할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: BOM과 설비능력의 지원 계산 경로 전반에 영향을 주는 high 결함이며 공통 Quantity/UOM 구조의 부재가 직접 확인되었다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: 병행 관리되는 제조 기준값에 권위·복제 출처·유효기간·대사 이력이 없어 신뢰할 값을 일관되게 선택할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 계획과 원가 결과의 재현 및 감사 계약을 약화하는 합의된 medium 결함이다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 생산오더 규칙이 적용 형상 고정 접점이나 명시적인 MES 실행 경계를 제공하지 않아 마스터와 실행 간 최소 계약이 미완결이다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 최소 형상 고정 접점 또는 명시적 제외 경계의 필요성에는 합의했지만 실적·로트 계보 전체의 포함 여부는 대상 목적 선언
+      없이는 결정할 수 없다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: AlternatePart가 조건·방향·승인 근거를 가진 일급 규칙으로 완결되지 않아 실제 대체 허용 범위를 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 잘못된 자재 대체를 허용할 수 있는 합의된 medium 결함이며 조건 모델과 관계 투영이 함께 필요하다.
+    related_surface_finding_ids:
+      - finding-010
+      - finding-021
+  - issue_id: issue-011
+    problem_definition: 가변 현재값과 불변 revision 기준선을 구분하지 않아 변경 전후 BOM·라우팅 형상의 연속적 보존이 불가능하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-005와 중복 관계가 보존되어 있으나 현재 이슈 자체도 변경 연속성 실패의 high 원인을 직접 기술하며 공식
+      병합되지 않았다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: 폐쇄형 UOM 열거와 독립 환산 모델 부재가 새로운 단위 수용과 계산 의미 보존을 어렵게 한다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 결손과 개선 방향에는 합의했지만 현재 지원 경로도 실패하는지, 확장 시 주로 드러나는지는 실행 증거가 없어 심각도와
+      우선순위가 미해결이다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-013
+    problem_definition: 재사용 공정 정의와 라우팅별 자원·시간 배정을 Operation 하나에 결합해 문맥별 변형을 복제 없이 표현할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 다공장·대체설비 확장 시 복제와 변경 전파 위험을 만드는 합의된 medium 결함이다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-014
+    problem_definition: 제품 구성과 회수 흐름의 혼합이 신규 재작업·회수 유형마다 BOM 소비자 예외와 계산 위험을 확산시킨다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: issue-002와 같은 개념 혼합의 확장성 표면이며 분리 필요성은 합의되었지만 현재 일반 BOM 핵심 경로의 실패 정도는
+      실행 증거가 부족하다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-015
+    problem_definition: AlternatePart에 무조건 대칭성과 one_way 허용을 동시에 부과해 동일 인스턴스의 방향 계약이 모순된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 명시된 계약 요소가 직접 양립하지 않는 합의된 medium 논리 결함으로, 소비자별 반대 대체 판단을 허용한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-016
+    problem_definition: 방향성 대체와 상호 대체를 하나의 AlternatePart 의미로 혼합해 정규 관계 의미가 결정되지 않는다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: issue-015와 중복되는 의미적 표면으로, 동일 데이터가 단방향 또는 양방향으로 해석되는 충돌을 명시한다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-017
+    problem_definition: 검사 계획 정보 객체와 실행 검사 공정을 같은 Operation 유형으로 취급해 역할과 수명주기를 혼합한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 계획의 버전·승인과 공정의 자원·시간 계약을 혼동시키는 합의된 medium 의미 결함이다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-018
+    problem_definition: Part의 관리 식별 역할과 구성상 원자성을 구분하지 않아 Assembly 상속과 BOM 대상 범위의 의미가 모호하다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 정의 명확화 필요성에는 합의했지만 구조 재설계 필요성과 영향 수준에는 이견이 남아 규범적 Part 의미 결정이 필요하다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-019
+    problem_definition: 범용 Quantity/UOM 결손이 WorkCenter 능력에서 처리량과 가용시간의 차원 혼합으로 나타난다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 능력 계산 영향은 구체적이지만 독립 루트인지 범용 수량 모델의 증상인지 이견이 남고 공식 의존 관계 근거도 부족하다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-020
+    problem_definition: ECO가 영향 품목별 이전·결과 revision 전이를 연결하지 않아 적용 시점의 생산 revision을 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 독립적인 medium 결함으로 해결되었으나 상위 revision·effectivity 결손의 증상이라는 두 렌즈의 이견과
+      관계 증거 공백은 보존해야 한다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-021
+    problem_definition: 제품 구성과 재투입 흐름의 개념 혼합 때문에 허용된 자기참조와 오류 순환을 구조적으로 구별할 수 없다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 구조적 표지 부재는 issue-002 계열 개념 혼합의 직접 증상으로 수렴했다. 일반 BOM 경로의 실제 실패 범위는 추가
+      실행 증거가 필요하다.
+    related_surface_finding_ids:
+      - finding-023

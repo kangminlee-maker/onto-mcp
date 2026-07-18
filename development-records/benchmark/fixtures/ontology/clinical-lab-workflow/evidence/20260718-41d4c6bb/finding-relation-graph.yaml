@@ -1,0 +1,162 @@
+schema_version: 1
+session_id: 20260718-41d4c6bb
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: Result.status와 Report.result_status를 별도 권위 후보로 저장하고 야간 배치로
+      동기화하는 설계를 제거하면 두 finding의 상태 분기 실패가 함께 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 정정 후 배치 전 Result는 corrected이고 Report는 finalized일 수 있으며,
+      서로 다른 enum과 불완전한 파생 규칙 때문에 단일 상태 권위가 없다는 동일 결함을 기술한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-008
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: 공통 상태 어휘와 즉시 적용되는 단일 파생 규칙을 도입하면 coverage와 semantics 양쪽에서 지적한
+      권위 분할이 동시에 사라진다.
+    shared_cause: null
+    rationale: 두 finding은 동일 필드, 동일 상태 어휘 불일치, 동일 야간 동기화 규칙을 근거로 결과 상태의 의미적 단일 권위
+      부재를 지적한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-002
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: Test–Assay의 권위 경계와 버전된 대응 관계를 정의하고 이중 등록을 폐지하면 두 finding의 카탈로그
+      분기 위험이 함께 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 신규 항목의 Test·Assay 이중 등록, 상호 매핑 부재, 독립 변경에 따른 주문·수행 의미
+      분기를 동일 핵심 결함으로 다룬다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-010
+    to_finding_id: finding-017
+    relation: duplicates
+    root_hypothesis: 주문 개념인 Test와 수행 개념인 Assay의 정체성 및 cardinality를 확정하면 진화와 의미 관점의 두
+      실패가 함께 해소된다.
+    shared_cause: null
+    rationale: finding-010은 변경 시의 분기를, finding-017은 현재 의미 경계의 불명확성을 강조하지만 둘 다
+      Test–Assay 대응 관계와 개념 권위가 정의되지 않은 동일 결함을 근거로 한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-017
+    to_finding_id: finding-021
+    relation: duplicates
+    root_hypothesis: Test와 Assay 사이의 명시적 수행 관계를 추가하고 Result가 실제 수행 Assay까지 추적하게 하면
+      의미적 단절과 구조적 고립이 동시에 사라진다.
+    shared_cause: null
+    rationale: finding-017의 의미 경계 불명확성과 finding-021의 Assay 구조적 고립은 모두 Test–Assay 관계
+      부재 및 Result의 Test-only 참조에서 발생한 동일 핵심 문제의 렌즈별 표현이다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-003
+    to_finding_id: finding-023
+    relation: duplicates
+    root_hypothesis: CriticalValue 통보를 Result, 수신자, 시각 및 외부 기록 식별자와 연결된 사건으로 모델링하면 두
+      finding의 감사 경로 부재가 함께 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 notified 불리언만 존재하고 실제 Result 및 외부 전화 기록으로 이어지는 관계나 식별자가
+      없어 통보 완료 근거를 검증할 수 없다고 지적한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-006
+    to_finding_id: finding-023
+    relation: shared_cause_candidate
+    root_hypothesis: 통보 행위를 정적 불리언이 아닌 독립 사건으로 모델링하지 않은 결정이 통보 증거 누락과 CriticalValue
+      연결 단절의 공통 원인이다.
+    shared_cause:
+      cause_claim: critical-value 통보를 시간·행위자·수신자·근거를 갖는 사건으로 모델링하지 않고 notified 불리언과
+        연결되지 않은 외부 기록으로 축약했다.
+      from_cause_ref: finding-006.cause-002
+      to_cause_ref: finding-023.cause-002
+    rationale: finding-006은 감사 가능한 통보 행위 자체의 부재를, finding-023은 그 결과로 생긴 Result→통보 기록
+      구조의 단절을 보여준다. 양쪽 causal path가 동일한 정적 속성 축약을 직접 지목한다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-019
+    to_finding_id: finding-023
+    relation: shared_cause_candidate
+    root_hypothesis: 정책성 임계값과 결과별 통보 사건을 분리하지 않은 모델링이 CriticalValue의 혼합 생명주기와 통보 연결
+      부재를 함께 발생시켰다.
+    shared_cause:
+      cause_claim: 재사용 가능한 임계 판정 규칙과 개별 결과의 통보 사건을 별도 존재론적 유형 및 관계로 분리하지 않았다.
+      from_cause_ref: finding-019.cause-002
+      to_cause_ref: finding-023.cause-002
+    rationale: finding-019의 규칙·사건 혼합과 finding-023의 Result·통보 기록 관계 누락은 모두 통보 사건을 독립
+      개념으로 두지 않은 설계로 설명된다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-007
+    to_finding_id: finding-012
+    relation: duplicates
+    root_hypothesis: 카탈로그 항목과 임계 규칙에 안정 식별자, 버전, 유효기간을 부여하고 Result가 적용 버전을 참조하게 하면 두
+      finding의 역사적 해석 실패가 함께 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 Test, Assay 및 critical-value 기준에 개별 버전·유효기간이 없어 변경 뒤 과거
+      결과에 적용된 정의를 재구성할 수 없다는 동일 결함을 기술한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-011
+    to_finding_id: finding-018
+    relation: duplicates
+    root_hypothesis: 하나의 참조 가능한 검체 분류와 명시적 상하위 매핑을 도입하면 확장성 문제와 의미 호환성 문제가 동시에 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 Specimen과 Test의 폐쇄형 enum 및 Assay의 자유 문자열이 공통 검체 개념을 공유하지
+      않아 새 유형 추가와 시스템 간 변환이 불안정하다고 지적한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-013
+    to_finding_id: finding-020
+    relation: duplicates
+    root_hypothesis: priority를 STAT 의미의 단일 권위로 정규화하고 불리언과 하위 타입을 파생 표현으로 제한하면 두
+      finding의 분기 위험이 함께 사라진다.
+    shared_cause: null
+    rationale: 두 finding은 priority=stat, is_stat, StatOrder라는 동일한 세 표현과 일치·파생 규칙 부재를
+      근거로 긴급도 개념의 중복 권위를 지적한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-009
+    to_finding_id: finding-021
+    relation: shared_cause_candidate
+    root_hypothesis: 분석 수행을 독립 사건으로 모델링하고 Assay를 Test·Specimen·Result에 연결하면 분석
+      provenance 누락과 Assay 고립이 함께 해소된다.
+    shared_cause:
+      cause_claim: 실제 분석 수행을 Assay 중심의 사건과 관계로 표현하지 않고 Specimen에서 Result로 직접 연결했다.
+      from_cause_ref: finding-009.cause-002
+      to_cause_ref: finding-021.cause-001
+    rationale: finding-009는 실행·장비·QC provenance가 사라진 결과를, finding-021은 그 구조적 전제인
+      Assay의 워크플로 고립을 보여준다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-014
+    to_finding_id: finding-022
+    relation: shared_cause_candidate
+    root_hypothesis: Order와 Result의 시작·종결 상태, 허용 전이 및 correction 후 전이를 완전한 상태 그래프로
+      정의하면 completed Order의 정정 후 의미 불확정성이 해소된다.
+    shared_cause:
+      cause_claim: 가역적인 Result 상태를 사용하는 완료 조건만 선언하고 후속 정정을 포함한 허용 전이 그래프와 종결 불변조건을 정의하지 않았다.
+      from_cause_ref: finding-014.cause-002
+      to_cause_ref: finding-022.cause-002
+    rationale: finding-014의 correction 이후 Order 처리 불명확성은 finding-022가 지적한 전이 그래프 부재가
+      Order–Result 시간 경로에서 드러난 구체적 사례다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-015
+    to_finding_id: finding-022
+    relation: shared_cause_candidate
+    root_hypothesis: Report의 사건 순서, 허용 전이 및 override 우선순위를 상태 그래프에 명시하면 release와
+      correction 조건의 단일값 충돌이 제거된다.
+    shared_cause:
+      cause_claim: 상태 값과 일부 조건만 선언하고 겹치는 사건을 직렬화하거나 상호 배타적 상태 의무의 우선순위를 결정하는 전이 구조를 두지 않았다.
+      from_cause_ref: finding-015.cause-002
+      to_cause_ref: finding-022.cause-002
+    rationale: finding-015의 finalized/amended 충돌은 finding-022의 불완전한 상태 그래프가 Report의
+      동시·중첩 조건에서 나타난 구체적 논리 실패다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-005
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

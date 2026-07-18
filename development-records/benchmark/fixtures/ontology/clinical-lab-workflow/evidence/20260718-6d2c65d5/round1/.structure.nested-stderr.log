@@ -1,0 +1,498 @@
+ENV-BEFORE unit=structure output=/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/structure.findings.yaml.codex-output.json
+WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/" (codex_home: AbsolutePathBuf("/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-home-Asgo4J/.codex"))
+OpenAI Codex v0.144.4
+--------
+workdir: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f70d0-631f-7b60-a602-a8e5d225e065
+--------
+user
+You are executing one bounded review structured-output unit as a ContextIsolatedReasoningUnit.
+
+Unit id: structure
+Unit kind: lens
+Output format: lens-sidecar
+Authoritative prompt packet path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/prompt-packets/structure.prompt.md
+Canonical YAML output path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/structure.findings.yaml
+
+Rules:
+- Treat the prompt packet below as the authoritative contract.
+- Treat the Boundary Policy and Effective Boundary State in the packet as hard constraints.
+- Read the files referenced by the prompt packet when needed.
+- Stay within the smallest sufficient file set implied by the packet.
+- Do not recursively follow reference chains beyond the files explicitly listed in the packet unless the packet requires it.
+- Do not use web research when the packet says web research is denied.
+- Do not read outside the allowed filesystem scope described in the packet.
+- Do not modify repository files yourself.
+- Produce only one JSON object matching the provided output schema.
+- The JSON object is the argument payload for submit_lens_findings.
+- Do not wrap the JSON object in markdown or code fences.
+- Do not include runtime-owned envelope fields such as schema_version, session_id, lens_id, issue_id, or validation unless the output schema explicitly requires them.
+- The runtime will validate the JSON object through the submit contract and write the canonical YAML artifact.
+- If the packet asks you to preserve disagreement or uncertainty, preserve it explicitly in the structured fields.
+- If you cannot complete the task within the declared boundary, encode the limitation as insufficient access or insufficient evidence within boundary instead of broadening the search.
+
+Authoritative prompt packet follows:
+
+# Review Lens Prompt Packet
+
+session_id: 20260718-6d2c65d5
+lens_id: structure
+execution_realization: worker
+host_runtime: codex
+review_mode: core-axis
+session_domain: none
+output_path: .onto/review/20260718-6d2c65d5/round1/structure.findings.yaml
+human_output_path: null
+request_summary: 이 임상검사 워크플로 온톨로지가 EMR/LIS 통합의 개념 권위 문서로 쓰기에 적절한지 검토해 달라. 엔티티·관계·상태 모델의 개념적 타당성과 운영 시 생길 위험을 중심으로.
+
+## Canonical Role
+You are structure.
+Execute as a ContextIsolatedReasoningUnit.
+Do not read other lens outputs during Round 1.
+
+## Role Definition Source
+../../../../../../Users/kangmin/Documents/onto-mcp/.onto/roles/structure.md
+
+# structure
+
+## Perspective
+
+이 lens는 대상 시스템을 **구조적 완결성**의 관점에서 본다. 모든 구성 요소가 적절히 연결되어 있는지, 필수 관계가 존재하는지, 고아(orphan) 요소가 없는지를 검증한다. 이 lens의 관심은 "존재해야 하는 연결이 실제로 있는가"이다.
+
+이 관점은 이미 존재하는 요소들 사이의 연결 완결성에만 초점을 둔다. 도메인 차원의 영역 누락이나 관계 방향성의 정확성은 별도 관점의 범위이다.
+
+### Observation focus
+
+고아 요소, 끊어진 경로, 누락된 필수 관계, 설계 의도와 연결 구조 간의 불일치.
+
+### Assertion type
+
+존재 진술: "X는 어떤 관계에도 연결되어 있지 않다", "필수 관계 Y가 누락되었다".
+
+## Core questions
+
+- 어떤 관계에도 연결되지 않은 고아 요소가 있는가?
+- 필수 관계가 누락되어 있는가?
+- 구조적 연결성이 설계 의도와 일치하는가?
+
+## Domain examples
+
+- Software: 도달 불가능한 함수, 참조되지 않는 모듈, 누락된 에러 처리 경로
+- Law: 정의 없이 사용된 용어, 참조되지 않는 부칙, 위임 규정의 대상 법률 누락
+- Accounting: 계정과목표의 고아 계정, 상위 계정 없는 하위 계정
+
+## Domain document
+
+`.onto/domains/{domain}/structure_spec.md` (`session_domain`이 설정된 경우).
+
+`session_domain`이 `none`이면 `.onto/processes/review/lens-prompt-contract.md` §9.3 Domain-None Self-Contained Rule에 따라 domain document 없이 실행한다.
+
+
+## Authoritative Artifact Inputs
+- materialized input: .onto/review/20260718-6d2c65d5/execution-preparation/materialized-input.md
+- role definition: ../../../../../../Users/kangmin/Documents/onto-mcp/.onto/roles/structure.md
+- interpretation: .onto/review/20260718-6d2c65d5/interpretation.yaml
+- binding: .onto/review/20260718-6d2c65d5/binding.yaml
+- review target profile: .onto/review/20260718-6d2c65d5/execution-preparation/review-target-profile.yaml
+- review context manifest: .onto/review/20260718-6d2c65d5/execution-preparation/review-context-manifest.yaml
+
+## Embedded Materialized Input
+
+<!-- onto:embedded-materialized-input:start lines=63 -->
+kind: single_text
+
+## clinical-lab-ontology.yaml
+ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/clinical-lab-ontology.yaml
+
+# Clinical Laboratory Workflow Ontology (v0.3 draft)
+# 병원 임상검사 파이프라인의 개념 모델. 주문(Order)부터 보고(Report)까지의
+# 엔티티·관계·상태를 정의한다. EMR/LIS 연동 설계의 개념 권위 문서로 사용 예정.
+
+ontology: clinical-lab-workflow
+version: "0.3"
+
+entities:
+
+  Order:
+    definition: "임상의가 환자에 대해 발행하는 검사 주문."
+    attributes:
+      order_id: { type: string }
+      patient_ref: { type: ref, target: Patient }
+      ordered_tests: { type: list, of: ref, target: Test }
+      priority: { type: enum, values: [routine, urgent, stat] }
+      is_stat: { type: boolean, note: "STAT 주문 여부. priority와 함께 기록." }
+    lifecycle: [draft, placed, in_progress, completed, cancelled]
+
+  StatOrder:
+    definition: "응급(STAT) 검사 주문. Order의 하위 타입."
+    is_a: Order
+    attributes:
+      stat_reason: { type: string }
+
+  Patient:
+    definition: "검사 대상 환자."
+    attributes:
+      patient_id: { type: string }
+      mrn: { type: string, note: "병원 등록번호" }
+
+  Specimen:
+    definition: "환자에게서 채취한 검체. 하나의 Order에 묶인다."
+    attributes:
+      specimen_id: { type: string }
+      collected_at: { type: datetime }
+      specimen_type: { type: enum, values: [blood, urine, tissue, swab] }
+      container_barcode: { type: string }
+    lifecycle: [collected, received, in_analysis, analyzed]
+
+  Test:
+    definition: "단일 검사 항목(예: CBC, BMP). 주문 가능한 카탈로그 단위."
+    attributes:
+      test_code: { type: string }
+      name: { type: string }
+      department: { type: ref, target: Department }
+      requires_specimen_type: { type: enum, values: [blood, urine, tissue, swab] }
+
+  Assay:
+    definition: "분석기에서 수행되는 검사 항목. 검사 카탈로그의 수행 단위."
+    attributes:
+      assay_code: { type: string }
+      display_name: { type: string }
+      department: { type: ref, target: Department }
+      specimen_kind: { type: string, note: "검체 종류 문자열 (예: 'WB', 'Serum', 'Urine-random')" }
+
+(truncated at 60 lines — full materialized input: .onto/review/20260718-6d2c65d5/execution-preparation/materialized-input.md)
+
+<!-- onto:embedded-materialized-input:end -->
+
+## Review Target Profile Summary
+- target_material_kind: code
+- target_input_kind: single_file
+- target_scope_kind: file
+- artifact_role_primary: configuration_artifact
+- closure_level: bounded_closed
+- review_goal: scope_control, precedence, invalid_input_behavior
+- closure_obligation_policy: must_close_in_target, must_close_before_next_stage, may_close_during_next_stage, planned_later, out_of_scope
+- material_support_status: supported
+- material_detection_confidence: 0.92
+- material_detection_basis: file name or extension indicates code/config material
+- material_kind_obligations:
+  - Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.
+  - Check visible type/runtime contract mismatches, edge-case input behavior, error/null/undefined paths, and caller-facing failure modes.
+  - Classify a visible correctness or runtime-contract failure as material when it can violate the declared review goal inside the bounded target.
+
+## Optional Context Inputs
+- session metadata: .onto/review/20260718-6d2c65d5/session-metadata.yaml
+- target snapshot: .onto/review/20260718-6d2c65d5/execution-preparation/target-snapshot.md
+- context candidate assembly: .onto/review/20260718-6d2c65d5/execution-preparation/context-candidate-assembly.yaml
+- domain binding: .onto/review/20260718-6d2c65d5/execution-preparation/domain-binding.yaml
+- review value-alignment criteria: .onto/review/20260718-6d2c65d5/execution-preparation/review-value-alignment-criteria.yaml
+- consumer id: lens:structure
+- allowed context source ids: context-candidate-assembly, materialized-input, review-target-profile, review-value-alignment-criteria, target-snapshot
+
+## Boundary Policy
+- Filesystem: read-only
+- Network: denied
+- Tools: required
+- web research: denied
+- repo exploration: allowed
+- recursive reference expansion: denied
+- filesystem allowed roots:
+  - .
+- source mutation: denied
+- allowed output refs:
+  - .onto/review/20260718-6d2c65d5/round1/structure.findings.yaml
+- extra exploration citation required: true
+- web source citation required: true
+
+## Boundary Enforcement Profile
+- prompt: prompt_declared_only
+- filesystem: prompt_declared_only
+- network: prompt_declared_only
+- write: prompt_declared_only
+
+## Effective Boundary State
+- web research: requested=denied, effective=denied, guarantee=prompt_declared_only
+- repo exploration: requested=allowed, effective=allowed, guarantee=prompt_declared_only
+- recursive reference expansion: requested=denied, effective=denied, guarantee=prompt_declared_only
+- source mutation: requested=denied, effective=denied, guarantee=prompt_declared_only
+- filesystem effective allowed roots:
+  - .
+- filesystem guarantee: prompt_declared_only
+
+## Unit Boundary Details
+`unit_boundary` is the authoritative boundary for this review unit.
+`parent_boundary_context` is diagnostic traceability only and must not broaden this unit boundary.
+
+```json
+{
+  "unit_boundary": {
+    "authority": "authoritative_unit_boundary",
+    "unit_id": "structure",
+    "web_research_policy": "denied",
+    "repo_exploration_policy": "allowed",
+    "recursive_reference_expansion_policy": "denied",
+    "read_authority": {
+      "repo_exploration_policy": "allowed",
+      "allowed_read_refs": [
+        "../../../../../../Users/kangmin/Documents/onto-mcp/.onto/roles/structure.md",
+        ".onto/review/20260718-6d2c65d5/binding.yaml",
+        ".onto/review/20260718-6d2c65d5/execution-preparation/context-candidate-assembly.yaml",
+        ".onto/review/20260718-6d2c65d5/execution-preparation/domain-binding.yaml",
+        ".onto/review/20260718-6d2c65d5/execution-preparation/materialized-input.md",
+        ".onto/review/20260718-6d2c65d5/execution-preparation/review-context-manifest.yaml",
+        ".onto/review/20260718-6d2c65d5/execution-preparation/review-target-profile.yaml",
+        ".onto/review/20260718-6d2c65d5/execution-preparation/review-value-alignment-criteria.yaml",
+        ".onto/review/20260718-6d2c65d5/execution-preparation/target-snapshot.md",
+        ".onto/review/20260718-6d2c65d5/interpretation.yaml",
+        ".onto/review/20260718-6d2c65d5/session-metadata.yaml"
+      ]
+    },
+    "filesystem_scope": {
+      "allowed_roots": [
+        "."
+      ]
+    },
+    "source_mutation_policy": "denied",
+    "boundary_enforcement_profile": {
+      "prompt_boundary_enforcement": "prompt_declared_only",
+      "filesystem_boundary_enforcement": "prompt_declared_only",
+      "network_boundary_enforcement": "prompt_declared_only",
+      "write_boundary_enforcement": "prompt_declared_only"
+    },
+    "output_seat": {
+      "output_path": ".onto/review/20260718-6d2c65d5/round1/structure.findings.yaml",
+      "allowed_output_refs": [
+        ".onto/review/20260718-6d2c65d5/round1/structure.findings.yaml"
+      ]
+    }
+  },
+  "parent_boundary_context": {
+    "authority": "diagnostic_parent_context",
+    "boundary_policy": {
+      "web_research_policy": "denied",
+      "repo_exploration_policy": "allowed",
+      "recursive_reference_expansion_policy": "denied",
+      "filesystem_scope": {
+        "allowed_roots": [
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ"
+        ]
+      },
+      "write_policy": {
+        "source_mutation_policy": "denied",
+        "allowed_output_refs": [
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/axiology.findings.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/coverage.findings.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/evolution.findings.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/logic.findings.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/semantics.findings.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/round1/structure.findings.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/stance-responses/axiology.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/stance-responses/coverage.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/stance-responses/evolution.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/stance-responses/logic.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/stance-responses/semantics.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/stance-responses/structure.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/deliberation/responses",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/deliberation-resolution.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/finding-ledger.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/finding-relation-graph.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/issue-ledger.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/issue-stance-matrix.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/deliberation-plan.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/problem-framing.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/lens-completion-barrier.yaml",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/synthesis.md",
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ/.onto/review/20260718-6d2c65d5/deliberation.md"
+        ]
+      },
+      "provenance_policy": {
+        "extra_exploration_citation_required": true,
+        "web_source_citation_required": true
+      }
+    },
+    "effective_boundary_state": {
+      "web_research": {
+        "requested_policy": "denied",
+        "effective_policy": "denied",
+        "guarantee_level": "prompt_declared_only",
+        "notes": [
+          "Current execution relies on declared boundary guidance; web access is not environment-enforced yet."
+        ]
+      },
+      "repo_exploration": {
+        "requested_policy": "allowed",
+        "effective_policy": "allowed",
+        "guarantee_level": "prompt_declared_only",
+        "notes": [
+          "Current execution relies on declared boundary guidance for repo exploration scope."
+        ]
+      },
+      "recursive_reference_expansion": {
+        "requested_policy": "denied",
+        "effective_policy": "denied",
+        "guarantee_level": "prompt_declared_only",
+        "notes": [
+          "Current execution relies on prompt-declared no-hidden-expansion guidance."
+        ]
+      },
+      "source_mutation": {
+        "requested_policy": "denied",
+        "effective_policy": "denied",
+        "guarantee_level": "prompt_declared_only",
+        "notes": [
+          "Current execution declares output-seat-only writing and source mutation denial in the prompt path."
+        ]
+      },
+      "filesystem_scope": {
+        "requested_allowed_roots": [
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ"
+        ],
+        "effective_allowed_roots": [
+          "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ"
+        ],
+        "guarantee_level": "prompt_declared_only",
+        "notes": [
+          "Current execution does not enforce filesystem scope below the host boundary; allowed roots are currently prompt-declared."
+        ]
+      }
+    },
+    "boundary_enforcement_profile": {
+      "prompt_boundary_enforcement": "prompt_declared_only",
+      "filesystem_boundary_enforcement": "prompt_declared_only",
+      "network_boundary_enforcement": "prompt_declared_only",
+      "write_boundary_enforcement": "prompt_declared_only"
+    }
+  }
+}
+```
+
+## Session Summary
+- requested target: ../../../../../../Users/kangmin/Documents/onto-mcp/clinical-lab-ontology.yaml
+- target scope kind: file
+- resolved target refs:
+  - clinical-lab-ontology.yaml
+- review mode: core-axis
+- lens set: axiology, coverage, evolution, logic, semantics, structure
+
+## Execution Directives
+- Read the role definition and the materialized input first.
+- Prefer the smallest sufficient set of files.
+- Only read optional context inputs if the primary inputs are not enough.
+- Do not recursively chase additional document links or reference chains found inside the target text.
+- Use the materialized input as the authoritative target input.
+- Apply the review target profile summary as bounded target-kind and review-goal context.
+- Use only your lens-specific perspective.
+- Perform structural inspection first when applicable.
+- If you find an issue, state what, why, and how to fix it.
+- For blocker/high/medium candidates, trace the evidence-backed causal path until the current bounded evidence reaches the starting cause; keep clear low/info findings surface-only.
+- If you find no issue, state why it is correct.
+- Submit your complete finding batch as the submit_lens_findings payload. The runtime writes the sidecar to .onto/review/20260718-6d2c65d5/round1/structure.findings.yaml.
+
+## Runtime Sidecar Output Contract
+Submit exactly one payload for `submit_lens_findings` through the constrained output channel. Do not write markdown or YAML yourself.
+
+The runtime fills `session_id`, `lens_id`, `candidate_id`, and sidecar YAML serialization.
+Submit only the semantic finding fields requested by the tool:
+- `target`
+- `evidence_anchor`
+- `claim`
+- `what`
+- `why`
+- `how_to_fix`
+- `upstream_evidence_required`
+- `severity_hint`
+- `materiality_basis`
+- `causal_path`
+
+For `severity_hint=blocker|high|medium`, `materiality_basis` and `causal_path` must be evidence-backed objects.
+For clear `low|info` surface findings, set `materiality_basis: null` and `causal_path: null`.
+The runtime assigns causal step ids and maps them to finding-ledger cause refs.
+
+Submit `domain_constraints_used` as `[]` unless a concrete domain document was actually used.
+Submit `domain_context_assumptions` as a list of strings.
+If there are no findings, submit `findings: []` and a concise `no_findings_rationale`.
+No human-readable lens markdown projection is requested for this session.
+
+
+codex
+{"findings":[],"domain_constraints_used":[],"domain_context_assumptions":[],"no_findings_rationale":"구조 렌즈 계약에 따라 역할 정의와 전체 materialized input만 읽고, 엔티티·관계·상태 연결의 고아 및 필수 관계 누락을 점검하겠습니다."}
+exec
+/bin/zsh -lc "wc -l /Users/kangmin/.codex/skills/onto/SKILL.md && sed -n '1,240p' /Users/kangmin/.codex/skills/onto/SKILL.md" in /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ
+ succeeded in 0ms:
+      55 /Users/kangmin/.codex/skills/onto/SKILL.md
+---
+name: onto
+description: Use when the user asks to work through the onto-mcp MCP-native tool surface. Prefer exposed underscore MCP tools such as `onto_review`, `onto_prepare_review`, `onto_review_status`, `onto_review_result`, `onto_list_lenses`, `onto_list_domains`, and reconstruct tools. Use `onto mcp` only as the stdio server command configured for the host, not as a one-shot review command.
+---
+
+# Onto
+
+이 skill은 `onto-mcp`의 MCP-native tool surface를 사용하는 host adapter 지침입니다.
+
+## Active Boundary
+
+Codex/host 설정에서 MCP 서버는 아래 command로 시작됩니다.
+
+```bash
+onto mcp
+```
+
+`onto mcp`는 단발성 review 명령이 아니라 stdio MCP 서버입니다. 실제 작업은 host에 노출된 MCP tool call로 수행합니다.
+
+## Tool Use
+
+현재 주요 tool:
+
+- `onto_review`: review 실행
+- `onto_prepare_review`: 실행 전 review session과 prompt packet 준비
+- `onto_review_status`: review session 상태 조회
+- `onto_review_result`: 완료된 review 결과 조회
+- `onto_list_lenses`: lens 목록 조회
+- `onto_list_domains`: domain 목록 조회
+- `onto_observe_source`, `onto_reconstruct`, `onto_reconstruct_status`, `onto_reconstruct_result`: reconstruct 경로
+
+사용자가 review를 요청하면:
+
+1. target과 intent를 해석합니다.
+2. 현재 tool 목록에 `onto_review`가 있으면 shell command 대신 `onto_review` MCP tool을 호출합니다.
+3. 준비만 요청했거나 실행 전 확인이 필요하면 `onto_prepare_review`를 호출합니다.
+4. 진행/결과 확인은 `onto_review_status`와 `onto_review_result`를 사용합니다.
+
+## Missing Tool Surface
+
+현재 세션에 `onto_*` MCP tools가 노출되어 있지 않으면, review를 임의의 shell command로 대체하지 않습니다. 대신 MCP 서버가 현재 Codex 세션에 아직 로드되지 않았다고 알리고, 새 세션/앱 재시작 후 다시 확인하도록 안내합니다.
+
+로컬 서버 readiness만 확인해야 할 때는 아래처럼 MCP 서버 시작 가능성과 `tools/list` 응답을 검증할 수 있습니다.
+
+```bash
+onto mcp
+```
+
+## Result Focus
+
+결과를 설명할 때는 tool 응답의 아래 영역을 우선 봅니다.
+
+- `entrypoint_plan`
+- `route_summary`
+- `review_result`
+
+codex
+{"findings":[],"domain_constraints_used":[],"domain_context_assumptions":[],"no_findings_rationale":"`onto` 스킬을 확인했습니다. 이 단위는 이미 준비된 lens-sidecar 실행이므로 새 review를 호출하지 않고, 허용된 prompt packet 입력만 판독해 제출 payload를 구성합니다."}
+exec
+/bin/zsh -lc "wc -l .onto/review/20260718-6d2c65d5/execution-preparation/materialized-input.md ../../../../../../Users/kangmin/Documents/onto-mcp/.onto/roles/structure.md && sed -n '1,260p' .onto/review/20260718-6d2c65d5/execution-preparation/materialized-input.md && sed -n '1,220p' ../../../../../../Users/kangmin/Documents/onto-mcp/.onto/roles/structure.md" in /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-8VNssJ
+ exited 1 in 0ms:
+wc: ../../../../../../Users/kangmin/Documents/onto-mcp/.onto/roles/structure.md: open: No such file or directory
+     128 .onto/review/20260718-6d2c65d5/execution-preparation/materialized-input.md
+     128 total
+
+ERROR: Selected model is at capacity. Please try a different model.
+ERROR: Selected model is at capacity. Please try a different model.
+tokens used
+14,142
+ENV-AFTER unit=structure exit=1

@@ -1,0 +1,125 @@
+review_record_id: 20260718-6d2c65d5
+session_id: 20260718-6d2c65d5
+entrypoint: review
+record_status: halted_partial
+created_at: 2026-07-18T01:01:09+09:00
+updated_at: 2026-07-18T01:03:21+09:00
+request_text: 이 임상검사 워크플로 온톨로지가 EMR/LIS 통합의 개념 권위 문서로 쓰기에 적절한지 검토해 달라. 엔티티·관계·상태
+  모델의 개념적 타당성과 운영 시 생길 위험을 중심으로.
+review_target_scope_ref: .onto/review/20260718-6d2c65d5/binding.yaml
+interpretation_ref: .onto/review/20260718-6d2c65d5/interpretation.yaml
+binding_ref: .onto/review/20260718-6d2c65d5/binding.yaml
+domain_final_selection_ref: .onto/review/20260718-6d2c65d5/binding.yaml
+resolved_review_mode: core-axis
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+resolved_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+execution_result_ref: .onto/review/20260718-6d2c65d5/execution-result.yaml
+session_metadata_ref: .onto/review/20260718-6d2c65d5/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260718-6d2c65d5/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260718-6d2c65d5/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260718-6d2c65d5/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260718-6d2c65d5/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  axiology: .onto/review/20260718-6d2c65d5/round1/axiology.findings.yaml
+  coverage: .onto/review/20260718-6d2c65d5/round1/coverage.findings.yaml
+  evolution: .onto/review/20260718-6d2c65d5/round1/evolution.findings.yaml
+  logic: .onto/review/20260718-6d2c65d5/round1/logic.findings.yaml
+  semantics: .onto/review/20260718-6d2c65d5/round1/semantics.findings.yaml
+lens_output_schema_version: 2
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+excluded_lens_ids: []
+degraded_lens_ids:
+  - structure
+degradation_notes_ref: .onto/review/20260718-6d2c65d5/degradation-summary.yaml
+per_lens_provenance:
+  axiology:
+    domain_constraints_used: []
+    domain_context_assumptions: []
+  coverage:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - 임상검사 EMR/LIS 통합 권위 문서는 정상 경로뿐 아니라 결과 의미에 영향을 주는 검체 예외, 통제 사건, 시간 이력 및 값의
+        권위 출처를 표현해야 한다.
+      - Test·Assay 정의와 critical threshold는 운영 중 변경될 수 있는 시점 의존 개념으로 간주했다.
+      - 외부 전화 기록 대장이나 부서 내규에 정보가 존재하더라도 온톨로지에서 식별·연결되지 않으면 권위 문서의 포괄 범위에는 포함되지
+        않은 것으로 판단했다.
+  evolution:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - EMR과 LIS는 검사 카탈로그, 검체 분류 및 결과 상태를 서로 다른 시점에 갱신할 수 있다.
+      - 검사 정의와 위험 임계값이 변경된 뒤에도 과거 결과와 당시 판단 근거를 재현해야 한다.
+  logic:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - Report에 선언된 유일한 상태 속성이 result_status이므로 상태 규칙의 ‘finalized 상태’를
+        Report.result_status=finalized로 해석했다.
+      - Order.completed가 통합 소비자에게 현재 워크플로 완료 상태로 노출된다고 해석했다.
+  semantics:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - 검토 대상의 명시대로 이 온톨로지가 EMR/LIS 통합의 개념 권위 문서로 소비된다고 가정했다.
+      - session_domain이 none이므로 외부 임상 표준이나 기관별 업무 규칙은 사용하지 않고 대상 문서 내부의 정의·관계·상태
+        선언만으로 판정했다.
+finding_ledger_ref: null
+finding_relation_graph_ref: null
+issue_ledger_ref: null
+issue_stance_matrix_ref: null
+deliberation_plan_ref: null
+problem_framing_ref: null
+issue_resolution_summary: []
+result_classification_summary:
+  highest_severity: null
+  finding_count: 0
+  issue_count: 0
+  finding_severity_counts: &a1
+    blocker: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  issue_severity_counts:
+    blocker: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 0
+  non_material_finding_count: 0
+  material_issues: []
+  non_material_findings: []
+  action_candidates:
+    - issue_id: runtime-halt
+      candidates:
+        - retry_execution
+        - continue_review
+      derivation_refs:
+        - execution-result.yaml
+      rationale: "Selected lens completion barrier failed: 5/6 planned lenses completed."
+synthesis_result_ref: null
+synthesis_result_sha256: null
+synthesis_output_sha256: null
+deliberation_status: not_performed
+deliberation_result_ref: null
+deliberation_result_sha256: null
+final_output_ref: .onto/review/20260718-6d2c65d5/final-output.md
+final_output_sha256: 7f28932ab2ac6e4156b9a8fcb663eeac57cc536557410aae663ea19e554e240e
+shared_phenomenon_summary: []

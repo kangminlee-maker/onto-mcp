@@ -1,0 +1,12 @@
+[
+  {
+    "fixture": "clinical-lab-workflow",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-tXJcs9/.onto/review/20260718-8075d1c7",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/clinical-lab-workflow/evidence/20260718-8075d1c7",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-tXJcs9",
+    "elapsed_sec": 729,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  }
+]

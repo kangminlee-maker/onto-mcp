@@ -40,7 +40,8 @@
     "scripts/effort-bench-arm-settings.ts",
     "scripts/effort-bench-itt-analyzer.ts",
     "scripts/effort-bench-judge-invariance.ts",
-    "scripts/effort-bench-run-admission.ts"
+    "scripts/effort-bench-run-admission.ts",
+    "scripts/effort-bench-pilot-report.ts"
   ],
   "exclude": []
 }

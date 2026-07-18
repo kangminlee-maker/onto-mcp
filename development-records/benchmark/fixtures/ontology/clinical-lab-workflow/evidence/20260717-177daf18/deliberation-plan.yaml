@@ -1,0 +1,114 @@
+schema_version: 1
+session_id: 20260717-177daf18
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: 불일치의 근본 원인을 동일 상태의 지연 복제로 볼지, 서로 다른 Result 검증 상태와 Report 발행·개정
+      상태의 범주 혼합으로 볼지 입장이 갈린다.
+    resolution_question: Result.status와 Report.result_status는 동일 의미의 복제 상태인가, 별도 의미
+      차원인가, 그리고 어느 해석이 권위 충돌의 근본 원인과 시정 방향을 지배해야 하는가?
+  - issue_id: issue-013
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+    conflict_summary: 정정 후 불일치의 근본 원인을 지속적 권위로 선언된 지연 복제의 논리적 모순으로 볼지, 서로 다른 상태 차원을
+      동일성 대상으로 선언한 의미 혼합으로 볼지 갈린다.
+    resolution_question: 필연적인 불일치 구간을 해소하려면 동일 상태의 권위를 단일화해야 하는가, 아니면 Result 검증과
+      Report 발행·개정 상태를 분리하고 차원 간 전이를 정의해야 하는가?
+  - issue_id: issue-012
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+    conflict_summary: 상태 확장 호환성 결손을 동일 의미의 두 폐쇄형 어휘 중복 문제로 볼지, 서로 다른 상태 차원 각각의 안정
+      어휘와 차원 간 버전형 전이 계약 부재로 볼지 입장이 갈린다.
+    resolution_question: 향후 상태 확장 계약은 하나의 권위 상태와 버전형 투영을 중심으로 해야 하는가, 아니면 두 독립 상태
+      차원과 그 사이의 버전형 전이·투영을 중심으로 해야 하는가?
+  - issue_id: issue-004
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: 모든 렌즈가 정책과 통보 사건의 혼합을 지지하지만, 현재 medium을 유지할지 결과 간 통보 상태 오적용
+      가능성을 근거로 high로 높일지 갈린다.
+    resolution_question: 공유 boolean 때문에 한 결과의 통보 상태가 다른 결과에 적용될 수 있다는 실패가 지원 경로를 막거나
+      임상 안전을 직접 훼손하는 high 수준인가, 아니면 감사 가능성을 약화하는 medium 수준인가?
+  - issue_id: issue-019
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.structure
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+    conflict_summary: 결과와 참여자 관계 누락이라는 원인에는 합의하지만, 구조적 추적성 결손을 medium으로 유지할지 미통보 위험
+      결과의 통보 완료 오인 가능성 때문에 high로 높일지 갈린다.
+    resolution_question: 유발 Result와 참여자를 식별하지 못하는 통보 상태가 실제로 미통보 위험 결과를 통보 완료로 오인하게
+      하는 지원 경로 실패를 구성해 high가 되는가, 아니면 신뢰성과 감사 가능성을 약화하는 medium인가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 원인, 심각도, 조치 방향을 일관되게 지지한다.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: structure의 narrow 입장은 소비자 팀 배정보다 권위 있는 규칙 연결 부재를 강조한 호환 가능한 원인 정밀화이며,
+      이슈의 심각도나 조치 방향을 바꾸지 않는다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 감사 사건 부재라는 원인과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 상태 차원 혼합과 권위 충돌이라는 통합 원인 및 high 심각도에 합의한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 버전 가능한 카탈로그 권위와 시간적 재현성 결손에 합의한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 검체 예외·사후 lifecycle 누락과 medium 심각도에 합의한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 문자열 중심 Result 모델의 임상 해석 근거 누락과 high 심각도에 합의한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 버전 가능한 Test–Assay 매핑 부재로 인한 정체성 연속성 결손에 합의한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 검체 분류의 중복 enum·자유 문자열 분산과 단일 버전형 권위 필요성에 합의한다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: logic과 structure의 narrow 입장은 기존 가설에 이미 포함된 completed의 의미 및 정정 후 전이 규칙
+      부재를 강조하는 정밀화로, 심각도나 조치 방향의 실질적 충돌이 아니다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 임계값 규칙과 결과별 통보 사건의 범주 혼합 및 high 심각도에 합의한다.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 STAT의 삼중 표현으로 인한 복수 권위 문제와 단일 권위 조치에 합의한다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 비동의어인 Test와 Assay를 이중 등록으로 동일시한 문제와 명시적 매핑 필요성에 합의한다.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 AssayExecution 부재가 수행 계보 단절과 Specimen의 잘못된 생산자 역할을 함께 만든다는 통합
+      원인에 합의한다.

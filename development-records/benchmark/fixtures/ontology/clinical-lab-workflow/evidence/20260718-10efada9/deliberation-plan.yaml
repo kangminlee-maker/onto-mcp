@@ -1,0 +1,76 @@
+schema_version: 1
+session_id: 20260718-10efada9
+planned_issues:
+  - issue_id: issue-018
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-018.structure
+      - issue-stance-matrix.yaml#stances.issue-018.coverage
+    conflict_summary: 구조 렌즈는 특정 Result와 통보 증거 사이의 좁은 연결 단절로 보아 medium을 유지하지만,
+      coverage 렌즈는 이를 일반적인 고위험 audit-event 결손의 구체적 증상으로 보아 severity 상향을 주장한다.
+    resolution_question: issue-018을 독립적인 medium 구조 결손으로 유지할 것인가, 아니면 안전 관련 감사 경로를 직접
+      끊는 high 결손으로 분류할 것인가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 근본 원인, 높은 심각도 및 제안 조치를 일관되게 지지한다.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 Test-Assay 정체성과 권위의 미결정이라는 원인 및 medium 심각도에 동의한다.
+  - issue_id: issue-003
+    reason_code: non_material_issue
+    reason: severity가 info이고 material_issue가 false인 경계 내 증거 부족 관찰이므로 물질적 갈등 심의 대상이 아니다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 Specimen 예외·종결 생명주기 누락의 원인과 높은 심각도를 지지한다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 안전 관련 행위의 first-class audit event 부재라는 원인과 높은 심각도를 지지한다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 versioned rule과 immutable notification event의 분리 필요성 및 높은 심각도에
+      동의한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 병렬 표현의 단일 권위와 결정적 projection 부재라는 원인 및 높은 심각도를 지지한다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: evolution과 logic의 narrow 입장은 전체 finding을 부정하지 않고 각 렌즈의 판단 범위를
+      provenance·구별 가능성으로 한정한다. 근본 원인, medium 심각도 및 핵심 조치와 충돌하지 않는다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 canonical SpecimenType 부재라는 원인과 medium 심각도에 동의한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 authoritative versioned Test-Assay realization mapping 부재라는
+      원인과 높은 심각도를 지지한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 versioned, namespaced code identity 및 시간적 교체 의미의 부재라는 원인과 높은
+      심각도에 동의한다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: structure의 narrow 입장은 상태 정책 선택을 구조 렌즈의 권한 밖으로 두면서 상태 의존 및 재평가 경로 누락은
+      지지한다. issue의 원인, medium 심각도 또는 조치 필요성과 실질적으로 충돌하지 않는다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 authoritative Test-Assay 모델 부재가 핵심 워크플로 단절을 만든다는 원인과 높은 심각도를
+      지지한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 Result 상태와 Report publication lifecycle의 의미·집계·우선권 규칙 부재라는 원인과
+      높은 심각도에 동의한다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 STAT 중복 표현의 canonical 권위 및 파생 규칙 부재라는 원인과 medium 심각도를 지지한다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: evolution과 logic의 narrow 입장은 관계 명칭의 최종 의미 판단을 semantics에 맡기면서 출처와 분석 실행의
+      구분 필요성은 지지한다. medium 심각도와 핵심 조치에 대한 물질적 충돌은 없다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 canonical 검체 의미 체계와 Test-Assay 변환 규칙 부재라는 원인 및 medium 심각도에 동의한다.

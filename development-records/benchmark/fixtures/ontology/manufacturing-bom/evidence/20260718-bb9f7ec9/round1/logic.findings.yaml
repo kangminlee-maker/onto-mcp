@@ -1,0 +1,53 @@
+schema_version: 1
+session_id: 20260718-bb9f7ec9
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart definition and direction
+      attribute
+    evidence_anchor: .onto/review/20260718-bb9f7ec9/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart의 대칭성 정의와 one_way 허용·기본값은 동시에 만족될 수 없습니다.
+    what: 정의는 모든 대체 관계가 양방향이라고 선언하지만, direction은 one_way를 허용하고 이를 기본값으로 지정합니다.
+    why: Conflict pair는 materialized-input.md:38과 :42-45입니다. one_way 인스턴스에서는 A→B가
+      성립하면서 B→A가 성립하지 않아 정의의 보편적 대칭 조건을 위반합니다. 이는 inter-claim 충돌이며 modality 축은
+      mixed입니다. 필요 조건으로 선언된 대칭성과 가능한·기본 상태로 선언된 단방향성이 충돌합니다. 용어 의미를 명확히 해도 충돌이
+      남으므로 logic 소유이며 별도 boundary handoff는 없습니다.
+    how_to_fix: 대체 관계의 단일 계약을 선택하십시오. 양방향만 허용한다면 direction을 제거하거나 bidirectional로
+      고정하고, 단방향도 필요하다면 정의를 direction 값에 따른 조건부 규칙으로 바꾸십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목 및 대체부품 관계의 일관된 개념 기준
+      failure_condition: direction=one_way인 AlternatePart가 생성되거나 기본값이 적용될 때
+      impact: PLM은 단방향 대체로, MES는 정의에 따라 양방향 대체로 해석할 수 있어 서로 다른 자재 선택과 제조 실행 판단을 만들 수
+        있습니다.
+      evidence_refs:
+        - .onto/review/20260718-bb9f7ec9/execution-preparation/materialized-input.md:38
+        - .onto/review/20260718-bb9f7ec9/execution-preparation/materialized-input.md:42-45
+    causal_path:
+      root_cause_candidate: 대체 가능성의 대칭성이라는 하나의 관계 제약에 대해 보편적 정의와 방향성 상태 모델이 서로 다른 양상을 부여했습니다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: AlternatePart 정의는 A가 B의 대체이면 B도 A의 대체라고 의무화합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-bb9f7ec9/execution-preparation/materialized-input.md:38
+        - cause_id: logic-candidate-001.cause-002
+          claim: 동일 엔티티가 비대칭 상태인 one_way를 허용하고 이를 기본값으로 둡니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-bb9f7ec9/execution-preparation/materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-003
+          claim: 보편적 대칭 제약과 단방향 가능 상태를 하나의 canonical relation 계약에 함께 둔 양상 모델 불일치입니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-bb9f7ec9/execution-preparation/materialized-input.md:38
+            - .onto/review/20260718-bb9f7ec9/execution-preparation/materialized-input.md:42-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - AlternatePart.direction의 one_way는 note의 명시대로 역방향 대체가 성립하지 않는 상태를 뜻한다고 해석했습니다.
+validation:
+  unaddressable_candidates: []

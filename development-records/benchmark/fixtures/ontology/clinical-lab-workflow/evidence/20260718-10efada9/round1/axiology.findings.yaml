@@ -1,0 +1,125 @@
+schema_version: 1
+session_id: 20260718-10efada9
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml — Result/Report 상태 권위와 동기화 정책
+    evidence_anchor: 'materialized-input.md:6-8, 62-84, 121-123;
+      value_authority_anchor={source:
+      .onto/review/20260718-10efada9/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: criterion_id=user-request-intent (lines 6-8), excerpt: "EMR/LIS
+      통합의 개념 권위 문서로 쓰기에 적절한지…운영 시 생길 위험을 중심으로"}; value_type=purpose;
+      alignment_direction=misaligned'
+    claim: 임상의가 신뢰하는 상태의 권위를 별도 필드와 야간 배치에 맡겨, 통합 개념 권위 문서라는 목적을 훼손한다.
+    what: Result.status는 LIS가 기록하지만 같은 정보를 Report.result_status에도 유지하며, Report 값은
+      임상의가 신뢰하는 권위 값으로 선언된다. Result가 corrected로 바뀌어도 Report 반영은 야간 1회다.
+    why: 수정 결과 발생 후 배치 전까지 LIS의 Result는 corrected인데 임상의가 신뢰하는 Report는 finalized일 수
+      있다. 하나의 임상 상태에 두 권위 좌석과 지연 동기화를 허용한 트레이드오프는 EMR/LIS가 공유할 단일 개념 권위라는 목적에 직접
+      어긋난다.
+    how_to_fix: 결과 상태의 단일 권위 필드와 canonical enum을 정하고 Report 상태는 즉시 계산되는 projection으로
+      정의한다. 별도 저장이 불가피하면 명시적 상태 매핑, 원자적/이벤트 기반 동기화, 불일치 시 배포 차단 규칙을 추가한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 엔티티·상태 의미를 일관되게 해석할 수 있는 개념 권위 문서 제공
+      failure_condition: Result가 corrected로 전이한 뒤 야간 동기화 전까지 Report.result_status가
+        finalized로 남는 경우
+      impact: 소비자가 권위 값으로 명시된 Report를 신뢰해 실제 LIS 상태와 다른 판단을 하므로 문서의 권위성과 운영 신뢰가 동시에
+        무너진다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 동일한 결과 상태의 권위를 Result와 Report에 분산하고 지연 동기화를 정상 운영 규칙으로 채택함
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 수정된 Result와 임상의가 보는 Report 상태가 야간 배치 전까지 달라질 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 두 필드는 같은 정보를 유지한다고 선언되지만 서로 다른 enum을 사용하며 Report 값만 별도로 권위 값이라 선언된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 단일 상태를 projection하지 않고 두 권위 좌석에 저장한 뒤 배치로 수렴시키는 설계가 불일치 창을 만든다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:72-83
+            - materialized-input.md:123
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml — Test/Assay 카탈로그 권위
+    evidence_anchor: 'materialized-input.md:46-60, 108-119, 126-127;
+      value_authority_anchor={source:
+      .onto/review/20260718-10efada9/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: criterion_id=user-request-intent (lines 6-8), excerpt: "EMR/LIS
+      통합의 개념 권위 문서로 쓰기에 적절한지"}; value_type=purpose;
+      alignment_direction=misaligned'
+    claim: Test와 Assay의 구분을 미결정 상태로 둔 채 이중 등록을 운영 규칙으로 삼아 카탈로그 개념 권위를 분산시킨다.
+    what: Test는 주문 가능 단위, Assay는 수행 단위로 정의되지만 둘 사이의 관계나 매핑 식별자는 없다. 동시에 신규 항목은 두 곳
+      모두 등록하도록 요구하고 통합 여부는 미래로 미룬다.
+    why: 정당한 개념 분리라면 주문 항목과 수행 항목의 대응 관계가 권위 문서에 있어야 한다. 현재는 독립 코드·검체 표현을 이중 입력하므로
+      어느 쪽이 항목 정체성과 검체 요구사항의 권위인지 결정할 수 없고, EMR 주문과 LIS 수행 간 불일치가 정상적으로 축적될 수
+      있다.
+    how_to_fix: Test와 Assay를 별도 개념으로 유지하되 명시적 매핑 관계와 cardinality, canonical 식별자, 검체
+      요구사항의 권위 좌석을 정의한다. 실제로 같은 개념이면 하나로 통합하고 시스템별 코드는 alias/projection으로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR의 주문 카탈로그와 LIS의 수행 카탈로그를 연결하는 개념 권위 제공
+      failure_condition: 신규 항목이 Test와 Assay에 각각 등록되면서 코드 또는 검체 표현이 달라지는 경우
+      impact: 문서만으로 두 시스템의 항목 대응과 어느 속성이 권위인지 판단할 수 없어 통합 설계가 별도 비공식 매핑에 의존하게 된다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: Test/Assay의 개념 분리 결정을 닫지 않은 상태에서 관계 모델 없이 이중 등록을 운영 정책으로 채택함
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 신규 검사 항목은 Test와 Assay 양쪽에 등록되지만 두 엔티티 사이의 관계가 정의되지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:108-119
+            - materialized-input.md:126-127
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 두 엔티티가 독립 코드와 서로 다른 검체 표현 체계를 소유해 대응 불일치가 가능하다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 카탈로그 정비와 통합 결정을 미래로 미룬 채 현재의 이중 권위 운영을 허용한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: 실제 EMR/LIS에 기존 매핑 권위가 있는지는 현재 경계에서 확인할 수 없지만, 본 문서에는 그 권위나 참조가 없다.
+  - candidate_id: axiology-candidate-003
+    target: axiology 실행의 가치 권위 바인딩
+    evidence_anchor: 'prompt packet §Authoritative alignment input 및 §Finding
+      evidence requirements; review-value-alignment-criteria.yaml:5-20;
+      value_authority_anchor={source: prompt packet, anchor: §Authoritative
+      alignment input/Binding timing, excerpt: "authority 파일 미존재 또는 읽기 실패 →
+      finding은 insufficient evidence + upstream_evidence_required=true"};
+      value_type=boundary; alignment_direction=indeterminate'
+    claim: 필수 canonical 가치 권위가 제공되지 않아 사용자 목적을 넘어선 axiology 판단은 불충분한 증거 상태다.
+    what: 바인딩된 가치 정렬 기준에는 사용자 요청 의도만 있으며, 역할 계약이 요구하는 core-lexicon과
+      제품화·OaC·LLM-native·product-locality 원칙의 내용 또는 인용 가능한 anchor가 없다.
+    why: 따라서 위 두 finding은 확인된 사용자 목적과 대상 자체의 선언에 한정된다. onto의 상위 제품 원칙이나 개념 SSOT와의 정렬
+      여부는 현재 경계에서 판정할 수 없다.
+    how_to_fix: 후속 axiology 실행 전에 필수 authority source set을 prompt packet 또는 허용된
+      context input에 materialize하고 안정적인 term/section anchor를 제공한다.
+    upstream_evidence_required: true
+    severity_hint: info
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

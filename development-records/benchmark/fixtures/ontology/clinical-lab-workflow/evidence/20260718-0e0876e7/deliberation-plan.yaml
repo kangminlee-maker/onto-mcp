@@ -1,0 +1,143 @@
+schema_version: 1
+session_id: 20260718-0e0876e7
+planned_issues:
+  - issue_id: issue-002
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+    conflict_summary: coverage와 semantics는 결과별 통보 사건의 부재가 환자안전 핵심 통제를 훼손하므로 high로
+      상향해야 한다고 보지만, 나머지 렌즈는 medium을 유지한다.
+    resolution_question: 감사 가능한 결과별 통보 사건이 없는 결함은 지원 경로의 목적 달성을 막는 high인가, 아니면 신뢰·감사
+      가능성을 약화하는 medium인가?
+  - issue_id: issue-012
+    priority: 9
+    conflict_type: domain_constraint
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+    conflict_summary: 원안은 중복 enum과 문자열을 단일 SpecimenType 권위로 통합하지만, semantics와 여러 좁힘
+      입장은 Test 요구 검체와 Assay matrix가 서로 다른 분류축일 수 있어 통합이 의미를 훼손한다고 본다. logic은 실제
+      값과 매핑 근거가 없어 판단을 보류한다.
+    resolution_question: Test 요구 검체와 Assay matrix는 하나의 버전형 권위 어휘로 통합할 동일 분류축인가, 아니면
+      별도 어휘와 명시적 매핑이 필요한 독립 분류축인가?
+  - issue_id: issue-019
+    priority: 8
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.axiology
+      - issue-stance-matrix.yaml#stances.issue-019.coverage
+      - issue-stance-matrix.yaml#stances.issue-019.evolution
+      - issue-stance-matrix.yaml#stances.issue-019.logic
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+      - issue-stance-matrix.yaml#stances.issue-019.structure
+    conflict_summary: semantics는 채취물 범주와 분석 matrix를 독립 분류축으로 확정하지만, evolution과
+      structure는 조건부로만 지지하고 logic은 실제 값과 호환성 규칙이 없어 분리 가설과 심각도를 확정할 수 없다고 본다.
+    resolution_question: 경계 내 증거로 두 속성이 독립 분류축임을 확정할 수 있는가, 아니면 실제 값·세분도·허용 변환 규칙을
+      확보할 때까지 근본 원인과 조치를 조건부로 유지해야 하는가?
+  - issue_id: issue-018
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - structure
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-018.semantics
+      - issue-stance-matrix.yaml#stances.issue-018.structure
+      - issue-stance-matrix.yaml#stances.issue-018.coverage
+    conflict_summary: coverage는 Test–Assay realization edge 부재가 주문에서 수행·결과까지의 핵심
+      workflow를 막으므로 high라고 보지만, semantics와 structure는 medium을 유지한다.
+    resolution_question: Test–Assay 실행 연결 부재는 지원되는 주문-수행-결과 경로 자체를 달성 불가능하게 하는
+      high인가, 아니면 외부 매핑으로 경로는 가능하되 권위성과 추적성이 약화되는 medium인가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: logic의 좁힘은 의미 수준 분리라는 상위 원인을 부정하지 않고 비원자적 전이와 지연 복제라는 논리 적용 범위를 구체화하므로
+      실질적으로 양립 가능하다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 근본 원인, medium 심각도 및 realization 관계 도입을 일관되게 지지한다.
+  - issue_id: issue-004
+    reason_code: non_material_issue
+    reason: 현재 분류가 info이고 material_issue가 false이므로 통제 숙의 대상이 아니다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 검체 lifecycle의 예외·종결 상태 누락과 medium 심각도에 합의한다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 현재값 덮어쓰기 모델의 이력 손실과 high 심각도에 합의한다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: semantics의 정책·사건 유형 혼합 설명은 단일 완료 플래그 축약 원인의 상위 설명이며, 다른 렌즈의 사건 모델 도입 조치와
+      양립한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 무버전 임계값 정책의 재현성 결함과 medium 심각도에 합의한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 Test–Assay 대응·권위·버전 모델 부재와 high 심각도를 지지한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 문자열 중심 Result 모델의 의미 차원 누락과 medium 심각도에 합의한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 카탈로그 권위 관계와 버전 모델 부재 및 high 심각도를 지지한다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 상태 매핑·전이 정책의 버전 및 적용 기간 부재와 medium 심각도에 합의한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 임계값의 정책 lifecycle 부재와 medium 심각도에 합의한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: coverage와 semantics의 좁힘은 상충하지 않는다. 모두 중첩 조건의 우선순위 결손을 인정하며 각각 coverage
+      범위와 더 넓은 의미 구분 맥락을 덧붙인다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: 모든 적용 가능한 렌즈가 correction 이후 완료 의미의 시간적 명세가 부족하다는 데 동의한다. 좁힘 입장은 특정 전이
+      정책을 증거 없이 단정하지 말자는 범위 제한이다.
+  - issue_id: issue-017
+    reason_code: no_material_conflict
+    reason: coverage의 좁힘은 의미적 중복 판단을 semantics에 맡기면서 일관성 규칙 누락만 다루는 렌즈 범위 제한이며, 단일
+      권위와 파생 제약 조치에는 이견이 없다.
+  - issue_id: issue-020
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 재사용 임계값 정책과 결과별 통보 사건의 유형 혼합, high 심각도 및 분리 조치에 합의한다.
+  - issue_id: issue-021
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 입력 재료와 수행 사건의 provenance 혼동 및 medium 심각도에 합의한다.
+  - issue_id: issue-022
+    reason_code: no_material_conflict
+    reason: semantics의 대체 근본 원인은 연결 부재를 부정하지 않고 그 상위 원인인 정책·사건 유형 혼합을 설명하며, 모든 렌즈가
+      동일한 사건 분리·연결 조치를 지지한다.

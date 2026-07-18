@@ -1,0 +1,254 @@
+schema_version: 1
+session_id: 20260717-76812fbb
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: CriticalValue 통보 모델
+    evidence_anchor: materialized-input.md:100-106 — CriticalValue는 임계 범위와 notified
+      불리언만 가지며 통보 시각·수신자는 외부 전화 기록 대장에 있다고 명시한다.
+    claim: 중요값 통보를 재구성할 감사 증거 개념이 온톨로지에 없다.
+    what: 통보 행위자, 수신자, 발생·확인 시각, 통보 수단, 근거 및 확인 결과를 나타내는 통보 사건이 없고 완료 여부만 남는다.
+    why: 외부 전화 기록 대장에 핵심 증거를 맡기면서 그 기록과 CriticalValue를 연결하는 식별자나 관계도 정의하지 않아 EMR/LIS
+      통합 모델만으로 통보 이행을 검증할 수 없다.
+    how_to_fix: CriticalValueNotification 같은 사건 엔티티를 추가하고 Result/CriticalValue, 통보자,
+      수신자, 통보·확인 시각, 수단, 근거, 결과 및 외부 기록 참조를 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 중요값 통보 통제와 운영 증거를 일관되게 표현하는 목적
+      failure_condition: 중요값 발생 후 통보 여부나 지연·실패를 두 시스템 사이에서 감사 또는 재구성해야 할 때
+      impact: 불리언만으로는 실제 통보의 주체·시점·수신 확인을 증명할 수 없어 환자안전 통제와 장애 분석의 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: 통보가 독립된 감사 가능 사건이 아니라 CriticalValue의 불리언 속성과 외부 장부로 분리되어 있다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 온톨로지 내부에는 notified 값 외에 통보 증거가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 통보 시각과 수신자는 외부 전화 기록 대장에만 존재하며 연결 관계가 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:106
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 통보 행위를 독립 사건으로 모델링하지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-119
+      unresolved_beyond_evidence: 외부 전화 기록 대장의 실제 필드와 보존 정책은 현재 경계에서 확인할 수 없다.
+  - candidate_id: coverage-candidate-002
+    target: Specimen lifecycle
+    evidence_anchor: materialized-input.md:37-44,121-124 — Specimen lifecycle은
+      analyzed에서 끝나며 이후 보관·폐기는 부서 내규에 위임된다.
+    claim: 검체 lifecycle이 분석 이후 보관·폐기까지 닫히지 않는다.
+    what: 보관, 반출, 폐기, 보존기간 만료 같은 종결 상태와 전이 증거가 온톨로지에 없다.
+    why: 검체가 analyzed 이후 어떤 상태인지 공통 모델로 표현할 수 없으므로 부서별 운영과 LIS 기록을 EMR 통합 관점에서 일관되게
+      해석하거나 추적할 수 없다.
+    how_to_fix: Specimen lifecycle에 retained/stored/disposed 등 종결 상태를 추가하고 상태 전이
+      시각·행위자·근거 및 적용 보존정책 참조를 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문부터 보고까지의 임상검사 엔티티·관계·상태를 통합 권위 모델로 제공하는 목적
+      failure_condition: 분석 완료 검체의 보관 위치, 재검 가능 여부 또는 폐기 이력을 시스템 간 확인해야 할 때
+      impact: 공통 lifecycle이 중간 상태에서 끝나 검체 책임과 종결 처리를 권위 문서로 판정할 수 없다.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:37-44
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: 분석 후 검체 처리를 온톨로지 상태 모델이 아니라 부서별 내규에 위임했다.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Specimen lifecycle의 마지막 상태는 analyzed이다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-44
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 보관·폐기 처리가 lifecycle 밖의 부서 내규로 빠져 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: 부서 내규의 실제 상태와 보존기간은 현재 경계에서 확인할 수 없다.
+  - candidate_id: coverage-candidate-003
+    target: Test·Assay 카탈로그 권위와 이력
+    evidence_anchor: materialized-input.md:46-60,126-127 — Test와 Assay가 별도 카탈로그 단위로
+      존재하고 신규 항목을 두 곳 모두 등록하지만 두 엔티티 간 관계와 권위 지정이 없다.
+    claim: 병행 카탈로그의 단일 권위, 대응 관계, 유효기간 및 변경 이력이 누락되었다.
+    what: 주문 단위 Test와 수행 단위 Assay를 연결하는 매핑, 어느 쪽이 코드·명칭·검체 요구사항의 원본인지, 매핑의 유효기간과 버전이
+      정의되지 않았다.
+    why: 같은 신규 항목을 두 곳에 중복 등록하도록 하면서 일치 판정과 과거 시점 매핑을 표현할 수 없어 EMR 주문 코드와 LIS 수행 코드가
+      어긋날 수 있다.
+    how_to_fix: TestAssayMapping 또는 명시적 relation을 추가하고 카디널리티, authoritative_system,
+      effective_from/effective_to, version 및 폐기 상태를 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR 주문 카탈로그와 LIS 수행 카탈로그 사이의 개념 권위를 제공하는 목적
+      failure_condition: 신규·변경·폐기된 검사 항목을 양 시스템에 배포하거나 과거 주문을 당시 Assay로 재구성할 때
+      impact: 중복 등록값의 원본과 시점별 대응을 결정할 수 없어 잘못된 검사 수행 또는 인터페이스 매핑 드리프트가 발생할 수 있다.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:46-60
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: Test와 Assay를 병행 관리하면서 이를 하나의 권위 있는 카탈로그 개념 또는 시간 유효 매핑으로 묶지 않았다.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Test와 Assay는 별도 엔티티이지만 서로를 연결하는 속성이나 relation이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 신규 항목은 두 곳 모두에 등록하도록 되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 병행 값의 단일 원본과 시점별 대응 개념이 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: Result·Report 상태 권위
+    evidence_anchor: materialized-input.md:62-84,121-123 — Result.status와
+      Report.result_status가 동일 정보를 유지하고, Report 값은 임상의가 신뢰하는 권위 값이지만 corrected
+      반영은 야간 배치다.
+    claim: 중복 상태의 단일 원본과 동기화 시점별 판정 규칙이 완결되지 않았다.
+    what: Result와 Report에 서로 다른 enum으로 상태를 중복 보관하면서 정식 매핑, 충돌 시 우선순위, 배치 전 유효 상태 및
+      동기화 실패 상태가 없다.
+    why: Result가 corrected된 뒤 Report가 amended되기 전까지 두 권위 후보가 의도적으로 불일치하는데, 소비자가 어느
+      값을 언제 신뢰해야 하는지 온톨로지가 결정하지 못한다.
+    how_to_fix: 결과 상태의 단일 권위 개념을 지정하고 Report 상태를 파생 투영으로 정의하거나, 두 lifecycle을 분리한 뒤
+      명시적 매핑·유효시각·동기화 상태·충돌 처리 규칙을 추가한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS가 결과의 현재 임상 상태를 동일하게 해석하도록 하는 개념 권위 목적
+      failure_condition: Result 정정 후 야간 동기화 전 또는 배치 실패 중 EMR이 Report.result_status를 조회할 때
+      impact: 임상의에게 이미 정정된 결과가 finalized로 보일 수 있고, 통합 소비자가 어느 상태를 권위로 삼을지 일관되게 결정할 수
+        없다.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:62-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 하나의 결과 상태 정보를 두 엔티티에 물리적으로 유지하면서 단일 권위와 시간성 있는 투영 계약을 정의하지 않았다.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Result.status와 Report.result_status가 같은 정보를 서로 다른 enum으로 보유한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: coverage-candidate-004.cause-002
+          claim: 정정 상태는 야간 배치 전까지 Report에 반영되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 중복 상태의 단일 원본, 매핑 및 충돌 처리 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:62-84
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: 실제 인터페이스가 배치 전 불일치를 별도 방식으로 차단하는지는 현재 경계에서 확인할 수 없다.
+  - candidate_id: coverage-candidate-005
+    target: 결과 정정·재발행 lifecycle과 감사 이력
+    evidence_anchor: materialized-input.md:62-84,121-123 — corrected/amended 상태는 있으나
+      Result에는 verified_by만 있고 Report에는 released_at만 있으며 정정 사건·사유·버전·대체 관계가 없다.
+    claim: 종결 결과 이후의 정정·재발행을 재구성할 lifecycle 및 감사 차원이 누락되었다.
+    what: 최종 결과의 이전 값, 정정 사유, 정정자·정정시각, 재검증, 보고서 버전, supersedes 관계와 재발행·통지 증거가 표현되지
+      않는다.
+    why: corrected와 amended는 현재 상태만 나타내므로 어떤 내용이 언제 누구에 의해 변경되어 어느 보고서를 대체했는지 권위
+      문서만으로 재구성할 수 없다.
+    how_to_fix: ResultRevision/ReportRevision 또는 Amendment 사건을 추가하고 이전 버전 관계, 변경 전후
+      값, 사유, 행위자, 발생·검증·재발행 시각 및 수신 통지를 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 최종·정정 결과와 보고의 lifecycle을 임상적으로 추적 가능한 권위 모델로 제공하는 목적
+      failure_condition: 최종 보고 후 결과가 정정되어 과거 보고 내용과 변경 경위를 감사하거나 임상의 통지를 입증해야 할 때
+      impact: 현재 상태만 남아 정정 계보와 책임 증거를 복원할 수 없으며, 이전 보고를 현재 결과로 오인할 위험이 있다.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:62-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 정정을 버전 있는 사건이 아니라 상태 enum의 최종 값으로만 모델링했다.
+      root_cause_step_id: coverage-candidate-005.cause-003
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: Result와 Report에는 corrected/amended 상태가 존재하지만 정정 사건이나 버전 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:62-84
+            - materialized-input.md:108-119
+        - cause_id: coverage-candidate-005.cause-002
+          claim: 행위자·시각 정보도 최초 검증자와 단일 released_at에 한정된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:73-84
+        - cause_id: coverage-candidate-005.cause-003
+          claim: 정정 lifecycle을 상태 변경이 아닌 감사 가능한 개별 사건으로 표현하지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:62-84
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-006
+    target: 검체 전처리·예외 lifecycle
+    evidence_anchor: materialized-input.md:37-44 — Specimen lifecycle은 collected에서
+      시작해 received, in_analysis, analyzed만 포함한다.
+    claim: 채취 전후의 검체 인계와 부적합·거부·재채취 예외 영역이 표현되지 않는다.
+    what: 채취 요청·시도, 채취자, 라벨링, 운송·인계, 접수시각, 검체 품질 판정, 거부 사유, 재채취 연결을 나타내는 상태나 사건이 없다.
+    why: 정상적으로 수집되어 분석된 검체만 표현할 수 있어 주문이 결과로 이어지지 않는 대표적인 검체 예외를 EMR과 LIS가 공통 원인 및
+      후속조치로 교환할 수 없다.
+    how_to_fix: SpecimenCollection 및 SpecimenHandling 사건이나 lifecycle 상태를 추가하고
+      collector, collected/received timestamps, custody transfer, accept/reject
+      reason, quality condition 및 replacement_specimen 관계를 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order부터 Report까지 전 구간의 임상검사 워크플로를 통합 모델로 제공하는 목적
+      failure_condition: 채취 실패, 운송 문제, 부적합 검체 거부 또는 재채취로 주문 진행이 중단·재개될 때
+      impact: 예외 원인과 재채취 계보가 공통 개념으로 전달되지 않아 주문 상태, TAT 및 사용자 안내가 시스템별로 달라질 수 있다.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:37-44
+        - materialized-input.md:108-119
+    causal_path:
+      root_cause_candidate: Specimen을 정상 분석 경로 중심의 상태 목록으로만 모델링하고 전처리 사건과 예외 분기를 포함하지 않았다.
+      root_cause_step_id: coverage-candidate-006.cause-002
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: Specimen lifecycle은 collected, received, in_analysis, analyzed 네 정상 상태만
+            포함한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-44
+        - cause_id: coverage-candidate-006.cause-002
+          claim: 채취·인계·품질 판정 및 거부·재채취를 나타내는 엔티티나 relation이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:13-119
+      unresolved_beyond_evidence: 기관별 세부 접수·거부 사유 코드는 현재 경계에서 확인할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 임상검사 통합 권위 모델은 정상 주문-분석-보고 경로뿐 아니라 검체 부적합·재채취, 분석 후 검체 처분, 최종 결과 정정 및 중요값
+    통보의 운영 증거를 표현해야 한다.
+  - EMR의 주문 가능한 Test와 LIS의 수행 가능한 Assay가 병행 관리될 경우 두 카탈로그 사이의 권위와 시점별 대응을 공통 모델이
+    명시해야 한다.
+validation:
+  unaddressable_candidates: []

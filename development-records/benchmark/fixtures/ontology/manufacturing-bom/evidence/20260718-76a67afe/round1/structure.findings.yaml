@@ -1,0 +1,53 @@
+schema_version: 1
+session_id: 20260718-76a67afe
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml의 AlternatePart 연결 구조
+    evidence_anchor: materialized-input.md:37-45, 84-91
+    claim: "`AlternatePart`가 명시적 관계 그래프에서 우회되어 관계 엔티티의 구조적 연결이 끊겨 있다."
+    what: "`AlternatePart`는 두 Part 참조와 방향 속성을 가진 관계 엔티티로 정의되지만, `relations`에는 이 엔티티를
+      시작점이나 종점으로 하는 간선이 없다. 대신 `Part -> Part`의 `alternate_of` 단축 관계만 있으며, 그 주석은
+      해당 관계가 `AlternatePart`를 통해 표현된다고 설명한다."
+    why: 관계 그래프만 소비하면 `AlternatePart.direction`, `primary_ref`, `alternate_ref`로
+      이어지는 경로가 없어 단축 관계를 관계 엔티티의 세부 정보와 결합할 수 없다. PLM/MES 구현이 단축 간선과 관계 엔티티 중 서로
+      다른 구조를 기준으로 삼을 수 있어, 대체품 방향 정보가 통합 경로에서 유실될 수 있다.
+    how_to_fix: "`AlternatePart`를 정식 관계 노드로 연결하는 명시적 간선을 추가한다. 예를 들어 `Part ->
+      AlternatePart`와 `AlternatePart -> Part` 관계를 각각 primary/alternate 역할로 선언하고,
+      `Part -> Part alternate_of`는 이 구조에서 파생되는 projection임을 명시하거나 제거한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리 모델을 PLM/MES 통합의 일관된 개념 기준으로 제공하는 목적
+      failure_condition: 통합 소비자가 `relations`를 정식 탐색 그래프로 사용하거나 대체품 관계의 방향 속성을 조회할 때
+      impact: 동일한 대체품 개념이 직접 Part 간선과 연결되지 않은 관계 엔티티로 분리되어, 시스템별 구조 해석과 방향 정보 보존 여부가
+        달라진다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: 정식 관계 그래프가 재구체화된 `AlternatePart` 노드를 포함하지 않고 Part 간 단축 간선으로 이를 우회한다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: "`relations` 목록의 대체품 연결은 `Part -> Part alternate_of`뿐이며 `AlternatePart`가
+            참여하는 간선은 없다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-001.cause-002
+          claim: 그러나 `AlternatePart`는 primary/alternate Part 참조와 관계 방향을 보유한 별도 엔티티이고, 단축
+            간선 주석도 이 엔티티를 통해 표현된다고 선언한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: 대상 문서는 ref 속성을 자동으로 관계 간선으로 투영하는지 명시하지 않는다. 그런 투영이
+        있더라도 명시적 `relations` 그래프와 단축 관계 사이의 대응 규칙은 현재 경계 내에서 확인되지 않는다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`relations` 섹션은 PLM/MES 소비자가 사용할 수 있는 명시적 구조 그래프이며, 엔티티 속성의 ref와 별개로 구조적 연결
+    계약을 나타낸다고 보았다."
+validation:
+  unaddressable_candidates: []

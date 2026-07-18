@@ -1,0 +1,159 @@
+schema_version: 1
+session_id: 20260718-8de943b3
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-002
+    to_finding_id: finding-021
+    relation: shared_cause_candidate
+    root_hypothesis: Specimen 예외·종결 상태와 허용 전이를 포함하는 완전한 lifecycle graph가 존재한다면 두
+      finding의 결함이 함께 해소된다.
+    shared_cause:
+      cause_claim: 상태 노드와 전이 간선을 포괄하는 lifecycle schema가 불완전하여 Specimen의 예외·종결 상태와 그
+        전이가 모두 누락되었다.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-021.cause-002
+    rationale: finding-002는 Specimen lifecycle의 정상 경로 편향을, finding-021은 전체 lifecycle
+      전이 간선의 불완전성을 지적한다. 전자는 후자의 Specimen-specific manifestation으로 볼 수 있지만 동일
+      범위는 아니므로 shared cause로 보존한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-003
+    to_finding_id: finding-004
+    relation: shared_cause_candidate
+    root_hypothesis: 검증·배포·정정 행위를 불변 사건과 시간순 버전으로 모델링하면 감사 증거 부재와 과거 결과·보고서 재구성 불가가 함께 해소된다.
+    shared_cause:
+      cause_claim: 시간에 발생하는 통제·정정 행위를 독립 사건 및 버전으로 보존하지 않고 현재 레코드의 부분 속성과 상태로만 표현했다.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-004.cause-003
+    rationale: finding-003의 감사 증거 부재와 finding-004의 정정 계보 부재는 모두 행위와 이력을 first-class
+      event/version으로 보존하지 않은 모델링 선택에서 발생한다. 다만 finding-003은 정정 외 검증·통보까지 포함하므로
+      중복은 아니다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-003
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: Critical notification을 특정 Result에 귀속되는 독립 사건으로 모델링하면 통보 감사 증거
+      부재와 규칙·통보 상태 혼합 문제가 동시에 해소된다.
+    shared_cause:
+      cause_claim: 결과별 통보 발생을 actor·recipient·time과 함께 보존하는 first-class notification
+        event가 없고 통보 정보가 규칙 속성 및 외부 대장에 분산되었다.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-015.cause-002
+    rationale: finding-003은 통제 행위 전반의 감사 증거를 다루고 finding-015는 CriticalValue에서 규칙과 통보
+      사건이 혼합된 의미 결함을 다룬다. Critical notification 부분에서는 동일한 사건 모델 부재가 양쪽을 직접 설명한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-005
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: Test–Assay 카탈로그에 canonical identity, 명시적 mapping, version 및
+      validity를 추가하면 두 finding이 동일 수정으로 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 Test와 Assay의 이중 등록에 단일 권위·대응 관계·버전·유효기간이 없어 변경 시 불일치와 과거
+      의미 추적 실패가 발생한다고 진술한다. 렌즈만 coverage와 evolution으로 다르고 핵심 결함과 수정 방향은 실질적으로
+      동일하다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-007
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: Test와 Assay가 동의어인지 주문 개념과 수행 구현인지 canonical하게 결정되고 그 관계가 모델링되면
+      의미 경계 불명확성과 카탈로그 진화 불연속이 함께 해소된다.
+    shared_cause: null
+    rationale: finding-013의 미결정 의미 경계가 이중 등록으로 데이터에 복제되고, finding-007에서는 그 복제가 버전·매핑
+      연속성 결함으로 나타난다. 동일한 Test–Assay 개념 결정 부재가 양쪽의 공통 root candidate다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-013
+    to_finding_id: finding-019
+    relation: duplicates
+    root_hypothesis: Test와 Assay 사이에 의미가 정의된 canonical relationship과 cardinality를
+      추가하면 두 finding이 동일 수정으로 해소된다.
+    shared_cause: null
+    rationale: finding-013은 Test–Assay 의미 경계와 관계 부재를 semantic 관점에서, finding-019는 동일
+      관계 부재로 Assay가 workflow graph에서 단절된 것을 structural 관점에서 기술한다. 둘 다 명시적
+      Test–Assay 연결 부재를 핵심 결함으로 삼는다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-006
+    to_finding_id: finding-017
+    relation: duplicates
+    root_hypothesis: Specimen과 Assay catalog 사이에 실제 수행 발생인 AssayExecution을 추가하고
+      Result 생성 관계를 그 발생에 귀속하면 두 finding이 동일 수정으로 해소된다.
+    shared_cause: null
+    rationale: finding-006은 실제 Assay 수행 발생 엔티티의 누락을, finding-017은 그 누락 때문에 Specimen이
+      Result 생산 주체로 잘못 표현된 것을 지적한다. 두 제안 모두 execution occurrence를
+      Specimen·Assay·Result에 연결하는 동일 교정을 요구한다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-008
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: Result–Report 상태에 단일 권위, 버전형 대응표, 유효기간과 consistency contract가
+      정의되면 상태 진화 불연속과 야간 배치 불변조건 충돌이 함께 해소된다.
+    shared_cause:
+      cause_claim: Result와 Report의 중복 상태 표현 사이에 독립적으로 버전되고 일관성 양상을 규정하는 권위 있는 mapping
+        contract가 없다.
+      from_cause_ref: finding-008.cause-003
+      to_cause_ref: finding-012.cause-003
+    rationale: finding-008은 상태 어휘와 매핑의 시간적 진화를, finding-012는 현재 복제본의 동기화 지연을 다룬다. 시간
+      범위는 다르지만 둘 다 두 상태 표현 사이의 명시적 권위·매핑·일관성 계약 부재에 의존한다.
+    confidence: medium
+  - relation_id: rel-009
+    from_finding_id: finding-012
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: Result 상태와 Report 출판 상태를 독립 개념으로 분리하고 단일 권위 원천 및 명시적
+      projection/consistency 규칙을 두면 두 finding이 동일 수정으로 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 서로 다른 범위의 Result.status와 Report.result_status를 동일 정보로 이중
+      저장하고 야간 배치로 갱신해 불일치가 노출된다는 동일 결함을 각각 logic과 semantics 관점에서 진술한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-021
+    to_finding_id: finding-011
+    relation: enables
+    root_hypothesis: 완전한 Order/Result 전이표에 corrected 이후 Order 재개방 또는 안정된 종결 유지 규칙이
+      포함되면 finding-011의 시간적 충돌은 재현되지 않는다.
+    shared_cause: null
+    rationale: finding-021의 불완전한 transition graph는 completed 이후 Result가 corrected가 될
+      때 Order가 유지·재개방되는지 결정할 구조를 제공하지 않는다. 이 구조적 누락이 finding-011의 완료 조건 충돌을 가능하게
+      하지만, finding-021은 더 넓은 lifecycle 범위를 가지므로 중복은 아니다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-010
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: CriticalValue를 버전 가능한 판정 규칙과 Result별 통보 발생으로 분리하면 조건형 기준 확장 실패와
+      규칙·사건 의미 혼합이 함께 해소된다.
+    shared_cause: null
+    rationale: finding-010은 CriticalValue가 확장 불가능한 고정 숫자 규칙인 점을, finding-015는 같은
+      엔티티가 통보 사건 상태까지 포함한 점을 지적한다. 둘은 재사용 가능한 정책 규칙과 시간에 발생하는 임상 사건을 분리하지 않은
+      모델에서 함께 발생한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-015
+    to_finding_id: finding-020
+    relation: duplicates
+    root_hypothesis: CriticalValue를 threshold configuration으로 제한하고
+      Result·notifier·recipient·timestamp에 연결되는 Notification event를 추가하면 두
+      finding이 동일 수정으로 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 Test별 임계 범위와 notified boolean만으로는 복수 Result의 개별 통보를
+      표현하거나 감사할 수 없다고 지적한다. 하나는 semantic 혼합, 다른 하나는 structural relation 부재를
+      강조하지만 대상 결함과 교정은 동일하다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-001
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-009
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-016
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-018
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

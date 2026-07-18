@@ -1,0 +1,143 @@
+schema_version: 1
+session_id: 20260718-bb9f7ec9
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: duplicates
+    root_hypothesis: 두 finding은 모두 Part의 단일 현재 상태와 버전·effectivity가 없는 BOM/Routing
+      때문에 시점별 구성 기준선을 재구성할 수 없다는 동일 결함을 기술한다.
+    shared_cause: null
+    rationale: 두 finding은 같은 Part, BomLine, Routing, ECO 구조와 동일한 운영 실패를 근거로 하며,
+      coverage와 evolution 관점만 다르다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-012
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 두 finding은 AlternatePart의 보편적 대칭 정의와 one_way 허용·기본값이 양립할 수 없다는
+      동일 계약 충돌을 기술한다.
+    shared_cause: null
+    rationale: 근거 필드, 실패 조건, 영향이 동일하며 logic과 semantics 렌즈가 같은 모순을 각각 표현했다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-005
+    to_finding_id: finding-002
+    relation: symptom_of
+    root_hypothesis: scrap_rate와 누적 표준시간의 복수 사실 및 충돌 해결 불능은 통합 중요 값을 권위·출처·신선도 계약 없이
+      복사·수기 관리한 상위 결함의 구체적 증상이다.
+    shared_cause: null
+    rationale: finding-005의 병행 관리 값 문제는 finding-002가 지적한 비권위적 복사와 수동 대사의 동일 사례들을 더 좁게 다룬다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-021
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: 생산오더 생성 규칙의 연결 대상 부재는 MES 실행 경계 개념 전체가 모델에서 빠진 상위 범위 결함의 구조적 증상이다.
+    shared_cause: null
+    rationale: finding-007은 ProductionOrder를 포함한 실행·실적·추적 개념의 부재를 지적하고, finding-021은
+      그중 released Routing에서 ProductionOrder로 이어지는 경로 단절을 특정한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-008
+    to_finding_id: finding-010
+    relation: symptom_of
+    root_hypothesis: 품목별 환산계수와 적용 범위의 부재는 값·단위·차원·변환 규칙을 분리한 확장 가능한 측정 개념이 없는 상위 결함의 한 증상이다.
+    shared_cause: null
+    rationale: finding-010의 causal path가 품목별 환산 마스터 부재를 직접 포함하며, finding-008은 그 결함이
+      혼합 단위 BOM에서 만드는 결정성 실패를 구체화한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-016
+    to_finding_id: finding-010
+    relation: symptom_of
+    root_hypothesis: 처리 수량과 가용 시간을 하나의 capacity 필드에 혼합한 문제는 측정값의 차원과 단위를 명시적으로 모델링하지
+      않은 상위 결함의 증상이다.
+    shared_cause: null
+    rationale: finding-010은 capacity_per_shift의 개수·시간 혼용을 확장성 문제의 직접 근거로 들고,
+      finding-016은 동일 필드의 차원 불일치를 의미론적으로 상세화한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-001
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: Part.rev와 ECO의 최신성·승인·효력·적용 상태가 분산되어 있고 이를 조정할 precedence 및
+      freshness 계약이 없기 때문에 두 문제가 함께 발생한다.
+    shared_cause:
+      cause_claim: 현재 설계 상태의 권위가 ECO 효과일과 상태, current_eco, 지연 갱신되는 Part.rev로 분산되어 있지만
+        단일 선정·우선순위·신선도 계약이 없다.
+      from_cause_ref: finding-001.cause-004
+      to_cause_ref: finding-017.cause-003
+    rationale: finding-001은 분산 권위로 인한 필수 리비전과 노출 리비전의 불일치를, finding-017은 같은 분산으로 인한
+      current_eco 의미의 불확정을 보여준다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-001
+    to_finding_id: finding-020
+    relation: same_root_candidate
+    root_hypothesis: ECO가 결과 리비전을 권위 있게 식별하지 못하고 Part.rev가 지연 투영으로 남은 것이 발효 후 적용
+      리비전을 닫힌 경로로 결정하지 못하는 공통 근원이다.
+    shared_cause: null
+    rationale: finding-020의 ECO→신규 리비전 연결 부재와 finding-001의 발효 후 stale Part.rev 노출은
+      모두 effective revision authority가 모델에 닫혀 있지 않음을 근거로 한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-020
+    to_finding_id: finding-003
+    relation: enables
+    root_hypothesis: ECO가 변경 전후 결과 리비전을 연결하지 않으면 effectivity 시점별 구성 기준선이 어떤 리비전으로
+      전이했는지 재구성할 수 없다.
+    shared_cause: null
+    rationale: finding-020의 결과 리비전 연결 부재는 finding-003이 요구하는 과거·현재 BOM/Routing 기준선
+      재구성을 막는 직접 기여 요인이다. 다만 BOM과 Routing 자체의 버전 부재도 별도 원인이므로 완전한 원인으로 단정하지 않는다.
+    confidence: medium
+  - relation_id: rel-010
+    from_finding_id: finding-013
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: 계획·명세 정보 객체와 실제 실행 행위 또는 행위자를 존재론적 유형과 관계명에서 분리하지 않은 것이 두 의미 오류의 공통 근원이다.
+    shared_cause: null
+    rationale: InspectionPlan을 Operation으로 상속한 문제와 Routing을 manufactured_by의 행위자로
+      표현한 문제 모두 제조 명세와 실행 역할을 혼동한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-014
+    to_finding_id: finding-019
+    relation: same_root_candidate
+    root_hypothesis: 방향성 있는 대체 허용과 대칭적인 상호 대체를 하나의 canonical relation으로 정규화하지 못해 엔티티
+      의미 충돌과 그래프 투영의 방향 정보 손실이 함께 발생한다.
+    shared_cause: null
+    rationale: finding-014는 AlternatePart 내부 의미 충돌을, finding-019는 AlternatePart를
+      우회하는 shortcut에서 direction이 사라지는 구조적 결과를 지적한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-002
+    to_finding_id: finding-004
+    relation: same_root_candidate
+    root_hypothesis: 복사·대사·환산 같은 수동 통합 행위를 권위와 증거를 가진 일급 개념으로 모델링하지 않고 운영 관행과 메모로 남긴
+      것이 두 결함의 공통 근원이다.
+    shared_cause: null
+    rationale: finding-002는 수동 관리 값의 권위·신선도 부재를, finding-004는 동일 행위의 actor·시각·근거·전후값
+      감사 증거 부재를 다룬다.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-002
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: scrap_rate를 권위 있는 의미·단위·범위·산식이 붙은 운영 수량으로 모델링하지 않고 자유로운 복사 숫자로
+      취급해 권위 불일치와 수치 해석 충돌이 함께 발생한다.
+    shared_cause:
+      cause_claim: 통합 중요 수치에 단일 권위와 provenance/freshness뿐 아니라 단위·범위·적용 산식을 포함한 결정적 수량
+        계약이 없다.
+      from_cause_ref: finding-002.cause-004
+      to_cause_ref: finding-015.cause-002
+    rationale: finding-002는 scrap_rate의 원본·동기화 권위 문제를, finding-015는 같은 속성의 rate와
+      coefficient 해석 및 산식 부재를 지적한다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-006
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-011
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

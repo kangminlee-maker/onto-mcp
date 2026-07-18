@@ -1,0 +1,101 @@
+schema_version: 1
+session_id: 20260717-177daf18
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml — Result/Report status authority and
+      synchronization rules
+    evidence_anchor: materialized-input.md:69-83,121-123
+    claim: Report.result_status의 지속적 권위·동일성 요구와 야간 배치 동기화는 정정 후 배치 전 구간에서 동시에 만족될 수
+      없다.
+    what: Result.status가 corrected로 바뀌면 Report.result_status는 amended여야 하지만, 갱신은 야간
+      1회로 지연될 수 있습니다. 그동안 Report는 finalized인 채로 남으면서도 임상의가 신뢰하는 권위 값으로 선언됩니다.
+    why: 문서는 Result 상태와 Report 상태에 동일 정보가 유지된다고 선언하고 Report 값을 권위 값으로 지정합니다. 그러나 명시된
+      지연 동기화는 corrected와 finalized가 공존하는 시간 경로를 허용하므로, 지속적 동일성·권위 보장과 양립하지 않습니다.
+    how_to_fix: 상태 권위를 한 곳으로 단일화하고 Report 상태를 즉시 파생하거나 원자적으로 갱신하십시오. 야간 배치를 유지해야 한다면
+      Report를 권위 값으로 선언하지 말고 pending_sync 같은 명시적 비권위 상태와 일관성 시점을 정의하십시오.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 임상의가 신뢰할 결과 상태의 개념 권위를 제공하는 목적
+      failure_condition: Result가 corrected로 변경된 뒤 다음 야간 동기화 전까지 Report.result_status가
+        finalized로 남는 경우
+      impact: 두 시스템이 서로 다른 상태를 정당한 권위 값으로 노출하여 정정 결과의 해석과 후속 처리가 달라질 수 있습니다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 지연 동기화되는 복제 필드를 지속적 권위 값으로 동시에 선언했습니다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 정정 직후 Result.status는 corrected이지만 Report.result_status는 다음 배치까지
+            finalized일 수 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 불일치 구간에도 Report.result_status는 임상의가 신뢰하는 권위 값입니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: logic-candidate-001.cause-003
+          claim: Result와 Report에 동일 정보가 유지된다는 필요조건을 지연 배치가 위반합니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml — Order completion rule
+    evidence_anchor: materialized-input.md:23,69-72,121-123
+    claim: 가역적인 Result.status를 근거로 Order를 completed로 전이시키지만, 이후 corrected 사건에 대한 완료
+      상태의 재평가 규칙이 없어 시간 경로상의 일관성을 확정할 수 없다.
+    what: 모든 Result가 final이면 Order가 completed가 되지만, 문서는 이후 Result가 corrected로 바뀌는
+      경로도 명시적으로 허용합니다. 이때 Order가 completed를 유지하는지, in_progress로 되돌아가는지, 별도 정정
+      상태를 갖는지 정의되지 않았습니다.
+    why: 현재 규칙만 따르면 completed Order와 corrected Result가 공존할 수 있습니다. 이것이 모순인지 판정하려면
+      completed가 종결 불변식인지 단순 이력 사건인지가 형식화되어야 하며, 현재 경계에는 그 주장이 없습니다. 따라서 통합 소비자는
+      서로 다른 상태 전개를 구현할 수 있습니다.
+    how_to_fix: completed의 양상을 명시하십시오. 종결 불변식이라면 correction 시 재개 전이를 정의하고, 이력 사건이라면
+      completion 시점과 current_result_status를 분리해 corrected 이후에도 completed가 유효한
+      이유를 규칙으로 선언하십시오.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS가 공유할 Order 상태 모델의 일관된 해석
+      failure_condition: Order가 completed로 전이한 뒤 포함 Result 중 하나가 corrected로 변경되는 경우
+      impact: 완료 여부와 후속 처리 가능성에 대해 EMR과 LIS가 서로 다른 상태를 계산할 수 있어 개념 권위 문서의 실행 가능성이
+        약화됩니다.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:69-72
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 완료 판정이 후속 변경 가능한 상태에 의존하면서 completed의 불변성 및 정정 후 전이가 형식화되지 않았습니다.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 모든 Result가 final인 시점에 Order는 completed로 전이합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:121-122
+        - cause_id: logic-candidate-002.cause-002
+          claim: Result.status는 그 이후 corrected로 변경될 수 있습니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:123
+        - cause_id: logic-candidate-002.cause-003
+          claim: Order lifecycle에는 상태 이름만 있고 correction 이후 적용할 전이 또는 완료 불변식은 제시되지 않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: completed가 종결 불변식인지 단순 과거 전이 기록인지에 관한 명시적 claim이 없어
+        최종 unsatisfiability 판정에는 추가 권위 규칙이 필요합니다.
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

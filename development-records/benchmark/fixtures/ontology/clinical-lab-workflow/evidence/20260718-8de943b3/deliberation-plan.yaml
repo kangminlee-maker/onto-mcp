@@ -1,0 +1,132 @@
+schema_version: 1
+session_id: 20260718-8de943b3
+planned_issues:
+  - issue_id: issue-012
+    priority: 100
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+    conflict_summary: logic은 중복 저장된 상태의 권위·동기화 계약 부재를 근본 원인으로 보고 medium을 유지하지만,
+      semantics는 Result 검증 상태와 Report 발행 상태를 동일 정보로 취급한 범위 혼동으로 원인을 대체하고 high로
+      상향한다.
+    resolution_question: 근본 원인을 비동기 중복 상태의 일관성 계약 부재로 볼지, 서로 다른 Result·Report 상태 개념의
+      의미적 혼합으로 볼지 결정하고 최종 심각도를 정해야 하는가?
+  - issue_id: issue-018
+    priority: 95
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - structure
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-018.structure
+      - issue-stance-matrix.yaml#stances.issue-018.semantics
+    conflict_summary: structure는 결과별 notification occurrence 관계 누락을 직접 원인으로 보고
+      medium을 유지하지만, semantics는 이를 규칙과 통보 사건을 혼합한 더 근본적인 개념 결함으로 대체하고 high로
+      상향한다.
+    resolution_question: 수정 범위를 누락된 결과별 통보 관계 추가로 한정할지, CriticalValue를 재사용 규칙과 결과별
+      사건으로 분리하는 개념 재설계로 정할지와 그에 따른 심각도를 결정해야 하는가?
+  - issue_id: issue-003
+    priority: 90
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+    conflict_summary: coverage는 검증·배포·정정·통보 전반의 감사 증거 누락을 high로 보지만, logic은 현재 속성으로
+      인해 서로 다른 사건 이력이 구별되지 않는 범위만 인정하고 심각도를 낮춘다.
+    resolution_question: 감사 증거 재구성 실패 전체를 high로 유지할지, 입증된 논리적 비구별성 범위로 이슈와 심각도를 축소할지 결정해야 하는가?
+  - issue_id: issue-010
+    priority: 85
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+    conflict_summary: semantics는 위험 판정 규칙과 결과별 통보 사건의 혼합이 미통보 오인을 초래할 수 있어 high를
+      유지하지만, evolution은 규칙 확장성과 버전 분리 범위만 직접 지지하며 심각도를 낮춘다.
+    resolution_question: 이 이슈의 최종 범위에 결과별 통보 오인 위험까지 포함해 high로 유지할지, 규칙 진화 결함으로 좁혀
+      심각도를 낮출지 결정해야 하는가?
+  - issue_id: issue-013
+    priority: 80
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+    conflict_summary: semantics는 범위가 다른 Result와 Report 상태의 의미·권위 혼합을 high로 유지하지만,
+      logic은 직접 입증된 영향이 배치 지연 중 시간적 불일치라고 보아 medium으로 낮춘다.
+    resolution_question: 서로 다른 상태 개념의 권위 이중화가 임상적 오해 가능성 때문에 high인지, 입증된 시간적 불일치 영향에
+      맞춰 medium인지 결정해야 하는가?
+  - issue_id: issue-005
+    priority: 70
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.evolution
+    conflict_summary: coverage는 Test·Assay 카탈로그의 권위·대응·버전 누락을 medium으로 유지하지만,
+      evolution은 변경 시 의미 연속성이 깨지는 결함을 더 중대하게 평가해 심각도를 상향한다.
+    resolution_question: 카탈로그 불일치가 신뢰와 변경 안정성을 약화하는 medium 문제인지, 과거·현재 의미 연속성을 깨는 더
+      높은 심각도의 문제인지 결정해야 하는가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: axiology만 적용 가능한 입장으로 이슈와 medium 심각도를 지지하며, 다른 렌즈는 모두 범위 밖으로 판단해 충돌이 없다.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들은 검체 lifecycle 누락과 medium 심각도에 합의한다. logic의 좁힘은 전이·종결 규칙을 강조하는
+      보완적 정교화이며, axiology의 증거 부족은 반대 입장이 아니다.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: 적용 가능한 모든 렌즈가 가변 단일 레코드로 인한 정정 이력 결함과 high 심각도를 지지한다. axiology의 권위 문서
+      부족은 도메인 판단과 충돌하지 않는다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들은 실제 Assay 수행 발생 개념의 누락과 medium 심각도에 합의한다. logic의 provenance
+      비결정성 한정은 원인을 반박하지 않는다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들이 Test–Assay 의미 경계와 canonical 관계 부재 및 high 심각도에 합의한다. logic의
+      카디널리티 강조는 결합된 원인의 부분 정교화다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들이 버전·유효기간 없는 상태 체계 결함과 medium 심각도에 합의한다. semantics와 structure의
+      좁힘은 각 렌즈 범위에 따른 보완적 설명이다.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: 적용 가능한 모든 렌즈가 issuer와 수명주기 없는 문자열 식별자의 원인 및 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: 적용 가능한 모든 렌즈가 corrected 이후 Order 전이 정책 부재와 medium 심각도를 지지한다. axiology의
+      정책 가치 증거 부족은 이 합의를 반박하지 않는다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: 적용 가능한 모든 렌즈가 STAT의 중복 표현과 단일 권위 부재를 medium 문제로 일관되게 지지한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들은 Specimen과 분석 수행 사건의 구분 부재 및 medium 심각도에 합의한다. logic의
+      provenance 비결정성 한정은 같은 결함의 논리적 영향만 좁혀 설명한다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들이 TAT 관찰 단위와 집계 규칙 누락 및 medium 심각도에 합의한다. structure의 연결·카디널리티
+      한정은 보완적 구조 설명이다.
+  - issue_id: issue-017
+    reason_code: no_material_conflict
+    reason: 적용 가능한 렌즈들이 Test–Assay 워크플로 관계 단절과 high 심각도에 합의한다. semantics가 의미 역할 결정을
+      선행 조건으로 강조하지만 제안 조치가 이미 이를 포함한다.
+  - issue_id: issue-019
+    reason_code: no_material_conflict
+    reason: 적용 가능한 모든 렌즈가 완전한 lifecycle 전이 그래프 부재와 medium 심각도를 지지한다. axiology의 권위 근거
+      부족은 반대 판단이 아니다.

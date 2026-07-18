@@ -1,0 +1,63 @@
+schema_version: 1
+session_id: 20260717-aa03f0e2
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart definition and direction
+      attribute
+    evidence_anchor: .onto/review/20260717-aa03f0e2/execution-preparation/materialized-input.md:37-45
+    claim: fail — AlternatePart is declared symmetric while the same entity permits
+      one-way substitution, so a one_way instance cannot satisfy both claims.
+    what: "The definition requires that if A substitutes for B, B also substitutes
+      for A. The direction enum and note simultaneously allow one_way as the
+      default. Conflict pair: materialized-input.md:38 ↔
+      materialized-input.md:42-45; inter-claim conflict; modality: mixed
+      necessary/possible."
+    why: For any AlternatePart instance whose direction is one_way, the definition
+      obligates the reverse substitution while the selected direction denotes
+      that only one direction applies. PLM and MES consumers can therefore
+      derive incompatible valid substitution sets from the same record,
+      weakening this ontology as their shared conceptual contract.
+    how_to_fix: "Choose one canonical model: either remove one_way and define
+      AlternatePart as always symmetric, or revise the definition to make
+      symmetry conditional on direction=bidirectional and explicitly define the
+      effective edge for direction=one_way."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide a logically consistent shared concept standard for
+        PLM/MES part substitution behavior.
+      failure_condition: An AlternatePart record uses the explicitly permitted one_way value.
+      impact: The same valid record requires and rejects the reverse substitution
+        depending on which declaration a consumer follows, making substitution
+        decisions non-interoperable.
+      evidence_refs:
+        - materialized-input.md:38
+        - materialized-input.md:42-45
+    causal_path:
+      root_cause_candidate: The symmetric substitution invariant was retained while an
+        asymmetric direction mode was added to the same concept without
+        conditioning the invariant.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: A one_way AlternatePart instance cannot simultaneously satisfy the
+            unconditional reciprocal-substitution definition and its selected
+            direction.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: The contradiction is caused by defining reciprocity unconditionally while
+            permitting one_way as a valid, default direction.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:44-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,113 @@
+schema_version: 1
+session_id: 20260718-3119806d
+planned_issues:
+  - issue_id: issue-012
+    priority: 10
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - logic
+      - coverage
+      - evolution
+      - semantics
+      - structure
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+    conflict_summary: 생산오더의 실제 revision 소비 경로가 확인되지 않아 logic·structure는 직접 충돌과 심각도의
+      확정을 유보하지만, semantics는 revision 의미 혼합을 대체 근인으로 보고 심각도를 high로 높이며 다른 렌즈들은 계약
+      공백에 대한 medium 판정을 유지한다.
+    resolution_question: 소비 경로 증거가 없는 경계에서 확정 가능한 결함은 revision 선택 권위의 계약 공백인지
+      revision 개념 혼합인지, 그리고 그 근거로 severity를 medium 또는 high 중 어디까지 인정할 수 있는가?
+  - issue_id: issue-011
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+    conflict_summary: logic은 자연어 자기참조 예외를 판별할 형식 조건의 부재를 근인으로 보지만, semantics는 제품구조와
+      회수·재투입 흐름의 개념 혼합이 더 근본적이며 흐름을 분리하면 예외 조건 자체가 불필요하다고 본다.
+    resolution_question: 정준 근인과 우선 조치는 비순환 예외를 형식화하는 것인가, 아니면 회수·재투입 흐름을 제품구조 BOM에서
+      분리해 예외를 제거하는 것인가?
+  - issue_id: issue-004
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: axiology와 evolution은 모든 운영 수치의 단위·권위·효력·파생·동기화 규칙 부재를 하나의 공통
+      원인으로 받아들이지만, coverage·logic·semantics·structure는 증거가 뒷받침하는 Quantity,
+      provenance, 값 선택 및 공통 관리 객체 범위로 근인을 제한한다.
+    resolution_question: 이 이슈를 모든 운영 수치 관행을 포괄하는 단일 관리계약 결함으로 유지할 충분한 근거가 있는가, 아니면
+      Quantity·provenance·동기화 책임별로 범위를 좁히거나 분리해야 하는가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: 적용 가능한 axiology 렌즈가 이슈·근인·심각도를 지지하고 다른 렌즈는 범위 밖으로 일관되게 판단했다.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: logic과 semantics의 narrowing은 각 렌즈의 직접 판단 범위를 설명할 뿐, 통합 변경관리 결함·high
+      심각도·제안 조치를 부정하지 않는다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 제품구조와 재투입 흐름의 분리, medium 심각도 및 근인에 동의한다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들은 실행·계보 범위 누락과 high 심각도에 동의하며 semantics의 not_applicable은 반대
+      주장이 아니다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 Quantity/UOM 계약 부재라는 근인, high 심각도 및 조치를 지지한다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: semantics는 자신의 판단을 provenance 의미 계약으로 한정하지만 이슈의 근인·medium 심각도·대사 조치를
+      반박하지 않는다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 불변 revision·effectivity 부재와 high 심각도에 동의한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈는 선형 라우팅의 확장성 결함에 동의하고 logic의 not_applicable은 현재 순차 라우팅의 논리 판정
+      범위만 구분한다.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: coverage와 structure의 narrowing은 형식 모순을 관계 유형 미분리 관점으로 투영한 것으로, high 심각도나
+      해결 방향과 충돌하지 않는다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 BomLine의 제품구조 의미와 회수 흐름을 분리해야 한다는 근인·조치·high 심각도에 동의한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 revision과 ECO 상태·효력의 의미 혼합, high 심각도 및 개념 분리를 지지한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: structure의 narrowing은 동일 근인을 관계 유형 미분리로 구체화하며 다른 렌즈의 판정이나 high 심각도와 양립한다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: logic과 structure는 각각 계약 불충분성과 개념 소유 구조로 직접 범위를 좁히지만 scrap 의미 혼합, medium
+      심각도 및 분리 조치를 수용한다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 검사 명세와 실행 단계의 정체성 분리, medium 심각도 및 제안 조치에 동의한다.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: 여러 렌즈가 실제 소비 경로에 따른 운영 영향을 조건부로 한정하지만, canonical 그래프의 방향 메타데이터 손실과
+      medium 심각도에는 실질적 이견이 없다.

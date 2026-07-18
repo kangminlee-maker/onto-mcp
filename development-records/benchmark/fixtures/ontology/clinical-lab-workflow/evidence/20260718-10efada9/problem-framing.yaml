@@ -1,0 +1,236 @@
+schema_version: 1
+session_id: 20260718-10efada9
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result와 Report의 상태 권위가 서로 다른 폐쇄 어휘와 지연 동기화에 분산되어 단일한 현재 상태를 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 상태 권위와 결정적 파생 규칙의 부재를 상충 상태의 공통 원인으로 지지하며, 이는 개념 권위 문서의 핵심 계약을
+      직접 훼손한다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-012
+  - issue_id: issue-002
+    problem_definition: Test와 Assay의 정체성 경계와 속성 우선권이 결정되지 않아 주문 항목과 수행 항목의 동일성을 판정할 수 없다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 두 개념을 동일 개념으로 볼지 별도 개념으로 볼지에 따라 권위 구조가 달라지며, 현재 모델은 그 선택을 닫지 않았다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 상위 제품 원칙 또는 개념 SSOT와의 정렬을 판단할 canonical 가치 권위가 현재 검토 경계에 없다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: out_of_scope
+    domain_axes: {}
+    rationale: 현재 자료로는 사용자 목적을 넘는 가치 정렬을 확정할 수 없으며, 이는 대상 온톨로지의 확인된 결함이 아니라 경계 밖 증거의 부재다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Specimen 모델이 정상 경로만 권위화하여 거부·분실·재채취·보관·폐기 같은 예외와 종결 생명주기를 표현하지 못한다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 예외·종결 경로의 구조적 누락이 운영 상태 교환과 감사 재구성 불능의 직접 원인이라는 데 모든 참여 렌즈가 동의한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 검증·공개·정정·통보 행위가 귀속 가능한 불변 사건이 아니라 변경 가능한 상태나 속성으로 축약되어 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 안전 관련 행위의 행위자·시각·근거·대상 버전을 입증할 수 없어 책임성과 사고 조사에 필요한 핵심 감사 계약이 성립하지 않는다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 시간에 따라 변하는 운영 규칙과 환자별 통보 사건이 하나의 무버전 current-state 개념에 혼합되어 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 규칙의 시간 유효성과 사건의 독립 정체성을 함께 소실시키는 공통 원인이 확인되었으며, 과거 기준과 실제 통보 이력의 재구성을 막는다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-017
+  - issue_id: issue-007
+    problem_definition: 공유 의미를 여러 위치에 병렬 저장하면서 단일 권위, 우선순위 및 결정적 파생 규칙을 지정하지 않았다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 카탈로그·상태·TAT 전반에서 복수 경로가 같은 사실의 권위를 주장하게 하는 일반적인 권위 설계 결손이다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: Result가 임상 관찰과 분석 실행을 문자열 중심 레코드로 축약하여 값의 유형·해석 조건·시각·방법 및
+      수행 provenance를 보존하지 못한다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 관찰·분석 실행·보고 값의 구분 부재가 임상적으로 동등하지 않은 결과를 구별하거나 재현하지 못하게 한다는 핵심 판단에는 합의가 있다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 검체 분류가 하나의 참조 가능하고 버전 가능한 권위 개념 없이 여러 enum과 문자열에 중복 인코딩되어 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 분류 변경이 여러 표현의 동시 수정과 외부 매핑을 요구하는 직접 원인이며, 과거와 현재 의미의 안정적 연결을 약화한다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Test와 Assay 사이의 수행 실현 관계에 cardinality, 유효기간 및 생명주기를 가진 권위 매핑이 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 신규·개정·분할·대체 검사의 주문-수행 연결을 모델 내부에서 원자적으로 결정하거나 추적할 수 없는 직접 원인이다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: 통합 코드와 분류에 namespace, version, validity 및 replacement
+      lineage를 갖춘 시간적 identity가 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 코드 변경 시 과거 identity와 병행 버전을 보존할 수 없어 외부 migration 표가 사실상의 권위가 되는 구조적 원인이다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: Result 정정으로 Order 완료 조건이 사라진 뒤 Order 상태를 재평가하는 규칙이 정의되지 않았다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 허용된 동일 사건 이력에 복수의 Order 상태 해석이 가능하며, corrected의 완료 의미 또는 주문 재개 정책을
+      명시적으로 결정해야 한다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-013
+    problem_definition: 주문 가능 Test와 실제 분석 수행 Assay의 의미 및 권위 연결 모델이 없어 핵심 워크플로 경로가 단절된다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Test-Assay 경계와 연결의 부재가 주문에서 수행 및 결과 귀속까지의 의미적·구조적 고립을 함께 설명한다.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-020
+  - issue_id: issue-014
+    problem_definition: 개별 Result 상태와 집계 Report publication 상태를 동일 정보처럼 취급하면서
+      집계·갱신·우선권 의미를 정의하지 않았다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 서로 다른 집계 수준과 생명주기의 상태가 모두 권위값으로 노출되므로 임상의와 시스템이 동일 상황을 상충되게 해석할 수 있다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-015
+    problem_definition: 하나의 주문 긴급도가 priority, is_stat 및 StatOrder로 중복 표현되지만
+      canonical 표현과 동치 규칙이 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 단일 분류 의미의 권위 표현을 선택하지 않은 것이 상충 가능한 STAT 조합과 시스템별 우선순위 해석 차이의 직접 원인이다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-016
+    problem_definition: Specimen의 물질적 출처 관계와 분석 실행의 생산 행위가 구분되지 않아 produces의 의미와 수행 주체가 모호하다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 출처와 생산 인과를 동일 관계 쌍에 귀속하여 결과 계보와 책임 주체를 잘못 해석할 수 있다는 점은 확인되었고, 좁은 입장들도
+      구분 필요성에는 동의한다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-017
+    problem_definition: Test와 Assay의 검체 요구사항이 서로 다른 값 체계를 사용하지만 동일성·계층·변환 의미가 정의되지 않았다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 검체 적합성을 모델 내부에서 참 또는 거짓으로 판정할 수 없으며, 두 표현의 의미 관계와 권위 변환 규칙을 결정해야 한다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-018
+    problem_definition: 특정 위험 Result에서 수신자·시각을 포함한 귀속 가능한 통보 증거로 이어지는 관계가 없다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 연결 결손 자체와 보강 필요성은 확인되며 더 일반적인 감사 사건 및 규칙-사건 혼합 문제의 구체적 증상이다. 다만 이것이
+      medium 구조 결손인지 high 안전 감사 단절인지는 운영 영향 증거와 적용 기준이 부족해 해결되지 않았다.
+    related_surface_finding_ids:
+      - finding-021

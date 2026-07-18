@@ -1,0 +1,255 @@
+schema_version: 1
+session_id: 20260718-bb9f7ec9
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: BOM·라우팅·ECO의 시점별 구성 기준선
+    evidence_anchor: materialized-input.md:20-21, 29-35, 55-61, 69-75, 93-96
+    claim: 과거 시점에 유효했던 BOM과 라우팅을 재구성할 버전·효력 범위 개념이 없다.
+    what: Part에는 현재 rev와 최신 ECO만 있고, BomLine과 Routing에는 revision, 유효 시작·종료, 대체 관계 또는
+      구성 기준선이 없다. ECO의 effective_date도 변경 전후 객체 버전을 식별하지 않는다.
+    why: 변경 적용일 규칙만으로는 특정 생산일·오더에 사용된 BOM 수량과 공정 순서를 결정할 수 없다. 주간 배치 지연까지 명시되어 있어
+      PLM과 MES의 현재값이 달라지는 기간에는 재현성과 추적성이 특히 약해진다.
+    how_to_fix: PartRevision, BomRevision, RoutingRevision 또는 통합
+      ConfigurationBaseline을 도입하고, released 버전을 불변으로 관리한다. 날짜·로트·일련번호 등 필요한
+      effectivity 범위와 선후 버전, ECO 적용 결과를 명시적으로 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 품목·BOM·라우팅·변경관리의 개념 기준을 제공하는 목적
+      failure_condition: 변경 적용 전후 또는 PLM-MES 동기화 지연 중 특정 생산 시점의 제품 구조와 공정을 판정해야 할 때
+      impact: 생산 기준선과 변경 적용 증거를 재구성할 수 없어 오구성 생산, 감사 실패 및 시스템 간 분쟁 가능성이 생긴다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:29-35
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: Part·BOM·Routing·ECO를 하나의 버전화된 구성 기준선과 effectivity 모델로 묶는 개념이 부재하다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 특정 과거 생산 시점에 사용된 BOM과 라우팅 버전을 식별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+            - materialized-input.md:93-96
+        - cause_id: coverage-candidate-001.cause-002
+          claim: BomLine과 Routing에는 버전·유효기간이 없고 Part는 현재 rev와 최신 ECO만 보유한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+        - cause_id: coverage-candidate-001.cause-003
+          claim: ECO는 effective_date만 가지며 변경 전후의 구성 객체 버전을 연결하지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: 승인·수동 복사·대사 행위의 감사 증거
+    evidence_anchor: materialized-input.md:35, 69-75, 82, 96, 98-100
+    claim: 통제 행위의 행위자·시각·근거·원본 스냅샷을 표현하는 감사 개념이 없다.
+    what: ECO에는 approved 상태만 있고 승인자, 승인시각, 근거가 없다. scrap_rate 복사, 표준원가 수기 입력·분기 대사,
+      현장 단위 환산도 행위와 증거를 기록할 구조가 없다.
+    why: 상태값과 현재 수치만으로는 누가 어떤 근거로 승인하거나 수동 조정했는지 검증할 수 없다. PLM/MES 간 불일치나 제조 오류 발생 시
+      책임 있는 변경과 비인가 변경을 구분하기 어렵다.
+    how_to_fix: Approval 및 AuditEvent/ManualAdjustment 개념을 추가해 actor, occurred_at,
+      reason, source_system, source_record/version, before/after value를 보존하고 ECO
+      승인·복사·대사·현장 환산에 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 변경관리와 제조 운영 통제에 신뢰 가능한 통합 기준을 제공하는 목적
+      failure_condition: ECO 승인 또는 수동 관리값의 오류·불일치를 조사하거나 승인 적법성을 입증해야 할 때
+      impact: 통제 행위의 증거가 없어 변경 추적, 원인 분석, 감사 및 책임 판정이 불가능하거나 수작업에 의존한다.
+      evidence_refs:
+        - materialized-input.md:35
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+        - materialized-input.md:98-100
+    causal_path:
+      root_cause_candidate: 상태 변경과 수동 데이터 조작을 일급 감사 사건으로 표현하는 공통 증거 모델이 부재하다.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: 승인과 수동 조정의 행위자·시각·근거를 온톨로지에서 재구성할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:98-100
+        - cause_id: coverage-candidate-002.cause-002
+          claim: ECO는 승인 상태만 보유하고, 복사·대사·환산은 자유서술 메모로만 존재한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:69-75
+            - materialized-input.md:98-100
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: 시스템 간 병행 관리 값의 권위 지정
+    evidence_anchor: materialized-input.md:20-21, 35, 53, 82, 98-100
+    claim: scrap_rate와 누적 표준시간 등 병행 관리 값에 단일 원본과 충돌 해결 규칙이 지정되지 않았다.
+    what: rev, current_eco, acceptance_criteria에는 원본이 명시되지만 scrap_rate는 엑셀에서 복사한다고만
+      되어 있다. 누적 std_time은 MES 계산값과 표준원가 시스템 수기값이 병존하며 분기 대사만 언급되고 어느 값이 권위 있는지
+      없다.
+    why: 같은 의미의 값이 여러 시스템에 존재하는데 권위, 동기화 방향, 허용 지연, 충돌 처리 기준이 없으면 통합 구현마다 서로 다른 값을
+      채택할 수 있다.
+    how_to_fix: 각 병행 관리 속성에 authoritative_system, derived_from,
+      synchronization_direction, freshness/SLA, reconciliation_rule을 지정한다. 파생값은
+      원천 Routing 버전에서 계산되는 내부 투영으로 정의하고 수기 사본의 권위를 제한한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 및 연계 시스템 사이에서 공유할 단일 개념 기준 제공
+      failure_condition: 복사본·계산값·수기값이 서로 다르거나 동기화가 지연될 때 생산계획 또는 원가 계산이 값을 선택해야 하는 경우
+      impact: 동일 개념에 복수의 사실이 생겨 계획량, 불량 여유, 표준원가가 시스템별로 달라지고 대사만으로는 자동 판정할 수 없다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:35
+        - materialized-input.md:53
+        - materialized-input.md:82
+        - materialized-input.md:98-100
+    causal_path:
+      root_cause_candidate: 병행 관리 속성에 적용할 공통 데이터 권위·파생·동기화 계약이 부재하다.
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: 시스템 간 값 불일치 시 어느 값을 채택해야 하는지 온톨로지가 결정하지 못한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:98-100
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 일부 속성만 원본을 명시하고 scrap_rate와 누적 std_time에는 권위 및 충돌 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:35
+            - materialized-input.md:82
+            - materialized-input.md:98-100
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: Routing 및 ECO lifecycle
+    evidence_anchor: materialized-input.md:55-61, 69-75
+    claim: 라우팅과 변경지시의 lifecycle이 발행 이후 종료·무효화·정정 구간을 포괄하지 않는다.
+    what: Routing은 draft와 released만, ECO는 open·approved·applied만 가진다. rejected,
+      cancelled, superseded, obsolete, archived 같은 종결 상태와 적용 후 정정·재발행 사건이 없다.
+    why: 발행된 라우팅의 단종이나 잘못 적용된 ECO의 취소·정정을 기존 상태 의미를 훼손하지 않고 표현할 수 없다. 삭제나 상태 덮어쓰기로
+      처리하면 변경 이력이 손실될 수 있다.
+    how_to_fix: 공통 LifecycleStatus를 무리하게 공유하기보다 각 개념의 실제 전이를 정의하고, Routing에는
+      obsolete/superseded, ECO에는 rejected/cancelled/superseded를 추가한다. 정정 ECO가 원
+      ECO를 대체·취소하는 관계와 허용 전이를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅과 변경관리 상태를 PLM/MES가 일관되게 해석하도록 하는 개념 기준
+      failure_condition: 발행 후 단종, 승인 거절, 적용 취소, 오류 정정 또는 재발행이 발생할 때
+      impact: 현 상태값만으로 유효성 및 후속 조치를 판정할 수 없어 폐기된 공정이나 잘못된 변경이 생산에 남을 수 있다.
+      evidence_refs:
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+    causal_path:
+      root_cause_candidate: Routing과 ECO의 lifecycle이 정상 진행 경로까지만 모델링되고 종료·예외·정정 전이가 정의되지 않았다.
+      root_cause_step_id: coverage-candidate-004.cause-002
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: 발행·적용 이후 무효화나 정정을 상태 의미와 모순 없이 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+        - cause_id: coverage-candidate-004.cause-002
+          claim: 두 상태 열거형 모두 정상 진행 상태만 포함하며 종료·예외 상태와 대체 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:61
+            - materialized-input.md:75
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: MES 실행과 계획 기준 사이의 연결 범위
+    evidence_anchor: materialized-input.md:47-67, 84-96
+    claim: 생산오더를 규칙에서 사용하지만 이를 비롯한 MES 실행·실적·추적 개념이 표현되어 있지 않다.
+    what: 모델은 계획 객체인 Routing, Operation, WorkCenter만 정의한다. 생산오더 생성 규칙이 있으나
+      ProductionOrder 엔티티가 없고, 공정 실행, 자재 투입·소비, 생산 산출, 로트/일련번호, 실제 시간·불량 및
+      genealogy 개념도 없다.
+    why: PLM의 제품·공정 정의가 MES의 실제 생산 단위와 어떻게 결합되는지 표현할 수 없다. 따라서 어떤 BOM·라우팅·ECO 기준선이
+      실제 제품에 적용되었는지 추적할 통합 접점이 없다.
+    how_to_fix: 최소 실행 브리지로 ProductionOrder, OperationExecution, MaterialConsumption,
+      ProductionOutput 및 Lot/Serial을 추가하고 계획 BOM/라우팅 버전과 실제 투입·산출을 연결한다. 실행 영역이
+      의도적으로 범위 밖이면 PLM-MES 통합 기준이라는 목적과 경계를 명시적으로 축소한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서 역할
+      failure_condition: released 라우팅으로 생산오더를 생성하고 실제 투입·공정·산출 또는 변경 적용 결과를 추적해야 할 때
+      impact: 계획 마스터와 MES 실행 사이의 핵심 계약이 비어 있어 통합 구현과 제조 추적성에 대한 기준 문서 역할을 수행하지 못한다.
+      evidence_refs:
+        - materialized-input.md:47-67
+        - materialized-input.md:84-96
+    causal_path:
+      root_cause_candidate: 온톨로지의 범위가 제조 계획 마스터에 머물러 있고 MES 실행을 연결하는 최소 경계 개념이 부재하다.
+      root_cause_step_id: coverage-candidate-005.cause-002
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: 실제 생산 단위가 어떤 계획·변경 기준으로 수행됐는지 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-96
+        - cause_id: coverage-candidate-005.cause-002
+          claim: 생산오더는 무정의 참조로만 등장하고 실행·투입·산출·추적 엔티티가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12-82
+            - materialized-input.md:95
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-006
+    target: 품목별 단위 변환
+    evidence_anchor: materialized-input.md:14-20, 29-35, 98-100
+    claim: 혼합 단위 BOM을 정규화할 품목별 환산계수와 그 적용 범위가 없다.
+    what: Part.uom은 ea, kg, m 중 하나만 저장하고 BomLine.qty_per에는 별도 단위나 환산 참조가 없다. 문서는 품목별
+      환산계수 마스터가 없고 현장에서 환산한다고 명시한다.
+    why: 중량·개수·길이가 섞인 BOM에서 요구량, 소비량과 재고를 결정적으로 변환할 수 없다. 현장별 임의 환산은 생산계획 및 실적 대사의
+      불일치를 만든다.
+    how_to_fix: PartUnitConversion을 추가해 part_ref, from_uom, to_uom, factor,
+      rounding_rule, effective interval 및 권위 시스템을 정의하고 BomLine과 생산 실적이 해당 변환 버전을
+      참조하도록 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목과 BOM 수량을 PLM/MES가 동일하게 해석하도록 하는 개념 기준
+      failure_condition: 상·하위 품목 또는 계획·실적이 서로 다른 단위를 사용해 수량 변환이 필요한 경우
+      impact: 소요량과 소비량을 재현 가능하게 계산할 수 없어 자재 부족, 과다 투입 및 재고 대사 오류가 발생할 수 있다.
+      evidence_refs:
+        - materialized-input.md:14-20
+        - materialized-input.md:29-35
+        - materialized-input.md:98-100
+    causal_path:
+      root_cause_candidate: 단위 변환을 품목별 관리 개념으로 승격하지 않고 현장 행위에 맡겼다.
+      root_cause_step_id: coverage-candidate-006.cause-002
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: 혼합 단위 수량을 온톨로지 규칙만으로 정규화할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:14-20
+            - materialized-input.md:29-35
+        - cause_id: coverage-candidate-006.cause-002
+          claim: 품목별 변환계수와 적용 규칙이 없으며 환산을 현장에서 수행한다고 명시한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 이 문서가 구현 상세 전체가 아니라 개념 기준 문서이더라도, PLM과 MES가 공통 판정해야 하는 버전·효력·권위·감사·실행 경계는
+    명시되어야 한다.
+  - 외부 도메인 표준은 사용하지 않았으며, 누락 판단은 문서가 선언한 PLM/MES 통합 목적과 문서 내부의 생산오더·수동 관리·동기화
+    서술에 한정했다.
+validation:
+  unaddressable_candidates: []

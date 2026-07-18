@@ -1,0 +1,109 @@
+schema_version: 1
+session_id: 20260717-aa03f0e2
+planned_issues:
+  - issue_id: issue-013
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+      - issue-stance-matrix.yaml#stances.issue-013.structure
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+    conflict_summary: 의미론·구조 렌즈는 분산된 대체 관계 권위와 방향 소실을 포함한 통합 이슈 전체를 high로 유지하지만, 논리
+      렌즈는 대칭성과 one_way의 내부 충돌만 지지하며 심각도를 낮춘다.
+    resolution_question: 정규 관계의 그래프 고립과 내부 방향성 충돌을 하나의 high 이슈로 유지할 것인가, 아니면 논리 충돌과
+      구조적 권위 분산을 분리하고 각각의 심각도를 재평가할 것인가?
+  - issue_id: issue-012
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+    conflict_summary: 두 렌즈 모두 무조건 대칭 정의와 one_way 값의 충돌을 인정하지만, 논리 렌즈는 medium을 유지하고
+      의미론 렌즈는 잘못된 자재 대체 위험을 근거로 심각도를 높인다.
+    resolution_question: 확인된 모순이 상호운용성 약화에 그치는 medium 문제인지, 실제 잘못된 자재 대체가 가능한 high
+      문제인지 어떤 실패 조건과 영향 기준으로 판정할 것인가?
+  - issue_id: issue-016
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+      - issue-stance-matrix.yaml#stances.issue-016.axiology
+    conflict_summary: 의미론 렌즈는 제품구조와 공정 물질흐름의 혼합 및 무한 전개 위험을 근거로 high를 유지하지만, 가치 렌즈는
+      동일 원인을 지지하면서 영향을 medium으로 낮춘다.
+    resolution_question: 일반 BOM 소비자가 자기참조 재투입을 처리하는 실패 조건이 지원 경로의 목적 달성을 막는 high인지,
+      신뢰성을 약화하는 medium인지?
+  - issue_id: issue-004
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: 가치 렌즈는 비순환 불변조건 훼손을 medium으로 유지하지만, 의미론 렌즈는 제품구조와 물질흐름의 혼합이
+      무한·중복 전개를 유발할 수 있다며 심각도를 높인다.
+    resolution_question: 스크랩 자기참조가 안전한 자재 전개라는 지원 목적을 실패시키는 high 결함인지, 예외 경계와 종료 조건
+      부재로 신뢰성만 약화하는 medium 결함인지?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: coverage의 narrow 입장은 원인을 부정하지 않고 실행 경계와 오더 선택 규칙의 누락을 명시하며, 이는 현재 뿌리 가설과
+      제안 조치에 이미 포함된다.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 UOM과 품목별 환산 권위의 누락, root cause 및 high 심각도에 일치한다.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: coverage와 structure는 각 렌즈가 직접 확인할 수 있는 권위·동기화 범위로 진술을 한정할 뿐, semantics가
+      확인한 산식 의미 문제나 통합 이슈를 반박하지 않는다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 독립 구성 리비전과 확장 가능한 효과성 범위의 필요성 및 high 심각도에 일치한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: evolution의 narrow 입장은 모든 MES 상세가 아닌 안정된 최소 실행 경계를 요구하며, 이는 현재 제안 조치의 생산
+      오더·실행·적용 구성·계보 최소 경계와 일치한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 사건 기반 lifecycle, 감사 증거, 종결·취소·정정 이력의 누락과 high 심각도에 일치한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 속성별 권위, provenance, 동기화 및 불일치 처리 계약의 누락과 medium 심각도에 일치한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 폐쇄형 단위와 무단위 값 대신 확장 가능한 UOM·환산 기준이 필요하다는 데 일치한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 BOM·Routing의 불변 리비전과 유효기간 부재 및 high 심각도에 일치한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 선형 ordered_list의 표현 한계와 전이 그래프 도입 필요성 및 medium 심각도에 일치한다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: structure의 narrow 입장은 의미적 혼합을 부정하지 않고 독립 개정 노드와 적용 경로 부재라는 구조적으로 검증 가능한
+      부분에 초점을 둔다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 검사 명세 정보 객체와 검사 실행 단계의 분리 필요성 및 medium 심각도에 일치한다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 능력값에 측정 차원·단위·basis가 필요하다는 원인과 medium 심각도에 일치한다.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: coverage는 구분 개념의 누락으로 범위를 한정하지만 포괄 품목과 말단 부품 의미의 분리라는 다른 렌즈의 진단이나 제안 조치를
+      반박하지 않는다.
+  - issue_id: issue-019
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 ECO에서 BOM·Routing 구성과 변경 전후 버전으로 이어지는 경로의 누락 및 high 심각도에
+      일치한다.

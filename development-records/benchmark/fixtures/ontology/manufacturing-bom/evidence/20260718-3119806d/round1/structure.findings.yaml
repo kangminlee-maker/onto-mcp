@@ -1,0 +1,133 @@
+schema_version: 1
+session_id: 20260718-3119806d
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart and relations
+    evidence_anchor: 'entities.AlternatePart; relations entry `{ from: Part, to:
+      Part, kind: alternate_of, note: "AlternatePart를 통해 표현되는 관계의 단축 표기" }`'
+    claim: AlternatePart is absent from the declared relation graph even though
+      alternate_of says the relationship is represented through it.
+    what: The entity holding `primary_ref`, `alternate_ref`, and `direction` has no
+      incident edge in `relations`; the only alternate edge connects Part
+      directly to Part.
+    why: A consumer traversing the declared relation graph bypasses AlternatePart
+      and therefore cannot reach the relationship-specific direction metadata.
+      This conflicts with the stated representation and weakens the ontology as
+      a shared PLM/MES structural contract.
+    how_to_fix: Declare explicit Part→AlternatePart and AlternatePart→Part edges
+      with distinct primary/alternate roles, and treat Part→Part `alternate_of`
+      only as a documented derived shortcut.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the conceptual reference for PLM/MES integration.
+      failure_condition: An integration consumer derives substitutability from the
+        `relations` graph and needs the `direction` carried by AlternatePart.
+      impact: The navigable graph loses relationship metadata and can yield a
+        materially different substitution structure from the entity model.
+      evidence_refs:
+        - entities.AlternatePart.attributes.primary_ref
+        - entities.AlternatePart.attributes.alternate_ref
+        - entities.AlternatePart.attributes.direction
+        - relations[Part→Part:alternate_of].note
+    causal_path:
+      root_cause_candidate: The shortcut Part→Part relation was declared without
+        wiring its association entity into the canonical relation graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: No declared relation has AlternatePart as its source or target.
+          relation_to_previous: null
+          evidence_refs:
+            - relations
+        - cause_id: structure-candidate-001.cause-002
+          claim: The direct Part→Part edge bypasses the entity that owns substitution
+            direction.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations[Part→Part:alternate_of]
+            - entities.AlternatePart.attributes.direction
+        - cause_id: structure-candidate-001.cause-003
+          claim: The shortcut relation was not structurally connected to its stated
+            association entity.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations[Part→Part:alternate_of].note
+            - entities.AlternatePart
+      unresolved_beyond_evidence: The bounded artifact does not specify whether
+        consumers traverse only `relations` or also synthesize edges from
+        reference attributes.
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml — ECO change connections
+    evidence_anchor: "entities.ECO.attributes.affected_parts; relations entry `{
+      from: ECO, to: Part, kind: changes }`; entities BomLine, Routing, and
+      Operation"
+    claim: ECO is connected only to Part, leaving BOM-line and routing structures
+      outside the change-management path.
+    what: The ontology contains BOM and routing components, but neither ECO
+      attributes nor declared relations connect an ECO to BomLine, Routing, or
+      Operation.
+    why: Within the declared PLM/MES integration model, a change affecting component
+      quantity, BOM membership, operation sequence, or operation parameters
+      cannot be structurally associated with its change order; only an affected
+      Part can be named.
+    how_to_fix: Add explicit ECO impact relations to the changeable structures—at
+      minimum BomLine and Routing, and Operation if operations are independently
+      governed—or introduce one canonical change-subject association that can
+      target those entity types.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide a coherent conceptual reference for item, BOM,
+        routing, and change-management integration.
+      failure_condition: An ECO changes a BOM line or routing detail rather than only
+        identifying an affected item.
+      impact: The bounded model cannot preserve structural traceability from the
+        change order to the changed manufacturing definition, weakening
+        integration and operational actionability.
+      evidence_refs:
+        - entities.ECO.attributes.affected_parts
+        - relations[ECO→Part:changes]
+        - entities.BomLine
+        - entities.Routing
+        - entities.Operation
+    causal_path:
+      root_cause_candidate: The change-subject model is constrained to Part references
+        despite BOM and routing being modeled as separate entities.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: ECO has an affected_parts reference and a changes edge only to Part.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.ECO.attributes.affected_parts
+            - relations[ECO→Part:changes]
+        - cause_id: structure-candidate-002.cause-002
+          claim: BomLine, Routing, and Operation have no incoming or outgoing
+            change-management connection.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine
+            - entities.Routing
+            - entities.Operation
+            - relations
+        - cause_id: structure-candidate-002.cause-003
+          claim: The change-subject structure was modeled as Part-only.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.ECO.attributes.affected_parts
+            - relations[ECO→Part:changes]
+      unresolved_beyond_evidence: The artifact does not state whether external PLM
+        identifiers provide finer-grained BOM or routing change links outside
+        this ontology.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The declared `relations` section is intended to be the canonical navigable
+    relationship graph for integration consumers.
+  - BOM membership/quantity and routing sequence/parameters are independently
+    changeable structures because the artifact models BomLine, Routing, and
+    Operation as distinct entities.
+validation:
+  unaddressable_candidates: []

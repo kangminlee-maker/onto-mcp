@@ -1,0 +1,129 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml — Part/BOM/Routing/ECO version model
+    evidence_anchor: materialized-input.md:14-35,55-61,69-75,84-96
+    claim: BOM과 라우팅에 독립적인 버전·효력 구간이 없어 변경 전후 구조를 동시에 유지할 수 없다.
+    what: Part에는 현재 rev와 최신 ECO만 있고, BomLine·Routing·Operation에는 revision,
+      valid-from/to 또는 ECO 적용 범위가 없다.
+    why: ECO 시행일 전후의 BOM과 라우팅을 구분하거나 과거 생산 오더의 적용 구조를 재현할 수 없다. 새 변경 유형이나 복수의 예정 변경을
+      수용하려면 기존 엔티티와 참조 구조를 수정해야 하므로 PLM/MES 간 변경 연속성이 깨진다.
+    how_to_fix: BOM 및 Routing의 버전 엔티티를 도입하고 revision, effectivity 범위, lifecycle 상태,
+      변경 원인 ECO를 명시하라. 생산 오더는 불변 버전 또는 특정 효력 스냅샷을 참조하게 하라.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목·BOM·라우팅·변경관리 개념 기준 제공
+      failure_condition: ECO 전후 구조가 공존하거나 예정 변경, 과거 생산 이력 재현, 시점 기준 조회가 필요한 경우
+      impact: 어느 BOM·라우팅 버전이 생산에 적용됐는지 결정할 수 없어 변경 연속성과 제조 추적성을 신뢰할 수 없다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:29-35
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: 변경 가능한 제조 구조를 시점별 불변 버전이 아니라 Part의 현재 상태와 무버전 참조로 모델링했다.
+      root_cause_step_id: evolution-candidate-001.cause-002
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: ECO 시행 전후의 BOM·라우팅을 모델 안에서 식별하거나 동시에 유지할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+            - materialized-input.md:96
+        - cause_id: evolution-candidate-001.cause-002
+          claim: BomLine과 Routing에는 revision/effectivity가 없고 Part에는 현재 rev와 최신 ECO만 존재한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+      unresolved_beyond_evidence: 외부 PLM이나 MES가 별도 이력을 보존할 수는 있으나, 해당 이력을 이 개념 기준에 매핑하는 계약은 경계 내 자료에 없다.
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml — 측정 단위와 환산 모델
+    evidence_anchor: materialized-input.md:19,34-35,53,67,98-100
+    claim: 수량·시간·능력의 단위 모델이 폐쇄적이거나 암묵적이어서 새 단위와 사업장 확장이 기존 구조 수정을 요구한다.
+    what: Part.uom은 ea/kg/m만 허용하고, BomLine 수량과 scrap_rate에는 단위 의미가 없으며 WorkCenter
+      능력은 작업장별로 서로 다른 단위를 하나의 number 필드에 넣는다. 품목별 환산계수도 없다.
+    why: 새 단위, 포장 단위, 교대 정의 또는 작업장 능력 척도를 추가할 때 enum과 필드 의미를 바꾸거나 현장별 규칙을 외부에 계속
+      추가해야 한다. PLM 수량과 MES 능력 계산이 확장될수록 동일 숫자의 의미가 충돌할 수 있다.
+    how_to_fix: 확장 가능한 UnitOfMeasure와 Quantity 개념을 만들고 qty_per, 표준시간, capacity에 단위를
+      명시적으로 참조시켜라. 품목·효력기간별 변환계수와 변환 불가 조건도 모델링하라.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 다양한 품목과 제조 자원을 포괄하는 PLM/MES 공통 개념 기준 제공
+      failure_condition: ea/kg/m 이외 단위, 품목별 환산, 서로 다른 교대·능력 단위를 가진 작업장을 통합하는 경우
+      impact: 확장 때마다 스키마 변경이나 수기 해석이 필요하고 수량·능력 계산의 의미가 시스템별로 달라진다.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:34-35
+        - materialized-input.md:53
+        - materialized-input.md:67
+        - materialized-input.md:100
+    causal_path:
+      root_cause_candidate: 측정값과 단위를 분리된 확장 가능 개념으로 모델링하지 않고 제한 enum 또는 필드별 관례로 표현했다.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 단위나 작업장 능력 척도를 추가하면 기존 enum 또는 숫자 필드의 해석을 변경해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:67
+            - materialized-input.md:100
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 수량·시간·능력이 공통 Quantity/UOM 계약 없이 서로 다른 숫자 속성과 현장 환산으로 분산돼 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:34-35
+            - materialized-input.md:53
+            - materialized-input.md:67
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml — BOM 순환성과 재생 원료 확장
+    evidence_anchor: materialized-input.md:29-35,93-95
+    claim: 재생 원료 흐름을 제품 BOM 자기참조 예외로 표현해 새 회수·재작업 시나리오가 추가될수록 비순환 규칙의 예외가 늘어난다.
+    what: 모델은 BOM 비순환을 요구하면서 스크랩 재투입은 Assembly가 자기 자신을 하위 품목으로 포함하도록 정의한다.
+    why: 회수, 재작업, 공동생산처럼 순환 물질 흐름이 확장될 때 제품 구성과 공정 물질 흐름을 같은 BomLine에 계속 혼합해야 한다.
+      그러면 기존 BOM 전개·원가 계산의 비순환 전제가 약화되고 새 사례마다 특례 수정이 필요하다.
+    how_to_fix: 제품 구성 BOM은 비순환으로 유지하고, 스크랩 회수·재투입·재작업은 별도의 MaterialFlow 또는
+      OperationInput/Output 관계로 분리하라. 두 개념 간 연결과 계산 경계를 명시하라.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 확장 가능한 BOM·공정 통합 개념과 안전한 제조 운영 규칙 제공
+      failure_condition: 스크랩 재투입 외에 다단 회수, 재작업, 공동·부산물 흐름을 추가하는 경우
+      impact: 새 흐름마다 순환 예외가 누적되어 BOM 전개와 원가·소요량 계산이 종료되거나 일관되게 동작한다는 신뢰가 약해진다.
+      evidence_refs:
+        - materialized-input.md:29-35
+        - materialized-input.md:93-95
+    causal_path:
+      root_cause_candidate: 제품 구성 관계와 순환 가능한 공정 물질 흐름을 동일한 BomLine 개념으로 표현했다.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 새 순환 제조 흐름은 BOM 비순환 규칙에 추가 예외를 요구한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-95
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 스크랩 재투입을 별도 공정 흐름이 아니라 Assembly의 자기 하위 포함으로 모델링한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:93-95
+      unresolved_beyond_evidence: 실제 BOM 전개 구현이 자기참조를 안전하게 차단하는지는 현재 경계에서 확인할 수 없지만,
+        개념 기준 자체의 확장 취약성은 명시된 예외로 확인된다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 현재 상태뿐 아니라 과거·현재·예정 제조 구조를 구분하고 재현할 수 있어야 한다.
+  - 향후 품목·사업장·공정 확장 과정에서 추가 측정 단위와 순환 물질 흐름이 도입될 수 있다.
+validation:
+  unaddressable_candidates: []

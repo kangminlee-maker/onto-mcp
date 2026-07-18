@@ -1,0 +1,186 @@
+schema_version: 1
+session_id: 20260718-6dc79b44
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 필수 가치 권위가 바인딩되지 않아 온톨로지의 PLM/MES 통합 목적 정렬을 검증할 수 없다.
+    issue_role: evidence_gap
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 권위 누락 자체는 확인되었지만 목적 적합성 판단은 수행되지 못했다. 후속 종합 판단 전에 필수 권위를 제공하고 해당 렌즈를
+      재실행해야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: BOM과 Routing에 독립적인 버전 및 유효기간이 없어 특정 시점의 제조 구성을 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 적용 가능 렌즈가 구조적 결손과 high 영향을 일관되게 확인했다. 시점별 구성 재현은 PLM/MES 변경 적용의 핵심
+      계약이므로 기준 문서에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 시간 유효 제조 구성과 ECO 변경항목·전후 버전의 연결 구조가 없어 변경 범위와 적용 구성을 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: coverage, evolution, semantics, structure가 공통 원인과 high 영향을 지지하며 이견이
+      없다. 변경 적용 경로의 결정성이 통합 기준의 핵심이므로 대상에서 해결해야 한다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-008
+      - finding-018
+      - finding-019
+  - issue_id: issue-004
+    problem_definition: Routing과 ECO가 증거 있는 상태 전이 이력 없이 현재 상태값만 보존해 승인·철회·정정 과정을 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 사건 기반 lifecycle 결손과 감사 영향에 적용 가능 렌즈들이 합의했다. 기본 개념 기준 확정 후 운영 통제 단계로
+      넘어가기 전에 상태 전이 권위를 명시해야 한다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-007
+  - issue_id: issue-005
+    problem_definition: 외부·병행 관리 값에 공통 권위, provenance, 유효성, 동기화 및 충돌 해결 계약이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 적용 가능 렌즈들이 공통 원인과 medium 영향을 일관되게 지지한다. 시스템 통합을 실행하기 전에 어느 값이 권위 있는지
+      결정할 계약이 필요하다.
+    related_surface_finding_ids:
+      - finding-005
+      - finding-010
+  - issue_id: issue-006
+    problem_definition: UOM이 폐쇄 enum과 품목 속성에 한정되고 유효한 품목별 변환 규칙이 없어 수량 환산과 단위 확장이 불안정하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 여러 렌즈가 UOM 기준정보와 변환 마스터의 부재를 확인했다. 실제 BOM 수량 교환·계산에 들어가기 전에 환산 의미를 결정
+      가능하게 해야 한다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: 대체 정책이 문맥과 시간에 독립적인 품목 쌍으로 고정되어 revision·BOM·사업장·기간별 승인 범위를 표현할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: evolution, semantics, structure가 문맥·유효성을 가진 정책의 필요성에 합의했다. MES 대체
+      판단으로 사용하기 전에 조건별 승인 범위를 표현할 수 있어야 한다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-008
+    problem_definition: AlternatePart의 항상 대칭이라는 정의와 one_way 허용·기본값이 양립하지 않아 방향 규칙이 결정되지 않는다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 동일 관계에 상충하는 규칙이 명시되어 논리·의미·구조 렌즈가 medium 영향을 확인했다. 기준 문서는 대칭 또는 조건부
+      방향 중 하나의 권위 규칙을 선택해야 한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-009
+    problem_definition: 정식 AlternatePart 권위 경로와 Part→Part 축약 관계가 분리되어 방향 규칙 충돌과
+      direction 정보 손실이 발생한다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 공통 권위 경로를 두어야 한다는 조치는 채택되었지만, 통합 원인 범위와 high 결합 영향에는 structure·logic의
+      이견이 남았다. 권위 경로와 결정적 투영 규칙은 대상에서 명시하고 시스템 수준 영향은 추가 증거로 확인해야 한다.
+    related_surface_finding_ids:
+      - finding-013
+      - finding-020
+  - issue_id: issue-010
+    problem_definition: 제품 구성과 공정 중 회수물 흐름을 동일한 BomLine으로 표현해 BOM의 비순환 구성 의미를 훼손한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 제품구조와 회수물 흐름의 혼합이 무한 전개·중복 소요·잘못된 소비를 유발할 수 있다는 high 영향에 관련 렌즈가 합의했다.
+      핵심 BOM 의미를 훼손하므로 기준 문서에서 분리해야 한다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-011
+    problem_definition: 검사 사양인 InspectionPlan과 실행 단계인 Operation을 하나의 상속 계층으로 결합해 정체성과 수명주기를 혼동한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: semantics, evolution, structure가 사양과 실행 엔티티의 분리에 합의했다. 품질 사양 개정과 라우팅
+      실행을 연계하기 전에 서로 다른 수명주기를 명확히 해야 한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-012
+    problem_definition: scrap_rate의 이름과 설명이 폐기 비율·수율·승수 중 서로 다른 계산 의미를 허용한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 계산 의미의 불확정성은 직접 관찰되었고 관련 렌즈들이 medium 영향을 유지했다. 생산계획 계산 전에 단위·범위·산식을
+      포함한 하나의 권위 의미를 결정해야 한다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-013
+    problem_definition: capacity_per_shift가 가용 시간과 처리량이라는 서로 다른 차원의 값을 함께 나타내 소비자가 단위를 결정할 수 없다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: semantics, evolution, structure가 차원 혼합과 medium 영향을 확인했다. 능력계획과 작업 배정에
+      사용하기 전에 차원별 속성 또는 명시적 kind·UOM 계약을 선택해야 한다.
+    related_surface_finding_ids:
+      - finding-017

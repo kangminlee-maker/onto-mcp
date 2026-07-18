@@ -1,0 +1,67 @@
+schema_version: 1
+session_id: 20260718-6d2c65d5
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: axiology 가치 정렬 검토의 authority binding
+    evidence_anchor: ".onto/review/20260718-6d2c65d5/prompt-packets/axiology.prompt\
+      .md §Authoritative alignment input/§Binding timing;
+      .onto/review/20260718-6d2c65d5/execution-preparation/context-candidate-as\
+      sembly.yaml (system_purpose_refs: [], execution_rule_refs: []);
+      .onto/review/20260718-6d2c65d5/execution-preparation/review-value-alignme\
+      nt-criteria.yaml (user-request-intent만 존재)"
+    claim: 필수 가치 권위 자료가 바인딩되지 않아 대상 온톨로지의 목적·가치 정렬 여부를 이 lens 경계 안에서 판단할 수 없다.
+    what: axiology 역할 계약은 core lexicon, 제품화 헌장 및 원칙, 활성 review contract를 가치 판단의 근거로
+      주입하도록 요구하지만, 허용된 컨텍스트에는 사용자 요청 의도만 있고 해당 권위 자료나 그 발췌가 없다.
+    why: 역할 계약은 권위 파일이 없거나 읽히지 않으면 개인 해석에 기반한 판단을 금지하고 insufficient evidence로 처리하도록
+      명시한다. 따라서 임상검사 온톨로지에서 관찰되는 상태 중복, 야간 동기화, 검체 폐기 외부화 등의 선택이 선언된 가치와 정렬되는지
+      판단할 근거가 없으며, 이 lens의 핵심 목적 전체가 수행되지 않는다.
+    how_to_fix: execution preparation 단계에서 지정된 순위 1~3 권위 자료의 관련 조항을 허용 컨텍스트와 prompt
+      packet에 명시적으로 바인딩한 뒤 axiology unit을 다시 실행한다. 각 finding이 요구하는
+      value_authority_anchor, value_type, alignment_direction도 submit 스키마에서
+      수용하도록 계약을 정렬한다.
+    upstream_evidence_required: true
+    severity_hint: blocker
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서 후보가 선언된 시스템 목적과 가치에 부합하는지 독립적으로 평가하는
+        axiology lens의 목적
+      failure_condition: 필수 순위 1~3 가치 권위 자료가 prompt packet 또는 허용 컨텍스트에 주입되지 않은 현재 실행 상태
+      impact: 권위 근거 없는 가치 판단은 역할 계약상 금지되므로 대상의 적합성에 대한 axiology 결론과 후속 종합의 신뢰성이 성립하지
+        않는다.
+      evidence_refs:
+        - axiology.prompt.md §Authoritative alignment input
+        - axiology.prompt.md §Binding timing
+        - "context-candidate-assembly.yaml: system_purpose_refs: [],
+          execution_rule_refs: []"
+        - "review-value-alignment-criteria.yaml:
+          criterion_id=user-request-intent"
+    causal_path:
+      root_cause_candidate: execution preparation이 axiology 계약에서 요구한 순위 1~3 authority
+        source set을 허용 컨텍스트 및 prompt packet에 바인딩하지 않았다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 현재 경계 안에는 target과 사용자 요청 의도는 있으나 가치 판단을 뒷받침할 canonical authority 발췌가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "review-value-alignment-criteria.yaml:
+              criterion_id=user-request-intent"
+            - "context-candidate-assembly.yaml: system_purpose_refs: []"
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 모든 axiology finding에 요구되는 value_authority_anchor를 구성할 수 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - axiology.prompt.md §Finding evidence requirements
+            - "context-candidate-assembly.yaml: execution_rule_refs: []"
+        - cause_id: axiology-candidate-001.cause-003
+          claim: axiology 역할 계약에 따라 대상별 가치 정렬 판단을 중단하고 insufficient evidence로 보고해야 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - axiology.prompt.md §Binding timing
+      unresolved_beyond_evidence: 누락된 authority 자료가 제공되기 전에는 대상의 구체적 설계 선택이 aligned인지
+        misaligned인지 판정할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

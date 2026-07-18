@@ -1,0 +1,49 @@
+schema_version: 1
+session_id: 20260718-6dc79b44
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml — entities.AlternatePart
+    evidence_anchor: .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart의 대칭성 정의와 one_way 허용·기본값은 동시에 만족할 수 없습니다.
+    what: 정의는 A가 B의 대체품이면 B도 A의 대체품이라고 항상 요구하지만, direction은 비대칭인 one_way를 허용하며 이를
+      기본값으로 지정합니다.
+    why: "conflict_pair: materialized-input.md:38 ↔ materialized-input.md:42-45.
+      inter-claim 충돌로, one_way 인스턴스는 정의가 의무화한 역방향 관계를 만족할 수 없습니다. modality_note:
+      mixed — 정의의 obligatory bidirectionality와 스키마의 possible/default one-way가
+      충돌합니다. boundary_handoff_note: 용어 모호성을 제거해도 두 명시적 규칙의 충돌이 남으므로 logic 소유입니다.
+      PLM과 MES가 서로 다른 규칙을 권위로 해석하면 반대 방향의 대체 가능 여부가 달라질 수 있습니다."
+    how_to_fix: 의도한 규칙을 하나로 통일하십시오. 비대칭 대체를 허용하려면 정의를 direction별 조건부 규칙으로 바꾸고, 항상
+      대칭이어야 한다면 one_way 값과 기본값을 제거하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체 부품 관계의 단일한 개념 기준을 제공하는 목적
+      failure_condition: direction=one_way인 AlternatePart가 생성되거나 한 시스템이 정의의 대칭 규칙을
+        우선하고 다른 시스템이 direction 값을 우선할 때
+      impact: 동일한 대체 관계에 대해 시스템별 허용 방향이 달라져 잘못된 자재 대체 또는 유효한 대체의 거부가 발생할 수 있으며, 개념 기준
+        문서로서의 결정 가능성이 약화됩니다.
+      evidence_refs:
+        - .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:38
+        - .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:42-45
+    causal_path:
+      root_cause_candidate: 대체 관계의 방향성 양상이 정의와 속성 스키마 사이에서 단일화되지 않았습니다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: AlternatePart는 대칭 관계로 정의되면서 동시에 one_way 관계를 허용하고 기본값으로 삼습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:38
+            - .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 직접 충돌은 대칭성 의무와 방향 선택 가능성을 서로 다른 권위 규칙에 배치한 결과입니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-6dc79b44/execution-preparation/materialized-input.md:38-45
+      unresolved_beyond_evidence: 실제 업무에서 대체 관계가 항상 대칭이어야 하는지, 조건에 따라 단방향일 수 있는지는 현재 경계의 자료만으로 결정할 수 없습니다.
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

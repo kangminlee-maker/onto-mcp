@@ -1,0 +1,169 @@
+schema_version: 1
+session_id: 20260718-8075d1c7
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: 두 finding은 모두 Result 정정과 야간 동기화 사이에 권위 있는 Report 상태가 낡게 유지되는 동일 결함을 지적한다.
+    shared_cause: null
+    rationale: 실패 조건이 모두 배포 후 Result가 corrected가 되었지만 다음 야간 배치가 실행되지 않은 시점이고, 영향도
+      임상의가 신뢰하는 Report.result_status의 부정확성으로 동일하다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: 두 finding은 결과 상태와 보고 상태를 독립 저장하면서 같은 임상 상태처럼 취급한 모델 때문에 발생한 동일한 권위 불일치이다.
+    shared_cause: null
+    rationale: 두 finding 모두 materialized-input.md:69-83,121-123의 corrected Result와
+      finalized Report 공존을 근거로 하며 동일한 사용자 노출 위험과 원자적 갱신 필요성을 제시한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 단일하고 버전된 상태 권위 및 명시적 투영이 없다는 설계가 현재의 지연 불일치와 향후 혼합 버전 상태 해석 실패를 함께 만든다.
+    shared_cause: null
+    rationale: finding-001은 현재 야간 동기화 구간의 불일치를, finding-011은 상태 어휘가 진화할 때의 호환성 실패를
+      다루지만 둘 다 독립된 두 상태 어휘와 불완전한 동기화 규칙을 근거로 한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-001
+    to_finding_id: finding-008
+    relation: symptom_of
+    root_hypothesis: finding-001의 낡은 보고 상태는 finding-008이 지적한 병렬 표현의 원천 권위·투영 계약 부재가
+      상태 영역에서 드러난 구체적 증상이다.
+    shared_cause: null
+    rationale: finding-008은 중복 사실 전반에 정규 원천과 불일치 처리 규칙이 없다고 지적하고, finding-001은 그중
+      Result/Report 상태에서 실제로 발생하는 사용자 노출 실패를 특정한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-014
+    to_finding_id: finding-023
+    relation: shared_cause_candidate
+    root_hypothesis: 완료와 정정에 대한 명시적 전이 그래프 및 우선순위 규칙이 없기 때문에 Order 완료의 정합성 문제와 전체 상태
+      경로의 불완전성이 함께 발생한다.
+    shared_cause:
+      cause_claim: 상태 열거와 일부 자연어 조건만 있고, 정정 이후 Order 상태를 결정하는 전이 간선이나 guard가 없다.
+      from_cause_ref: finding-014.cause-002
+      to_cause_ref: finding-023.cause-002
+    rationale: finding-014는 corrected Result 이후 completed Order 처리의 미정의를 특정하고,
+      finding-023은 이를 포함한 lifecycle 전반에서 전이 구조가 없음을 지적한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-022
+    relation: same_root_candidate
+    root_hypothesis: Test와 Assay 사이의 정식 매핑 관계 및 권위가 없다는 하나의 설계 결함이 카탈로그 권위 분산과 주문-수행
+      경로 단절을 함께 만든다.
+    shared_cause: null
+    rationale: finding-002는 중복 등록과 원천 권위 문제에, finding-022는 구조적 경로 단절에 초점을 두지만 둘 다
+      Test–Assay 관계 부재와 양쪽 등록 메모를 동일 증거로 사용한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-009
+    to_finding_id: finding-022
+    relation: same_root_candidate
+    root_hypothesis: Test–Assay 연결을 수명주기 있는 정규 개념으로 모델링하지 않은 것이 현재 구조적 고립과 카탈로그 변경 시
+      정체성 단절을 모두 유발한다.
+    shared_cause: null
+    rationale: finding-022는 현재 Order에서 Assay로 가는 경로가 없음을, finding-009는 추가·분할·병합·폐기 시
+      그 연결의 연속성을 보존할 수 없음을 보여준다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-017
+    to_finding_id: finding-022
+    relation: shared_cause_candidate
+    root_hypothesis: 주문 단위 Test와 수행 단위 Assay를 구별하고 연결하는 정규 관계가 없어서 의미적 입도와 구조적 경로가 모두 확정되지 않는다.
+    shared_cause:
+      cause_claim: Test와 Assay를 양쪽에 등록하도록 요구하면서 동일성 기준이나 연결 관계를 정의하지 않았다.
+      from_cause_ref: finding-017.cause-001
+      to_cause_ref: finding-022.cause-003
+    rationale: finding-017의 의미적 모호성과 finding-022의 운영상 고립은 모두 양쪽 등록만 존재하고 대응 관계가 없다는
+      동일한 근거에서 직접 파생된다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-005
+    to_finding_id: finding-021
+    relation: symptom_of
+    root_hypothesis: finding-021의 Specimen produces Result라는 잘못된 생성 의미는 finding-005가
+      지적한 분석 실행 개념 부재의 관계 수준 증상이다.
+    shared_cause: null
+    rationale: 분석 실행 주체가 모델에 없으므로 결과 생성이 물리적 검체에 직접 귀속된다. 두 finding 모두 Assay가 Result
+      생성 경로에 참여하지 않는다는 증거를 공유한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-005
+    to_finding_id: finding-022
+    relation: shared_cause_candidate
+    root_hypothesis: Test와 Assay를 연결하는 수행 경로가 없기 때문에 Assay가 구조적으로 고립되고 실제 실행·QC·결과 계보도 표현되지 않는다.
+    shared_cause:
+      cause_claim: Test와 Assay 사이의 관계가 없어 주문된 검사에서 실제 수행 단위로 이어지는 경로가 닫히지 않는다.
+      from_cause_ref: finding-005.cause-001
+      to_cause_ref: finding-022.cause-003
+    rationale: finding-022는 누락된 카탈로그 연결 자체를, finding-005는 그 결과로 실행·방법·QC를 Result에
+      귀속할 수 없는 분석 단계 공백을 설명한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-010
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: 공통되고 버전 가능한 SpecimenType 권위가 없다는 설계가 변경 시 다중 스키마 수정과 현재 값 간 의미 불일치를 함께 만든다.
+    shared_cause: null
+    rationale: finding-010은 enum과 자유 문자열의 진화·호환성 문제를, finding-018은 blood/WB/Serum 및
+      Urine-random의 입도 불일치를 다루지만 둘 다 세 속성이 공통 코드 체계를 참조하지 않는다는 데 근거한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-003
+    to_finding_id: finding-020
+    relation: same_root_candidate
+    root_hypothesis: CriticalValue 정책과 환자별 발생·통보 사건을 분리하지 않은 것이 통보 증거 부재와 notified
+      값의 대상 모호성을 동시에 만든다.
+    shared_cause: null
+    rationale: finding-003은 즉시 통보의 시각·수신자·책임 증거가 외부로 분산됨을, finding-020은 재사용 임계값과 발생별
+      boolean이 한 엔티티에 혼합됨을 지적하며 둘 다 구조화된 통보 이벤트 부재를 해결책으로 제시한다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-003
+    to_finding_id: finding-006
+    relation: symptom_of
+    root_hypothesis: CriticalValue의 boolean 및 외부 전화 대장 문제는 안전 관련 행위를 변경 가능한 현재 상태로
+      축약한 더 일반적인 감사 이벤트 모델링 결함의 한 증상이다.
+    shared_cause: null
+    rationale: finding-006은 검증·발행·정정·통보 전체의 actor-time-reason 증거 부족을 포괄하고,
+      finding-003은 그중 위험값 통보에서 발생하는 구체적 운영 실패를 설명한다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-013
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: 버전되는 임계값 규칙과 개별 통보 사건을 하나의 CriticalValue 유형에 합친 것이 과거 규칙 적용성
+      상실과 통보 대상 불명확성을 함께 유발한다.
+    shared_cause:
+      cause_claim: 별도의 버전된 CriticalValue 규칙과 Result별 통보 이벤트가 모델링되지 않았다.
+      from_cause_ref: finding-013.cause-003
+      to_cause_ref: finding-020.cause-003
+    rationale: finding-013은 시간에 따른 정책 변경을 보존하지 못하는 문제를, finding-020은
+      occurrence-level notified의 귀속 실패를 다루며 두 causal path 모두 규칙과 사건의 분리를 요구한다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-013
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: CriticalValue 임계값의 과거 적용성을 보존하지 못하는 finding-013은 시간 의존 임상 지식을
+      timeless current-state 엔티티로 표현한 finding-007의 구체적 사례이다.
+    shared_cause: null
+    rationale: finding-007은 Test·Assay·CriticalValue의 버전·유효기간·역사적 바인딩 부재를 포괄하며,
+      finding-013은 그중 CriticalValue 정책 변경이 과거 결과 해석을 깨뜨리는 실패를 상세화한다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-004
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-012
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-019
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

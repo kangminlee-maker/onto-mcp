@@ -1,0 +1,234 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: Separating drawing revision, manufacturing revision, and
+      production effectivity—and binding them in one authoritative effective
+      configuration—would remove both the weekly-lag authority mismatch and the
+      revision-meaning ambiguity.
+    shared_cause: null
+    rationale: Both findings concern Part.rev serving incompatible
+      revision/effectivity roles while its weekly source synchronization can lag
+      ECO.effective_date. Finding-001 emphasizes authority alignment;
+      finding-017 emphasizes semantic conflation.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: Both failures would cease if ECO effectivity resolved an
+      immutable, versioned manufacturing configuration rather than relying on
+      current Part.rev and unversioned BOM/routing projections.
+    shared_cause:
+      cause_claim: The ontology represents change through separately sourced current
+        revision/effective-date fields without an authoritative, versioned
+        configuration binding for BOM and routing.
+      from_cause_ref: finding-001.cause-002
+      to_cause_ref: finding-005.cause-003
+    rationale: The synchronization conflict in finding-001 and the historical
+      reconstruction gap in finding-005 arise from the same current-state-only
+      change representation, although they affect different operations.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: A single defect—absence of independently versioned and
+      effective-dated BOM and routing structures—fully accounts for both
+      findings.
+    shared_cause: null
+    rationale: "The findings make the same claim using coverage and evolution
+      lenses: BOM and routing cannot coexist or be reconstructed across ECO
+      effectivity because their structures lack versions and effectivity
+      intervals."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-011
+    to_finding_id: finding-023
+    relation: same_root_candidate
+    root_hypothesis: Promoting revision from a Part string to a relationship-capable
+      configuration/version entity linked to ECO, BOM, and routing would
+      eliminate both the evolution and structural failures.
+    shared_cause: null
+    rationale: Finding-011 reports the missing version/effectivity model, while
+      finding-023 reports the resulting absence of a traversable
+      ECO-to-execution-configuration path.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: Both findings reduce to using an acyclic product-structure
+      relation to represent cyclic material recovery because no separate
+      process-material-flow concept exists.
+    shared_cause: null
+    rationale: The axiology and evolution lenses describe the same self-referential
+      BOM exception and recommend the same separation of product structure from
+      recovery flow; finding-013 chiefly extends the consequence to future
+      scenarios.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-013
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: A single modeling defect—encoding scrap reinsertion as Assembly
+      self-containment through BomLine—fully explains both findings.
+    shared_cause: null
+    rationale: Both findings identify the same evidence and conceptual conflation.
+      One emphasizes extensibility and calculation stability; the other
+      emphasizes semantic correctness and operational consequences.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-003
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: A canonical Quantity/Measurement model carrying dimension,
+      unit, authority, validity, and derivation would address both present
+      integration ambiguity and future unit-extension fragility.
+    shared_cause:
+      cause_claim: Operational measurements are distributed across untyped scalar
+        fields and local conventions instead of a shared extensible
+        quantity-and-unit contract.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-012.cause-002
+    rationale: Finding-003 evaluates trust in current quantitative semantics;
+      finding-012 evaluates evolution under new units and sites. Both trace to
+      the same missing measurement abstraction.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: Assigning every operational value one authoritative source plus
+      version, synchronization time, validity, and derivation status would
+      remove both the broad measurement-trust defect and the replica-conflict
+      defect.
+    shared_cause:
+      cause_claim: Operational values lack a modeled authority, provenance, freshness,
+        and derivation contract, allowing copied or manually maintained replicas
+        to act as peer facts.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-009.cause-003
+    rationale: Finding-003 is the broader quantitative-semantics finding;
+      finding-009 isolates the authority and synchronization-provenance portion
+      for scrap_rate and cumulative standard time.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-008
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: Introducing an extensible UOM model with part- and
+      effectivity-specific conversion rules would resolve both deterministic
+      conversion failure and schema evolution pressure.
+    shared_cause:
+      cause_claim: The ontology models numeric quantities and limited unit labels but
+        lacks an extensible governed UOM and conversion contract.
+      from_cause_ref: finding-008.cause-002
+      to_cause_ref: finding-012.cause-002
+    rationale: Finding-008 focuses on the missing conversion master's immediate
+      operational effect; finding-012 covers the same omission's effect on
+      adding units, packaging rules, and site-specific capacity measures.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-003
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: Replacing ambiguous scalar measurements with typed quantities
+      that specify arithmetic meaning, denominator, formula, and authority would
+      eliminate both findings.
+    shared_cause: null
+    rationale: The undefined rate-versus-factor meaning and copied authority of
+      scrap_rate are a concrete instance of finding-003's broader absence of
+      shared quantitative semantics.
+    confidence: medium
+  - relation_id: rel-011
+    from_finding_id: finding-012
+    to_finding_id: finding-019
+    relation: same_root_candidate
+    root_hypothesis: A typed capacity measurement distinguishing available time from
+      throughput and requiring an explicit UOM would remove both the
+      extensibility problem and the dimensional ambiguity.
+    shared_cause: null
+    rationale: Finding-019 is the concrete WorkCenter.capacity_per_shift
+      manifestation of finding-012's broader claim that time, count, and
+      capacity lack a common dimension-aware measurement contract.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-009
+    to_finding_id: finding-021
+    relation: shared_cause_candidate
+    root_hypothesis: Making cumulative standard time an authoritative derivation
+      from a fixed Routing version and separately naming any approved snapshot
+      or override would resolve both findings.
+    shared_cause:
+      cause_claim: A derived routing value and a manually maintained cost-system value
+        coexist without distinct identities, provenance, or precedence.
+      from_cause_ref: finding-009.cause-003
+      to_cause_ref: finding-021.cause-002
+    rationale: Finding-009 covers authority conflicts across several manufacturing
+      values; finding-021 isolates the cumulative-standard-time instance and its
+      missing formula, routing-version basis, and override semantics.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-004
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: Both findings are fully explained by declaring AlternatePart
+      universally symmetric while permitting and defaulting instances to one-way
+      direction.
+    shared_cause: null
+    rationale: The axiology and logic findings describe the same contradictory
+      substitution contract and the same risk of unauthorized reverse
+      substitution, though finding-004 additionally notes the lossy shortcut.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-014
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: Choosing one authoritative directional semantics for
+      AlternatePart would remove both the logical contradiction and the semantic
+      divergence.
+    shared_cause: null
+    rationale: Both findings cite the same definition-versus-direction conflict.
+      Their differing severities reflect lens judgment, not different underlying
+      defects.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-022
+    to_finding_id: finding-004
+    relation: enables
+    root_hypothesis: The disconnected Part-to-Part shortcut enables consumers to
+      ignore or lose AlternatePart.direction, amplifying the inconsistent
+      interpretation identified in finding-004.
+    shared_cause: null
+    rationale: Finding-022 establishes that the canonical relations graph bypasses
+      the entity carrying direction. This structural loss makes it possible for
+      consumers to apply symmetric shortcut semantics instead of the instance's
+      one-way rule.
+    confidence: high
+  - relation_id: rel-016
+    from_finding_id: finding-006
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: Modeling lifecycle as immutable actor-attributed transition
+      events, including terminal and corrective transitions, would address both
+      missing lifecycle outcomes and missing approval/application evidence.
+    shared_cause:
+      cause_claim: Lifecycle control is represented mainly as current state values
+        rather than as a complete, auditable state-transition history.
+      from_cause_ref: finding-006.cause-002
+      to_cause_ref: finding-007.cause-002
+    rationale: Finding-006 exposes incomplete terminal and post-terminal lifecycle
+      semantics; finding-007 exposes absent evidence for ECO transitions. Both
+      follow from a current-state-only lifecycle representation.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-010
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-020
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

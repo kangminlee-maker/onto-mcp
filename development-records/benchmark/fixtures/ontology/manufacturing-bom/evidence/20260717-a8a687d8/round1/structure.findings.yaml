@@ -1,0 +1,129 @@
+schema_version: 1
+session_id: 20260717-a8a687d8
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart 및 relations
+    evidence_anchor: entities.AlternatePart; relations의 Part→Part alternate_of 항목
+    claim: AlternatePart가 명시적 관계 그래프에서 우회되어 direction을 포함한 대체품 관계 구조가 끊겨 있다.
+    what: AlternatePart는 primary_ref, alternate_ref, direction을 소유하지만 relations에는
+      AlternatePart를 경유하는 연결이 없고 Part→Part alternate_of 단축 관계만 존재한다.
+    why: 다른 주요 참조 속성은 relations에 대응 관계가 있지만 AlternatePart만 우회된다. 따라서 relations를 소비하는
+      PLM/MES 통합 경로에서는 AlternatePart.direction과 관계 인스턴스를 도달하거나 추적할 수 없다.
+    how_to_fix: Part→AlternatePart와 AlternatePart→Part의 역할별 관계를 명시하고, Part→Part
+      alternate_of는 이 구조에서 결정적으로 파생되는 투영으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공
+      failure_condition: 통합 소비자가 명시된 relations 그래프를 기준으로 대체품 관계를 탐색하거나 방향을 판정할 때
+      impact: 대체품의 방향성과 관계 인스턴스가 통합 경로에서 소실되어 잘못된 자재 대체 또는 상호 대체 판정이 가능하다.
+      evidence_refs:
+        - entities.AlternatePart.attributes.primary_ref
+        - entities.AlternatePart.attributes.alternate_ref
+        - entities.AlternatePart.attributes.direction
+        - "relations: Part→Part alternate_of note"
+    causal_path:
+      root_cause_candidate: 대체품 관계를 AlternatePart 엔티티와 Part→Part 단축 관계로 이중 표현하면서 둘 사이의
+        구조적 연결 또는 파생 규칙을 선언하지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: 명시적 relations 목록에서 AlternatePart를 from 또는 to로 사용하는 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - relations 전체 목록
+            - entities.AlternatePart
+        - cause_id: structure-candidate-001.cause-002
+          claim: 대체 관계는 Part→Part alternate_of로 직접 표현되고 AlternatePart 경유는 note에만 서술되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "relations: Part→Part alternate_of note"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml — ECO와 Part revision 연결
+    evidence_anchor: entities.Part.attributes.rev/current_eco;
+      entities.ECO.attributes.affected_parts/effective_date/status; 세 번째
+      integrity_rule
+    claim: ECO가 적용할 정확한 신규 revision으로 이어지는 구조적 연결이 없다.
+    what: ECO는 영향 품목과 적용일만 참조하고 Part는 현재 rev 문자열과 최신 ECO 참조만 보유한다. 무결성 규칙이 요구하는 ECO별
+      신규 rev를 식별하는 연결은 없다.
+    why: 적용일 이후 신규 rev를 따라야 한다는 규칙을 평가하려면 ECO, 대상 품목, 결과 revision의 대응이 필요하지만 현재
+      구조에서는 그 결과 revision을 결정할 수 없다. current_eco도 '최신' ECO만 가리켜 변경 이력별 연결을 대신하지
+      못한다.
+    how_to_fix: 최소한 ECO의 영향 품목별 결과 revision을 연결하는 effectivity 항목을 추가한다. 지속적인 변경 이력이
+      필요하면 PartRevision을 별도 엔티티로 두고 ECO와 이전·신규 revision을 연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM 설계변경과 MES 생산 적용시점 사이의 revision 기준 제공
+      failure_condition: 한 품목에 여러 ECO가 존재하거나 Part.rev 배치 동기화가 effective_date보다 늦을 때 생산
+        revision을 판정하는 경우
+      impact: ECO 적용 대상은 알 수 있어도 적용해야 할 revision은 알 수 없어, 통합 시스템이 구 revision으로 생산하거나
+        외부 추정에 의존하게 된다.
+      evidence_refs:
+        - entities.Part.attributes.rev
+        - entities.Part.attributes.current_eco
+        - entities.ECO.attributes.affected_parts
+        - entities.ECO.attributes.effective_date
+        - integrity_rules[2]
+    causal_path:
+      root_cause_candidate: revision을 Part의 단일 가변 문자열로만 모델링하여 ECO별 revision 전이를 연결할 구조가 없다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: ECO와 Part 사이에는 changes/affected_parts 연결만 있으며 결과 revision 연결이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "relations: ECO→Part changes"
+            - entities.ECO.attributes
+        - cause_id: structure-candidate-002.cause-002
+          claim: Part.rev는 단일 문자열이고 current_eco는 최신 ECO만 참조한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Part.attributes.rev
+            - entities.Part.attributes.current_eco
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: manufacturing-bom-ontology.yaml — BOM 순환 예외 구조
+    evidence_anchor: entities.BomLine.attributes; 첫 번째 integrity_rule
+    claim: 스크랩 재투입 자기참조를 일반 BOM 순환과 구별할 구조적 표지가 누락되어 있다.
+    what: 무결성 규칙은 일반 순환은 금지하면서 스크랩 재투입 자기참조는 허용하지만, BomLine에는 해당 연결이 재투입 예외임을 나타내는
+      속성이나 관계가 없다.
+    why: 동일한 Assembly 자기참조 구조가 허용된 재투입인지 잘못 생성된 순환인지 모델만으로 판별되지 않는다. 따라서 비순환 검증기가
+      예외를 안전하게 적용할 수 없다.
+    how_to_fix: BomLine에 명시적인 용도/edge_kind를 추가해 일반 구성과 scrap_reintroduction을 구분하고,
+      순환 예외는 해당 값과 자기참조 조건을 함께 만족할 때만 허용하도록 규칙을 구조화한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 구조를 PLM/MES가 일관되게 검증하고 전개할 수 있는 개념 기준 제공
+      failure_condition: Assembly 자기참조가 발견되어 비순환 검사 또는 BOM 전개가 예외 여부를 판정할 때
+      impact: 정상 재투입 연결이 거부되거나 임의의 자기순환이 허용되어 BOM 전개와 소요량 계산의 신뢰성이 약화된다.
+      evidence_refs:
+        - integrity_rules[0]
+        - entities.BomLine.attributes.parent_ref
+        - entities.BomLine.attributes.child_ref
+        - entities.BomLine.attributes 전체
+    causal_path:
+      root_cause_candidate: 순환 예외의 의미가 무결성 규칙의 자연어에만 있고 BomLine 구조에는 투영되지 않았다.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: 규칙은 금지된 순환과 허용된 스크랩 재투입 자기참조를 구별해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - integrity_rules[0]
+        - cause_id: structure-candidate-003.cause-002
+          claim: BomLine에는 두 경우를 구별하는 속성이나 별도 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine.attributes
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - relations 목록은 통합 소비자가 사용하는 명시적 관계 그래프이며, ref와 is_a 선언도 구조적 연결 증거로 해석했다.
+  - 외부 제조 도메인 규칙 없이 대상 문서가 스스로 선언한 정의와 무결성 규칙만 필수 연결 판단에 사용했다.
+validation:
+  unaddressable_candidates: []

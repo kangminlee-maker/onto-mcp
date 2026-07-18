@@ -1,0 +1,79 @@
+schema_version: 1
+session_id: 20260717-2b4d329d
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - logic
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+    conflict_summary: semantics는 Result 상태와 Report 문서 상태가 서로 다른 개념인데 잘못 동일시된 것이 근본
+      원인이라고 보는 반면, logic과 evolution은 하나의 현재 상태 권위를 두 필드에 중복 저장하고 지연 동기화한 것이 핵심
+      원인이라고 본다. 어느 진단을 채택하느냐에 따라 상태 개념을 분리할지 단일 정규 상태로 통합할지가 달라진다.
+    resolution_question: Result 상태와 Report 문서 상태는 독립된 두 lifecycle로 분리해야 하는가, 아니면 하나의
+      정규 상태 권위에서 버전된 매핑으로 투영해야 하는가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 정책과 결과별 통보 사건의 혼합이라는 원인, high 심각도 및 분리 조치에 동의한다.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: evolution의 narrow는 매핑 책임으로 범위를 한정할 뿐 원인, 심각도 또는 조치에 반대하지 않는다.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: structure의 제한은 실제 소유자 분기 정도에 관한 증거 범위만 좁히며 canonical 지표 계약 필요성에는 합의한다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: axiology는 권위 문서 바인딩 누락을 지지하고 다른 렌즈들은 자신의 적용 범위 밖이라고 일관되게 판단해 상충하는 주장이 없다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 부분 lifecycle 표현과 명시적 전이 모델 부재라는 원인 및 high 심각도에 동의한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 현재 상태 중심 축약과 사건·버전 계보 부재라는 원인 및 high 심각도에 동의한다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: evolution은 자신의 직접 관심 범위만 사건 이력과 상태 확장성으로 좁혔으며 통보 사건 모델 필요성, 원인 및 심각도에는
+      동의한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 변경 가능한 참조 개념의 버전 권위 부재라는 원인과 medium 심각도에 동의한다.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: evolution, logic, structure의 narrow는 각 렌즈가 직접 입증하는 하위 범위를 밝힌 것이며 Result의
+      임상 관찰·수행 맥락 보강 필요성과 high 심각도를 부정하지 않는다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 Test와 Assay의 권위·다중성 매핑 부재라는 원인과 high 심각도에 동의한다.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 이중 등록과 버전된 매핑 부재라는 원인, high 심각도 및 제안 조치에 동의한다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 CriticalValue 정책을 버전 없는 현재값으로 축약한 원인과 medium 심각도에 동의한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 Result 상태와 Report 문서 상태의 의미 경계 및 정합성 계약 부재라는 원인과 high 심각도에 동의한다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 completed의 시간적 의미와 정정 후 전이 부재라는 원인 및 medium 심각도에 동의한다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: evolution의 narrow는 provenance 확장성과 이력 연속성에 초점을 둔 렌즈별 범위 제한이며 독립 수행 개념
+      부재라는 원인과 조치에는 동의한다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 STAT 표현의 중복 권위와 단일 정규 priority 필요성 및 medium 심각도에 동의한다.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: evolution은 구조적 단절을 버전된 다중성 매핑 부재로 구체화했을 뿐 Test-to-Assay 실행 경로 필요성이나 high
+      심각도와 충돌하지 않는다.
+  - issue_id: issue-019
+    reason_code: no_material_conflict
+    reason: evolution의 narrow는 정책 버전과 불변 통보 사건의 시간적 분리에 초점을 둔 범위 제한이며 결과별 통보 관계 부재라는
+      원인과 조치에는 동의한다.

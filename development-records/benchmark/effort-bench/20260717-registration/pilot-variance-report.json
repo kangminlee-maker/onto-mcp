@@ -1,0 +1,496 @@
+{
+  "schema_version": "effort-bench-pilot-report/1",
+  "registration": "development-records/benchmark/effort-bench/20260717-registration/preregistration.yaml",
+  "analysis_seed": 20260718,
+  "zone_knobs": {
+    "full": 300,
+    "low": 40,
+    "partial": 60
+  },
+  "bench_runs": [
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "full",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 1,
+      "metrics": {
+        "recall_material": 0.8928571428571429,
+        "precision": 0.7828947368421051
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 795479,
+        "promptChars": 1632609,
+        "outputChars": 371694
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "full",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 2,
+      "metrics": {
+        "recall_material": 0.8928571428571428,
+        "precision": 0.8947368421052632
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 734388,
+        "promptChars": 1563954,
+        "outputChars": 336398
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "full",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 3,
+      "metrics": {
+        "recall_material": 0.9821428571428572,
+        "precision": 0.890625
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 925071,
+        "promptChars": 2011811,
+        "outputChars": 397625
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "full",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 1,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.8421052631578947
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 761342,
+        "promptChars": 1552118,
+        "outputChars": 338633
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "full",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 2,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.857142857142857
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 1494299,
+        "promptChars": 2219831,
+        "outputChars": 411107
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "full",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 3,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.8263888888888888
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 839473,
+        "promptChars": 1732161,
+        "outputChars": 365967
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "partial",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 1,
+      "metrics": {
+        "recall_material": 0.9464285714285713,
+        "precision": 0.8238636363636362
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 728586,
+        "promptChars": 1745621,
+        "outputChars": 358608
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "partial",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 2,
+      "metrics": {
+        "recall_material": 0.9107142857142856,
+        "precision": 0.845238095238095
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 769724,
+        "promptChars": 1688611,
+        "outputChars": 376554
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "partial",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 3,
+      "metrics": {
+        "recall_material": 0.857142857142857,
+        "precision": 0.7222222222222222
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 728800,
+        "promptChars": 1411969,
+        "outputChars": 326349
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "partial",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 1,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.875
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 728847,
+        "promptChars": 1457323,
+        "outputChars": 311233
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "partial",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 2,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.8269230769230768
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 559058,
+        "promptChars": 1243131,
+        "outputChars": 271800
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "partial",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 3,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.8124999999999999
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 767362,
+        "promptChars": 1530362,
+        "outputChars": 319762
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "low",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 1,
+      "metrics": {
+        "recall_material": 0.8749999999999999,
+        "precision": 0.838235294117647
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 716745,
+        "promptChars": 1365025,
+        "outputChars": 300958
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "low",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 2,
+      "metrics": {
+        "recall_material": 0.8749999999999999,
+        "precision": 0.6578947368421053
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 850160,
+        "promptChars": 1658705,
+        "outputChars": 347393
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "low",
+      "effort": "medium",
+      "fixture": "clinical-lab-workflow",
+      "rep": 3,
+      "metrics": {
+        "recall_material": 0.7142857142857143,
+        "precision": 0.7102272727272728
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 974547,
+        "promptChars": 1888010,
+        "outputChars": 384903
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "low",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 1,
+      "metrics": {
+        "recall_material": 0.796875,
+        "precision": 0.75
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 749207,
+        "promptChars": 1378197,
+        "outputChars": 278343
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "low",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 2,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.8684210526315789
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 856895,
+        "promptChars": 1538261,
+        "outputChars": 337031
+      }
+    },
+    {
+      "schema_version": "m3-bench-run/1",
+      "zone": "low",
+      "effort": "medium",
+      "fixture": "manufacturing-bom",
+      "rep": 3,
+      "metrics": {
+        "recall_material": 1,
+        "precision": 0.7573529411764706
+      },
+      "judge_runs": 8,
+      "cost": {
+        "durationMs": 909386,
+        "promptChars": 1840671,
+        "outputChars": 352005
+      }
+    }
+  ],
+  "analysis": {
+    "contrasts": [
+      {
+        "id": "C1-coverage-main-medium",
+        "outcome": "not_evaluable",
+        "per_fixture": [
+          {
+            "fixture": "clinical-lab-workflow",
+            "point": 0.017857142857143016,
+            "ci": {
+              "point": 0.017857142857143016,
+              "lower": -0.04166666666666652,
+              "upper": 0.07738095238095266,
+              "bootstrap_iterations": 2000
+            },
+            "met": false
+          },
+          {
+            "fixture": "manufacturing-bom",
+            "point": 0,
+            "ci": {
+              "point": 0,
+              "lower": 0,
+              "upper": 0,
+              "bootstrap_iterations": 2000
+            },
+            "met": false
+          }
+        ],
+        "underpowered": [
+          {
+            "fixture": "credit-risk-taxonomy",
+            "reason": "missing cell (zone=full, effort=medium, fixture=credit-risk-taxonomy) — fail-closed"
+          },
+          {
+            "fixture": "logistics-fulfillment",
+            "reason": "missing cell (zone=full, effort=medium, fixture=logistics-fulfillment) — fail-closed"
+          }
+        ],
+        "reason": "registered fixture(s) without a complete (full vs partial) pair at effort=medium: credit-risk-taxonomy, logistics-fulfillment — fail-closed (attrition)"
+      },
+      {
+        "id": "C2-coverage-main-medium-low",
+        "outcome": "not_evaluable",
+        "per_fixture": [
+          {
+            "fixture": "clinical-lab-workflow",
+            "point": 0.10119047619047628,
+            "ci": {
+              "point": 0.10119047619047628,
+              "lower": 0.017857142857142905,
+              "upper": 0.20833333333333326,
+              "bootstrap_iterations": 2000
+            },
+            "met": false
+          },
+          {
+            "fixture": "manufacturing-bom",
+            "point": 0.06770833333333337,
+            "ci": {
+              "point": 0.06770833333333337,
+              "lower": 0,
+              "upper": 0.203125,
+              "bootstrap_iterations": 2000
+            },
+            "met": false
+          }
+        ],
+        "underpowered": [
+          {
+            "fixture": "credit-risk-taxonomy",
+            "reason": "missing cell (zone=full, effort=medium, fixture=credit-risk-taxonomy) — fail-closed"
+          },
+          {
+            "fixture": "logistics-fulfillment",
+            "reason": "missing cell (zone=full, effort=medium, fixture=logistics-fulfillment) — fail-closed"
+          }
+        ],
+        "reason": "registered fixture(s) without a complete (full vs low) pair at effort=medium: credit-risk-taxonomy, logistics-fulfillment — fail-closed (attrition)"
+      }
+    ],
+    "recovery": {
+      "id": "recovery",
+      "outcome": "not_evaluable",
+      "per_fixture": [],
+      "underpowered": [
+        {
+          "fixture": "clinical-lab-workflow",
+          "reason": "missing cell (zone=full-restored, effort=medium, fixture=clinical-lab-workflow) — fail-closed"
+        },
+        {
+          "fixture": "credit-risk-taxonomy",
+          "reason": "missing cell (zone=full, effort=medium, fixture=credit-risk-taxonomy) — fail-closed"
+        },
+        {
+          "fixture": "logistics-fulfillment",
+          "reason": "missing cell (zone=full, effort=medium, fixture=logistics-fulfillment) — fail-closed"
+        },
+        {
+          "fixture": "manufacturing-bom",
+          "reason": "missing cell (zone=full-restored, effort=medium, fixture=manufacturing-bom) — fail-closed"
+        }
+      ],
+      "reason": "registered fixture(s) without a complete (full vs full-restored) pair at effort=medium: clinical-lab-workflow, credit-risk-taxonomy, logistics-fulfillment, manufacturing-bom — fail-closed (attrition)"
+    },
+    "cell_dispersion": [
+      {
+        "zone": "full",
+        "effort": "medium",
+        "fixture": "clinical-lab-workflow",
+        "n_reps": 3,
+        "mean": 0.9226190476190476,
+        "sd": 0.0515491311776452
+      },
+      {
+        "zone": "full",
+        "effort": "medium",
+        "fixture": "manufacturing-bom",
+        "n_reps": 3,
+        "mean": 1,
+        "sd": 0
+      },
+      {
+        "zone": "low",
+        "effort": "medium",
+        "fixture": "clinical-lab-workflow",
+        "n_reps": 3,
+        "mean": 0.8214285714285713,
+        "sd": 0.0927884361197612
+      },
+      {
+        "zone": "low",
+        "effort": "medium",
+        "fixture": "manufacturing-bom",
+        "n_reps": 3,
+        "mean": 0.9322916666666666,
+        "sd": 0.11727427342914273
+      },
+      {
+        "zone": "partial",
+        "effort": "medium",
+        "fixture": "clinical-lab-workflow",
+        "n_reps": 3,
+        "mean": 0.9047619047619045,
+        "sd": 0.044939490686135425
+      },
+      {
+        "zone": "partial",
+        "effort": "medium",
+        "fixture": "manufacturing-bom",
+        "n_reps": 3,
+        "mean": 1,
+        "sd": 0
+      }
+    ],
+    "all_met": false,
+    "seed": 20260718,
+    "bootstrap_iterations": 2000,
+    "alpha": 0.05,
+    "ci_rule": "cluster-bootstrap-by-review",
+    "caveats": [
+      "tool-read exposure heterogeneity unobserved: per-run tool-read paths are not recorded (aggregate tool_calls only) — lens-side voluntary tail recovery is part of the ITT treatment but its variation across runs is not measured (design §4-4)"
+    ]
+  },
+  "power": [
+    {
+      "contrast_id": "C1-coverage-main-medium",
+      "min_effect_recall_points": 0.15,
+      "sigma_max": 0.11727427342914273,
+      "required_reps_per_cell": 10
+    },
+    {
+      "contrast_id": "C2-coverage-main-medium-low",
+      "min_effect_recall_points": 0.3,
+      "sigma_max": 0.11727427342914273,
+      "required_reps_per_cell": 3
+    }
+  ]
+}

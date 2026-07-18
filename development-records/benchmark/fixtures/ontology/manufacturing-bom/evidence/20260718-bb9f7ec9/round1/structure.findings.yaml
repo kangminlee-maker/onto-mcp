@@ -1,0 +1,120 @@
+schema_version: 1
+session_id: 20260718-bb9f7ec9
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: AlternatePart와 relations 대체품 연결 구조
+    evidence_anchor: materialized-input.md:37-45, 84-91
+    claim: AlternatePart가 명시적 관계 그래프에서 우회되어 대체 방향 정보가 연결되지 않는다.
+    what: AlternatePart는 두 Part 참조와 direction을 갖지만 relations에는 AlternatePart를 경유하는
+      간선이 없고 Part→Part shortcut만 존재한다.
+    why: shortcut의 note가 AlternatePart를 통한 표현이라고 선언하면서도 실제 연결이 없어, 관계 그래프 소비자는
+      direction과 대체 관계 레코드를 추적할 수 없다. PLM/MES가 서로 다른 표현을 기준으로 삼을 위험이 있다.
+    how_to_fix: relations에 Part→AlternatePart와 AlternatePart→Part 간선을 추가하고,
+      Part→Part shortcut은 명시적으로 이 경로에서 파생되는 projection으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합용 대체품 관계의 단일 개념 기준
+      failure_condition: relations 그래프를 기준으로 대체품 연결을 탐색하거나 교환할 때
+        AlternatePart.direction이 경로에 포함되지 않는 경우
+      impact: 대체 허용 방향을 잃은 채 품목 간 관계만 전달되어 제조 투입 가능 부품의 판정 신뢰성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: 관계형 엔티티인 AlternatePart를 명시적 relations 그래프에 연결하지 않고
+        Part→Part shortcut만 선언했다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: 명시적 대체품 간선은 Part→Part이며 AlternatePart를 경유하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-001.cause-002
+          claim: 따라서 AlternatePart에 속한 direction은 해당 간선에서 도달할 수 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: ECO와 적용 대상 리비전 연결
+    evidence_anchor: materialized-input.md:14-21, 69-75, 90, 96
+    claim: ECO가 변경 후 적용할 신규 리비전에 연결되지 않는다.
+    what: 무결성 규칙은 effective_date 이후 신규 rev 적용을 요구하지만 ECO에는 affected_parts만 있고 신규 rev
+      값이나 리비전 엔티티로 향하는 연결이 없다.
+    why: ECO에서 영향 품목까지는 도달할 수 있어도 어느 리비전을 적용해야 하는지 구조적으로 결정할 수 없다. Part.current_eco는
+      최신 ECO만 가리키고 ECO→신규 rev 연결을 대체하지 못한다.
+    how_to_fix: 최소한 ECO에 target_rev 또는 resulting_revision 참조를 추가하고, 장기적으로 리비전을 독립
+      엔티티로 관리한다면 ECO→PartRevision 관계와 PartRevision→Part 관계를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM 설계변경을 MES 생산 적용 기준으로 연결하는 변경관리 개념 계약
+      failure_condition: ECO.effective_date 이후 생산분의 적용 리비전을 ECO 데이터만으로 판정해야 하는 경우
+      impact: 변경 발효일은 알지만 적용 대상 리비전을 식별하지 못해 구·신 리비전 혼용을 방지하는 통합 기준이 닫히지 않는다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:69-75
+        - materialized-input.md:90
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: ECO 모델이 영향 품목과 발효일만 보유하고 결과 리비전 연결을 정의하지 않았다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: 무결성 규칙은 발효일 이후 생산분이 신규 rev를 따라야 한다고 요구한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: structure-candidate-002.cause-002
+          claim: ECO의 속성과 relations에는 신규 rev를 식별하는 값 또는 참조가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:90
+      unresolved_beyond_evidence: 신규 리비전을 문자열 속성으로 둘지 독립 PartRevision 엔티티로 둘지는 현재 경계의 자료만으로 결정할 수 없다.
+  - candidate_id: structure-candidate-003
+    target: released Routing과 생산 오더 생성 규칙
+    evidence_anchor: materialized-input.md:55-61, 84-96
+    claim: 생산 오더 생성 규칙의 대상이 모델에 연결되지 않은 채 남아 있다.
+    what: Routing.status=released 조건으로 생산 오더를 생성한다는 규칙이 있으나 생산 오더 엔티티나
+      Routing/Part에서 그 대상으로 이어지는 관계가 없다.
+    why: 규칙의 출발점인 Routing은 모델링되어 있지만 결과 대상이 없어서, 릴리스 상태가 실제 MES 실행 객체 생성으로 이어지는 구조적
+      경로를 표현하거나 검증할 수 없다.
+    how_to_fix: ProductionOrder를 범위에 포함한다면 엔티티와 Part/Routing 참조를 추가하고 released
+      Routing을 요구하는 관계 제약을 연결한다. 범위 밖이라면 규칙을 외부 계약으로 표시하고 책임 시스템과 경계 참조를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅 릴리스와 MES 생산 실행 사이의 통합 개념 기준
+      failure_condition: 생산 오더 생성 가능 여부와 사용 라우팅을 온톨로지 관계로 검증해야 하는 경우
+      impact: 핵심 운영 규칙이 연결 대상 없이 자연어로만 존재하여 실행 객체가 어떤 released Routing에 근거했는지 추적할 수 없다.
+      evidence_refs:
+        - materialized-input.md:55-61
+        - materialized-input.md:84-95
+    causal_path:
+      root_cause_candidate: 무결성 규칙에서 생산 오더를 도입했지만 해당 개념이나 외부 경계 연결을 선언하지 않았다.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: 무결성 규칙은 released Routing만 생산 오더 생성에 사용하도록 요구한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:95
+        - cause_id: structure-candidate-003.cause-002
+          claim: 정의된 entities와 relations에는 생산 오더 또는 그 외부 경계로 이어지는 연결이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12-91
+      unresolved_beyond_evidence: ProductionOrder가 이 온톨로지 내부 범위인지 외부 MES 계약인지 현재 문서에는 명시되어 있지 않다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - entities의 typed ref와 is_a는 구조적 연결로 인정했다.
+  - relations 섹션은 통합 소비자가 사용하는 명시적 관계 그래프로 해석했다.
+  - 문서 내부 무결성 규칙이 직접 언급한 개념은 최소한 내부 엔티티 또는 명시된 외부 경계에 연결되어야 한다고 보았다.
+validation:
+  unaddressable_candidates: []

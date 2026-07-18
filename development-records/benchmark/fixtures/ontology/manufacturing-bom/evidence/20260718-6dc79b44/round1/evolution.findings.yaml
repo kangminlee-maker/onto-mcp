@@ -1,0 +1,173 @@
+schema_version: 1
+session_id: 20260718-6dc79b44
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml — BOM·라우팅·ECO 변경 모델
+    evidence_anchor: materialized-input.md:20-21, 23-27, 55-61, 69-75, 93-96
+    claim: 새 품목 리비전이나 ECO를 적용할 때 기존 BOM·라우팅을 보존하면서 새 버전을 추가할 수 없어, 구조 변경 또는 기존 참조
+      덮어쓰기가 필요하다.
+    what: Part에는 단일 rev/current_eco만 있고 Assembly와 Routing은 버전·유효기간 없는 현재 구조를 직접
+      참조한다. ECO도 영향 품목과 날짜만 가지며 변경 전후 BOM·라우팅 버전을 식별하지 않는다.
+    why: ECO 발효 전후의 설계·공정 구성을 동시에 표현하거나 생산 오더가 사용한 구성을 고정할 수 없다. 변경 시 과거 데이터의 의미가
+      달라지거나 PLM의 설계 버전과 MES의 실행 버전이 단절되어 통합 기준 문서의 역할이 약화된다.
+    how_to_fix: 불변 PartRevision, BomRevision, RoutingRevision 개념과 유효기간을 도입하고, ECO 변경
+      항목이 이전·신규 버전을 연결하도록 한다. 생산 실행 참조는 현재 Part가 아니라 확정된 BOM·라우팅 버전을 고정해 가리키게
+      한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 품목·BOM·라우팅·변경관리의 공통 개념 기준을 제공하는 목적
+      failure_condition: 동일 품목에 순차 또는 병행 리비전이 존재하거나 ECO 발효 전후 생산 이력을 함께 해석해야 할 때
+      impact: 설계 기준과 제조 실행 기준의 버전 연결 및 과거 재현이 불가능해져 잘못된 BOM·공정 적용 위험과 감사 불가능성이 생긴다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:23-27
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: BOM·라우팅·ECO 관계에 독립적인 버전 식별자, 유효 구간, 변경 전후 버전 연결이 없다.
+      root_cause_step_id: evolution-candidate-001.cause-002
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 리비전 변경 후에도 어느 BOM과 라우팅이 특정 생산 시점에 유효했는지 모델 자체에서 선택할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:55-61
+            - materialized-input.md:96
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 이는 Assembly.bom_lines와 Routing이 버전 없는 직접 참조이고 ECO가
+            affected_parts/effective_date만 보유한 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23-27
+            - materialized-input.md:55-60
+            - materialized-input.md:69-75
+      unresolved_beyond_evidence: 실제 PLM과 MES가 별도 버전 키를 보유하는지는 경계 내 자료로 확인할 수 없지만, 이
+        개념 기준 문서에는 그 매핑 계약이 없다.
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml — Part.uom 및 단위 변환
+    evidence_anchor: materialized-input.md:14-21, 98-100
+    claim: 새 측정 단위나 품목별 환산 요구를 수용하려면 enum과 주변 구조를 수정해야 하며, 기존 수량의 해석 연속성도 보장되지 않는다.
+    what: uom이 ea, kg, m의 폐쇄 enum이고 품목별 환산계수 마스터가 없으며 필요한 변환을 현장에서 수행한다.
+    why: 새 단위, 단위 코드 체계 또는 PLM/MES 간 단위 변환이 생길 때 데이터 추가만으로 확장할 수 없다. 현장 환산 방식이 변경되면
+      과거 qty_per와 현재 수량이 같은 의미인지 재현할 근거도 없다.
+    how_to_fix: Uom을 식별자와 차원·표준 코드 매핑을 가진 참조 엔티티로 분리하고, 품목별 변환계수에 유효기간과 출처를 부여한다.
+      BomLine 수량은 사용 단위를 명시적으로 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 사이에서 품목과 BOM 수량을 안정적으로 교환하는 공통 개념 제공
+      failure_condition: 기존 세 값 밖의 단위가 추가되거나 시스템 간 단위 변환이 필요할 때
+      impact: 스키마 변경이나 비관리 수기 변환이 필요해지고, BOM 수량의 시스템 간 의미가 달라질 수 있다.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:100
+    causal_path:
+      root_cause_candidate: 단위가 확장 가능한 기준정보가 아니라 폐쇄 enum으로 고정되고 변환 규칙의 권위 데이터가 없다.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 단위와 환산 규칙은 데이터 등록만으로 추가할 수 없고 현장 절차에 의존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:100
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 이는 Part.uom의 폐쇄 값 목록과 품목별 환산계수 마스터 부재의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml — 외부 원본에서 복제되는 운영 속성
+    evidence_anchor: materialized-input.md:20-21, 35, 81-82, 96, 98-100
+    claim: 외부 원본 값이 변경될 때 복제값의 출처·적용 시점·동기화 상태를 보존할 구조가 없어 데이터 연속성과 변경 추적이 끊긴다.
+    what: rev, current_eco, scrap_rate, acceptance_criteria 및 누적 표준시간 관련 값이 외부
+      장부·시스템·문서·수기 필드에서 복사되거나 지연 동기화되지만, 복제값에는 원본 식별자, 원본 버전, 관측 시점 또는 유효기간이 없다.
+    why: 원본이 갱신되거나 동기화 방식이 바뀌면 현재 값이 어느 원본 버전에서 왔는지, 특정 생산 시점에 어떤 값이 적용됐는지 판별할 수 없다.
+      새 소스 시스템을 추가할 때도 각 속성에 별도 필드를 붙이는 방식으로 구조가 확산될 가능성이 크다.
+    how_to_fix: 복제되는 값에 공통 provenance/effectivity 구조를 적용해 source_system,
+      source_record, source_version, observed_at, effective_from/to,
+      sync_status를 기록한다. 계산·문서 원본 값은 가능한 경우 버전된 외부 참조로 유지한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 개념 기준에서 변경 후에도 운영 데이터의 출처와 의미를 유지하는 목적
+      failure_condition: 외부 원본 값이나 동기화 주기·시스템이 변경되거나 과거 생산 상태를 재현해야 할 때
+      impact: 최신값과 적용값을 구분할 수 없어 계획, 품질, 변경 적용 판단이 서로 다른 시점의 데이터를 사용할 수 있다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:35
+        - materialized-input.md:81-82
+        - materialized-input.md:96
+        - materialized-input.md:98-100
+    causal_path:
+      root_cause_candidate: 외부 권위 데이터의 복제본에 공통 출처·버전·유효성 메타모델이 없다.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 원본 변경 후 복제값이 어느 원본 버전과 생산 시점에 대응하는지 추적할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:82
+            - materialized-input.md:96
+            - materialized-input.md:99
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 이는 여러 속성이 외부 원본 또는 수기 관리임을 선언하면서도 값 자체 외에 출처와 시점 속성을 모델링하지 않은 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:35
+            - materialized-input.md:81-82
+            - materialized-input.md:98-100
+      unresolved_beyond_evidence: 외부 시스템에 별도 이력·대사 기능이 있는지는 확인할 수 없지만, 온톨로지에는 그 기능과 연결되는 식별·시점 계약이 없다.
+  - candidate_id: evolution-candidate-004
+    target: manufacturing-bom-ontology.yaml — AlternatePart 확장성
+    evidence_anchor: materialized-input.md:37-45, 84-91
+    claim: 대체 가능성이 품목 쌍과 방향만으로 고정되어, 리비전·BOM·사업장·기간별 대체 조건을 추가하려면 기존 관계를 변경하거나 병렬
+      개념을 만들어야 한다.
+    what: AlternatePart는 primary_ref, alternate_ref, direction만 가지며 적용 범위, 승인 상태,
+      유효기간 또는 기준 리비전을 표현하지 않는다.
+    why: 대체 승인 조건이 시간이나 제조 문맥에 따라 달라지는 경우 동일 품목 쌍에 복수의 유효한 대체 정책을 안전하게 추가할 수 없다.
+      무조건적 단축 관계 alternate_of는 이런 문맥을 더 잃어 MES가 과도하게 넓은 대체 허용으로 해석할 위험이 있다.
+    how_to_fix: AlternatePart를 버전·유효기간·승인 상태를 가진 대체 정책으로 확장하고, 적용 BOM/상위 품목, 사업장 또는
+      라우팅 문맥을 선택적으로 참조하게 한다. 단축 관계는 문맥 없는 탐색용 projection임을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM의 대체 승인 정보를 MES의 자재 투입 판단과 안정적으로 연결하는 개념 기준
+      failure_condition: 동일 대체 품목 쌍의 허용 범위가 리비전, BOM, 사업장 또는 기간에 따라 달라질 때
+      impact: 새 조건을 기존 구조에 무손실로 추가할 수 없고, MES가 적용 범위를 초과한 부품을 투입할 수 있다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: 대체 관계가 문맥과 시간에 독립적인 품목 쌍 및 방향으로만 모델링되어 있다.
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 조건부 또는 기간별 대체 정책을 기존 레코드 형태로 구분해 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 이는 AlternatePart에 방향 외의 적용 범위·버전·유효성 속성이 없고 alternate_of 단축 관계가 문맥을 전달하지
+            않는 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:39-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: 실제 대체 승인 차원이 무엇인지는 경계 내 자료에 없으므로, 제안된 범위 차원은 선택적 확장점으로 두어야 한다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 변경 전후의 설계·공정 버전과 실제 생산에 사용된 버전을 함께 식별할 수 있어야 한다.
+  - 측정 단위와 환산 규칙은 품목 및 연동 시스템이 늘면서 추가되거나 변경될 수 있다.
+  - 부품 대체 허용 범위는 리비전, BOM, 사업장 또는 유효기간 같은 제조 문맥에 따라 달라질 수 있다.
+validation:
+  unaddressable_candidates: []

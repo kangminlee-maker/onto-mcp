@@ -1,0 +1,297 @@
+schema_version: 1
+session_id: 20260718-ddf66b5d
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: AlternatePart definition and direction semantics
+    evidence_anchor: materialized-input.md:37-45,84-91
+    claim: AlternatePart is simultaneously defined as symmetric and modeled as
+      direction-sensitive, so the same relation has incompatible meanings.
+    what: The definition says that if B substitutes for A, A also substitutes for B,
+      while `direction` supports `one_way` and makes it the default. The
+      shortcut `alternate_of` relation does not preserve direction.
+    why: Mutual interchangeability and directed substitution are different
+      authorization semantics. A PLM/MES consumer cannot determine whether
+      reverse substitution is permitted, which can allow an unapproved component
+      or reject an approved one.
+    how_to_fix: Define one canonical directed substitution relation with explicit
+      source and target; represent mutual interchangeability as two directed
+      assertions or an explicit bidirectional property, and require the shortcut
+      projection to preserve that meaning.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Provide a semantically reliable PLM/MES reference model for
+        part substitution.
+      failure_condition: A consumer interprets the symmetric definition or
+        `alternate_of` shortcut while another follows the default `one_way`
+        value.
+      impact: Systems can disagree about which component substitutions are authorized
+        during planning or execution.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: The model conflates mutual interchangeability with
+        directed substitution under one concept.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: The prose definition asserts symmetry, but the attribute model defaults
+            to one-way substitution.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: semantics-candidate-001.cause-002
+          claim: The `alternate_of` shortcut further suppresses the direction that
+            distinguishes the two meanings.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:84-91
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: InspectionPlan classification
+    evidence_anchor: materialized-input.md:47-53,77-82
+    claim: InspectionPlan is incorrectly classified as an Operation even though its
+      name, definition, and attributes describe an inspection specification.
+    what: "`Operation` denotes an executable routing step, whereas `InspectionPlan`
+      contains sampling rules and acceptance criteria and is described as a
+      plan. Making the plan a subtype of the performed step mixes an information
+      object with a process occurrence/type."
+    why: A routing consumer may treat the plan itself as an executable operation,
+      while inspection parameters cannot be independently versioned or attached
+      to the intended inspection operation without changing the meaning of
+      inheritance.
+    how_to_fix: Model `InspectionOperation` as an Operation and link it to a
+      separate `InspectionPlan` or `InspectionSpecification`; alternatively
+      rename the current subtype to `InspectionOperation` if it is intended to
+      denote the executable step.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Provide consistent routing and inspection concepts across PLM and MES.
+      failure_condition: Consumers use `is_a Operation` to dispatch every
+        InspectionPlan as an executable routing step.
+      impact: Execution semantics and quality-specification semantics become
+        indistinguishable, weakening routing interoperability.
+      evidence_refs:
+        - materialized-input.md:47-53
+        - materialized-input.md:77-82
+    causal_path:
+      root_cause_candidate: The ontology conflates an executable manufacturing process
+        with the informational specification governing that process.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: InspectionPlan is declared as an Operation despite plan-specific sampling
+            and acceptance attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:77-82
+        - cause_id: semantics-candidate-002.cause-002
+          claim: Operation is defined as a routing process step rather than a plan or
+            specification.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:47-53
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: BOM self-inclusion exception for scrap re-entry
+    evidence_anchor: materialized-input.md:29-35,93-96
+    claim: The ontology uses a product-composition relation to represent a
+      recycling/material-return process, changing the meaning of a BOM line.
+    what: BomLine means that a parent uses a child as a component, but the integrity
+      rule represents scrap recovery by making an Assembly its own child.
+    why: Scrap return is a process/material-flow relationship, not literal
+      self-composition. Encoding it as BOM membership creates a cyclic
+      part-whole meaning and makes ordinary BOM explosion semantics unsafe or
+      ambiguous.
+    how_to_fix: Keep the product BOM acyclic and model scrap recovery or re-entry as
+      a distinct material-flow, co-product, return, or rework relation
+      associated with the relevant operation and quantity basis.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serve as a safe conceptual reference for BOM exchange and
+        manufacturing planning.
+      failure_condition: A PLM or MES consumer applies normal component-explosion
+        semantics to the allowed self-child line.
+      impact: The consumer can recurse indefinitely, double-count requirements, or
+        misunderstand recovered material as product composition.
+      evidence_refs:
+        - materialized-input.md:29-35
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: A process-flow concept for recovered material is
+        represented using the semantically different BOM part-whole relation.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: The integrity rule permits self-inclusion specifically to represent scrap
+            re-entry.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-96
+        - cause_id: semantics-candidate-003.cause-002
+          claim: BomLine is defined only as parent usage of a child component, not as a
+            process return flow.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: Part revision and ECO effectivity semantics
+    evidence_anchor: materialized-input.md:14-21,69-75,93-96
+    claim: The model conflates item revision, drawing revision, latest ECO, and
+      effective production revision.
+    what: "`Part.rev` is explicitly a drawing revision, while the effectivity rule
+      calls it the revision that production must follow. `current_eco` means the
+      latest ECO without defining whether latest means open, approved, applied,
+      or effective, and the weekly revision synchronization permits these
+      representations to disagree."
+    why: Drawing revision, item revision, change-order lifecycle, and production
+      effectivity are not interchangeable. At an ECO effective date, MES cannot
+      reliably identify the authorized production configuration from these
+      fields.
+    how_to_fix: Separate item revision from drawing revision; model ECO lifecycle
+      and effectivity explicitly; link affected revision transitions to the ECO;
+      and define a single effective-revision projection whose authority and
+      synchronization semantics are unambiguous.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Provide a consistent change-management vocabulary for PLM/MES
+        integration.
+      failure_condition: An ECO becomes effective before the weekly `Part.rev`
+        synchronization, or multiple ECO statuses compete for `current_eco`.
+      impact: Production can select a stale or unauthorized revision despite following
+        the ontology's named fields and rule.
+      evidence_refs:
+        - materialized-input.md:14-21
+        - materialized-input.md:69-75
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: Several distinct revision and change-effectivity concepts
+        are collapsed into a generic `rev` value and a single latest-ECO
+        pointer.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: The production rule requires a new revision after ECO effectivity while
+            acknowledging that `Part.rev` remains stale until a weekly batch.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-96
+        - cause_id: semantics-candidate-004.cause-002
+          claim: "`Part.rev` denotes drawing revision, and `current_eco` denotes an
+            undefined latest change rather than an explicitly effective revision
+            transition."
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:14-21
+            - materialized-input.md:69-75
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: BomLine.scrap_rate
+    evidence_anchor: materialized-input.md:29-35
+    claim: "`scrap_rate` is named as a rate but defined as a process-defect
+      coefficient, without a shared numerical meaning."
+    what: The attribute does not say whether it is a fraction, percentage, additive
+      allowance, yield loss, or gross-up multiplier, and it places a
+      process-derived notion on a component-usage line.
+    why: Consumers can legitimately calculate materially different planned
+      quantities from the same value. Copying an independently maintained value
+      also permits its meaning and value to drift from the process evidence it
+      supposedly represents.
+    how_to_fix: Choose and define one canonical concept—such as `scrap_fraction` or
+      `yield_fraction`—with range, unit, quantity formula, process/operation
+      scope, and source authority; derive any gross-up coefficient
+      deterministically.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide consistent BOM quantity semantics for manufacturing planning.
+      failure_condition: PLM and MES apply different percentage/coefficient or
+        operation/BOM-line interpretations to the same stored number.
+      impact: Material requirements and expected yield can diverge while both systems
+        appear contract-compliant.
+      evidence_refs:
+        - materialized-input.md:29-35
+    causal_path:
+      root_cause_candidate: A derived process-loss measure is stored as an undefined
+        BOM-line scalar without canonical formula or dimensional semantics.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: The field is called a rate but its note calls it a process-defect
+            coefficient copied from a separate spreadsheet.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+        - cause_id: semantics-candidate-005.cause-002
+          claim: The model supplies neither a formula nor a scale that distinguishes rate,
+            fraction, allowance, and multiplier meanings.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+      unresolved_beyond_evidence: The bounded artifact does not identify the
+        spreadsheet's formula or authoritative measurement process.
+  - candidate_id: semantics-candidate-006
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: materialized-input.md:63-67
+    claim: One capacity attribute conflates count throughput with available
+      processing time.
+    what: "`capacity_per_shift` may mean either number of units or time depending on
+      the work center, although those quantities have different dimensions and
+      operational interpretations."
+    why: A bare numeric value cannot be compared, aggregated, or exchanged reliably
+      when its dimension changes by instance. PLM/MES integrations may interpret
+      hours as pieces or vice versa.
+    how_to_fix: Represent capacity as a typed quantity with an explicit unit and
+      capacity basis, or split throughput capacity from available-time capacity
+      and define how each relates to a shift.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide consistent work-center capacity semantics to
+        manufacturing consumers.
+      failure_condition: A consumer receives `capacity_per_shift` without
+        work-center-specific out-of-band knowledge of whether it denotes count
+        or time.
+      impact: Scheduling and capacity calculations can be dimensionally invalid.
+      evidence_refs:
+        - materialized-input.md:63-67
+    causal_path:
+      root_cause_candidate: Dimensionally distinct capacity concepts are compressed
+        into one untyped numeric property.
+      root_cause_step_id: semantics-candidate-006.cause-002
+      steps:
+        - cause_id: semantics-candidate-006.cause-001
+          claim: The same attribute explicitly permits either count or time as its unit.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63-67
+        - cause_id: semantics-candidate-006.cause-002
+          claim: Its name exposes no capacity basis or dimension with which a consumer
+            could disambiguate the value.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:63-67
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Directed substitution authorizes replacement from a source part to a target
+    part; mutual interchangeability requires authorization in both directions.
+  - A product BOM expresses component or material composition, while scrap
+    recovery and re-entry express manufacturing material flow.
+  - An inspection plan or specification is an information object governing an
+    executable inspection operation, not the operation itself.
+  - Item revision, drawing revision, ECO lifecycle status, and production
+    effectivity may change independently and therefore require distinct
+    semantics.
+  - Capacity values require an explicit dimension and basis; count throughput
+    and available processing time are not interchangeable.
+  - A scrap or yield rate used for planning requires a defined scale and formula.
+validation:
+  unaddressable_candidates: []

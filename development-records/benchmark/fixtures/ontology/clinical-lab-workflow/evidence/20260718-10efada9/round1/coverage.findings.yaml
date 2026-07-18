@@ -1,0 +1,294 @@
+schema_version: 1
+session_id: 20260718-10efada9
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: Specimen lifecycle and pre-analytic workflow coverage
+    evidence_anchor: materialized-input.md:37-44,108-110,118-124
+    claim: Specimen lifecycle omits exception handling and terminal custody states.
+    what: Specimen begins at collected and ends at analyzed; collection requests,
+      accessioning, transport, receipt condition, rejection, recollection, loss,
+      retention, and disposal are not represented. Storage and disposal are
+      delegated to departmental rules outside the ontology.
+    why: When a specimen is unsuitable, lost, recollected, retained, or destroyed,
+      EMR and LIS cannot express the event or determine whether an order may
+      proceed. A conceptual authority spanning order through report therefore
+      leaves a material workflow segment undefined.
+    how_to_fix: Extend Specimen with pre-analytic and terminal states and events,
+      including collection/accession, transport and receipt, rejection reason,
+      recollection linkage, storage location and retention period, disposal
+      actor/time/reason, and explicit allowed transitions.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Using the ontology as the conceptual authority for EMR/LIS
+        laboratory workflow integration.
+      failure_condition: A specimen is rejected, recollected, lost, stored, or
+        disposed rather than following the collected-to-analyzed happy path.
+      impact: Systems cannot exchange or consistently interpret the specimen's
+        operational state, blocking reliable order progression and audit
+        reconstruction.
+      evidence_refs:
+        - materialized-input.md:37-44
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: The bounded ontology models only the specimen happy path
+        and delegates post-analysis lifecycle semantics outside its authority.
+      root_cause_step_id: coverage-candidate-001.cause-002
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: The declared Specimen lifecycle contains only collected, received,
+            in_analysis, and analyzed.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-44
+        - cause_id: coverage-candidate-001.cause-002
+          claim: Post-analysis storage and disposal are not modeled and are delegated to
+            departmental rules.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: The contents of departmental rules are outside the
+        allowed evidence, but their existence would not close the ontology's
+        role as the shared conceptual authority.
+  - candidate_id: coverage-candidate-002
+    target: Audit evidence for verification, release, correction, and critical-value
+      notification
+    evidence_anchor: materialized-input.md:62-84,100-106,121-124
+    claim: Controlled clinical actions lack a first-class audit-evidence model.
+    what: Result verification records only an actor, report release records only a
+      time, result correction records only a status, and critical-value
+      notification is reduced to a boolean whose time and recipient remain in an
+      external telephone ledger. No common action record captures actor, time,
+      reason, recipient, channel, or superseded artifact.
+    why: Verification, release, amendment, and critical notification are
+      safety-relevant acts. Without complete evidence concepts, EMR/LIS
+      integration cannot reconstruct who performed an act, when, why, or against
+      which result/report version.
+    how_to_fix: Introduce a shared auditable event concept and specialized
+      verification, release, correction/amendment, and notification events.
+      Require actor, timestamp, reason/basis, affected version, and—where
+      applicable—recipient, channel, acknowledgement, and escalation outcome.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Providing an operationally trustworthy conceptual authority
+        for laboratory result exchange and reporting.
+      failure_condition: A result is verified or corrected, a report is released or
+        amended, or a critical value is communicated or escalated.
+      impact: The integrated workflow cannot prove or reliably reconcile
+        safety-relevant actions, weakening accountability and incident
+        investigation.
+      evidence_refs:
+        - materialized-input.md:62-84
+        - materialized-input.md:100-106
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: The ontology represents controlled actions mainly as
+        current attributes or statuses rather than immutable, attributable
+        events.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Verification, release, correction, and notification have incomplete
+            actor/time/reason evidence across their respective entities.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-84
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-002.cause-002
+          claim: Notification evidence is explicitly kept in a separate telephone ledger,
+            while the ontology retains only a boolean.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-002.cause-003
+          claim: No event or audit-evidence entity exists in the bounded entity set.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:13-106
+      unresolved_beyond_evidence: The external ledger's schema and reliability are outside the boundary.
+  - candidate_id: coverage-candidate-003
+    target: Temporal validity and historical versioning of laboratory definitions
+    evidence_anchor: materialized-input.md:46-60,100-106,126-128
+    claim: Time-dependent catalog and critical-threshold concepts have no validity
+      or history dimensions.
+    what: Test, Assay, and CriticalValue contain current codes and configuration
+      values but no effective period, version, retirement state, replacement
+      lineage, or provenance. Critical bounds likewise have no unit, population
+      context, or effective dates.
+    why: Catalog definitions, assay mappings, and critical thresholds can change.
+      Without temporal versions, a historical Result cannot be interpreted
+      against the definitions and alert policy effective when it was produced.
+    how_to_fix: Add immutable versions or effective_from/effective_to to Test,
+      Assay, their mapping, and CriticalValue; include retirement/replacement
+      lineage and bind each Result to the exact applicable definition and
+      threshold version.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serving as a durable conceptual authority for EMR/LIS
+        interpretation of current and historical laboratory data.
+      failure_condition: A test definition, assay implementation, specimen
+        requirement, or critical-value threshold changes after results have been
+        issued.
+      impact: Historical results and past notification decisions cannot be
+        reconstructed consistently, making audits and longitudinal
+        interpretation unreliable.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:100-106
+        - materialized-input.md:126-128
+    causal_path:
+      root_cause_candidate: The ontology models mutable operational definitions as
+        timeless current-state records.
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Test, Assay, and CriticalValue expose no effective period, version, or
+            retirement attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-003.cause-002
+          claim: Test and Assay are maintained concurrently pending future consolidation,
+            increasing the likelihood of definition changes and divergence.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: The actual frequency of catalog and threshold
+        changes is not available within the boundary.
+  - candidate_id: coverage-candidate-004
+    target: Cross-system authority for duplicated catalogs, statuses, and TAT
+    evidence_anchor: materialized-input.md:46-60,69-84,121-128
+    claim: Several shared concepts are maintained in parallel without one declared
+      source of truth and deterministic projection rule.
+    what: New catalog items are entered in both Test and Assay; result state is
+      stored in both Result.status and Report.result_status with different
+      vocabularies and delayed synchronization; TAT is independently calculated
+      by the dashboard team. Although Report.result_status is called
+      authoritative for clinicians, the ontology does not designate
+      authoritative ownership and projection rules for the underlying result
+      state, catalog mapping, or TAT definition.
+    why: Parallel representations without one authority permit drift. EMR, LIS,
+      analyzer catalogs, reports, and dashboards can produce incompatible
+      answers for the same test, status, or turnaround time.
+    how_to_fix: For each duplicated concept, designate a single authoritative
+      entity/system and define versioned mappings or derived projections. Make
+      Report status and TAT deterministic derivations from authoritative events,
+      and replace dual Test/Assay registration with an explicit versioned
+      mapping and ownership model.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Establishing precedence and shared meaning across EMR/LIS
+        integration boundaries.
+      failure_condition: The duplicated catalog entries, status fields, or dashboard
+        calculation diverge or synchronize late.
+      impact: Consumers receive conflicting operational truth, directly defeating the
+        authority and precedence expected from this ontology.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:69-84
+        - materialized-input.md:121-128
+    causal_path:
+      root_cause_candidate: The ontology permits parallel maintenance of shared values
+        without consistently assigning authority and derivation ownership.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Test and Assay require duplicate registration, Result and Report retain
+            parallel status values, and TAT logic is maintained outside the
+            ontology.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-84
+            - materialized-input.md:126-128
+        - cause_id: coverage-candidate-004.cause-002
+          claim: The parallel result statuses use different vocabularies and are
+            synchronized only by a nightly batch after correction.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-84
+            - materialized-input.md:121-124
+        - cause_id: coverage-candidate-004.cause-003
+          claim: Only the clinician-facing Report field has a bounded authority statement;
+            the other duplicated concepts lack a single authority and projection
+            contract.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:72-84
+            - materialized-input.md:126-128
+      unresolved_beyond_evidence: Actual system ownership assignments may exist
+        elsewhere, but no such evidence is present in the bounded authority
+        artifact.
+  - candidate_id: coverage-candidate-005
+    target: Result interpretation and provenance coverage
+    evidence_anchor: materialized-input.md:54-73,100-106,118-123
+    claim: Result is too coarse to represent clinically interpretable and
+      reproducible laboratory observations.
+    what: Result contains a string value, string unit, status, Test reference, and
+      verifier, but no observation time, numeric/coded/text distinction,
+      reference interval, abnormal or critical interpretation, method/Assay,
+      instrument, performing laboratory, detection-limit qualifier, or
+      provenance linking the value to a specific analytic execution.
+    why: The same textual value and unit can have different meanings depending on
+      method, interval, timing, and qualifiers. EMR/LIS consumers cannot
+      reliably display, trend, compare, or reproduce the result from the current
+      concept set.
+    how_to_fix: Separate an analytic execution/observation from its reported value.
+      Add typed value variants, observation and performance times, reference
+      interval and interpretation, qualifiers, Assay/method and instrument
+      provenance, performing laboratory, and linkage to the applicable versioned
+      definitions.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Providing conceptually valid result semantics for EMR/LIS
+        exchange and downstream clinical use.
+      failure_condition: A result requires method-specific interpretation, non-numeric
+        representation, abnormal/critical flags, timing, or reproducibility
+        metadata.
+      impact: Consumers may lose clinically relevant meaning or compare non-equivalent
+        observations as though they were equivalent.
+      evidence_refs:
+        - materialized-input.md:54-73
+        - materialized-input.md:100-106
+        - materialized-input.md:118-123
+    causal_path:
+      root_cause_candidate: The ontology collapses the laboratory observation and its
+        analytic provenance into a minimally typed Result record.
+      root_cause_step_id: coverage-candidate-005.cause-002
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: Result represents every value and unit as strings and includes no
+            interpretation, observation time, method, instrument, or execution
+            reference.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:62-73
+        - cause_id: coverage-candidate-005.cause-002
+          claim: Assay exists as a separate execution-level catalog concept but Result has
+            no relation to it.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:54-73
+            - materialized-input.md:108-119
+      unresolved_beyond_evidence: The exact minimum result fields required by any
+        external exchange standard cannot be assessed because no domain document
+        or web research is allowed.
+domain_constraints_used: []
+domain_context_assumptions:
+  - EMR/LIS integration must represent non-happy-path specimen handling, not
+    only successful analysis.
+  - Verification, report release or amendment, and critical-value notification
+    are controlled clinical actions requiring attributable evidence.
+  - Laboratory catalogs, assay implementations, thresholds, and interpretation
+    rules can change over time, so historical reconstruction requires temporal
+    versions.
+  - Clinically meaningful result exchange requires interpretation and analytic
+    provenance beyond an untyped value and unit.
+validation:
+  unaddressable_candidates: []

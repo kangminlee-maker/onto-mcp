@@ -1,0 +1,123 @@
+schema_version: 1
+session_id: 20260718-0e0876e7
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — Test/Assay execution structure
+    evidence_anchor: materialized-input.md lines 46-60, 108-119, 126-127
+    claim: Assay has no workflow relationship to Test or any order-to-result
+      execution entity.
+    what: Test is the orderable catalog unit and Assay is the analyzer execution
+      unit, but Assay is connected only to Department through an attribute. The
+      relationship list contains no Test–Assay, Specimen–Assay, or Result–Assay
+      edge, even though new items must currently be registered in both catalogs.
+    why: Without a mapping edge, the model cannot represent which analyzer assay
+      realizes an ordered Test or produces its Result. EMR/LIS integrations
+      would have to maintain that mapping outside the intended conceptual
+      authority, breaking traceability across the declared Order-to-Report
+      workflow.
+    how_to_fix: Add an explicit, cardinality-defined Test-to-Assay realization
+      relationship, including its inverse or canonical navigation rule. If
+      mappings vary by specimen or analyzer, model that mapping as an
+      association entity rather than leaving the catalogs parallel.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        integration across the Order-to-Report workflow.
+      failure_condition: An ordered Test must be translated to an analyzer Assay,
+        especially when their codes or cardinalities are not identical.
+      impact: The authoritative model cannot supply the execution mapping, so
+        integrations must invent non-authoritative mappings and cannot reliably
+        trace results back through the execution unit.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: Two distinct catalog concepts were retained without a
+        canonical relationship defining how the orderable unit is realized by
+        the execution unit.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay has no declared workflow edge to Test, Specimen, Result, Order, or
+            Report.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-60
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-002
+          claim: The ontology requires parallel Test and Assay registration while
+            postponing their integration, but supplies no interim mapping
+            structure.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: The required mapping cardinality and whether it
+        depends on analyzer or specimen cannot be established within the bounded
+        artifact.
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — CriticalValue notification structure
+    evidence_anchor: materialized-input.md lines 100-106 and 108-119
+    claim: CriticalValue.notified is not connected to the concrete Result or
+      notification participants to which the completion state applies.
+    what: CriticalValue represents a dangerous value range and carries a notified
+      boolean, but it references only Test. It has no relationship to Result,
+      Report, Order, or Staff; notification time and recipient are delegated to
+      an external telephone ledger without any linking identifier.
+    why: A catalog-level threshold can be reused by many results, so its boolean
+      cannot structurally identify which critical result was communicated, to
+      whom, or under which order. The ontology therefore cannot represent or
+      reconcile the immediate-notification event it declares.
+    how_to_fix: Separate the reusable critical-value threshold from a
+      result-specific notification event. Link that event to the triggering
+      Result, recipient Staff or external-recipient reference, notification
+      timestamp, and status; include a stable external-ledger reference if the
+      telephone ledger remains authoritative.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as an operational conceptual authority for
+        laboratory workflow and EMR/LIS integration.
+      failure_condition: A Result falls within a CriticalValue range and its required
+        immediate notification must be recorded or reconciled.
+      impact: The model can mark a reusable threshold as notified without identifying
+        the affected result or recipient, weakening operational traceability for
+        an explicitly immediate action.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:100-106
+        - materialized-input.md:108-119
+    causal_path:
+      root_cause_candidate: A result-specific notification event was collapsed into a
+        boolean property of the reusable CriticalValue threshold while its
+        supporting facts were placed in an unlinked external ledger.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue.notified has no structural edge to the Result instance,
+            report/order context, notification recipient, or external record.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-002.cause-002
+          claim: The artifact places notification time and recipient in a telephone ledger
+            but defines no identifier or relationship joining that ledger record
+            to CriticalValue or Result.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:106
+      unresolved_beyond_evidence: The external telephone ledger schema and its
+        available identifiers are outside the bounded evidence.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Reference attributes and is_a declarations are treated as structural edges
+    alongside entries in the relations section.
+  - Entity definitions and explicit notes in the target are treated as design
+    intent for determining whether a relationship is required.
+validation:
+  unaddressable_candidates: []

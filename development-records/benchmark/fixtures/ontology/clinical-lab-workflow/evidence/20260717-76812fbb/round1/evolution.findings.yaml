@@ -1,0 +1,212 @@
+schema_version: 1
+session_id: 20260717-76812fbb
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml — Test/Assay catalog model
+    evidence_anchor: entities.Test; entities.Assay; notes[0] ("현재 신규 항목은 두 곳 모두에
+      등록한다"); relations (Test와 Assay 간 관계 없음)
+    claim: 검사 카탈로그의 이중 권위 때문에 신규 항목과 카탈로그 변경이 기존 구조 전반의 동시 수정을 요구한다.
+    what: 주문 단위인 Test와 수행 단위인 Assay가 별도 코드·명칭·부서·검체 속성을 가지지만 둘 사이의 명시적 매핑이나 단일 권위가
+      없다. 신규 항목은 양쪽에 중복 등록하도록 규정되어 있다.
+    why: 새 검사, 분석법 교체, 코드 개정, 장비별 수행 변형이 생길 때 두 엔티티를 함께 수정해야 하며 어느 Test가 어느 Assay로
+      수행되는지 연속적으로 추적할 수 없다. 중복 등록이 어긋나면 EMR 주문과 LIS 수행 결과가 서로 다른 카탈로그 의미를 참조하게
+      되어 개념 권위 문서로서의 신뢰가 훼손된다.
+    how_to_fix: Test를 주문 가능한 검사 개념의 권위로 유지하고 Assay를 버전 가능한 수행 정의로 분리한 뒤, 유효기간과 매핑
+      식별자를 가진 명시적 Test–Assay 관계를 추가한다. 신규 항목 등록은 한 권위에서 시작해 매핑으로 확장되도록 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계에서 검사 카탈로그의 개념 권위를 제공하는 목적
+      failure_condition: 신규 검사 추가, 분석법 교체, 장비별 Assay 분기 또는 코드 개정 시 Test와 Assay의 중복 등록이
+        불일치하거나 과거 매핑을 보존하지 못하는 경우
+      impact: 주문 개념과 실제 수행 개념의 대응을 안정적으로 해석할 수 없어 통합 규칙과 기존 데이터의 연속성을 신뢰할 수 없다.
+      evidence_refs:
+        - entities.Test
+        - entities.Assay
+        - notes[0]
+        - relations
+    causal_path:
+      root_cause_candidate: 주문 카탈로그와 수행 카탈로그 사이에 단일 권위 또는 버전 가능한 명시적 매핑이 없고 중복 등록을 운영 규칙으로 채택했다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 새 검사 항목은 Test와 Assay 두 곳 모두에 등록해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - notes[0]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 두 엔티티는 유사한 카탈로그 속성을 독립적으로 가지지만 상호 관계가 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Test.attributes
+            - entities.Assay.attributes
+            - relations
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 중복 카탈로그를 연결하는 권위 모델과 버전 이력이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Test
+            - entities.Assay
+            - relations
+            - notes[0]
+      unresolved_beyond_evidence: 실제 LIS 또는 EMR에 별도 매핑 테이블이 있는지는 경계 내 증거로 확인할 수 없지만, 이
+        문서는 그 매핑을 개념 계약으로 정의하지 않는다.
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml — specimen classification
+    evidence_anchor: entities.Specimen.attributes.specimen_type;
+      entities.Test.attributes.requires_specimen_type;
+      entities.Assay.attributes.specimen_kind
+    claim: 검체 분류가 중복된 폐쇄형 enum과 비정규 문자열로 나뉘어 있어 새 검체 유형 도입 시 기존 스키마와 매핑 규칙을 반복 수정해야
+      한다.
+    what: Specimen.specimen_type과 Test.requires_specimen_type은 동일한 네 값의 enum을 각각
+      선언하지만, Assay.specimen_kind는 'WB', 'Serum', 'Urine-random' 같은 별도 문자열을 사용한다.
+    why: 새 검체 유형이나 더 세밀한 전처리·용기·재료 구분이 추가되면 두 enum을 동시에 확장하고 Assay 문자열과의 새 매핑도 만들어야
+      한다. 기존 문자열의 철자·세분화 차이는 과거 데이터와 새 분류의 자동 연결을 어렵게 해 EMR/LIS 확장 시 호환성을 약화한다.
+    how_to_fix: 버전과 안정적 식별자를 가진 공통 SpecimenType 개념을 도입하고 Specimen, Test, Assay가 이를
+      참조하게 한다. 외부 또는 기존 문자열은 유효기간을 가진 별칭·매핑으로 보존한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 새 검사와 분석법을 수용하면서 EMR/LIS 간 검체 의미를 지속적으로 공유하는 목적
+      failure_condition: 현재 네 범주 밖의 검체 또는 기존 enum보다 세밀한 LIS 검체 코드가 도입되는 경우
+      impact: 기존 정의 여러 곳의 수정과 데이터 마이그레이션이 필요하고, 문자열 기반 Assay 데이터와의 의미 연속성이 보장되지 않는다.
+      evidence_refs:
+        - entities.Specimen.attributes.specimen_type
+        - entities.Test.attributes.requires_specimen_type
+        - entities.Assay.attributes.specimen_kind
+    causal_path:
+      root_cause_candidate: 검체 분류가 재사용 가능한 권위 개념이 아니라 각 엔티티의 속성 값 목록 또는 자유 문자열로 내장되어 있다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 검체 유형은 Specimen과 Test의 enum 목록을 각각 수정하고 Assay 문자열 매핑도 추가해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Specimen.attributes.specimen_type
+            - entities.Test.attributes.requires_specimen_type
+            - entities.Assay.attributes.specimen_kind
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 같은 검체 의미가 두 폐쇄형 값 목록과 하나의 자유 문자열 표현으로 분산되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Specimen.attributes.specimen_type
+            - entities.Test.attributes.requires_specimen_type
+            - entities.Assay.attributes.specimen_kind
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 공통 식별자와 버전 이력을 가진 SpecimenType 권위가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities
+            - entities.Specimen.attributes.specimen_type
+            - entities.Test.attributes.requires_specimen_type
+            - entities.Assay.attributes.specimen_kind
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml — Result/Report status evolution
+    evidence_anchor: entities.Result.attributes.status;
+      entities.Report.attributes.result_status; state_rules[0:2]
+    claim: 결과 상태가 서로 다른 두 어휘로 중복 저장되고 변환 규칙이 부분적으로만 정의되어 있어 상태 확장 시 호환성이 깨진다.
+    what: Result는 preliminary/final/corrected를, Report는 prelim/finalized/amended를
+      사용한다. finalized와 amended 전이는 서술되어 있지만 전체 대응표, 상태 버전, 미지원 상태 처리 규칙은 없다.
+    why: LIS가 새 상태를 추가하거나 상태 의미를 개정하면 Result와 Report의 enum, Order 완료 조건, 동기화 규칙을 함께
+      변경해야 한다. 매핑되지 않은 새 상태는 EMR에 표시할 권위 상태를 결정할 수 없고 과거 상태의 의미도 버전별로 재현하기 어렵다.
+    how_to_fix: Result 상태를 버전 가능한 단일 권위 상태 모델로 두고 Report 상태는 명시적·완전한 투영 규칙으로 계산한다. 각
+      매핑에 유효 버전과 미지원 상태 처리 방식을 정의하고, Order 완료 조건도 같은 권위 상태의 속성으로 표현한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: LIS 결과 상태를 EMR 보고 및 주문 완료 의미로 안정적으로 전달하는 개념 계약
+      failure_condition: 새 LIS 상태 추가, 기존 상태 의미 변경 또는 과거 버전 데이터 재처리가 필요한 경우
+      impact: 여러 enum과 서술 규칙을 동시에 수정해야 하며, 미매핑 상태에서는 EMR 표시·주문 완료 판단의 연속성과 재현성이 보장되지
+        않는다.
+      evidence_refs:
+        - entities.Result.attributes.status
+        - entities.Report.attributes.result_status
+        - state_rules[0]
+        - state_rules[1]
+    causal_path:
+      root_cause_candidate: 하나의 상태 권위를 재사용하지 않고 Result와 Report에 별도 폐쇄형 상태 어휘를 저장하며 변환을
+        부분적 서술 규칙에 맡겼다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 새 결과 상태가 추가되면 Result, Report, Order 완료 규칙과 동기화 규칙을 함께 변경해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+            - state_rules[0]
+            - state_rules[1]
+        - cause_id: evolution-candidate-003.cause-002
+          claim: Result와 Report가 서로 다른 상태 어휘를 저장하지만 전체 대응 규칙은 정의되어 있지 않다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+            - state_rules[1]
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 공통 상태 권위, 버전, 완전한 투영 계약이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+            - state_rules
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: clinical-lab-ontology.yaml — STAT/priority representation
+    evidence_anchor: entities.Order.attributes.priority;
+      entities.Order.attributes.is_stat; entities.StatOrder
+    claim: STAT 개념이 enum 값, boolean, 하위 타입으로 삼중 표현되어 우선순위 체계 확장 시 기존 구조와 소비자 규칙의 동시
+      변경을 요구한다.
+    what: 동일한 STAT 의미가 Order.priority의 stat 값, Order.is_stat, StatOrder 하위 타입으로 각각
+      표현되며 이들 사이의 파생 또는 정합성 규칙이 없다.
+    why: 새 우선순위나 특수 처리 범주를 추가할 때 enum만 확장할지 boolean과 하위 타입도 추가할지 결정할 수 없다. 기존 소비자가
+      서로 다른 표현을 권위로 삼으면 새 범주가 일부 연동 경로에서 누락되며, 이후 하나의 표현을 폐기할 때도 호환성 마이그레이션이
+      필요하다.
+    how_to_fix: Order.priority를 단일 권위 분류로 정하고 is_stat은 파생 속성으로 명시하거나 제거한다.
+      StatOrder는 STAT만의 독립 수명주기·규칙이 실제로 필요할 때만 유지하고, 그렇지 않으면 stat_reason을 조건부
+      Order 속성으로 통합한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR 주문 우선순위와 LIS 특수 처리 의미를 확장 가능하게 공유하는 목적
+      failure_condition: STAT 외의 새 특수 우선순위나 세분화된 긴급 처리 범주가 추가되거나 기존 STAT 표현을 통합하는 경우
+      impact: 세 표현과 각 소비자를 함께 수정해야 하고, 표현별 해석 차이로 새 범주의 처리 누락 또는 기존 데이터 마이그레이션 위험이 생긴다.
+      evidence_refs:
+        - entities.Order.attributes.priority
+        - entities.Order.attributes.is_stat
+        - entities.StatOrder
+    causal_path:
+      root_cause_candidate: 하나의 우선순위 개념을 속성과 규칙으로 확장하지 않고 동일한 STAT 의미를 세 개의 독립 개념 표면에 영속화했다.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 새 특수 우선순위 추가 시 enum, 플래그, 하위 타입 중 어떤 표면을 확장해야 하는지 계약이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Order.attributes.priority
+            - entities.Order.attributes.is_stat
+            - entities.StatOrder
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 현재 STAT가 priority 값, boolean, 하위 타입으로 중복 표현된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Order.attributes.priority
+            - entities.Order.attributes.is_stat
+            - entities.StatOrder
+        - cause_id: evolution-candidate-004.cause-003
+          claim: 표현 간 권위·파생 관계가 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Order
+            - entities.StatOrder
+            - state_rules
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검사 카탈로그, 검체 분류, 결과 상태와 주문 우선순위는 EMR/LIS 운영 중 신규 항목·코드·상태가 추가되거나 개정될 수 있다.
+  - 개념 권위 문서는 중복 저장된 표현 사이의 권위, 매핑, 버전 연속성을 문서 자체에서 정의해야 한다.
+validation:
+  unaddressable_candidates: []

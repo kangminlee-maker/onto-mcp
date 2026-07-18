@@ -1,0 +1,45 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: AlternatePart 대체 방향 계약
+    evidence_anchor: .onto/review/20260718-795bfbce/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart의 대칭성 정의와 one_way 허용 규칙은 동시에 만족될 수 없다.
+    what: 정의는 모든 대체 관계가 양방향이라고 선언하지만, direction은 one_way를 허용하며 이를 기본값으로 지정한다.
+    why: conflict_pair는 38행과 42-45행이다. one_way 인스턴스에서는 역방향 대체가 성립하지 않아야 하지만 정의는 역방향도
+      반드시 성립시킨다. 이는 inter-claim 충돌이며 modality는 mixed이다. 대칭성의 의미를 명확히 해도 충돌이 남으므로
+      별도 semantics handoff는 필요하지 않다.
+    how_to_fix: 대체 관계를 방향성 관계로 통일하고, direction=bidirectional일 때만 역방향이 성립하도록 정의를
+      수정한다. 항상 대칭이어야 한다면 one_way 값과 기본값을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체 부품 관계를 일관된 개념 기준으로 제공하는 목적
+      failure_condition: one_way AlternatePart가 생성되거나 기본값이 적용되는 경우
+      impact: 소비 시스템에 따라 역방향 대체 허용 여부가 달라져 승인되지 않은 부품 대체 또는 유효한 대체의 거부로 이어질 수 있다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: 동일한 대체 관계에 대해 무조건적 대칭성 정의와 방향 선택 속성을 함께 권위 규칙으로 선언했다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: one_way 인스턴스의 역방향 대체 여부가 정의와 direction 규칙에서 반대로 판정된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 충돌은 대칭성을 모든 인스턴스에 강제하면서 동시에 비대칭 인스턴스를 허용한 규칙 설계의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:38-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - ontology의 definition, enum values, note를 PLM/MES 소비자가 따라야 하는 규범적 계약으로 해석했다.
+validation:
+  unaddressable_candidates: []

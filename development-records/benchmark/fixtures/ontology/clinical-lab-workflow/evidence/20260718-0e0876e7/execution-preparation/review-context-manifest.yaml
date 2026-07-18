@@ -1,0 +1,844 @@
+schema_version: "1"
+producer: onto-review-runtime
+producer_version: review-runtime-settings-domain-axiology-plan-20260523
+settings_schema_version: settings.json/v3
+domain_registry_version: domain-docs/v1
+alignment_contract_version: review-value-alignment-criteria/v1
+lifecycle_state: dispatched
+session_id: 20260718-0e0876e7
+target_refs:
+  - /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/clinical-lab-ontology.yaml
+domain_binding_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/domain-binding.yaml
+review_value_alignment_criteria_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/review-value-alignment-criteria.yaml
+actor_consumer_bindings_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/actor-consumer-bindings.yaml
+context_sources:
+  - context_source_id: materialized-input
+    source_kind: materialized_input
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/materialized-input.md
+    source_sha256: 161d9dc8b966897648fa9c53380f4cf3f8753012d36ae3d499cb9f0d3e952680
+    required: true
+    sensitivity: internal
+    allowed_consumers: &a1
+      - teamlead
+      - lens:axiology
+      - lens:coverage
+      - lens:evolution
+      - lens:logic
+      - lens:semantics
+      - lens:structure
+      - deliberation:axiology
+      - deliberation:coverage
+      - deliberation:evolution
+      - deliberation:logic
+      - deliberation:semantics
+      - deliberation:structure
+      - issue-stance:axiology
+      - issue-stance:coverage
+      - issue-stance:evolution
+      - issue-stance:logic
+      - issue-stance:semantics
+      - issue-stance:structure
+      - issue-artifact:finding-ledger
+      - issue-artifact:finding-relation-graph
+      - issue-artifact:issue-ledger
+      - issue-artifact:issue-stance-matrix
+      - issue-artifact:deliberation-plan
+      - issue-artifact:problem-framing
+      - controlled-deliberation
+      - synthesize
+      - final-output
+      - review-record
+  - context_source_id: target-snapshot
+    source_kind: target_snapshot
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/target-snapshot.md
+    source_sha256: ec6001ca9f1736c64bdf67668f6f503b46b9b8b83be0ae6a1ec4ba4b12d345ac
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: context-candidate-assembly
+    source_kind: context_candidate_assembly
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/context-candidate-assembly.yaml
+    source_sha256: 702eaf11c8862cd3146e41368a9eb240d58b9ee25e67ff2f87ea21f2eee3d3cf
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: review-target-profile
+    source_kind: review_target_profile
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/review-target-profile.yaml
+    source_sha256: 7a410c5012d200b3da49bdf015a969e6acd4abe7c035a397c2d2e27f48304f84
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: review-value-alignment-criteria
+    source_kind: review_value_alignment_criteria
+    source_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/execution-preparation/review-value-alignment-criteria.yaml
+    source_sha256: a0c3018622d9fbb6d4e850c846e6797026187b71a34220f067d81dc8f94f2eea
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+derived_context_access_matrix:
+  teamlead:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:axiology: &a2
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:coverage: &a3
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:evolution: &a4
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:logic: &a5
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:semantics: &a6
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:structure: &a7
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:axiology:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:coverage:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:evolution:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:logic:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:semantics:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:structure:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:axiology:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:coverage:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:evolution:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:logic:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:semantics:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-stance:structure:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:finding-ledger:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:finding-relation-graph:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:issue-ledger:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:issue-stance-matrix:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:deliberation-plan:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:problem-framing:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  controlled-deliberation:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  synthesize:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  final-output:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  review-record:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+packet_refs:
+  - consumer_id: lens:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/axiology.prompt.md
+    packet_sha256: b2e21913fea0a02e3f6801fcf62c9ae12af80f77a2534df28a58ae807014497a
+    consumed_context_refs: *a2
+    forbidden_context_refs: []
+  - consumer_id: lens:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/coverage.prompt.md
+    packet_sha256: c17484ba1f5d1009ceecd77c5284710084b0cb7ab4e7eaf1afb1bb80d9b4ba15
+    consumed_context_refs: *a3
+    forbidden_context_refs: []
+  - consumer_id: lens:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/evolution.prompt.md
+    packet_sha256: 7091cf570c434a7a34a222bbdfa5ed822e83a7cff88638bcdd9fd79384a95d40
+    consumed_context_refs: *a4
+    forbidden_context_refs: []
+  - consumer_id: lens:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/logic.prompt.md
+    packet_sha256: 235ddcf0c674399754679512f6729a06022fbac3939e4c528f8903d0164d30fa
+    consumed_context_refs: *a5
+    forbidden_context_refs: []
+  - consumer_id: lens:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/semantics.prompt.md
+    packet_sha256: c2c1e4dae2ea24cb17611c4e9450b64e4d0bafb4dd8490dceeebeaf1c8516d6b
+    consumed_context_refs: *a6
+    forbidden_context_refs: []
+  - consumer_id: lens:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/structure.prompt.md
+    packet_sha256: b12ce3e7eecaae8016c68eed8ef710af4c58f7a44240893fd3c23fd6b691d6cb
+    consumed_context_refs: *a7
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:finding-ledger
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/finding-ledger.prompt.md
+    packet_sha256: 89d24f6d9f5cfcacb1510b7c173cccd9209d0cf2250ca60340e3ba4648f056bc
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:finding-relation-graph
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/finding-relation-graph.prompt.md
+    packet_sha256: 99de13818f5c07ede4dc2c43be2a91646b4cf0b5972dbea652e7395cedb42e24
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:issue-ledger
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-ledger.prompt.md
+    packet_sha256: caf4c3fa7a45fcf32e2579c8a81f871f4481ec49b7fb800e4ad217e4481252ae
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/coverage.prompt.md
+    packet_sha256: 1b6473a184e35941aa740f2dfe500a10dbab73e91a37426420102086d8deff09
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/logic.prompt.md
+    packet_sha256: 7db037a2cb013c18709fe39ad4f2b81f6c33df0b8970e9cefdc7c3d373999eba
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/structure.prompt.md
+    packet_sha256: 4f1e6cdc6fcd43d2ebe52682ab8ed378a742fa64bd12acd9f9733093d589ccd1
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/evolution.prompt.md
+    packet_sha256: e7b4ed468f1a07b58130e4811d2df269bd6508a0ba67cb8499f51bd97aadd36e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/axiology.prompt.md
+    packet_sha256: 113bf26588425d33f2ce4a29a43790b65a2e4aa0860eca8bef639eca81a99815
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-stance:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance/semantics.prompt.md
+    packet_sha256: a1312de936b43416ff4835a7e1761a73ca73fbec956a18399c40baf21a8c370b
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:issue-stance-matrix
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/issue-stance-matrix.prompt.md
+    packet_sha256: 7b5d041f61d66449d5a97eaebdb65356928523c93b0f4b68894985eaa5459671
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:deliberation-plan
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation-plan.prompt.md
+    packet_sha256: 0ad1427a63c0dc794117f6bde7a1fe8afeed184b7d5f51bb353ee53a5cda68d4
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/axiology.prompt.md
+    packet_sha256: a9341c66c5ff4914aa9ca6dce505d3eaff5244ef5a6300a14669a129348ce4e5
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/coverage.prompt.md
+    packet_sha256: 08dd986689bec9c0a9c0988643b1b732dfc683a15640167cdf453c120860aa9e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/evolution.prompt.md
+    packet_sha256: 942eb22b4f845f3b408f6e2dd1a7fbdf9ee5a03b6273c85d1dfe2bae077946d6
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/logic.prompt.md
+    packet_sha256: b90a811e7f407db887a78a2a5702a11200a7f5ce8ba8c5752a4e74a8a2bba389
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/semantics.prompt.md
+    packet_sha256: d7784c26681d20296628cf3caf678d3e1466e8c20728c990407f1f36c9166cb3
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-002/structure.prompt.md
+    packet_sha256: aeb93916ecc33b4479fe281c57d39717876a824b7d42373b83104dcb8741dae1
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/axiology.prompt.md
+    packet_sha256: b3e75070271fb633321d184ac23a86e8aa5d28ab168b8397fa4e924e4361fb8a
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/coverage.prompt.md
+    packet_sha256: 98b24535e2c961b4719a7394397da3a56a5d5e9a89f52e30c9b775267dbd1a00
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/evolution.prompt.md
+    packet_sha256: 869ba3383bf2dd972e0319da303d4428e9dd4e9bd8128edd482d9b12a24027d1
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/logic.prompt.md
+    packet_sha256: 85654e3f989198a54dcc77752ac8bfa265f8d7e83b1da80c08a215fbbc26087d
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/semantics.prompt.md
+    packet_sha256: f36890d6aced79aeac9db21ad1cbcb1e99a1d680e67be739cfb9498eda2ca931
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-012/structure.prompt.md
+    packet_sha256: cfbdd7500de40e63e1ff62a2f7485ab6bbd9ec32607595f36e5676d21b40a5b8
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:axiology
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/axiology.prompt.md
+    packet_sha256: d0b4a83f20fd1816c358d356bcde475f42f375790fc9c407ffe9ed2c666e5612
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/coverage.prompt.md
+    packet_sha256: 3b5c395a9be7e034ccfa391ad6ece8697499d52166e252e7c3a583130a97bfda
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:evolution
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/evolution.prompt.md
+    packet_sha256: bc977816ddd47552c8c115a2ea41d311f62e5ef863360b287848b460db8cc717
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:logic
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/logic.prompt.md
+    packet_sha256: 99f888aa2dd964e15918656c961063f6d71dc485d0686d082b639584def1a27b
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/semantics.prompt.md
+    packet_sha256: f2ab5bd597ef394bd0a4bb4ad5aeaf7b071c86a0f9d756e38f55be43cd62bdbf
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-019/structure.prompt.md
+    packet_sha256: ee92853ff1b27065b345b83dda0b1e70e3789f39d4662faa110591157ba90d3f
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:semantics
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-018/semantics.prompt.md
+    packet_sha256: 9cd0b71b13b61fd8771a194e5f1ae8434efdfe51a3257f5f4b1185445aec1760
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:structure
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-018/structure.prompt.md
+    packet_sha256: 59944c1041cea915d0e42a90b2595d3e5e0ede6c590342fe53b58d016f793d8e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: deliberation:coverage
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/deliberation/issue-018/coverage.prompt.md
+    packet_sha256: aeeac56929dd83405e0aa0cda421582f8970b2e53c03931b8915ae90e46cdacb
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: controlled-deliberation
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/teamlead.deliberation.prompt.md
+    packet_sha256: 6dcb1f7696c0a9e85cbc4ea0272460cedc516916ea2f52dfd083d17a8da88665
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: issue-artifact:problem-framing
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/problem-framing.prompt.md
+    packet_sha256: b09f1bdf943a62d23f9476a2a168d05603181ba6647cd5c7defe369ab8d51fde
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-001.prompt.md
+    packet_sha256: d166a321870017038ed93dce97b4d4f7595de767dba173359245f8fffe70aa4f
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-011.prompt.md
+    packet_sha256: d7369a1268188affe258aef0695678500844f6e87a3108c0ee9b7ae9adadd5fa
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-006.prompt.md
+    packet_sha256: ebe818c2fe800862c2da3d61626a05354d3c1cb9a3d29471d62f679b4515452e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-009.prompt.md
+    packet_sha256: d32a2ed8924bf131656cac6bde811e163df806f3e51c2cc7b718acabd66000ee
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-017.prompt.md
+    packet_sha256: 1174ff9b81c4dfe39c03ef882aea8b40627cd4dff3f7e5bcf2a1a9f2c4503c95
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-022.prompt.md
+    packet_sha256: da3faa9c95a80e542b45d85a79d99e2a6a6186ebbcb3e9cd310c76ae2459be40
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-007.prompt.md
+    packet_sha256: 7a30fc044fcd83d276555d0f291ad96920b6303a4ad8657b777c34efdbe99679
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-002.prompt.md
+    packet_sha256: 346c8bc90737849ccd83f3ee79f871f8e8e6d31328d4e5344f48b3c3ad258358
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-020.prompt.md
+    packet_sha256: c20427cb3f6de67606a01196a3d2ecf6315ca526b9e81f883cfd188b6d218a09
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-003.prompt.md
+    packet_sha256: 968549ca379b30ba5dde3aed22bb9a3703e9a5ca1b9abdd9905cd6028e801e3f
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-010.prompt.md
+    packet_sha256: 3b1a2d2bc77a71256df731102fc3c914a2e7ca054725f3a8731c3f617b2f692a
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-008.prompt.md
+    packet_sha256: f8e446450811036d6edf1c5692a27c34530f9ed0a126a4af816490e6498640f5
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-005.prompt.md
+    packet_sha256: 383646bc407cc19602ba8a744f9445330c52442e42c2a4060d0c47fe3351aec7
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-021.prompt.md
+    packet_sha256: 2996ee3cf85180037e803ad75299fcde51c9c4e59e9eb1ff722ba3c74f771a1c
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-013.prompt.md
+    packet_sha256: 4c1017284868382ee8c936e31ca95a69fe61076dffc314b8b3c5545997db4c5a
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-018.prompt.md
+    packet_sha256: 4ee895bd697ea735b8bb143933719888fe5f26f91110172b970c8084f1b7de69
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-014.prompt.md
+    packet_sha256: b029305bf536820772300c9d413ed1a5240b51d3d24229e35278b0e9fba022a4
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-016.prompt.md
+    packet_sha256: c045def3a1c570c26e67d60051097e941de884f7496c177dfe9a9f32c637e8ae
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+  - consumer_id: synthesize
+    packet_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-iZ98Um/.onto/review/20260718-0e0876e7/prompt-packets/synthesis/issue-015.prompt.md
+    packet_sha256: a3d28881c61dc470c2d2c6e347b86d35ae9ccdc6771b69da6a02efed202ae9d6
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs: []
+validation_results:
+  - domain_binding_valid
+  - review_value_alignment_dispatch_allowed
+  - review_target_profile_admitted
+  - context_access_matrix_valid
+  - packet_refs_materialized
+  - generated_packet_ref_registered:issue-artifact:finding-ledger
+  - generated_packet_ref_registered:issue-artifact:finding-relation-graph
+  - generated_packet_ref_registered:issue-artifact:issue-ledger
+  - generated_packet_ref_registered:issue-stance:coverage
+  - generated_packet_ref_registered:issue-stance:logic
+  - generated_packet_ref_registered:issue-stance:structure
+  - generated_packet_ref_registered:issue-stance:evolution
+  - generated_packet_ref_registered:issue-stance:axiology
+  - generated_packet_ref_registered:issue-stance:semantics
+  - generated_packet_ref_registered:issue-artifact:issue-stance-matrix
+  - generated_packet_ref_registered:issue-artifact:deliberation-plan
+  - generated_packet_ref_registered:deliberation:axiology
+  - generated_packet_ref_registered:deliberation:coverage
+  - generated_packet_ref_registered:deliberation:evolution
+  - generated_packet_ref_registered:deliberation:logic
+  - generated_packet_ref_registered:deliberation:semantics
+  - generated_packet_ref_registered:deliberation:structure
+  - generated_packet_ref_registered:controlled-deliberation
+  - generated_packet_ref_registered:issue-artifact:problem-framing
+  - generated_packet_ref_registered:synthesize
+failure_record_refs: []
+embed_budget:
+  max_embed_lines_effective: 40
+  max_embed_lines_source: cli

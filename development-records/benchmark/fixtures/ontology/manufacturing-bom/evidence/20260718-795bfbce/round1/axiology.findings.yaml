@@ -1,0 +1,262 @@
+schema_version: 1
+session_id: 20260718-795bfbce
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml — ECO/Part revision authority and
+      effective-date rule
+    evidence_anchor: 'Target: materialized-input.md lines 20-21 and 93-96. Part.rev
+      and current_eco have different source systems; production after
+      ECO.effective_date must use the new revision, while Part.rev is
+      synchronized weekly. Value authority: {source:
+      .onto/review/20260718-795bfbce/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: criterion user-request-intent, lines 6-18, excerpt: "PLM/MES 통합의
+      개념 기준 문서…변경관리 개념의 정합성과 제조 운영 위험"}. value_type=purpose;
+      alignment_direction=misaligned.'
+    claim: The weekly revision projection is misaligned with the ontology’s purpose
+      as an effective PLM/MES change-control baseline.
+    what: The model requires new-revision production immediately after an ECO
+      effective date but allows Part.rev—the revision exposed to consumers—to
+      remain stale until a weekly synchronization.
+    why: During the admitted lag, the same conceptual baseline can indicate both
+      that the new revision is mandatory and that the part still has the old
+      revision. The undocumented tradeoff favors batch synchronization
+      convenience over configuration correctness at the PLM/MES boundary.
+    how_to_fix: Introduce one authoritative effective-configuration concept that
+      binds part, revision, ECO, effectivity, and lifecycle state. Require
+      production-order eligibility to resolve that configuration atomically;
+      treat Part.rev as a derived projection with explicit freshness and failure
+      semantics.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serve as a coherent conceptual baseline for PLM/MES
+        integration, particularly change management and manufacturing-operation
+        risk.
+      failure_condition: An ECO has reached its effective date after the drawing
+        register changes but before the weekly Part.rev synchronization
+        completes.
+      impact: PLM and MES consumers can select different revisions for the same
+        production interval, weakening trust in the ontology as the shared
+        authority and enabling obsolete-revision production.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:93-96
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: Revision identity and ECO effectivity are modeled as
+        separately sourced projections without an authoritative
+        effective-configuration binding.
+      root_cause_step_id: axiology-candidate-001.cause-002
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: The effective-date rule requires the new revision while explicitly
+            permitting Part.rev to lag by a weekly batch.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: axiology-candidate-001.cause-002
+          claim: This mismatch is enabled by assigning Part.rev and current_eco to
+            separate source systems without a shared effective-state contract.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:96
+      unresolved_beyond_evidence: The target does not show whether an external runtime
+        gate compensates for this lag; such a gate would not repair the
+        conceptual baseline unless represented in the ontology.
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml — BOM acyclicity and
+      scrap-reintroduction exception
+    evidence_anchor: 'Target: materialized-input.md lines 93-94. The rule declares
+      BOM acyclic but models scrap reintroduction as an Assembly containing
+      itself. Value authority: {source:
+      .onto/review/20260718-795bfbce/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: criterion user-request-intent, lines 6-18, excerpt: "BOM/공정 온톨로지가
+      PLM/MES 통합의 개념 기준 문서로 적절한지…BOM…정합성과 제조 운영 위험"}. value_type=tradeoff;
+      alignment_direction=misaligned.'
+    claim: Using a self-referential product BOM to encode material recovery
+      sacrifices integration clarity for local modeling convenience.
+    what: A process/material-flow phenomenon—scrap recovery and reintroduction—is
+      represented by deliberately violating the BOM’s own acyclicity invariant.
+    why: PLM product structure and MES material flow have different lifecycle and
+      traversal needs. Conflating them makes cycle detection, BOM explosion,
+      quantity roll-up, and integration interpretation exception-dependent,
+      undermining the stated common-reference purpose.
+    how_to_fix: Keep the product BOM acyclic and model recovered-material flow with
+      a separate canonical entity or relation carrying source operation,
+      destination operation or material, recovery yield, and effectivity.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide a coherent BOM and routing concept model usable across
+        PLM and MES.
+      failure_condition: A product uses scrap-reintroduction or recovered-material
+        processing represented through the documented self-child pattern.
+      impact: Standard BOM consumers cannot safely distinguish an invalid
+        product-structure cycle from an intentional process return, reducing
+        interoperability and making operational calculations dependent on
+        undocumented special handling.
+      evidence_refs:
+        - materialized-input.md:93-94
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: The ontology lacks a distinct material-recovery or
+        process-flow concept and therefore overloads the product-structure BOM.
+      root_cause_step_id: axiology-candidate-002.cause-002
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: The acyclic BOM rule contains an explicit self-containment exception for
+            scrap reintroduction.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-94
+        - cause_id: axiology-candidate-002.cause-002
+          claim: The exception is a symptom of representing a recovery-process flow
+            through the Assembly/BomLine product-structure concept.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:93-94
+      unresolved_beyond_evidence: The target does not specify existing
+        consumer-specific cycle guards; their existence would confirm
+        operational mitigation but would preserve the conceptual conflation.
+  - candidate_id: axiology-candidate-003
+    target: manufacturing-bom-ontology.yaml — operational quantities, units, and
+      duplicated planning/cost values
+    evidence_anchor: 'Target: materialized-input.md lines 35, 53, 63-67, and 98-100.
+      Scrap rate is copied from a planning spreadsheet; work-center capacity
+      mixes count and time units; accumulated standard time is manually
+      duplicated and reconciled quarterly; UOM conversion is performed locally
+      without a conversion master. Value authority: {source:
+      .onto/review/20260718-795bfbce/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: criterion user-request-intent, lines 6-18, excerpt: "PLM/MES 통합의
+      개념 기준 문서…제조 운영 위험을 중심으로"}. value_type=commitment;
+      alignment_direction=misaligned.'
+    claim: The model normalizes duplicated and locally interpreted measurements
+      instead of establishing shared quantitative semantics for PLM/MES
+      integration.
+    what: "Several operationally significant values lack canonical ownership,
+      dimensional metadata, or synchronized derivation: scrap rate is copied,
+      capacity units vary by work center, standard-time totals are manually
+      re-entered, and UOM conversions are decided on the shop floor."
+    why: This implicitly prioritizes compatibility with existing spreadsheets and
+      manual practices over a reliable integration contract. Values can be
+      syntactically valid numbers yet mean different things or become stale, so
+      planning, capacity, cost, and material-consumption decisions cannot be
+      compared safely across systems.
+    how_to_fix: Define a canonical measurement model with value, unit, basis or
+      denominator, validity interval, and source authority. Make accumulated
+      values derived from authoritative routing data; represent reconciliation
+      as validation rather than a second authority; add governed part-specific
+      conversion factors.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Act as a PLM/MES conceptual baseline that controls
+        manufacturing-operation risk.
+      failure_condition: A consumer performs material planning, capacity comparison,
+        costing, or quantity conversion using the documented fields across
+        systems or work centers.
+      impact: Equivalent-looking values may differ in unit, age, denominator, or
+        authority, producing inconsistent operational decisions while still
+        appearing contract-compliant.
+      evidence_refs:
+        - materialized-input.md:35
+        - materialized-input.md:53
+        - materialized-input.md:63-67
+        - materialized-input.md:98-100
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: The ontology lacks a shared authority-and-dimension
+        contract for operational measurements and accepts manual replicas as
+        peer values.
+      root_cause_step_id: axiology-candidate-003.cause-002
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: Operational quantities are copied, manually duplicated, expressed with
+            variable units, or converted without a governed master.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:67
+            - materialized-input.md:99-100
+        - cause_id: axiology-candidate-003.cause-002
+          claim: These practices are enabled by scalar number fields that omit source
+            authority, unit basis, validity, and derivation status.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:34-35
+            - materialized-input.md:53
+            - materialized-input.md:67
+      unresolved_beyond_evidence: The target does not establish the magnitude or
+        frequency of resulting planning and costing discrepancies.
+  - candidate_id: axiology-candidate-004
+    target: manufacturing-bom-ontology.yaml — AlternatePart substitution semantics
+    evidence_anchor: 'Target: materialized-input.md lines 37-45 and 91.
+      AlternatePart is defined as symmetric, while direction permits one_way and
+      makes it the default; a Part-to-Part shortcut further hides the relation
+      object. Value authority: {source:
+      .onto/review/20260718-795bfbce/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: criterion user-request-intent, lines 6-18, excerpt: "PLM/MES 통합의
+      개념 기준 문서…품목…개념의 정합성과 제조 운영 위험"}. value_type=stakeholder;
+      alignment_direction=misaligned.'
+    claim: The substitution model does not provide PLM and MES stakeholders one
+      dependable meaning for an approved alternate part.
+    what: The entity definition promises reciprocal substitutability, but its
+      default state is one-way; the alternate_of shortcut omits the direction
+      attribute entirely.
+    why: Engineering approval and shop-floor substitution can therefore interpret
+      the same relation differently. The shortcut improves local convenience but
+      discards the property that determines whether a substitution is
+      authorized, undermining the ontology’s shared-reference purpose.
+    how_to_fix: Choose one canonical substitution concept with explicit source part,
+      substitute part, direction, approval status, applicability/effectivity,
+      and relevant context. Define reciprocity only for bidirectional instances
+      and remove or formally constrain the lossy shortcut.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide coherent part concepts for PLM/MES integration while
+        controlling manufacturing-operation risk.
+      failure_condition: A consumer relies on the symmetric definition or alternate_of
+        shortcut while another honors the default one-way direction.
+      impact: Systems can disagree about whether a reverse substitution is authorized,
+        allowing an unapproved component choice or rejecting an approved one.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: Reciprocal equivalence and directional substitution
+        permission are conflated under one AlternatePart concept, with a lossy
+        shortcut relation.
+      root_cause_step_id: axiology-candidate-004.cause-002
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: The definition states reciprocal substitutability while the direction
+            field defaults to one-way.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: axiology-candidate-004.cause-002
+          claim: The ambiguity is enabled by one concept carrying incompatible reciprocal
+            and directional meanings, plus a shortcut that cannot preserve
+            direction.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: The target contains no approval or effectivity rules
+        showing which interpretation current consumers actually enforce.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Because the artifact declares itself a PLM/MES integration conceptual
+    baseline, its consumers are assumed to rely on it to agree on effective
+    configuration, product structure, substitutions, and operational measurement
+    meaning.
+  - No manufacturing domain document was bound; operational consequences are
+    limited to those directly implied by the target’s own concepts and notes.
+validation:
+  unaddressable_candidates: []

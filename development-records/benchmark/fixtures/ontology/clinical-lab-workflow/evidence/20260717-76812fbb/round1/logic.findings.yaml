@@ -1,0 +1,102 @@
+schema_version: 1
+session_id: 20260717-76812fbb
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml — Order completion state rule
+    evidence_anchor: materialized-input.md:23,69-72,121-123
+    claim: Order의 완료 판정이 이후 corrected로 바뀔 수 있는 Result.status에 의존하지만, 정정 후 Order 상태를
+      재평가하는 규칙이 없어 시간 전개상 완료 의미를 일관되게 유지할 수 없다.
+    what: "`모든 Result가 final`이면 Order를 `completed`로 전이시키면서도 Result가 이후 `corrected`로
+      바뀌는 경로를 명시적으로 허용한다. 그러나 그때 completed를 유지할지, 재개할지, 별도 정정 상태로 전이할지가 정의되지
+      않았다."
+    why: 충돌 쌍은 materialized-input.md:122의 완료 전이 규칙과 materialized-input.md:123의 후속
+      corrected 전이 규칙이다. 이는 여러 claim 사이의 시간적 충돌이며 modality는 mixed(완료 전이와 후속 정정
+      의무)이다. final 조건을 만족해 완료된 주문에서 정정이 발생하면 현재 상태는 completed이지만 완료 근거는 더 이상
+      성립하지 않는다. EMR과 LIS가 서로 다른 해석을 선택할 수 있어 개념 권위 문서의 상태 판정이 결정적이지 않다.
+    how_to_fix: 완료를 불변 종결 상태로 만들지, 정정 가능한 스냅숏 상태로 만들지 명시한다. 후자라면 corrected 발생 시
+      Order를 재개하거나 `completed_amended` 같은 정정 상태로 전이시키는 규칙과 재완료 조건을 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 Order 상태 전이의 개념 권위를 제공하는 목적
+      failure_condition: completed 전이 후 연결된 Result.status가 final에서 corrected로 변경되는 경우
+      impact: 동일 사건 뒤 EMR은 completed를 유지하고 LIS는 미완료 또는 정정 진행으로 해석할 수 있어 상태 동기화와 후속 처리가
+        비결정적이 된다.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:69-72
+        - materialized-input.md:122-123
+    causal_path:
+      root_cause_candidate: 완료 조건이 가역적인 Result.status에 결합되어 있으나 정정 이후의 Order 전이 규칙이 정의되지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: Result가 모두 final이면 Order가 completed로 전이한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:122
+        - cause_id: logic-candidate-001.cause-002
+          claim: completed 판정 이후에도 Result.status는 corrected로 변경될 수 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-003
+          claim: Order lifecycle과 state_rules에는 정정 시 completed 상태를 재평가하거나 해제하는 전이가 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: 정정 이후에도 completed를 유지하려는 것인지, 주문을 재개하려는 것인지는 경계 내 문서에서 확정할 수 없다.
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml — Order completion quantifier
+    evidence_anchor: materialized-input.md:20,111,121-122
+    claim: "`모든 Result가 final`이라는 완료 조건에 Result 존재 조건이 없어 결과가 0개인 Order도 형식적으로
+      completed 전이 조건을 만족한다."
+    what: 완료 규칙은 보편 조건만 선언하고 최소 하나의 Result가 존재해야 한다는 조건이나 주문된 Test별 기대 결과 집합을 요구하지
+      않는다.
+    why: 표준적인 보편양화 해석에서는 빈 집합의 모든 원소가 final이라는 명제가 참이다. 따라서 결과가 아직 생성되지 않았거나 결과 연결
+      범위가 비어 있는 주문도 완료될 수 있다. 이는 necessary 조건을 충분조건으로 사용하면서 존재 전제를 누락한
+      modality/quantifier 오류다.
+    how_to_fix: 완료 조건을 `expected Result가 하나 이상 존재하고, ordered_tests로부터 기대되는 모든
+      Result가 생성되었으며, 그 상태가 모두 final`인 경우로 한정하고, 어떤 Result 집합을 양화하는지도 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS가 동일하게 적용할 수 있는 Order 완료 판정 규칙 제공
+      failure_condition: Order에 연결되거나 완료 판정 대상으로 선택된 Result 집합이 비어 있는 경우
+      impact: 결과 미생성 주문이 완료로 판정될 수 있어 워크플로 진행 상태와 인터페이스 이벤트의 신뢰성이 약화된다.
+      evidence_refs:
+        - materialized-input.md:20
+        - materialized-input.md:111
+        - materialized-input.md:122
+    causal_path:
+      root_cause_candidate: 완료 규칙의 보편양화 조건에 존재성과 기대 결과 완전성 조건이 포함되지 않았다.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: Order 완료는 모든 Result가 final인지에 의해서만 판정된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:122
+        - cause_id: logic-candidate-002.cause-002
+          claim: 규칙에는 Result가 하나 이상 존재해야 한다는 전제가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: logic-candidate-002.cause-003
+          claim: Order의 ordered_tests와 Test-Result 관계도 완료 규칙의 양화 범위 또는 기대 결과 수로 연결되지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:111-112
+            - materialized-input.md:122
+      unresolved_beyond_evidence: 자연어의 `모든 Result`가 존재를 암묵적으로 전제하도록 의도되었는지는 경계 내 문서에서 확인되지 않는다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`모든 Result`는 형식화 시 표준적인 보편양화로 해석하며, 별도의 존재 전제가 없으면 빈 집합에서도 참이다."
+  - enum 상태 속성은 한 시점에 하나의 값만 갖는 단일값 속성으로 해석한다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,288 @@
+schema_version: 1
+session_id: 20260718-3119806d
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: integrity_rules의 BOM 순환 예외
+    evidence_anchor: materialized-input.md:29-35, 93-96 — BomLine은 상위 품목의 하위 품목
+      사용량으로 정의되지만, 스크랩 재투입은 Assembly가 자기 자신을 하위에 포함하도록 규정한다.
+    claim: 공정상 스크랩 재투입을 제품구조의 자기 구성 관계로 표현해 BOM 관계의 의미를 훼손한다.
+    what: 제품 구성·소요량을 뜻하는 BomLine에 공정 중 회수·재투입 흐름을 넣어, 하나의 관계가 제품구조와 공정 물류라는 서로 다른
+      의미를 갖게 된다.
+    why: 자기 자신을 구성품으로 둔 BOM은 통상적인 BOM 전개에서 종료점을 잃는다. 이 문서도 BOM 비순환을 원칙으로 선언하므로 예외가
+      관계의 본래 의미와 직접 충돌하며, PLM 제품구조를 MES 자재 흐름으로 전달할 때 반복 소요량이나 무한 전개로 해석될 수 있다.
+    how_to_fix: BOM은 비순환 제품구조로 유지하고, 스크랩 회수·재투입은 Routing/Operation에 연결된 별도
+      material_flow 또는 recycle_input 관계로 모델링하며 회수율과 투입 지점을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 BOM을 일관된 제품구조 및 자재소요 기준으로 사용하는 목적
+      failure_condition: 스크랩 재투입이 있는 Assembly를 BOM 전개·소요량 계산·생산오더 생성에 사용할 때
+      impact: 제품구조와 공정 흐름의 의미가 섞여 BOM 전개가 반복되거나 소요량이 과대 계산될 수 있어 통합 기준으로 신뢰할 수 없다.
+      evidence_refs:
+        - materialized-input.md:29-35
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: 제품 구성 관계와 공정 중 자재 회수 흐름을 하나의 BomLine 개념으로 표현한 의미적 혼합
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: 스크랩 재투입을 Assembly의 자기 하위 포함으로 모델링한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-96
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 자기 포함은 상위 품목이 하위 품목을 얼마나 사용하는지 나타내는 BomLine 의미를 공정 흐름 표현으로 바꾼다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:93-96
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: Part.rev, Part.current_eco 및 ECO 효력 규칙
+    evidence_anchor: materialized-input.md:14-21, 69-75, 93-96 — Part.rev는 도면 리비전이고
+      current_eco는 최신 ECO이며, effective_date 이후 생산분은 신규 rev를 따르지만 rev는 주간 배치로
+      갱신된다.
+    claim: 도면 리비전, 품목의 유효 구성 리비전, 최신 ECO를 동일한 변경 상태처럼 취급한다.
+    what: Part.rev는 명시적으로 도면 리비전인데 생산 효력 규칙에서는 품목의 신규 리비전으로 사용된다. current_eco도 시간상
+      최신 변경인지, 승인된 변경인지, 현재 생산에 유효한 변경인지 구분하지 않는다.
+    why: 도면 리비전은 품목/BOM/라우팅의 유효 구성 리비전과 항상 같은 개념이 아니다. 더구나 ECO 효력일과 rev 동기화 시점이 다르므로
+      효력일 이후에도 MES가 구 rev를 볼 수 있으며, open·approved·applied 중 어느 ECO가 생산 기준인지
+      current_eco만으로 결정할 수 없다.
+    how_to_fix: DrawingRevision과 ItemRevision(또는 ProductRevision)을 분리하고, ECO가 생성하는
+      이전/신규 리비전과 적용 대상 BOM·Routing을 명시한다. current_eco 대신 effective_change 또는
+      effective_revision을 상태·효력 조건으로 결정하며 효력 적용과 동기화의 원자성 또는 명시적 지연 상태를 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM 변경 정보를 MES 생산 기준으로 정확히 전달하는 변경관리 계약
+      failure_condition: ECO.effective_date가 도래했지만 도면 관리대장 기반 Part.rev 배치 갱신 전이거나 최신
+        ECO가 아직 생산 유효 상태가 아닐 때
+      impact: 같은 품목에 대해 PLM과 MES가 서로 다른 리비전을 현재 기준으로 판단하여 구 도면·구 BOM 또는 잘못된 공정으로 생산할 수
+        있다.
+      evidence_refs:
+        - materialized-input.md:14-21
+        - materialized-input.md:69-75
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: 도면 문서 리비전과 품목의 유효 구성 리비전, 변경 지시의 시간·상태 의미를 분리하지 않은 변경 모델
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: 효력일 이후 신규 rev를 사용하도록 하면서 Part.rev 갱신은 주간 배치 이후로 늦춘다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-96
+        - cause_id: semantics-candidate-002.cause-002
+          claim: Part.rev는 품목 구성 리비전이 아니라 도면 리비전으로 정의되어 있고 current_eco는 단지 최신 변경을 가리킨다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:14-21
+        - cause_id: semantics-candidate-002.cause-003
+          claim: ECO 상태·효력과 리비전별 구성 사이의 명시적 연결이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:84-90
+      unresolved_beyond_evidence: 실제 도면 리비전과 품목 리비전이 조직 내에서 항상 동일하도록 운영되는지는 경계 내 증거로
+        확인할 수 없지만, 문서 자체의 배치 지연은 효력 시점 불일치를 확정한다.
+  - candidate_id: semantics-candidate-003
+    target: AlternatePart 정의와 direction 속성
+    evidence_anchor: materialized-input.md:37-45, 91 — 정의는 대체 관계가 대칭이라고 선언하지만
+      direction은 one_way와 bidirectional을 허용하고 기본값은 one_way이다.
+    claim: 대칭적 상호대체와 방향성 대체를 하나의 AlternatePart 의미로 모순되게 정의한다.
+    what: 엔티티 정의는 A가 B의 대체품이면 B도 A의 대체품이라고 단정하지만, 같은 엔티티의 direction은 반대 방향이 성립하지 않는
+      one_way를 기본으로 둔다. 단축 관계 alternate_of에도 방향 의미가 드러나지 않는다.
+    why: 소비자는 정의에 따라 관계를 대칭 폐쇄하거나 기본 direction에 따라 단방향으로 처리할 수 있다. 그 결과 승인되지 않은 역대체가
+      허용되거나 허용된 대체가 차단될 수 있어 자재 대체 판단이 시스템마다 달라진다.
+    how_to_fix: 기본 개념을 directed_substitution으로 정의해 from_part와 to_part를 명시하고, 상호대체는 두
+      방향 승인 또는 별도 interchangeability 개념으로 표현한다. alternate_of 단축 표기도 동일한 방향·승인
+      의미를 보존하도록 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM의 대체 승인 의미를 MES 자재 투입 판단에 일관되게 전달하는 계약
+      failure_condition: one_way 대체 관계를 소비 시스템이 엔티티 정의 또는 alternate_of 단축 표기에 따라 대칭 관계로 해석할 때
+      impact: 승인되지 않은 부품 역대체가 발생할 수 있어 조립 적합성, 품질 및 추적성에 직접적인 제조 위험이 생긴다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: 방향성 substitution과 대칭적 interchangeability를 하나의 대체품 개념으로 합친 것
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: AlternatePart는 대칭 관계로 정의되면서 one_way를 기본 방향으로 허용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: semantics-candidate-003.cause-002
+          claim: Part 간 alternate_of 단축 표기는 direction을 노출하지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:91
+        - cause_id: semantics-candidate-003.cause-003
+          claim: 방향성 대체와 상호 호환성의 의미 구분이 모델에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: BomLine.scrap_rate
+    evidence_anchor: materialized-input.md:29-35 — scrap_rate는 BomLine 속성이지만 '공정 불량
+      감안 계수'이며 별도 엑셀 값을 복사한다고 설명한다.
+    claim: 공정 불량률과 BOM 구성품 추가 소요 계수를 scrap_rate 하나로 혼합하고 복제 입력으로 둔다.
+    what: 속성명은 비율을 뜻하지만 값의 범위·분모·적용 산식이 없고, 위치는 BOM 구성품 관계인데 설명은 공정 불량을 가리킨다. 또한 원본이
+      아닌 엑셀 값을 복사해 독립 저장한다.
+    why: 공정 수율과 구성품별 스크랩 계수는 적용 대상과 계산 방식이 다를 수 있다. 어떤 소비자는 qty_per/(1-rate), 다른
+      소비자는 qty_per*(1+rate)로 계산할 수 있고, 복사본이 원천과 달라지면 동일 BOM에서도 서로 다른 소요량이 나온다.
+    how_to_fix: operation_yield와 component_scrap_factor를 의미에 따라 분리하고, 각각 값
+      범위·단위·분모·적용 산식·유효기간을 정의한다. 복사 필드 대신 권위 원천을 참조하거나 원천 버전과 동기화 상태가 있는 명시적
+      스냅샷으로 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM과 공정 데이터를 이용한 일관된 자재소요 및 생산계획 계산
+      failure_condition: PLM/MES 또는 계획 시스템이 scrap_rate를 서로 다른 산식·대상에 적용하거나 복사본이 원천 엑셀과 달라질 때
+      impact: 필요 자재량과 생산량이 시스템별로 달라져 부족·과잉 투입 및 계획 불일치가 발생할 수 있다.
+      evidence_refs:
+        - materialized-input.md:29-35
+    causal_path:
+      root_cause_candidate: 공정 수율과 BOM 구성품 스크랩 계수를 구분하지 않고 외부 계산값을 의미 규약 없이 복제한 것
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: BomLine.scrap_rate가 공정 불량 감안 계수이자 별도 엑셀의 복사값으로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 값의 산식·범위·적용 대상이 정의되지 않아 이름만으로 계산 의미를 결정해야 한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+      unresolved_beyond_evidence: 생산계획팀 엑셀의 실제 산식은 경계 내에 없어 특정 계산식 오류까지는 확정할 수 없다.
+  - candidate_id: semantics-candidate-005
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: materialized-input.md:63-67 — capacity_per_shift의 단위가 작업장마다 개수
+      또는 시간이라고 정의된다.
+    claim: 처리량과 가용시간이라는 차원이 다른 값을 하나의 capacity_per_shift 속성으로 표현한다.
+    what: 같은 숫자 속성이 어떤 WorkCenter에서는 개수/교대, 다른 곳에서는 시간/교대를 뜻한다. 값 자체에는 단위나 용량의 종류가
+      없다.
+    why: 개수 기준 처리능력과 시간 기준 가용능력은 직접 비교·합산할 수 없으며, Operation.std_time_min과 결합 가능한 것은
+      시간 용량이다. 소비자가 단위를 별도로 추측해야 하므로 부하율과 생산 가능량 계산이 의미적으로 불안정하다.
+    how_to_fix: available_time_min_per_shift와 throughput_per_shift를 분리한다. 처리량에는 명시적
+      UOM과 적용 품목·공정 조건을 연결하고, 공통 Quantity 구조를 사용한다면 value와 unit을 필수로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅 표준시간과 작업장 용량을 결합한 MES 능력계획 기준
+      failure_condition: 개수형과 시간형 WorkCenter 용량을 같은 필드로 읽어 부하 또는 처리 가능량을 계산할 때
+      impact: 차원이 맞지 않는 값을 동일 계산에 투입해 작업장 과부하 또는 가용능력을 잘못 판단할 수 있다.
+      evidence_refs:
+        - materialized-input.md:47-53
+        - materialized-input.md:63-67
+    causal_path:
+      root_cause_candidate: 용량의 종류와 측정 단위를 값에서 분리하지 않은 다의적 속성 설계
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: capacity_per_shift 하나가 개수 또는 시간을 나타낸다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63-67
+        - cause_id: semantics-candidate-005.cause-002
+          claim: Operation 표준시간은 분 단위이지만 용량 필드에는 호환 단위 표지가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:47-53
+            - materialized-input.md:63-67
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-006
+    target: InspectionPlan의 Operation 상속
+    evidence_anchor: materialized-input.md:47-60, 77-82 — Operation은 라우팅의 공정 단계이고
+      InspectionPlan은 검사 계획·파라미터 확장인데 is_a Operation으로 선언된다.
+    claim: 검사 계획이라는 명세 객체를 실제 라우팅 단계인 Operation의 하위 유형으로 잘못 분류한다.
+    what: Operation은 수행되는 공정 단계이고 InspectionPlan은 sampling_rule과
+      acceptance_criteria를 담는 계획·규격이다. 계획은 단계가 따르는 명세이지 단계 자체가 아니므로 모든
+      InspectionPlan을 Operation처럼 라우팅에 배치할 수 있다는 잘못된 is_a 의미가 생긴다.
+    why: 상속에 따라 InspectionPlan이 work_center, std_time_min 같은 실행 단계 속성을 물려받고
+      Routing.operations에 직접 들어갈 수 있다. 이는 검사 단계와 검사 명세의 식별·개정·재사용 수명주기를 섞어 PLM
+      품질 기준과 MES 실행 단계를 잘못 대응시킨다.
+    how_to_fix: InspectionOperation을 Operation의 하위 유형으로 두고, 독립적인 InspectionPlan 또는
+      InspectionSpecification을 has_inspection_plan 관계로 연결한다. 계획의 개정·효력과 실행 단계의
+      순서·작업장을 분리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품질 검사 기준과 MES 라우팅 실행 단계를 정확히 대응시키는 개념 계약
+      failure_condition: 하나의 검사 계획을 여러 공정에서 재사용·개정하거나 Routing.operations 소비자가 모든
+        Operation 하위 객체를 실행 단계로 취급할 때
+      impact: 검사 명세 변경이 공정 단계 변경으로 오인되거나 계획 객체가 실행 라우팅에 배치되어 품질 기준과 실행 추적성이 어긋난다.
+      evidence_refs:
+        - materialized-input.md:47-60
+        - materialized-input.md:77-82
+    causal_path:
+      root_cause_candidate: 실행 행위/단계와 그 행위를 규정하는 계획·명세를 존재론적으로 구분하지 않은 것
+      root_cause_step_id: semantics-candidate-006.cause-002
+      steps:
+        - cause_id: semantics-candidate-006.cause-001
+          claim: 검사 계획이 Operation의 하위 유형으로 선언된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:77-82
+        - cause_id: semantics-candidate-006.cause-002
+          claim: Operation은 라우팅에 배치되는 수행 단계로 정의된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:47-60
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-007
+    target: Part.uom, BomLine.qty_per 및 UOM 변환 주석
+    evidence_anchor: materialized-input.md:14-19, 29-35, 98-100 — Part.uom은 ea/kg/m
+      중 하나이고 qty_per에는 단위·기준수량이 없으며 품목별 환산계수 없이 현장에서 kg↔ea를 환산한다.
+    claim: BOM 소요량의 단위와 환산 의미가 모델에 고정되지 않아 qty_per가 시스템 간 동일한 양을 뜻하지 않는다.
+    what: qty_per는 무차원 number이고 '하위 품목을 얼마나 쓰는지'만 정의된다. 자식 UOM 기준인지, 상위 1단위당인지, 기준
+      배치당인지 명시되지 않으며 필요한 대체 UOM 환산도 현장 판단에 맡긴다.
+    why: 특히 kg와 ea 사이 환산은 품목별 질량 같은 추가 정보가 없으면 결정할 수 없다. PLM과 MES가 서로 다른 기준수량이나 현장
+      환산값을 쓰면 동일 BOM 행의 물리적 소요량이 달라진다.
+    how_to_fix: BomLine에 component_quantity와 parent_base_quantity를 단위 포함 Quantity로
+      정의한다. 품목별 대체 UOM 환산계수에는 적용 조건·유효기간·권위 원천을 두고, 환산 불가능한 단위 조합은 명시적으로 거부한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM BOM 수량을 MES 자재 불출·투입 수량으로 손실 없이 전달하는 계약
+      failure_condition: kg↔ea 같은 단위 환산이 필요하거나 상위 품목 기준수량이 1이 아닌 BOM을 처리할 때
+      impact: 동일 qty_per가 서로 다른 물리량으로 해석되어 자재 부족·과다 투입과 생산실적 불일치를 일으킬 수 있다.
+      evidence_refs:
+        - materialized-input.md:14-19
+        - materialized-input.md:29-35
+        - materialized-input.md:98-100
+    causal_path:
+      root_cause_candidate: 수량의 값, 측정 단위, 기준수량 및 품목별 환산 권위를 명시적 개념으로 모델링하지 않은 것
+      root_cause_step_id: semantics-candidate-007.cause-002
+      steps:
+        - cause_id: semantics-candidate-007.cause-001
+          claim: qty_per가 단위와 기준수량 없는 number로 정의되고 환산은 현장에서 수행된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:98-100
+        - cause_id: semantics-candidate-007.cause-002
+          claim: Part에는 단일 UOM만 있으며 품목별 환산계수 마스터가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:14-19
+            - materialized-input.md:98-100
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 이 산출물은 선언된 목적대로 PLM과 MES가 품목·BOM·라우팅·변경 상태를 동일하게 해석하도록 구속하는 개념 기준 문서로 사용된다고
+    가정했다.
+  - BOM의 parent-child 관계는 제품 구성 및 구성품 소요를, Routing/Operation은 제조 공정 순서와 실행 맥락을
+    표현한다는 문서 자체의 정의를 적용했다.
+  - 외부 도메인 문서나 표준은 사용하지 않았으며, 제조 현장의 실제 추가 통제는 경계 내에서 확인할 수 없다.
+validation:
+  unaddressable_candidates: []

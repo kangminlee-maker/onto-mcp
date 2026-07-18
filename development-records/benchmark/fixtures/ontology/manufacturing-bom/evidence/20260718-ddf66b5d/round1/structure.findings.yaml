@@ -1,0 +1,48 @@
+schema_version: 1
+session_id: 20260718-ddf66b5d
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml의 AlternatePart 연결 구조
+    evidence_anchor: materialized-input.md:37-45,84-91
+    claim: AlternatePart가 명시적 relations 그래프에서 고립되어 있다.
+    what: AlternatePart는 두 Part 사이의 대체 관계와 direction을 담는 연관 엔티티로 선언됐지만, relations에는
+      AlternatePart를 출발점이나 도착점으로 하는 간선이 없다. 대신 Part→Part 단축 관계만 존재한다.
+    why: relations만 소비하는 PLM/MES 통합 경로에서는 대체 관계가 어떤 AlternatePart 인스턴스로 구체화되는지, 따라서
+      direction을 어디서 읽어야 하는지 연결할 수 없다. 단축 관계의 설명도 AlternatePart를 통해 표현된다고 명시하므로
+      현재 연결 구조가 자체 설계 의도와 맞지 않는다.
+    how_to_fix: relations에 Part→AlternatePart와 AlternatePart→Part 간선을 추가해
+      primary_ref와 alternate_ref를 명시적으로 연결하고, Part→Part alternate_of는 이 경로에서
+      유도되는 투영으로 규정하거나 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 대체부품 관계와 그 속성을 일관되게 교환하는 목적
+      failure_condition: 통합 소비자가 명시적 relations 그래프를 기준으로 대체부품 연결을 탐색하거나 매핑할 때
+      impact: 대체 관계의 연관 엔티티와 direction 속성을 도달할 수 없어 시스템별로 서로 다른 직접 Part→Part 해석을 만들 수
+        있다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: Part→Part 단축 관계가 AlternatePart 연관 엔티티를 경유하는 명시적 간선을 대체했다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: relations 목록에는 AlternatePart가 참여하는 간선이 하나도 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-001.cause-002
+          claim: 이는 AlternatePart를 통해 표현된다고 설명된 관계를 Part→Part 단축 간선만으로 선언한 구조의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`relations` 목록을 통합 소비자가 사용하는 명시적 관계 그래프로 해석했다."
+validation:
+  unaddressable_candidates: []

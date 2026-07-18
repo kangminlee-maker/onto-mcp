@@ -1,0 +1,196 @@
+schema_version: 1
+session_id: 20260717-76812fbb
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: Axiology attributes the stale clinician-facing status to
+      duplicated authority and delayed synchronization, while semantics argues
+      that Result and Report represent distinct lifecycles whose concepts were
+      incorrectly declared equivalent and independently authoritative.
+    resolution_question: Is the primary defect duplicated storage of one
+      authoritative status, or conflation of distinct Result and Report
+      lifecycle concepts, and what authority and transition contract follows
+      from that choice?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+    conflict_summary: The lenses agree that the composite issue is too broad but
+      differ on whether catalog authority, temporal Test–Assay mapping,
+      performed-execution structure, and Result provenance belong to one causal
+      issue or require separate issues.
+    resolution_question: Which findings share one root cause, and which must be
+      split into distinct catalog-mapping, execution, and provenance issues?
+  - issue_id: issue-006
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+    conflict_summary: Coverage treats the defect as duplicate status storage without
+      a temporal projection contract; semantics treats the fields as distinct
+      lifecycle concepts incorrectly equated, while axiology argues the issue
+      may be only a narrower expression of issue-001.
+    resolution_question: Should issue-006 remain an independent duplicate-authority
+      issue, be reframed around distinct lifecycle concepts, or be absorbed into
+      issue-001?
+  - issue_id: issue-007
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - logic
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+    conflict_summary: Coverage limits its support to auditable correction lineage,
+      logic limits the root to missing downstream Order reevaluation and lowers
+      its directly supported severity to medium, while axiology supports the
+      combined high-severity issue.
+    resolution_question: Should correction lineage and downstream Order reevaluation
+      remain one high-severity issue, or be split with separate scopes and
+      severity judgments?
+  - issue_id: issue-008
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+    conflict_summary: Evolution supports an independent high-severity
+      change-coupling issue, axiology treats it as an evolutionary manifestation
+      of issue-003, and structure supports only the narrower mapping defect.
+    resolution_question: Does issue-008 add a materially independent evolution
+      failure, or should its versioning and change-cost consequences be
+      incorporated into issue-003?
+  - issue_id: issue-010
+    priority: 5
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+    conflict_summary: Evolution frames the root as separate closed vocabularies
+      lacking a versioned complete projection, while semantics rejects treating
+      the vocabularies as copies and requires transitions between distinct
+      lifecycles; structure supports only mapping completeness.
+    resolution_question: Must the repair define a projection between equivalent
+      status vocabularies or a transition contract between distinct Result and
+      Report lifecycle concepts?
+  - issue_id: issue-013
+    priority: 4
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+      - issue-stance-matrix.yaml#stances.issue-013.axiology
+      - issue-stance-matrix.yaml#stances.issue-013.evolution
+    conflict_summary: Semantics supports issue-013 as the conceptual root, axiology
+      considers its value impact subsumed by issue-001, and evolution narrows
+      its support to change coupling rather than the precise
+      corrected-versus-amended distinction.
+    resolution_question: Should issue-013 remain the canonical semantic issue, be
+      merged into issue-001, or retain only a distinct lifecycle-evolution
+      scope?
+  - issue_id: issue-014
+    priority: 3
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+    conflict_summary: Semantics supports issue-014 as a standalone ambiguity in STAT
+      equivalence, while axiology considers it the same duplicated-authority
+      defect already represented by issue-011.
+    resolution_question: Does issue-014 contain a materially distinct semantic
+      contract problem, or should it be merged into issue-011 as the same STAT
+      authority defect?
+  - issue_id: issue-016
+    priority: 2
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - axiology
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.structure
+      - issue-stance-matrix.yaml#stances.issue-016.axiology
+      - issue-stance-matrix.yaml#stances.issue-016.coverage
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+    conflict_summary: Structure supports an independent medium issue about missing
+      Result attribution; axiology and coverage treat it as a narrower surface
+      of issue-002, while coverage and semantics raise its severity to high
+      because the notification target cannot be identified.
+    resolution_question: Should issue-016 be merged into issue-002 or retained
+      independently, and if retained does the patient-safety impact justify high
+      rather than medium severity?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All participating lenses support the policy-versus-event root cause,
+      high severity, and proposed separation of threshold policy from
+      result-specific notification events.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: All applicable lenses agree on the missing authoritative TAT projection
+      and medium severity; structure's not-applicable stance does not contradict
+      that conclusion.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All lenses support the specimen lifecycle boundary defect, its root
+      cause, and medium severity.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All lenses agree that specimen and material semantics require a shared
+      versioned concept hierarchy and retain medium severity.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All lenses support the diagnosis that STAT has three independent
+      authority surfaces and agree on canonicalizing priority with derived
+      representations.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: All applicable lenses support the vacuous-truth defect and the need for
+      Result existence and expected-result completeness conditions;
+      not-applicable stances introduce no material conflict.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: All lenses support the missing lifecycle transition graph as a
+      high-severity defect and agree on adding explicit transitions and guards.

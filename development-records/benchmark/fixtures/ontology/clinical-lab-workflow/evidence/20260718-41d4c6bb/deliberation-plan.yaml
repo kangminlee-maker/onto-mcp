@@ -1,0 +1,122 @@
+schema_version: 1
+session_id: 20260718-41d4c6bb
+planned_issues:
+  - issue_id: issue-014
+    priority: 10
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - logic
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+    conflict_summary: Logic finds insufficient evidence to determine whether
+      completed is a terminal invariant or a historical marker and therefore
+      cannot confirm the root hypothesis or medium severity; the other lenses
+      retain medium severity while narrowing the defect to the missing
+      post-correction transition and completion-semantics contract.
+    resolution_question: Does the bounded evidence support a material
+      medium-severity defect solely from the missing post-correction transition
+      and completion-semantics contract, or must the issue remain an evidence
+      gap until completed is established as terminal or historical?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: Logic's conditional narrowing is compatible with the other lenses'
+      shared diagnosis and retained high severity.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: Structure narrows the direct cause to missing relationships and
+      cardinality, which refines rather than contradicts the supported
+      catalog-authority diagnosis.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: All applicable lenses support the issue, root hypothesis, and medium
+      severity.
+  - issue_id: issue-004
+    reason_code: non_material_issue
+    reason: The issue is low severity and is therefore outside material-conflict
+      deliberation.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All applicable lenses support the lifecycle-coverage defect and medium
+      severity.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All applicable lenses support the missing auditable-event model and high
+      severity.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All applicable lenses support the missing version and validity history
+      defect and medium severity.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: Logic's conditional qualification concerns formalization of the
+      equivalence invariant and does not materially dispute the single-authority
+      defect or high severity.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All applicable lenses support the missing analytical-execution
+      provenance domain and medium severity.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: All applicable lenses support the undefined Test–Assay authority and
+      mapping defect and high severity.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All applicable lenses support the fragmented specimen-vocabulary defect
+      and medium severity.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: All applicable lenses support the missing item-level versioning and
+      validity defect and medium severity.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: Logic's conditional consistency framing is compatible with the shared
+      diagnosis of duplicated STAT authority and retained medium severity.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: Semantics narrows the cause to missing override meaning and event
+      ordering, which is compatible with the other lenses' supported root cause
+      and medium severity.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: Logic limits its claim to conditional consistency, but does not
+      materially dispute the semantic single-authority defect or high severity.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: All applicable lenses support the undefined Test–Assay semantic boundary
+      and medium severity.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: All applicable lenses support the incompatible specimen
+      classification-level and datatype defect and medium severity.
+  - issue_id: issue-019
+    reason_code: consistent_stances
+    reason: All applicable lenses support separating reusable critical-value rules
+      from result-specific notification events at medium severity.
+  - issue_id: issue-020
+    reason_code: no_material_conflict
+    reason: Logic's conditional consistency qualification refines rather than
+      contradicts the duplicated STAT-identity diagnosis and medium severity.
+  - issue_id: issue-021
+    reason_code: consistent_stances
+    reason: All applicable lenses support the structural isolation of Assay and high
+      severity.
+  - issue_id: issue-022
+    reason_code: no_material_conflict
+    reason: Logic and semantics narrow their applicable scope within the broader
+      missing-transition-graph defect while all applicable lenses retain medium
+      severity.
+  - issue_id: issue-023
+    reason_code: consistent_stances
+    reason: All applicable lenses support the missing Result-to-notification
+      traceability path and medium severity.

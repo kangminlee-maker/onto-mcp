@@ -1,0 +1,172 @@
+schema_version: 1
+session_id: 20260718-8de943b3
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — Test/Assay execution path
+    evidence_anchor: materialized-input.md:46-60, 108-119, 126-127
+    claim: Assay is disconnected from the order-to-result workflow because no
+      Test–Assay or Result–Assay relationship exists.
+    what: Test is the orderable catalog unit and Assay is the analyzer execution
+      unit, but Assay connects only to Department and is absent from every
+      declared relation.
+    why: An ordered Test cannot be structurally resolved to the Assay that performs
+      it, and a Result cannot identify its executing Assay. EMR/LIS
+      implementations therefore need an undocumented mapping outside the
+      purported conceptual authority.
+    how_to_fix: Add a canonical Test-to-Assay execution mapping with cardinality
+      and, where execution traceability is required, link Result to the
+      performed Assay. Replace the dual-registration note with an explicit
+      synchronization or ownership rule.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Using the ontology as the conceptual authority for EMR/LIS
+        integration from Order through Report.
+      failure_condition: Whenever an ordered Test must be translated into an analyzer
+        execution unit or an emitted Result must be traced to that unit.
+      impact: The core order-to-execution path cannot be derived from the authority
+        document, forcing divergent out-of-band mappings between systems.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: The ontology declares separate orderable and executable
+        catalog concepts without defining their canonical connecting
+        relationship.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay has only a Department reference and no edge into the
+            Order–Test–Specimen–Result–Report graph.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-60
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-002
+          claim: The document postpones Test/Assay consolidation and requires duplicate
+            registration without defining a mapping between them.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: The target does not establish whether one Test maps
+        to one or multiple Assays; that cardinality requires an explicit design
+        decision.
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — CriticalValue notification structure
+    evidence_anchor: materialized-input.md:100-106, 108-119
+    claim: CriticalValue lacks the relationships needed to connect a critical
+      threshold to the Result occurrence and its notification record.
+    what: CriticalValue references only Test and stores a notified boolean. No
+      relationship connects it to Result, notification time, sender, or
+      recipient; the note instead places some information in an unmodeled
+      telephone log.
+    why: The model cannot identify which result triggered notification or
+      substantiate who was notified and when. A single boolean on a
+      threshold-range concept cannot structurally represent multiple
+      result-specific notification events.
+    how_to_fix: Keep CriticalValue as threshold configuration and add a
+      result-specific notification occurrence linked to Result, the applicable
+      threshold, notifier, recipient, and timestamp; represent any external
+      telephone log with an explicit reference.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Serving as an operational EMR/LIS conceptual authority,
+        including the declared immediate-notification workflow.
+      failure_condition: When multiple Results are evaluated against the same critical
+        range or systems must exchange or audit a notification.
+      impact: The integration contract cannot associate notification state with a
+        particular clinical result or its actors, making the declared workflow
+        non-actionable and non-traceable.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - materialized-input.md:108-119
+    causal_path:
+      root_cause_candidate: A result-specific notification occurrence and its required
+        relations are absent from the ontology.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue contains only a Test reference, numeric bounds, and a
+            notified boolean, with no Result or notification-party link.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: structure-candidate-002.cause-002
+          claim: The relations section contains no CriticalValue edge, while notification
+            time and recipient are delegated to an unmodeled external log.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:106
+            - materialized-input.md:108-119
+      unresolved_beyond_evidence: The external telephone log's schema and ownership
+        are outside the bounded evidence, but its missing reference in this
+        authority document is directly observable.
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml — lifecycle transition topology
+    evidence_anchor: materialized-input.md:15-23, 37-44, 75-84, 121-124
+    claim: Lifecycle states are listed without a structurally complete transition
+      graph.
+    what: Order and Specimen declare state lists, but the state rules define only
+      Order completion, a Report status update, and post-analysis handling. No
+      edges or triggers connect most Order and Specimen states, and Report uses
+      status-like rules without a declared lifecycle.
+    why: A state vocabulary alone does not specify which transitions are allowed.
+      EMR and LIS implementations can independently invent paths such as
+      draft-to-placed or received-to-in_analysis, producing incompatible
+      validation and event handling.
+    how_to_fix: Define explicit per-entity transitions with from-state, to-state,
+      trigger, and guards for every declared lifecycle state; either declare
+      Report.result_status as its lifecycle or model a separate Report lifecycle
+      consistently.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Providing an authoritative shared state model for EMR/LIS
+        workflow integration.
+      failure_condition: Whenever either system must validate, emit, consume, or
+        reconcile a transition other than the few narrative cases currently
+        stated.
+      impact: The authority document cannot determine legal state progression, so
+        interoperating systems may accept different sequences or become unable
+        to reconcile workflow state.
+      evidence_refs:
+        - materialized-input.md:15-23
+        - materialized-input.md:37-44
+        - materialized-input.md:75-84
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: The ontology defines state nodes but lacks a
+        transition-edge schema and a complete set of transition edges.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: Order and Specimen expose lifecycle state arrays, while Report exposes a
+            status enum.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15-23
+            - materialized-input.md:37-44
+            - materialized-input.md:75-84
+        - cause_id: structure-candidate-003.cause-002
+          claim: Only three narrative state rules are supplied, leaving most declared
+            states without incoming/outgoing transition definitions.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: Exact actors and guards for the missing transitions
+        are not specified in the bounded target and must be decided during
+        correction.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The ontology's own declaration that it covers Order-to-Report entities,
+    relationships, and states is treated as the structural completeness
+    contract.
+  - Attribute references and is_a links are counted as structural connections
+    even when they are not repeated in the relations section.
+  - No external clinical-laboratory standard or domain document was assumed.
+validation:
+  unaddressable_candidates: []

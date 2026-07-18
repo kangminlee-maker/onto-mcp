@@ -1,0 +1,95 @@
+schema_version: 1
+session_id: 20260718-41d4c6bb
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml — Order 완료 상태 규칙
+    evidence_anchor: materialized-input.md:23, 71, 122-123
+    claim: insufficient evidence — Order 완료 판정이 이후 corrected로 바뀔 수 있는 Result.status에
+      의존하지만, 정정 후 완료 상태의 처리 규칙이 없다.
+    what: 모든 Result가 final이면 Order가 completed로 전이하지만, Result는 이후 corrected로 변경될 수
+      있다. completed를 유지·취소·재개할지 정의되지 않았다.
+    why: "completed가 종결 불변 상태라면 정정 후에는 완료 근거가 사라져 상태와 근거가 불일치한다. 반대로 단순 이력 상태라면 모순은
+      없지만, 문서가 그 양상을 형식화하지 않아 시간 경로의 만족 가능성을 확정할 수 없다. conflict_pair:
+      materialized-input.md:122 ↔ materialized-input.md:123.
+      satisfiability_note: inter-claim; 완료 조건의 입력 상태가 후속 사건으로 가역적이다.
+      modality_note: mixed; 완료 전이의 necessary/trigger 의미와 정정 후 의무가 구분되지 않았다.
+      boundary_handoff_note: 정정 후 전이 구조의 부재는 structure lens에도 해당한다."
+    how_to_fix: completed의 불변조건을 명시하고 corrected 발생 시 Order를 in_progress로 재개하거나 별도의
+      amended/reopened 상태로 전이하도록 규칙을 추가한다. completed가 이력적 표지라면 그 점과 정정 처리 효과를
+      명시한다.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 Order 상태를 일관된 개념 권위로 제공하는 목적
+      failure_condition: completed 처리 후 연결된 Result가 corrected로 변경되는 경우
+      impact: EMR과 LIS가 완료 상태 유지 또는 재개를 서로 다르게 구현하여 후속 검토·알림·업무 재개 여부가 달라질 수 있다.
+      evidence_refs:
+        - materialized-input.md:23
+        - materialized-input.md:71
+        - materialized-input.md:122-123
+    causal_path:
+      root_cause_candidate: 종결 판정이 가역적인 Result.status에 의존하면서 후속 정정에 대한 Order 상태 불변조건과 전이가 정의되지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 정정된 결과와 completed Order가 동시에 존재할 수 있으나 그 상태의 유효성이 결정되지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:71
+            - materialized-input.md:122-123
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이는 completed 전이가 final 상태의 순간 조건만 사용하고 정정 후 규칙을 두지 않은 것의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:23
+            - materialized-input.md:122-123
+      unresolved_beyond_evidence: completed가 종결 불변 상태인지 이력적 상태인지, 정정 시 실제 시스템이 어떤 전이를 수행하는지는 경계 내 문서에 없다.
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml — Report 상태 전이 규칙
+    evidence_anchor: materialized-input.md:80-83, 123
+    claim: fail under literal conjunctive reading — released_at 기록과 Result 정정 조건이
+      겹치면 단일 Report.result_status에 finalized와 amended가 동시에 요구된다.
+    what: 같은 규칙은 released_at 기록 시 finalized가 되도록 하고, Result.status가 corrected로 바뀌면
+      amended가 되도록 한다. 두 사건의 동시 발생 또는 정정 후 release에 대한 우선순위가 없다.
+    why: "result_status는 단일 enum 속성이므로 한 시점에 finalized와 amended를 함께 만족할 수 없다. ‘단’이
+      amended 우선 예외를 뜻한다고 해석하면 충돌을 피할 수 있지만, 그 우선순위가 형식 규칙으로 선언되지 않아 통합 구현이 동일한
+      결론을 보장하지 않는다. conflict_pair: materialized-input.md:123의 첫 문장 ↔ 같은 줄의 조건문.
+      satisfiability_note: intra-claim; 허용된 사건 순서에서 두 상태 의무가 중첩된다.
+      modality_note: obligatory; 두 전이 의무 사이의 override 우선순위가 누락됐다.
+      boundary_handoff_note: ‘단’의 정확한 예외 의미는 semantics lens 확인 대상이지만, 우선순위가 없을
+      때의 단일값 충돌은 logic 범위에 남는다."
+    how_to_fix: "전이 우선순위를 명시한다. 예: corrected Result가 하나라도 존재하면 amended가 finalized보다
+      우선하며, release 시점에도 corrected 조건을 먼저 평가한다. 허용 사건 순서와 상태 전이표를 함께 정의한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 임상의가 신뢰하는 Report.result_status를 EMR/LIS 사이의 단일 권위 상태로 제공하는 목적
+      failure_condition: Result 정정이 report release와 동시에 발생하거나 release 전에 발생하는 경우
+      impact: 동일 사건에 대해 한 시스템은 finalized, 다른 시스템은 amended를 선택할 수 있어 권위 상태가 분기된다.
+      evidence_refs:
+        - materialized-input.md:80-83
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: 동일한 단일값 상태를 설정하는 두 조건 규칙 사이에 사건 순서와 override 우선순위가 정의되지 않았다.
+      root_cause_step_id: logic-candidate-002.cause-002
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 겹치는 release·correction 조건에서 finalized와 amended라는 상호 배타적 상태 의무가 발생한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:80-83
+            - materialized-input.md:123
+        - cause_id: logic-candidate-002.cause-002
+          claim: 이 충돌은 두 전이 조건의 우선순위와 동시 사건 처리 규칙이 없는 것의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:123
+      unresolved_beyond_evidence: 자연어 ‘단’을 명시적 override로 간주하는지와 실제 이벤트 직렬화 정책은 문서에 형식화되지 않았다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - enum 속성은 한 시점에 하나의 값만 갖는 단일값 상태로 해석했다.
+  - state_rules의 ‘되어야 한다’는 해당 조건에서 적용되는 의무 규칙으로 해석했다.
+validation:
+  unaddressable_candidates: []
