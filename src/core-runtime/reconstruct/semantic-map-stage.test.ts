@@ -4,7 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
+  authoringPromptContractSha256,
   buildSemanticMapBridgeCallbacks,
+  CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+  codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
@@ -13,6 +16,7 @@ import {
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
   renderSemanticMapProjection,
   resolveSemanticMapCapability,
+  resolveSemanticMapKinds,
   runSemanticMapStage,
   SEMANTIC_MAP_PROMPT_NOTE,
   SEMANTIC_MAP_SEED_PROMPT_NOTE,
@@ -1740,5 +1744,67 @@ describe("semantic-map dispatch breaker (설계 B)", () => {
     expect(repartitioned.breaker.tripped).toBe(true);
     expect(repartitioned.completed_item_ids).toEqual(["obs-1", "obs-5"]);
     expect(repartitioned.incomplete_item_ids).toEqual(["obs-2", "obs-3", "obs-4"]);
+  });
+});
+
+// ── step 6 (multi-artifact design DD6/DD7): code prompt contract 격리 + kind 광고 해석 ──────────────
+
+describe("code authoring prompt contract (step 6 DD6 — fingerprint 격리)", () => {
+  it("is a SEPARATE contract: CG-1 catalog carries no code keys (ct-F2 — registering there would rotate spreadsheet fingerprints)", () => {
+    const cg1Keys = Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT);
+    expect(cg1Keys.length).toBeGreaterThan(0);
+    for (const key of Object.keys(CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)) {
+      expect(cg1Keys).not.toContain(key);
+    }
+    expect(codeAuthoringPromptContractSha256()).not.toBe(authoringPromptContractSha256());
+  });
+
+  it("rotates on any template edit (CG-1 edit-sensitivity pattern) and is non-empty", () => {
+    const baseline = codeAuthoringPromptContractSha256();
+    expect(baseline).toMatch(/^[0-9a-f]{64}$/);
+    const contractKeys = Object.keys(CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT);
+    expect(contractKeys.length).toBeGreaterThan(0); // cardinality guard — an empty contract hashes green vacuously.
+    for (const key of contractKeys) {
+      const edited = { ...CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT, [key]: `${CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT[key]} EDITED` };
+      expect(codeAuthoringPromptContractSha256(edited)).not.toBe(baseline);
+    }
+  });
+});
+
+describe("resolveSemanticMapKinds (step 6 DD7 — 광고 부재 = 기존 계약의 명시적 해석)", () => {
+  it("capability pair absent → [] (stage skip, kind 무의미)", () => {
+    expect(resolveSemanticMapKinds({})).toEqual([]);
+  });
+
+  it("pair present without advertisement → ['spreadsheet'] (legacy author byte-parity)", () => {
+    expect(
+      resolveSemanticMapKinds({ synthesizeSemanticMapNode: synthesize, verifySemanticMapBoundary: verify }),
+    ).toEqual(["spreadsheet"]);
+  });
+
+  it("advertised kinds pass through (deduped)", () => {
+    expect(
+      resolveSemanticMapKinds({
+        synthesizeSemanticMapNode: synthesize,
+        verifySemanticMapBoundary: verify,
+        supportedSemanticMapKinds: ["spreadsheet", "code", "code"],
+      }),
+    ).toEqual(["spreadsheet", "code"]);
+  });
+
+  it("unroutable advertised kind → fail-loud configuration error", () => {
+    expect(() =>
+      resolveSemanticMapKinds({
+        synthesizeSemanticMapNode: synthesize,
+        verifySemanticMapBoundary: verify,
+        supportedSemanticMapKinds: ["document"],
+      }),
+    ).toThrow(/unroutable kind 'document'/);
+  });
+
+  it("one-sided pair still fails loud through the kind resolver (pair rule precedes kind reading)", () => {
+    expect(() =>
+      resolveSemanticMapKinds({ synthesizeSemanticMapNode: synthesize, supportedSemanticMapKinds: ["code"] }),
+    ).toThrow(/capability is a PAIR/);
   });
 });

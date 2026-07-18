@@ -24,6 +24,11 @@ import type {
   SemanticSynthesisInput,
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
+import type {
+  CodeSemanticBoundaryVerifyInput,
+  CodeSemanticSynthesisInput,
+  CodeSemanticSynthesisOutput,
+} from "./comprehension-semantic-map-code.js";
 import { ontologySeedClaimProjections } from "./seed-claim-projections.js";
 
 export const RECONSTRUCT_MOCK_REALIZATION_ENV = REVIEW_MOCK_REALIZATION_ENV;
@@ -73,6 +78,53 @@ export function withMockSemanticMapCapability<T extends object>(author: T): T & 
       input: SemanticBoundaryVerifyInput,
     ): Promise<SemanticBoundaryVerification> {
       return input.boundary.row % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted";
+    },
+  };
+}
+
+/** Code-kind-capable sibling of withMockSemanticMapCapability (multi-artifact design 20260718 DD7 ·
+ *  INV-MOCK-1 boundary): advertises both routable kinds and answers the code envelope variant with
+ *  the same deterministic shape discipline (seam-echo + one region-open boundary; parity verdict). */
+export function withMockCodeSemanticMapCapability<T extends object>(author: T): T & {
+  supportedSemanticMapKinds: readonly ["spreadsheet", "code"];
+  synthesizeSemanticMapNode(
+    input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
+  ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput>;
+  verifySemanticMapBoundary(
+    input: SemanticBoundaryVerifyInput | CodeSemanticBoundaryVerifyInput,
+  ): Promise<SemanticBoundaryVerification>;
+} {
+  const base = withMockSemanticMapCapability(author);
+  return {
+    ...base,
+    supportedSemanticMapKinds: ["spreadsheet", "code"] as const,
+    async synthesizeSemanticMapNode(
+      input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
+    ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput> {
+      if ("target_material_kind" in input && input.target_material_kind === "code") {
+        const seam = input.symbol_seams[0];
+        return {
+          semantic_summary:
+            `mock ${input.node_ref.file}:${input.node_ref.line_start}-${input.node_ref.line_end}` +
+            ` kids=${input.child_summaries.length}`,
+          boundaries: [
+            ...(seam
+              ? [{ line: seam.line, character_before: "seam-prev", character_after: "seam-next" }]
+              : []),
+            { line: input.node_ref.line_start, character_before: "prev", character_after: "next" },
+          ],
+        };
+      }
+      return base.synthesizeSemanticMapNode(input as SemanticSynthesisInput);
+    },
+    async verifySemanticMapBoundary(
+      input: SemanticBoundaryVerifyInput | CodeSemanticBoundaryVerifyInput,
+    ): Promise<SemanticBoundaryVerification> {
+      if ("file" in input.node_ref) {
+        const boundary = input.boundary as CodeSemanticBoundaryVerifyInput["boundary"];
+        return boundary.line % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted";
+      }
+      return base.verifySemanticMapBoundary(input as SemanticBoundaryVerifyInput);
     },
   };
 }

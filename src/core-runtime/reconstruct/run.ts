@@ -344,6 +344,28 @@ import {
   type ReduceTopologyTrace,
   type SemanticNodeKey,
 } from "./comprehension-reduce.js";
+// Step 6 (multi-artifact design 20260718 DD6/DD7/DD9): the code artifact's L2 realization — the
+// stage routes code-kind observations through these; the spreadsheet surfaces above are untouched.
+import {
+  accumulateCodeSemanticMap,
+  assertCodeSynthesisInputBounded,
+  assertCodeSynthesisOutputBounded,
+  buildCodeSynthesisInputForNode,
+  buildCodeSynthesisMeta,
+  projectCodeSemanticMapToSeed,
+  reconcileCodeBoundaries,
+  type CodeSemanticBoundaryVerifyInput,
+  type CodeSemanticSeedProjection,
+  type CodeSemanticSynthesisInput,
+  type CodeSemanticSynthesisOutput,
+} from "./comprehension-semantic-map-code.js";
+import {
+  foldCodeStructureInventory,
+  codeReduceNodeKey,
+  type CodeReduceNode,
+  type CodeReduceRegion,
+} from "./comprehension-reduce-code.js";
+import type { CodeStructureInventory } from "../code-structure-observer.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
   llmTouchFingerprint,
@@ -465,22 +487,35 @@ export interface ReconstructDirectiveAuthor {
     input: ReconstructValueReadStageInput,
   ): Promise<ReconstructValueReadStageOutput>;
   /**
+   * kind 광고 (multi-artifact design 20260718 DD7, optional): the semantic-map artifact kinds this
+   * author's capability pair supports. ABSENT = ["spreadsheet"] — not a code default but the
+   * EXPLICIT reading of the pre-advertisement contract (what a non-advertising author actually
+   * supports), so legacy authors keep byte-identical behavior. Consulted only by the stage's kind
+   * routing (유효 kind = settings 옵트인 ∩ 이 광고); a non-advertised kind's input can never reach
+   * this author — the stage routing is the sole supplier.
+   */
+  readonly supportedSemanticMapKinds?: readonly TargetMaterialKind[];
+  /**
    * Layer-2 semantic-map stage (wiring design 20260702 §15.1): synthesize ONE reduce-tree node's
    * semantic judgment from bounded deterministic facts + child summaries. Non-authoritative /
-   * provisional; the module enforces the source-safe envelope (assertSynthesisInputBounded).
+   * provisional; the module enforces the source-safe envelope (assertSynthesisInputBounded /
+   * assertCodeSynthesisInputBounded). The parameter is a per-artifact union (DD7): the spreadsheet
+   * variant's shape is UNCHANGED (no discriminator added); the code variant carries
+   * target_material_kind:"code" and reaches only authors advertising the code kind.
    * Optional — an author without the PAIR leaves the stage skipped (default-off;
-   * resolveSemanticMapCapability owns the pair rule). No live caller until the W2 stage wiring.
+   * resolveSemanticMapCapability owns the pair rule).
    */
   synthesizeSemanticMapNode?(
-    input: SemanticSynthesisInput,
-  ): Promise<SemanticSynthesisOutput>;
+    input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
+  ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput>;
   /**
    * Independent adversarial re-check of ONE unanchored semantic boundary (design N3: ALL unanchored
    * are re-verified — the only check where structure is blind). A distinct prompt (and optionally a
    * distinct model) from synthesize in production. Optional — paired with synthesizeSemanticMapNode.
+   * Per-artifact union parameter (DD7) — same routing guarantee as synthesize.
    */
   verifySemanticMapBoundary?(
-    input: SemanticBoundaryVerifyInput,
+    input: SemanticBoundaryVerifyInput | CodeSemanticBoundaryVerifyInput,
   ): Promise<SemanticBoundaryVerification>;
   /**
    * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
@@ -588,6 +623,35 @@ export function resolveSemanticMapCapability(
     );
   }
   return hasSynthesize ? "present" : "absent";
+}
+
+/** The semantic-map artifact kinds the stage can route in Phase 1 (multi-artifact design DD7). */
+export const SEMANTIC_MAP_ROUTABLE_KINDS = ["spreadsheet", "code"] as const;
+export type SemanticMapArtifactKind = (typeof SEMANTIC_MAP_ROUTABLE_KINDS)[number];
+
+/**
+ * kind 광고 해석 (DD7): capability pair 부재 → [] (stage skip). 광고 부재 = ["spreadsheet"] —
+ * 기존 계약의 명시적 해석(광고 없는 구 author가 실제로 지원하는 집합; INV-CFG-1 비접촉).
+ * 미지의 kind 광고는 fail-loud 설정 오류 (조용한 라우팅 누락 방지).
+ */
+export function resolveSemanticMapKinds(
+  author: Pick<
+    ReconstructDirectiveAuthor,
+    "synthesizeSemanticMapNode" | "verifySemanticMapBoundary" | "supportedSemanticMapKinds"
+  >,
+): readonly SemanticMapArtifactKind[] {
+  if (resolveSemanticMapCapability(author) === "absent") return [];
+  const advertised = author.supportedSemanticMapKinds;
+  if (advertised === undefined) return ["spreadsheet"];
+  const kinds = [...new Set(advertised)];
+  for (const kind of kinds) {
+    if (!(SEMANTIC_MAP_ROUTABLE_KINDS as readonly string[]).includes(kind)) {
+      throw new Error(
+        `reconstruct: supportedSemanticMapKinds advertises unroutable kind '${kind}' — the semantic-map stage routes only [${SEMANTIC_MAP_ROUTABLE_KINDS.join(", ")}] (fail-loud configuration error; multi-artifact design DD7).`,
+      );
+    }
+  }
+  return kinds as SemanticMapArtifactKind[];
 }
 
 export type ReconstructSemanticAuthorRealization = "direct_call";
@@ -2094,6 +2158,36 @@ export const SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT =
 export const SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT =
   "You are an INDEPENDENT adversarial re-checker for ONE proposed semantic boundary in a spreadsheet column region. The boundary was proposed WITHOUT structural corroboration (no value-shape seam co-locates with it), so your default is to REFUTE it. Input fields: node_ref (the region), boundary (row, character_before, character_after, anchor_status, verification), summary (the region's semantic summary). Confirm ONLY if the boundary is genuinely supported by the summary and the before/after characterization is coherent, specific, and non-redundant; otherwise refute. Reply with STRICT JSON only: {\"verdict\": \"adversarial_confirmed\"} or {\"verdict\": \"adversarial_refuted\"} — the verdict value must be EXACTLY one of those two strings (no synonyms, no other casing) and no additional fields are allowed.";
 
+// ── code semantic-map prompts (step 6 · multi-artifact design DD6) ────────────────────────────────
+// Registered in CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT — NOT in the CG-1 catalog above: the
+// CG-1 sha folds into every SPREADSHEET fingerprint (reduce_prompt_sha256), so cataloging these
+// there would rotate spreadsheet reuse keys and break in-flight spreadsheet resumes (리뷰 ct-F2).
+// The code contract sha folds into the CODE observation fingerprint only (DD6 fingerprint 격리).
+
+/** DD6: the code synthesize prompt — identifier-only envelope (names + doc first line + signature
+ *  first line, O-5); declaration bodies are never provided, so grounding restricts to stated facts. */
+export const CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT =
+  "You are reading ONE code file region through its deterministic symbol structure. No source-code bodies are provided — only structural identity facts. Input fields: target_material_kind (\"code\"), node_ref (file, line_start, line_end), symbol_path (containing declaration labels, outermost first), signal_clusters (symbol-kind tokens present in the region), symbol_seams (lines where the dominant symbol kind changes, with prev_kind/new_kind), symbol_names (declaration identifiers covered by the region; symbol_names_total is the AUTHORITATIVE count when the list was bounded), doc_comment_first_line (the author's stated purpose — first line only), signature_line (the declaration's first source line), child_summaries (semantic summaries of child sub-regions; present only on merge nodes). Reply with STRICT JSON only, no prose outside it: {\"semantic_summary\": string, \"boundaries\": [{\"line\": integer, \"character_before\": string, \"character_after\": string}]}. semantic_summary: at most 600 characters — one plain-language reading of what this region appears to implement, grounded ONLY in the given identifiers, kind tokens, seams, doc/signature lines, and child summaries; never invent function bodies, algorithms, or behavior you were not shown. boundaries: at most 16 items — lines where you judge the PURPOSE of the code changes; character_before/character_after describe the character of the code before/after that line in structural terms, each at most 120 characters; propose ONLY boundaries you can ground in the input — an empty array is honest and acceptable. No additional fields.\n\n" +
+  "OUTPUT DISCIPLINE: Reply with ONLY the raw JSON object. Do NOT wrap it in markdown code fences or backticks, and do NOT write any text before or after the JSON.\n" +
+  "GROUNDING: Describe ONLY what the given identifiers, kind tokens, doc first lines, and signature lines state. Do not guess implementation details, runtime behavior, or unstated dependencies; if nothing beyond the structure is stated, say the region is the declarations it names.\n" +
+  "BOUNDARIES: A boundary's line should correspond to a symbol_seam (or a transition a child_summary explicitly reports). Do not invent split points at lines with no supporting seam.";
+
+/** DD6: the code adversarial verify prompt — refute-by-default lens for ONE unanchored boundary. */
+export const CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT =
+  "You are an INDEPENDENT adversarial re-checker for ONE proposed semantic boundary in a code file region. The boundary was proposed WITHOUT structural corroboration (no symbol-kind seam co-locates with it), so your default is to REFUTE it. Input fields: node_ref (the region), boundary (line, character_before, character_after, anchor_status, verification), summary (the region's semantic summary). Confirm ONLY if the boundary is genuinely supported by the summary and the before/after characterization is coherent, specific, and non-redundant; otherwise refute. Reply with STRICT JSON only: {\"verdict\": \"adversarial_confirmed\"} or {\"verdict\": \"adversarial_refuted\"} — the verdict value must be EXACTLY one of those two strings (no synonyms, no other casing) and no additional fields are allowed.";
+
+/** W4-note twin for CODE observations (DD9): rendered inline with a code observation's semantic-map
+ *  replace. The spreadsheet note above is byte-frozen (CG-1) — a shared reword would rotate every
+ *  spreadsheet reuse key, so the code surface gets its own note in the CODE contract. */
+export const CODE_SEMANTIC_MAP_PROMPT_NOTE =
+  "semantic_map is a NON-AUTHORITATIVE, provisional hierarchical reading of code file regions (accumulated bottom-up over deterministic symbol-structure trees). Each node carries a summary and boundary candidates; disposition structural_location_only means a symbol-kind seam co-locates (LOCATION corroborated, content NOT verified); adversarial_confirmed means an independent re-check agreed (still provisional). The *_total counts are AUTHORITATIVE — a shorter list was bounded for prompt size, never silently dropped. Treat as hints; the deterministic structure inventory remains the structural authority.";
+
+/** Seed SYSTEM-prompt append for runs whose semantic_map payload contains CODE entries — additive:
+ *  absent when no code map exists, so spreadsheet-only seed prompts stay byte-identical. */
+export const CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE =
+  "When userPayload.semantic_map contains code-file entries you MAY additionally consult them (they extend any exclusive input-field list above). " +
+  CODE_SEMANTIC_MAP_PROMPT_NOTE;
+
 // ── Real-LLM capability runtime bounds + dispatch machinery (design 20260703 §2/§4) ───────────────
 
 /** §10.F5: maxTokens is a provider HINT, not a runtime cap — these deterministic caps are the
@@ -2198,6 +2292,45 @@ function projectSemanticMapVerifyVerdict(raw: Record<string, unknown>): Semantic
     throw new Error(`semantic-map verify author: verdict must be EXACTLY one of ${ADVERSARIAL_RESULTS.join("|")} — got '${String(verdict)}' (no synonym mapping, fail-closed).`);
   }
   return verdict as SemanticBoundaryVerification;
+}
+
+/** §10.F2 declared-field projection, CODE variant (step 6 DD6): line-based boundary vocabulary,
+ *  same runtime caps and fail-closed discipline as the spreadsheet projection. */
+export function projectCodeSemanticMapSynthesisOutput(raw: Record<string, unknown>): CodeSemanticSynthesisOutput {
+  const summary = raw.semantic_summary;
+  if (typeof summary !== "string" || summary.trim().length === 0) {
+    throw new Error("code-semantic-map synthesize author: semantic_summary must be a non-empty string (fail-closed).");
+  }
+  if (summary.length > SEMANTIC_MAP_SUMMARY_CHAR_CAP) {
+    throw new Error(`code-semantic-map synthesize author: semantic_summary exceeds the ${SEMANTIC_MAP_SUMMARY_CHAR_CAP}-char runtime cap (§10.F5 fail-closed, got ${summary.length}).`);
+  }
+  const rawBoundaries = raw.boundaries;
+  if (!Array.isArray(rawBoundaries)) {
+    throw new Error("code-semantic-map synthesize author: boundaries must be an array (fail-closed).");
+  }
+  if (rawBoundaries.length > SEMANTIC_MAP_BOUNDARIES_PER_NODE_CAP) {
+    throw new Error(`code-semantic-map synthesize author: ${rawBoundaries.length} boundaries exceed the per-node cap ${SEMANTIC_MAP_BOUNDARIES_PER_NODE_CAP} (§10.F5 fail-closed).`);
+  }
+  const boundaries = rawBoundaries.map((entry, index) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}] must be an object (fail-closed).`);
+    }
+    const candidate = entry as Record<string, unknown>;
+    const line = candidate.line;
+    const before = candidate.character_before;
+    const after = candidate.character_after;
+    if (!Number.isSafeInteger(line)) {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}].line must be a safe integer (fail-closed).`);
+    }
+    if (typeof before !== "string" || typeof after !== "string") {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}] character fields must be strings (fail-closed).`);
+    }
+    if (before.length > SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP || after.length > SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP) {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}] character field exceeds the ${SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP}-char cap (§10.F5 fail-closed).`);
+    }
+    return { line: line as number, character_before: before, character_after: after };
+  });
+  return { semantic_summary: summary, boundaries };
 }
 
 /** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
@@ -3288,8 +3421,15 @@ export async function runSemanticMapStage(args: {
     return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null, aggregateFingerprint: null };
   }
   assertSemanticMapStageConfig(args.config);
-  const rawSynthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
-  const rawVerifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(args.directiveAuthor);
+  // The author methods take the per-artifact union (DD7); this SPREADSHEET dispatch path narrows to
+  // the spreadsheet view — the stage routing is the sole supplier, so a code input can never flow
+  // through these bindings (code observations dispatch through their own typed bindings).
+  const rawSynthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(
+    args.directiveAuthor,
+  ) as (input: SemanticSynthesisInput) => Promise<SemanticSynthesisOutput>;
+  const rawVerifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(
+    args.directiveAuthor,
+  ) as (input: SemanticBoundaryVerifyInput) => Promise<SemanticBoundaryVerification>;
   const cfg = args.config;
   const priorDispatchSpend = args.priorDispatchSpend ?? {
     synthesize: 0,
@@ -10565,6 +10705,38 @@ export function authoringPromptContractSha256(
   }));
 }
 
+// ── CODE authoring prompt contract (step 6 · multi-artifact design DD6) ───────────────────────────
+// A SEPARATE contract, same structure/edit-rotation discipline as CG-1 — deliberately NOT merged
+// into RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: authoringPromptContractSha256 folds into every
+// SPREADSHEET observation fingerprint (reduce_prompt_sha256), so registering code prompts there
+// would rotate spreadsheet reuse keys and fail in-flight spreadsheet resumes with
+// source_ref_mismatch (리뷰 ct-F2). This sha folds into the CODE observation fingerprint only;
+// code fingerprints reach the seed reuse key through the aggregate fingerprint, so rotation
+// coverage is complete (DD6). Concept split 근거: fingerprint 격리라는 런타임 동작 차이.
+
+export const CODE_AUTHORING_PROMPT_CONTRACT_VERSION =
+  "reconstruct_code_authoring_prompt_contract:v1";
+
+export const CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
+  code_semantic_map_synthesize: CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+  code_semantic_map_verify: CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
+  code_observation_semantic_map_note: CODE_SEMANTIC_MAP_PROMPT_NOTE,
+  code_ontology_seed_semantic_map_note: CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
+};
+
+/** sha256 of the code authoring prompt contract (DD6) — folded into the CODE observation
+ *  fingerprint (semanticMapCodeObservationFingerprint) so editing any code prompt/note rotates
+ *  code reuse keys tautologically while spreadsheet fingerprints stay untouched. Parameterized
+ *  only for the edit-sensitivity test (CG-1 pattern); the fold always calls it with no argument. */
+export function codeAuthoringPromptContractSha256(
+  contract: Record<string, string> = CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+): string {
+  return sha256Text(stableJson({
+    contract_version: CODE_AUTHORING_PROMPT_CONTRACT_VERSION,
+    templates: contract,
+  }));
+}
+
 export function createDirectCallReconstructDirectiveAuthor(args: {
   llmConfig?: Partial<LlmCallConfig>;
   /**
@@ -10765,14 +10937,23 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     // absent (default) keeps the stage skipped and the merged wiring cut's off-path untouched.
     ...(args.enableSemanticMapAuthoring === true
       ? {
-        async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
+        // Step 6 (DD7): the production pair advertises BOTH routable kinds — the settings opt-in
+        // (`semantic_map_code`, default off) remains the rollout guard, so advertising alone keeps
+        // spreadsheet-only byte-parity (유효 kind = settings ∩ 광고).
+        supportedSemanticMapKinds: SEMANTIC_MAP_ROUTABLE_KINDS,
+        async synthesizeSemanticMapNode(
+          input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
+        ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput> {
+          // DD6/DD7 discriminator: only the code variant carries target_material_kind — the
+          // spreadsheet envelope is byte-frozen (no discriminator added to the existing contract).
+          const isCode = "target_material_kind" in input && input.target_material_kind === "code";
           const capability = args.semanticMapDispatchCapabilities?.synthesize;
           const raw = await callSemanticMapJsonAuthorWithRetry({
             llmCall: capability ? sealedLlmCall(capability) : llmCall,
             llmConfig: semanticMapSynthesizeLlmConfig,
             telemetry,
-            artifactName: "semantic-map-synthesize",
-            systemPrompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+            artifactName: isCode ? "code-semantic-map-synthesize" : "semantic-map-synthesize",
+            systemPrompt: isCode ? CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT : SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
             userPayload: input,
             maxTokens: 900,
             ...(args.semanticMapDispatchCapabilities
@@ -10784,16 +10965,19 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 }
               : {}),
           });
-          return projectSemanticMapSynthesisOutput(raw);
+          return isCode ? projectCodeSemanticMapSynthesisOutput(raw) : projectSemanticMapSynthesisOutput(raw);
         },
-        async verifySemanticMapBoundary(input: SemanticBoundaryVerifyInput): Promise<SemanticBoundaryVerification> {
+        async verifySemanticMapBoundary(
+          input: SemanticBoundaryVerifyInput | CodeSemanticBoundaryVerifyInput,
+        ): Promise<SemanticBoundaryVerification> {
+          const isCode = "file" in input.node_ref;
           const capability = args.semanticMapDispatchCapabilities?.verify;
           const raw = await callSemanticMapJsonAuthorWithRetry({
             llmCall: capability ? sealedLlmCall(capability) : llmCall,
             llmConfig,
             telemetry,
-            artifactName: "semantic-map-verify",
-            systemPrompt: SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
+            artifactName: isCode ? "code-semantic-map-verify" : "semantic-map-verify",
+            systemPrompt: isCode ? CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT : SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
             userPayload: input,
             maxTokens: 300,
             ...(args.semanticMapDispatchCapabilities
