@@ -51,3 +51,4 @@ development-records/benchmark/review-cert/*/shim/
 development-records/benchmark/review-cert/20260712-101717/capture/
 development-records/benchmark/review-cert/20260712-101717/review-cert-record.json
 development-records/benchmark/review-cert/20260712-101717/runs/rows.progress.jsonl
+scripts/.code-probe-out/

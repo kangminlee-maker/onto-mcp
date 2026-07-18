@@ -1,0 +1,466 @@
+{
+  "aggregate_fingerprint": "a044d1f591ab9e3b01e49bc3e5e390366dba016cc21f1d18471643766cb3877f",
+  "census": {
+    "author_id": "golden-mock-author",
+    "by_observation": [
+      {
+        "columns": [
+          {
+            "adversarial_confirmed": 0,
+            "adversarial_refuted": 1,
+            "anchored": 1,
+            "column_index": 0,
+            "frontier_accumulating": 0,
+            "frontier_frontier": 1,
+            "frontier_subsumed": 2,
+            "produced_nodes": 1,
+            "reason": null,
+            "sheet": "Ledger",
+            "status": "produced",
+            "synthesize_calls": 1,
+            "unanchored": 1,
+            "verify_calls": 1
+          },
+          {
+            "adversarial_confirmed": 0,
+            "adversarial_refuted": 1,
+            "anchored": 0,
+            "column_index": 0,
+            "frontier_accumulating": 0,
+            "frontier_frontier": 1,
+            "frontier_subsumed": 0,
+            "produced_nodes": 1,
+            "reason": null,
+            "sheet": "Notes",
+            "status": "produced",
+            "synthesize_calls": 1,
+            "unanchored": 1,
+            "verify_calls": 1
+          }
+        ],
+        "fingerprint": "48f49fa45ac010375d9f26ba153b916608667a10c4ff5d74c668858f4a40f594",
+        "map_present": true,
+        "observation_id": "obs-golden-capped",
+        "skip_reason": null
+      },
+      {
+        "columns": [
+          {
+            "adversarial_confirmed": 0,
+            "adversarial_refuted": 0,
+            "anchored": 0,
+            "column_index": 0,
+            "frontier_accumulating": 0,
+            "frontier_frontier": 0,
+            "frontier_subsumed": 0,
+            "produced_nodes": 0,
+            "reason": null,
+            "sheet": "Blank",
+            "status": "empty",
+            "synthesize_calls": 0,
+            "unanchored": 0,
+            "verify_calls": 0
+          },
+          {
+            "adversarial_confirmed": 0,
+            "adversarial_refuted": 1,
+            "anchored": 0,
+            "column_index": 1,
+            "frontier_accumulating": 0,
+            "frontier_frontier": 1,
+            "frontier_subsumed": 0,
+            "produced_nodes": 1,
+            "reason": null,
+            "sheet": "Blank",
+            "status": "produced",
+            "synthesize_calls": 1,
+            "unanchored": 1,
+            "verify_calls": 1
+          }
+        ],
+        "fingerprint": "6f93930f741f574e1aacab4f303c4d782b3e4e681eeec827c1364c498a24f4cb",
+        "map_present": true,
+        "observation_id": "obs-golden-empty",
+        "skip_reason": null
+      },
+      {
+        "columns": [
+          {
+            "adversarial_confirmed": 3,
+            "adversarial_refuted": 0,
+            "anchored": 2,
+            "column_index": 0,
+            "frontier_accumulating": 1,
+            "frontier_frontier": 2,
+            "frontier_subsumed": 2,
+            "produced_nodes": 3,
+            "reason": null,
+            "sheet": "Main",
+            "status": "produced",
+            "synthesize_calls": 3,
+            "unanchored": 3,
+            "verify_calls": 3
+          },
+          {
+            "adversarial_confirmed": 1,
+            "adversarial_refuted": 0,
+            "anchored": 0,
+            "column_index": 1,
+            "frontier_accumulating": 0,
+            "frontier_frontier": 1,
+            "frontier_subsumed": 0,
+            "produced_nodes": 1,
+            "reason": null,
+            "sheet": "Main",
+            "status": "produced",
+            "synthesize_calls": 1,
+            "unanchored": 1,
+            "verify_calls": 1
+          }
+        ],
+        "fingerprint": "23abcccf04df65e34c3991b0094e92c96ed088adc99b31eef288d285c7871477",
+        "map_present": true,
+        "observation_id": "obs-golden-plain",
+        "skip_reason": null
+      }
+    ],
+    "max_synthesize_calls": 2400,
+    "max_verify_calls": 1000,
+    "observations_map_absent": 0,
+    "observations_map_present": 3,
+    "observations_total": 3,
+    "schema_version": "1",
+    "synthesize_calls_total": 7,
+    "synthesize_model_identity": "golden-model",
+    "verify_calls_total": 7,
+    "verify_model_identity": "golden-verify-model"
+  },
+  "gate_logic_sha256_informational": "bf9299308934c9c3d238c6c1780f8e09e970cbbd303d8f84b0ed07ea6fd3ae9f",
+  "ground": {
+    "obs-golden-capped/Ledger#0": {
+      "frontier_modes": {
+        "Ledger#0:1-40": "subsumed",
+        "Ledger#0:1-80": "frontier",
+        "Ledger#0:41-80": "subsumed"
+      },
+      "node_ground_hashes": {
+        "Ledger#0:1-40": "19a1c5fadd45862f6a03fbadf0f061c1f56fc710e87172ecdeb52dc418562ad5",
+        "Ledger#0:1-80": "327cc90b7beea90c88a20452990b05eea0eaaf09ed6aa21244a7e81937045006",
+        "Ledger#0:41-80": "c6423937c9a203530b3e602f8a811e86fb7956ae7e362edbe5157660c53d6700"
+      },
+      "root_ground_hash": "327cc90b7beea90c88a20452990b05eea0eaaf09ed6aa21244a7e81937045006",
+      "root_key": "Ledger#0:1-80"
+    },
+    "obs-golden-capped/Notes#0": {
+      "frontier_modes": {
+        "Notes#0:3-5": "frontier"
+      },
+      "node_ground_hashes": {
+        "Notes#0:3-5": "4f15e864b2ef956e48fa5df62e3bbb75ba6f4e2d96abca8696acf192e1946224"
+      },
+      "root_ground_hash": "4f15e864b2ef956e48fa5df62e3bbb75ba6f4e2d96abca8696acf192e1946224",
+      "root_key": "Notes#0:3-5"
+    },
+    "obs-golden-empty/Blank#0": {
+      "empty": true
+    },
+    "obs-golden-empty/Blank#1": {
+      "frontier_modes": {
+        "Blank#1:1-2": "frontier"
+      },
+      "node_ground_hashes": {
+        "Blank#1:1-2": "97f4fd313cdf4a0625b51a1bcba950464d616a315d20091d431aab8893777a8d"
+      },
+      "root_ground_hash": "97f4fd313cdf4a0625b51a1bcba950464d616a315d20091d431aab8893777a8d",
+      "root_key": "Blank#1:1-2"
+    },
+    "obs-golden-plain/Main#0": {
+      "frontier_modes": {
+        "Main#0:12-18": "frontier",
+        "Main#0:2-11": "frontier",
+        "Main#0:2-18": "accumulating",
+        "Main#0:2-6": "subsumed",
+        "Main#0:7-11": "subsumed"
+      },
+      "node_ground_hashes": {
+        "Main#0:12-18": "29f69d26a96eb4b228b9f7a6442fcdded281f1ce471c5dd240ad48e5bfcaf639",
+        "Main#0:2-11": "758b83074435d1d660fc501ced46aac944ce258f40db0322fdf2e3f4ed0c45df",
+        "Main#0:2-18": "aca12f35de54993875669c0a71487af292d7886146e080bc4f369448056a7392",
+        "Main#0:2-6": "3d94fac9740d83afbd0fead030fe56dcf55a67de16a013bc4f0aa4f5df95b336",
+        "Main#0:7-11": "d8e149a82a267086bebfa498f05e283accf9912d3fe7bdd3949ebbcf23e1ee05"
+      },
+      "root_ground_hash": "aca12f35de54993875669c0a71487af292d7886146e080bc4f369448056a7392",
+      "root_key": "Main#0:2-18"
+    },
+    "obs-golden-plain/Main#1": {
+      "frontier_modes": {
+        "Main#1:2-18": "frontier"
+      },
+      "node_ground_hashes": {
+        "Main#1:2-18": "a176096697d173b45016eeec5c271cf5902e32d68591c0a98e87db53bdfb695e"
+      },
+      "root_ground_hash": "a176096697d173b45016eeec5c271cf5902e32d68591c0a98e87db53bdfb695e",
+      "root_key": "Main#1:2-18"
+    }
+  },
+  "llm_facing_calls": [
+    {
+      "input_json": "{\"child_summaries\":[],\"format_clusters\":[\"decimal\",\"text\"],\"node_ref\":{\"column_index\":0,\"row_end\":80,\"row_start\":1,\"sheet\":\"Ledger\"},\"value_shape_seams\":[{\"new_shape\":\"text\",\"prev_shape\":\"decimal\",\"row\":41}]}",
+      "kind": "synthesize",
+      "output_json": "{\"boundaries\":[{\"character_after\":\"seam-next\",\"character_before\":\"seam-prev\",\"row\":41},{\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":1}],\"semantic_summary\":\"mock Ledger#0:1-80 kids=0\"}"
+    },
+    {
+      "input_json": "{\"boundary\":{\"anchor_status\":\"unanchored\",\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":1,\"verification\":\"unverified\"},\"node_ref\":{\"column_index\":0,\"row_end\":80,\"row_start\":1,\"sheet\":\"Ledger\"},\"summary\":\"mock Ledger#0:1-80 kids=0\"}",
+      "kind": "verify",
+      "output_json": "\"adversarial_refuted\""
+    },
+    {
+      "input_json": "{\"child_summaries\":[],\"format_clusters\":[\"text\"],\"node_ref\":{\"column_index\":0,\"row_end\":5,\"row_start\":3,\"sheet\":\"Notes\"},\"value_shape_seams\":[]}",
+      "kind": "synthesize",
+      "output_json": "{\"boundaries\":[{\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":3}],\"semantic_summary\":\"mock Notes#0:3-5 kids=0\"}"
+    },
+    {
+      "input_json": "{\"boundary\":{\"anchor_status\":\"unanchored\",\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":3,\"verification\":\"unverified\"},\"node_ref\":{\"column_index\":0,\"row_end\":5,\"row_start\":3,\"sheet\":\"Notes\"},\"summary\":\"mock Notes#0:3-5 kids=0\"}",
+      "kind": "verify",
+      "output_json": "\"adversarial_refuted\""
+    },
+    {
+      "input_json": "{\"child_summaries\":[],\"format_clusters\":[\"int\"],\"node_ref\":{\"column_index\":1,\"row_end\":2,\"row_start\":1,\"sheet\":\"Blank\"},\"value_shape_seams\":[]}",
+      "kind": "synthesize",
+      "output_json": "{\"boundaries\":[{\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":1}],\"semantic_summary\":\"mock Blank#1:1-2 kids=0\"}"
+    },
+    {
+      "input_json": "{\"boundary\":{\"anchor_status\":\"unanchored\",\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":1,\"verification\":\"unverified\"},\"node_ref\":{\"column_index\":1,\"row_end\":2,\"row_start\":1,\"sheet\":\"Blank\"},\"summary\":\"mock Blank#1:1-2 kids=0\"}",
+      "kind": "verify",
+      "output_json": "\"adversarial_refuted\""
+    },
+    {
+      "input_json": "{\"child_summaries\":[],\"format_clusters\":[\"int\",\"iso-date\"],\"node_ref\":{\"column_index\":0,\"row_end\":11,\"row_start\":2,\"sheet\":\"Main\"},\"value_shape_seams\":[{\"new_shape\":\"iso-date\",\"prev_shape\":\"int\",\"row\":7}]}",
+      "kind": "synthesize",
+      "output_json": "{\"boundaries\":[{\"character_after\":\"seam-next\",\"character_before\":\"seam-prev\",\"row\":7},{\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":2}],\"semantic_summary\":\"mock Main#0:2-11 kids=0\"}"
+    },
+    {
+      "input_json": "{\"boundary\":{\"anchor_status\":\"unanchored\",\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":2,\"verification\":\"unverified\"},\"node_ref\":{\"column_index\":0,\"row_end\":11,\"row_start\":2,\"sheet\":\"Main\"},\"summary\":\"mock Main#0:2-11 kids=0\"}",
+      "kind": "verify",
+      "output_json": "\"adversarial_confirmed\""
+    },
+    {
+      "input_json": "{\"child_summaries\":[],\"format_clusters\":[\"text\"],\"node_ref\":{\"column_index\":0,\"row_end\":18,\"row_start\":12,\"sheet\":\"Main\"},\"value_shape_seams\":[]}",
+      "kind": "synthesize",
+      "output_json": "{\"boundaries\":[{\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":12}],\"semantic_summary\":\"mock Main#0:12-18 kids=0\"}"
+    },
+    {
+      "input_json": "{\"boundary\":{\"anchor_status\":\"unanchored\",\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":12,\"verification\":\"unverified\"},\"node_ref\":{\"column_index\":0,\"row_end\":18,\"row_start\":12,\"sheet\":\"Main\"},\"summary\":\"mock Main#0:12-18 kids=0\"}",
+      "kind": "verify",
+      "output_json": "\"adversarial_confirmed\""
+    },
+    {
+      "input_json": "{\"child_summaries\":[{\"key\":\"Main#0:2-11\",\"summary\":\"mock Main#0:2-11 kids=0\"},{\"key\":\"Main#0:12-18\",\"summary\":\"mock Main#0:12-18 kids=0\"}],\"format_clusters\":[\"int\",\"iso-date\",\"text\"],\"node_ref\":{\"column_index\":0,\"row_end\":18,\"row_start\":2,\"sheet\":\"Main\"},\"value_shape_seams\":[{\"new_shape\":\"iso-date\",\"prev_shape\":\"int\",\"row\":7},{\"new_shape\":\"text\",\"prev_shape\":\"iso-date\",\"row\":12}]}",
+      "kind": "synthesize",
+      "output_json": "{\"boundaries\":[{\"character_after\":\"seam-next\",\"character_before\":\"seam-prev\",\"row\":7},{\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":2}],\"semantic_summary\":\"mock Main#0:2-18 kids=2\"}"
+    },
+    {
+      "input_json": "{\"boundary\":{\"anchor_status\":\"unanchored\",\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":2,\"verification\":\"unverified\"},\"node_ref\":{\"column_index\":0,\"row_end\":18,\"row_start\":2,\"sheet\":\"Main\"},\"summary\":\"mock Main#0:2-18 kids=2\"}",
+      "kind": "verify",
+      "output_json": "\"adversarial_confirmed\""
+    },
+    {
+      "input_json": "{\"child_summaries\":[],\"format_clusters\":[\"text\"],\"node_ref\":{\"column_index\":1,\"row_end\":18,\"row_start\":2,\"sheet\":\"Main\"},\"value_shape_seams\":[]}",
+      "kind": "synthesize",
+      "output_json": "{\"boundaries\":[{\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":2}],\"semantic_summary\":\"mock Main#1:2-18 kids=0\"}"
+    },
+    {
+      "input_json": "{\"boundary\":{\"anchor_status\":\"unanchored\",\"character_after\":\"next\",\"character_before\":\"prev\",\"row\":2,\"verification\":\"unverified\"},\"node_ref\":{\"column_index\":1,\"row_end\":18,\"row_start\":2,\"sheet\":\"Main\"},\"summary\":\"mock Main#1:2-18 kids=0\"}",
+      "kind": "verify",
+      "output_json": "\"adversarial_confirmed\""
+    }
+  ],
+  "projections": {
+    "obs-golden-capped": {
+      "authority": "non_authoritative",
+      "nodes": [
+        {
+          "boundaries": [
+            {
+              "character_after": "seam-next",
+              "character_before": "seam-prev",
+              "disposition": "structural_location_only",
+              "row": 41
+            }
+          ],
+          "node_ref": {
+            "column_index": 0,
+            "row_end": 80,
+            "row_start": 1,
+            "sheet": "Ledger"
+          },
+          "semantic_summary": "mock Ledger#0:1-80 kids=0"
+        },
+        {
+          "boundaries": [],
+          "node_ref": {
+            "column_index": 0,
+            "row_end": 5,
+            "row_start": 3,
+            "sheet": "Notes"
+          },
+          "semantic_summary": "mock Notes#0:3-5 kids=0"
+        }
+      ],
+      "nodes_total": 2,
+      "provisional": true,
+      "refuted_disclosure": [
+        {
+          "character_after": "next",
+          "character_before": "prev",
+          "node_ref": {
+            "column_index": 0,
+            "row_end": 80,
+            "row_start": 1,
+            "sheet": "Ledger"
+          },
+          "row": 1
+        },
+        {
+          "character_after": "next",
+          "character_before": "prev",
+          "node_ref": {
+            "column_index": 0,
+            "row_end": 5,
+            "row_start": 3,
+            "sheet": "Notes"
+          },
+          "row": 3
+        }
+      ],
+      "refuted_disclosure_total": 2,
+      "unanchored_unverified_total": 2
+    },
+    "obs-golden-empty": {
+      "authority": "non_authoritative",
+      "nodes": [
+        {
+          "boundaries": [],
+          "node_ref": {
+            "column_index": 1,
+            "row_end": 2,
+            "row_start": 1,
+            "sheet": "Blank"
+          },
+          "semantic_summary": "mock Blank#1:1-2 kids=0"
+        }
+      ],
+      "nodes_total": 1,
+      "provisional": true,
+      "refuted_disclosure": [
+        {
+          "character_after": "next",
+          "character_before": "prev",
+          "node_ref": {
+            "column_index": 1,
+            "row_end": 2,
+            "row_start": 1,
+            "sheet": "Blank"
+          },
+          "row": 1
+        }
+      ],
+      "refuted_disclosure_total": 1,
+      "unanchored_unverified_total": 1
+    },
+    "obs-golden-plain": {
+      "authority": "non_authoritative",
+      "nodes": [
+        {
+          "boundaries": [
+            {
+              "character_after": "next",
+              "character_before": "prev",
+              "disposition": "adversarial_confirmed",
+              "row": 12
+            }
+          ],
+          "node_ref": {
+            "column_index": 0,
+            "row_end": 18,
+            "row_start": 12,
+            "sheet": "Main"
+          },
+          "semantic_summary": "mock Main#0:12-18 kids=0"
+        },
+        {
+          "boundaries": [
+            {
+              "character_after": "seam-next",
+              "character_before": "seam-prev",
+              "disposition": "structural_location_only",
+              "row": 7
+            },
+            {
+              "character_after": "next",
+              "character_before": "prev",
+              "disposition": "adversarial_confirmed",
+              "row": 2
+            }
+          ],
+          "node_ref": {
+            "column_index": 0,
+            "row_end": 11,
+            "row_start": 2,
+            "sheet": "Main"
+          },
+          "semantic_summary": "mock Main#0:2-11 kids=0"
+        },
+        {
+          "boundaries": [
+            {
+              "character_after": "seam-next",
+              "character_before": "seam-prev",
+              "disposition": "structural_location_only",
+              "row": 7
+            },
+            {
+              "character_after": "next",
+              "character_before": "prev",
+              "disposition": "adversarial_confirmed",
+              "row": 2
+            }
+          ],
+          "node_ref": {
+            "column_index": 0,
+            "row_end": 18,
+            "row_start": 2,
+            "sheet": "Main"
+          },
+          "semantic_summary": "mock Main#0:2-18 kids=2"
+        },
+        {
+          "boundaries": [
+            {
+              "character_after": "next",
+              "character_before": "prev",
+              "disposition": "adversarial_confirmed",
+              "row": 2
+            }
+          ],
+          "node_ref": {
+            "column_index": 1,
+            "row_end": 18,
+            "row_start": 2,
+            "sheet": "Main"
+          },
+          "semantic_summary": "mock Main#1:2-18 kids=0"
+        }
+      ],
+      "nodes_total": 4,
+      "provisional": true,
+      "refuted_disclosure": [],
+      "refuted_disclosure_total": 0,
+      "unanchored_unverified_total": 0
+    }
+  },
+  "sidecars": {
+    "comprehension/semantic-map-census.yaml": "schema_version: \"1\"\nobservations_total: 3\nobservations_map_present: 3\nobservations_map_absent: 0\nsynthesize_calls_total: 7\nverify_calls_total: 7\nmax_synthesize_calls: 2400\nmax_verify_calls: 1000\nauthor_id: golden-mock-author\nsynthesize_model_identity: golden-model\nverify_model_identity: golden-verify-model\nby_observation:\n  - observation_id: obs-golden-capped\n    map_present: true\n    skip_reason: null\n    fingerprint: 48f49fa45ac010375d9f26ba153b916608667a10c4ff5d74c668858f4a40f594\n    columns:\n      - sheet: Ledger\n        column_index: 0\n        status: produced\n        reason: null\n        produced_nodes: 1\n        frontier_accumulating: 0\n        frontier_frontier: 1\n        frontier_subsumed: 2\n        anchored: 1\n        unanchored: 1\n        adversarial_confirmed: 0\n        adversarial_refuted: 1\n        synthesize_calls: 1\n        verify_calls: 1\n      - sheet: Notes\n        column_index: 0\n        status: produced\n        reason: null\n        produced_nodes: 1\n        frontier_accumulating: 0\n        frontier_frontier: 1\n        frontier_subsumed: 0\n        anchored: 0\n        unanchored: 1\n        adversarial_confirmed: 0\n        adversarial_refuted: 1\n        synthesize_calls: 1\n        verify_calls: 1\n  - observation_id: obs-golden-empty\n    map_present: true\n    skip_reason: null\n    fingerprint: 6f93930f741f574e1aacab4f303c4d782b3e4e681eeec827c1364c498a24f4cb\n    columns:\n      - sheet: Blank\n        column_index: 0\n        status: empty\n        reason: null\n        produced_nodes: 0\n        frontier_accumulating: 0\n        frontier_frontier: 0\n        frontier_subsumed: 0\n        anchored: 0\n        unanchored: 0\n        adversarial_confirmed: 0\n        adversarial_refuted: 0\n        synthesize_calls: 0\n        verify_calls: 0\n      - sheet: Blank\n        column_index: 1\n        status: produced\n        reason: null\n        produced_nodes: 1\n        frontier_accumulating: 0\n        frontier_frontier: 1\n        frontier_subsumed: 0\n        anchored: 0\n        unanchored: 1\n        adversarial_confirmed: 0\n        adversarial_refuted: 1\n        synthesize_calls: 1\n        verify_calls: 1\n  - observation_id: obs-golden-plain\n    map_present: true\n    skip_reason: null\n    fingerprint: 23abcccf04df65e34c3991b0094e92c96ed088adc99b31eef288d285c7871477\n    columns:\n      - sheet: Main\n        column_index: 0\n        status: produced\n        reason: null\n        produced_nodes: 3\n        frontier_accumulating: 1\n        frontier_frontier: 2\n        frontier_subsumed: 2\n        anchored: 2\n        unanchored: 3\n        adversarial_confirmed: 3\n        adversarial_refuted: 0\n        synthesize_calls: 3\n        verify_calls: 3\n      - sheet: Main\n        column_index: 1\n        status: produced\n        reason: null\n        produced_nodes: 1\n        frontier_accumulating: 0\n        frontier_frontier: 1\n        frontier_subsumed: 0\n        anchored: 0\n        unanchored: 1\n        adversarial_confirmed: 1\n        adversarial_refuted: 0\n        synthesize_calls: 1\n        verify_calls: 1\n",
+    "comprehension/semantic-map.yaml": "schema_version: \"1\"\nobservations:\n  - observation_id: obs-golden-capped\n    projection:\n      authority: non_authoritative\n      provisional: true\n      nodes:\n        - node_ref:\n            sheet: Ledger\n            column_index: 0\n            row_start: 1\n            row_end: 80\n          semantic_summary: mock Ledger#0:1-80 kids=0\n          boundaries:\n            - row: 41\n              character_before: seam-prev\n              character_after: seam-next\n              disposition: structural_location_only\n        - node_ref:\n            sheet: Notes\n            column_index: 0\n            row_start: 3\n            row_end: 5\n          semantic_summary: mock Notes#0:3-5 kids=0\n          boundaries: []\n      nodes_total: 2\n      refuted_disclosure:\n        - node_ref:\n            sheet: Ledger\n            column_index: 0\n            row_start: 1\n            row_end: 80\n          row: 1\n          character_before: prev\n          character_after: next\n        - node_ref:\n            sheet: Notes\n            column_index: 0\n            row_start: 3\n            row_end: 5\n          row: 3\n          character_before: prev\n          character_after: next\n      refuted_disclosure_total: 2\n      unanchored_unverified_total: 2\n    node_epochs:\n      - key: Ledger#0:1-40\n        subtree_epoch_contribution: 8798aa18eec5c7a8a530b0ba0514eb9c055bd1cc8678d6dee4a9e0672e6478e5\n      - key: Ledger#0:1-80\n        subtree_epoch_contribution: 6e1a1c7a3ab2c46e25dc111f15e8a9037da1274d1991952cd149dac7f2fc5f49\n      - key: Ledger#0:41-80\n        subtree_epoch_contribution: a2f0b7d70dc54b4591aeb8d3324f15c419a4e2832f619e456a6a9d830a6f5bf2\n      - key: Notes#0:3-5\n        subtree_epoch_contribution: 733a71b60811b27b7a7aab9843fd2f3c1ca7c5b1f4c2190d23b8b1e087dd4ddb\n  - observation_id: obs-golden-empty\n    projection:\n      authority: non_authoritative\n      provisional: true\n      nodes:\n        - node_ref:\n            sheet: Blank\n            column_index: 1\n            row_start: 1\n            row_end: 2\n          semantic_summary: mock Blank#1:1-2 kids=0\n          boundaries: []\n      nodes_total: 1\n      refuted_disclosure:\n        - node_ref:\n            sheet: Blank\n            column_index: 1\n            row_start: 1\n            row_end: 2\n          row: 1\n          character_before: prev\n          character_after: next\n      refuted_disclosure_total: 1\n      unanchored_unverified_total: 1\n    node_epochs:\n      - key: Blank#1:1-2\n        subtree_epoch_contribution: 26d6e67faa3feb18b9dd97b47c864dc71268eb16c931ae0b168636232d236d82\n  - observation_id: obs-golden-plain\n    projection:\n      authority: non_authoritative\n      provisional: true\n      nodes:\n        - node_ref:\n            sheet: Main\n            column_index: 0\n            row_start: 12\n            row_end: 18\n          semantic_summary: mock Main#0:12-18 kids=0\n          boundaries:\n            - row: 12\n              character_before: prev\n              character_after: next\n              disposition: adversarial_confirmed\n        - node_ref:\n            sheet: Main\n            column_index: 0\n            row_start: 2\n            row_end: 11\n          semantic_summary: mock Main#0:2-11 kids=0\n          boundaries:\n            - row: 7\n              character_before: seam-prev\n              character_after: seam-next\n              disposition: structural_location_only\n            - row: 2\n              character_before: prev\n              character_after: next\n              disposition: adversarial_confirmed\n        - node_ref:\n            sheet: Main\n            column_index: 0\n            row_start: 2\n            row_end: 18\n          semantic_summary: mock Main#0:2-18 kids=2\n          boundaries:\n            - row: 7\n              character_before: seam-prev\n              character_after: seam-next\n              disposition: structural_location_only\n            - row: 2\n              character_before: prev\n              character_after: next\n              disposition: adversarial_confirmed\n        - node_ref:\n            sheet: Main\n            column_index: 1\n            row_start: 2\n            row_end: 18\n          semantic_summary: mock Main#1:2-18 kids=0\n          boundaries:\n            - row: 2\n              character_before: prev\n              character_after: next\n              disposition: adversarial_confirmed\n      nodes_total: 4\n      refuted_disclosure: []\n      refuted_disclosure_total: 0\n      unanchored_unverified_total: 0\n    node_epochs:\n      - key: Main#0:12-18\n        subtree_epoch_contribution: 4ee0c87f19fca3376ffba55f73f9dfb5acedbefe09787c4408fd45977e71b4fb\n      - key: Main#0:2-11\n        subtree_epoch_contribution: 99b2235af26542590fb83b47978d78a8f5e682230d0e349794cc73c4a0e0d2d5\n      - key: Main#0:2-18\n        subtree_epoch_contribution: 1fd0b37980a41b6277a0cd952a4ebb57b899749a0a4788a54edd1bd197bfcd3c\n      - key: Main#0:2-6\n        subtree_epoch_contribution: 14c24b4547bc371c43a64836d60d3b9ed4f692781a719a50a102827da531b954\n      - key: Main#0:7-11\n        subtree_epoch_contribution: 8e78bf7d286e15fa5e0f2994ae4decff05da7fa305015e3c4b18f159b5c91ed0\n      - key: Main#1:2-18\n        subtree_epoch_contribution: 401a4016faec8ae97d8c25ce0e9b9db56df529070c79e281b4f48c39e9262f46\n"
+  }
+}
