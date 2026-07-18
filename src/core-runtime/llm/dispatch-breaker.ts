@@ -55,10 +55,12 @@ const RATE_LIMIT_PATTERNS = [
   "rate_limit",
   "too many requests",
   "overloaded",
-  // Provider capacity refusal ("Selected model is at capacity. Please try a
-  // different model.") — same systemic class as "overloaded": the provider is
-  // shedding load, not the item failing (observed live 2026-07-18).
-  "at capacity",
+  // Provider capacity refusal — same systemic class as "overloaded": the
+  // provider is shedding load, not the item failing (observed live
+  // 2026-07-18). Anchored to the full phrase: bare "at capacity" occurs in
+  // domain text and validator-echoed refs, and an item-local contract
+  // failure must never become breaker fuel.
+  "selected model is at capacity",
   "session limit",
   "usage limit",
   "quota",

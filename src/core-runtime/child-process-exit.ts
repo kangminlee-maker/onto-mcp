@@ -44,6 +44,17 @@ export function awaitChildExit(
       if (settled) return;
       settled = true;
       if (graceTimer) clearTimeout(graceTimer);
+      // Release our ends of the stdio pipes. After settlement nobody reads
+      // them, and an orphan-held write end would otherwise pin the fds and
+      // the data-listener closures for as long as the orphan lives —
+      // settle-and-LEAK in a long-lived host process (MCP server) instead of
+      // the old settle-never. Destroy is idempotent and a no-op after a
+      // normal close.
+      // `?.destroy?.` — real ChildProcess streams always have destroy(); test
+      // doubles built from bare EventEmitters may not.
+      child.stdout?.destroy?.();
+      child.stderr?.destroy?.();
+      child.stdin?.destroy?.();
       options.onSettled?.();
       finish();
     };

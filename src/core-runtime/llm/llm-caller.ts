@@ -1011,6 +1011,16 @@ async function callCodexCli(
   }
 
   const text = stdout.trim();
+  if (text.length === 0) {
+    // Exit 0 with no stdout is never a valid model response. Reachable when
+    // the CLI dies after fork but before writing, or when settlement's
+    // post-exit stream grace elapsed before a straggling pipe flush — either
+    // way, failing loud here beats returning an empty "success" downstream
+    // code would misattribute.
+    throw new Error(
+      `codex CLI exited 0 but produced no stdout (model="${modelId ?? "codex-default"}") — refusing to report an empty success`,
+    );
+  }
   // codex exec does not return usage metadata in stdout; estimate by char count.
   // LlmCallResult carries these as approximate; audit may flag via declared_billing_mode=subscription.
   const estimateTokens = (s: string) => Math.max(1, Math.ceil(s.length / 4));

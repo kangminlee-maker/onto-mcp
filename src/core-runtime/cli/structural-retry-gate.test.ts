@@ -93,6 +93,18 @@ describe("provider refusal classification — transient wins over echoed contrac
       "codex worker did not produce structured output json.\nschema_version: onto-review/1";
     expect(gate("issue-synthesis-response", echoOnly, false)).toBe(false);
   });
+
+  it("bare 'at capacity'/'usage limit' in item-local content do NOT reroute a contract failure", () => {
+    // The signatures are anchored to the full provider phrases precisely so
+    // that domain text or a hallucinated ref echoed by the validator cannot
+    // turn a terminal contract failure into a retryable transient one.
+    const hallucinatedRef =
+      "submit_issue_synthesis_response.source_refs_used contains unsupported ref: warehouse at capacity";
+    expect(gate("issue-synthesis-response", hallucinatedRef, false)).toBe(false);
+    const domainEcho =
+      "submit_issue_synthesis_response.source_refs_used contains unsupported ref: api usage limit note";
+    expect(gate("issue-synthesis-response", domainEcho, false)).toBe(false);
+  });
 });
 
 describe("structural retry gate — shouldRetryUnitFailure (§4-2c)", () => {

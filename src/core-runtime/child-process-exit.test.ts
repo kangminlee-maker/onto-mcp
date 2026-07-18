@@ -24,6 +24,11 @@ describe("awaitChildExit — dead-child-open-stream wedge", () => {
     const elapsed = Date.now() - startedAt;
     expect(code).toBe(7);
     expect(elapsed).toBeLessThan(3_000); // close-only would take ~5000ms
+    // Settle-and-leak guard: our pipe ends must be released at settlement,
+    // not pinned until the orphan dies (fd/listener accumulation in
+    // long-lived host processes).
+    expect(child.stdout!.destroyed).toBe(true);
+    expect(child.stderr!.destroyed).toBe(true);
   });
 
   it("resolves via close on a normal child (no grace delay in the happy path)", async () => {

@@ -1613,8 +1613,11 @@ const TRANSIENT_EXECUTOR_FAILURE_PATTERNS = [
   // keywords echoed from the packet body and mislabel a capacity/quota
   // refusal as an output-format violation (observed live 2026-07-18:
   // "Selected model is at capacity" runs recorded as output_contract).
-  "at capacity",
-  "usage limit",
+  // Anchored to the full provider phrases: bare "at capacity"/"usage limit"
+  // occur in domain text and validator-echoed refs, and this scan runs FIRST
+  // — a loose anchor would reroute genuine contract failures into retries.
+  "selected model is at capacity",
+  "hit your usage limit",
 ];
 
 function isTransientExecutorFailureMessage(message: string): boolean {

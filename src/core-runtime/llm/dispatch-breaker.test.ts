@@ -50,6 +50,14 @@ describe("classifySystemicDispatchFailure", () => {
     expect(
       classifySystemicDispatchFailure("You've hit your usage limit."),
     ).toBe("rate_limit");
+    // Item-local contract failure whose echoed ref contains the bare words —
+    // must NOT become breaker fuel (the pattern is anchored to the full
+    // provider phrase).
+    expect(
+      classifySystemicDispatchFailure(
+        "submit_issue_synthesis_response.source_refs_used contains unsupported ref: warehouse at capacity",
+      ),
+    ).toBe(null);
     expect(
       classifySystemicDispatchFailure(
         '[model-call] claude call FAILED: exit_code=1 message="claude: not logged in"',
