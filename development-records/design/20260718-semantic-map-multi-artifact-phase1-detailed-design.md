@@ -1,6 +1,8 @@
 # semantic-map multi-artifact 확장 — Phase 1 (코드/AST) 상세 설계 (2026-07-18)
 
-> 상태: **설계 v2 — 독립 적대적 3-렌즈 리뷰 15건 반영 완료 (§9), owner 승인 대기 (구현 미착수)**
+> 상태: **설계 v3 — 3-렌즈 리뷰 15건 반영(§9) + owner 결정 4건 반영(2026-07-18, §7):
+> O-1 boolean 채택(+자동감지 승격 백로그), O-2·O-3 권장안, O-4 다언어 지시로
+> 파서를 tree-sitter WASM으로 개정. 구현 착수 가능 (프로브가 첫 실증 게이트)**
 > 상위 SSOT: [20260715-semantic-map-multi-artifact-extension-design.md](20260715-semantic-map-multi-artifact-extension-design.md)
 > — 원리(§2)·owner 확정 결정 D1~D4(§3)·목표 형상(§4)·착수 순서(§5)는 SSOT가 소유한다.
 > 이 문서 소유: **Phase 0 재확증 결과 + Phase 1 상세 설계 결정(DD1~DD9) + 검증 계획 + 구현 순서.**
@@ -43,9 +45,10 @@ Phase 1(코드) 완료 = 아래 게이트 전부 통과. 각 게이트는 **비�
   `stableJson` 바이트(LLM-facing 정확 바이트) + seed projection + `semantic-map` sidecar 스냅샷.
   (a)~(b)만으로는 self-consistent한 L2 구성 회귀(입력 필드 순서·seam sort·child-summary 순서
   변경)가 green으로 통과하므로 (e)가 L2 절반의 바이트 동일을 잠근다.
-- **G-CODE (코드 byte-stable reduce + 분할 건전성)**: N=1 프로브(§7 step 2) — 실제 TS 파일
-  ≥ 2개 + **적대적 형상 파일**(배럴 re-export·대형 단일 union 타입·top-level 스크립트·깊은
-  중첩) 각 1개에서:
+- **G-CODE (코드 byte-stable reduce + 분할 건전성)**: N=1 프로브(§7 step 2) — **tree-sitter
+  WASM 실증 선행**(선택 조합의 로드·파싱·재파싱 결정론, O-4) 후, 실제 TS 파일 ≥ 2개 +
+  **실제 Python 파일 ≥ 1개**(owner 실사용 우세 언어) + **적대적 형상 파일**(배럴
+  re-export·대형 단일 union 타입·top-level 스크립트·깊은 중첩) 각 1개에서:
   (i) leaf partition → {flat, AST 계층, fanin-3} 3개 grouping의 root ground **바이트 동일**,
   (ii) negative control 3종 — overlap 주입 → reject, honesty understate 주입 → reject,
   **한 줄 다중 선언 fixture**(리뷰 inv-F2)가 유효 분할로 처리됨,
@@ -150,22 +153,40 @@ spreadsheet 분기와 대칭)에서 code kind를 **`code-structure-observer.ts`(
 structure-observer.ts와 동급 위치)**로 라우팅, `structural_data.code_structure_inventory`를
 생산한다. stage-시 재파싱은 TOCTOU(content_sha256 채집 시점과 불일치)·레이어 위반으로 기각.
 관찰 옵트인: §DD7의 settings 키가 꺼져 있으면 기존 generic raw-text 관찰과 **바이트 동일**
-(G-OFF의 관찰 측 절반). **미지원 언어**(v1 = TS/JS 외)는 spreadsheet의 unsupported 강등과
+(G-OFF의 관찰 측 절반). **미지원 언어**(v1 = TS/JS·Python 외 — 동봉 문법이 없는 언어)는
+spreadsheet의 unsupported 강등과
 달리 generic raw-text 관찰을 그대로 유지하되(기존 flat 경로 유효), 옵트인이 켜져 있으면
 `structural_data.code_structure_unsupported = { reason: "language not supported: <ext>" }`를
 함께 기록해 스테이지 census가 실패와 미지원을 결정론적으로 구별하게 한다 (리뷰 gf-F5).
 
-**파서 의존 (리뷰 ct-F1 — owner 결정 O-4)**: `typescript`는 현재 **devDependency**다
-(package.json:103; 런타임 deps에 없음). 제품 코드(`src/`)에서 import하면 npm 설치 사용자에게
-`ERR_MODULE_NOT_FOUND`로 즉사하므로, 구현 전에 **`typescript`를 dependencies로 승격**(설치
-용량 수 MB 증가)해야 한다. 추천: 승격 (AST 권위 원리상 진짜 파서가 옳고, 대안인 경량
-토크나이저는 AST authority를 훼손, 파서 번들링은 유지비 과다). 초안의 "신규 의존 0" 표기는
-**오류였음** — 정정.
+**파서 의존 (리뷰 ct-F1 + owner 결정 O-4, 2026-07-18)**: owner 지시 — "코드가 typescript만
+있는 것은 아니다. python 등 다른 언어가 훨씬 많다. 대응 가능한 방안이 필요하다." 이에 따라
+초안(v1~v2)의 TypeScript compiler API 단일 파서안을 **폐기**하고 **tree-sitter WASM**을
+채택한다:
+- **메커니즘**: `web-tree-sitter`(순수 WASM 런타임 — 설치 시 native 컴파일 없음) + 언어별
+  **사전 빌드 grammar `.wasm` 동봉**(빌드 타임 채집; 프리빌드 소스 후보로
+  `@vscode/tree-sitter-wasm` npm 실재 실측 확인, 2026-07-18: web-tree-sitter 0.26.11 ·
+  tree-sitter-python 0.25.0 · tree-sitter-typescript 0.23.2). 확정 조합은 **프로브(§7 step 2)가
+  실증**한다 — 로드·파싱·결정론(동일 입력 → 동일 출력 재파싱)을 실측 후 제품 배선.
+- **왜 이것인가**: 파서 1개 메커니즘 + 문법 N개 플러그 — 설계의 per-artifact 플러그 원리가
+  언어 축에도 그대로 적용된다 (concept economy: 언어마다 파서 메커니즘을 늘리지 않음).
+  TS/JS도 tree-sitter로 통일한다(추출기가 필요한 것은 구조 — span·선언 kind·이름 — 뿐이라
+  compiler API의 타입 의미론은 불요). 이로써 ct-F1의 `typescript` devDep 문제는 **소멸**
+  (typescript는 devDep에 남고 제품이 import하지 않음); ct-F1의 본질 요구(런타임에 devDep
+  의존 금지)는 WASM 동봉으로 충족된다.
+- **비용**: 런타임 deps에 `web-tree-sitter` + 문법 wasm 수 MB (언어당 수백 KB). 결정론:
+  각 문법 wasm의 sha256 + 버전을 `extractor_logic_sha256`에 언어별로 접는다 — 문법 업그레이드가
+  해당 언어 관찰의 reuse 키를 자동 회전.
 
 ### DD5. per-position 신호·leaf partition·AST 계층
 
-- **파서**: TypeScript compiler API. v1 대상 = `.ts/.tsx/.js/.mjs/.cjs`. 타 언어는 어댑터 뒤
-  후속 (per-artifact 플러그 원리 그대로). 의존 승격은 O-4 (DD4).
+- **파서**: tree-sitter WASM (DD4 — owner O-4 지시로 다언어). **v1 언어 = TS/JS + Python** —
+  문법 2개를 처음부터 실어 "문법 플러그"가 TS 형상에 과적합되지 않았음을 구조로 증명한다
+  (owner 실사용은 Python 우세). 추가 언어 = 문법 wasm + kind 매핑 테이블 추가만.
+- **언어-중립 kind 매핑**: 아래 신호 토큰 어휘는 언어 공통이고, 언어별로
+  "tree-sitter node type → 공통 kind" 매핑 테이블을 둔다(예: python `function_definition` →
+  `function_decl`, `class_definition` → `class_decl`, `import_statement` → `import`).
+  매핑 테이블도 `extractor_logic_sha256`에 접힌다 — 매핑 수정이 reuse 키를 자동 회전.
 - **위치 단위 = 1-based 라인, 분할 규칙 = 라인-소유권 분할 (리뷰 inv-F2/F3 정정)**:
   문자-공간 full-start 타일링을 라인으로 사영하면 같은 줄의 인접 선언
   (`export const a = 1; export const b = 2;`, 한 줄 클래스)이 `row_start == 직전.row_end`가
@@ -250,15 +271,20 @@ interface CodeSemanticSynthesisInput {
   없는 구 author가 실제로 지원하는 집합)이므로 INV-CFG-1 비접촉 (G2 스캐너 범위는
   model/effort/auth/retry 리터럴 한정 — 리뷰 ct 렌즈 확인). `resolveSemanticMapCapability`
   pair 규칙 유지 + kind 광고를 반환에 포함.
-- **settings 옵트인 (신규 키, default-off — 리뷰 ct-F4로 형상 추천 반전)**:
+- **settings 옵트인 (owner 결정 O-1, 2026-07-18: boolean 채택)**:
   `reconstruct.execution.semantic_map_code` (boolean, 부재 = off). 근거: reconstruct execution
   스칼라 메커니즘(`RECONSTRUCT_EXECUTION_SCALAR_KEYS` + `reconstructExecutionScalarsShape`,
   settings-chain.ts:486-531)이 **boolean 단일-소스**라 per-kind boolean은 키 1줄 추가로
   안착하고 F19 silent-strip 클래스도 구조로 닫힌다. 초안의 배열 키
   (`semantic_map_artifact_kinds`)는 V3/Normalized strict 스키마·normalize 복사 등 4개 사이트
   bespoke 배선이 필요해 "additive" 주장이 반대였음 — **정정**. document kind는 Phase 2에서
-  `semantic_map_document`로 동일 패턴. 유효 kind = settings ∩ author 광고. **owner 확인
-  항목 O-1** (§7).
+  `semantic_map_document`로 동일 패턴. 유효 kind = settings ∩ author 광고.
+  **자동감지 승격 경로 (owner 지시 — 백로그)**: kind 자동감지 자체는 관찰 측에 이미 존재
+  (`target_material_kind` detection)하므로 "향후 자동감지" = 이 수동 플래그를 은퇴시키고
+  **감지된 kind가 곧 라우팅을 결정하는 default-on 상태로의 승격**이다. 승격 게이트 =
+  G-SEM live 증거 축적 + owner 승격 결정 — 레포의 기존 default-off → 관찰 → default-on
+  promotion 선례(breaker-observation 5종, PR #203)와 동일 패턴. v1 플래그는 롤아웃 가드로만
+  존재한다.
 - 스테이지 라우팅: run.ts:3448의 spreadsheet 필터를 "유효 kind 집합 필터 + kind별 인벤토리
   추출"로 확장. census `skip_reason` union(artifact-types.ts:2570)에
   `no_code_inventory`(옵트인 이후 관찰 부재)와 **`code_extraction_unsupported`**(미지원 언어,
@@ -367,21 +393,24 @@ spreadsheet 전용 필터). node_ref를 느슨한 union으로 넓히면 code pro
 | 순서 | 커밋 단위 | 게이트/스톱 |
 |---|---|---|
 | 1 | 골든 채집 스크립트 + 골든 커밋 (G-SS-e 포함) | 골든 파일 비어 있지 않음 |
-| 2 | **N=1 프로브** `scripts/code-reduce-proof-harness.mts` — script-local AST 프로토타입 (제품 코드 무접촉): 라인-소유권 분할 + 계층 fold byte-stability + 비퇴화 지표 + **mock-L2 accumulate + seed projection + envelope dump** | **G-CODE·G-L2 실패 시 재설계 스톱**; envelope dump owner 확인 후 3단계 진행 |
+| 2 | **N=1 프로브** `scripts/code-reduce-proof-harness.mts` — script-local 프로토타입 (제품 코드 무접촉): **tree-sitter WASM 조합 실증(O-4)** + TS/Python 라인-소유권 분할 + 계층 fold byte-stability + 비퇴화 지표 + **mock-L2 accumulate + seed projection + envelope dump** | **G-CODE·G-L2 실패 시 재설계 스톱**; envelope dump owner 확인 후 3단계 진행 |
 | 3 | L1 코어 추출 + 스프레드시트 façade (+ trace 충돌 가드) | G-SS 전건 |
-| 4 | O-4 승격 + `code-structure-observer.ts` + 관찰 배선 (옵트인 뒤) | 관찰 G-OFF 절반 |
+| 4 | 런타임 의존 추가(`web-tree-sitter` + 문법 wasm 동봉) + `code-structure-observer.ts` + 관찰 배선 (옵트인 뒤) | 관찰 G-OFF 절반 |
 | 5 | `foldHierarchyWithTrace` + 코드 L1 어댑터 (제품화) | 프로브를 제품 코어로 재실행 |
 | 6 | L2 코어 추출 + 코드 envelope/프롬프트 계약/광고/스테이지 라우팅 + **DD9 projection 표면** (1a) | G-L2·G-OFF 전건 |
 | 7 | E2E mock → (O-2 승인 시) live N=1 | §6-4·6-5 (G-SEM) |
 | 8 | Phase 1b set-tier (별도 PR) | §4 (set-tier 캡 + live 2-파일) |
 
-**owner 결정 항목**:
-- **O-1** settings 키 형상 — 추천: **per-kind boolean `semantic_map_code`** (기존 boolean
-  스칼라 메커니즘에 1줄 안착; 배열 대안은 4-사이트 bespoke 배선 필요 — 리뷰 ct-F4).
-- **O-2** live N=1 spend 시점 (수용 기준 = G-SEM).
-- **O-3** 1b 착수 — 시점만이 아니라 **set-tier 예산 캡 + live 2-파일 수용 기준을 포함한
-  scope 승인** (리뷰 gf-F4).
-- **O-4** `typescript` dependencies 승격 (설치 용량 수 MB 증가 수용 — 리뷰 ct-F1). 추천: 승격.
+**owner 결정 (2026-07-18 확정)**:
+- **O-1 결정**: settings.json **boolean on/off를 기본으로 채택** (`semantic_map_code`).
+  단서 — "향후에는 자동감지": 수동 플래그의 default-on 승격 경로를 백로그로 명시 (DD7의
+  자동감지 승격 경로; 승격 게이트 = G-SEM live 증거 + owner 승격 결정).
+- **O-2 결정**: 권장안 — mock E2E 통과 직후 live N=1 (수용 기준 = G-SEM 대조군 blind).
+- **O-3 결정**: 권장안 — 1b는 set-tier 예산 캡 + live 2-파일 수용 기준을 포함한 scope로
+  진행 (시점은 1a 검증 후).
+- **O-4 결정 (원안 개정)**: "코드가 typescript만 있는 것은 아니다 — python 등 대응 필요"
+  → TypeScript compiler API 단일 파서안 폐기, **tree-sitter WASM + 언어별 문법 플러그**
+  채택 (DD4·DD5). v1 문법 = TS/JS + Python; `typescript` 패키지 승격 문제는 소멸.
 
 ## 8. 리스크 / 열린 문제
 
@@ -390,8 +419,12 @@ spreadsheet 전용 필터). node_ref를 느슨한 union으로 넓히면 code pro
   라이브 N=1에서 실측 후 kind 어휘 세분화(예: 선언명 전이도 seam)로 재조정.
 - **파일 크기 스케일**: 대형 파일(수천 라인)의 leaf 수 → frontier가 흡수하지만 synthesize
   호출 수는 트리 크기에 비례 — X7 preflight가 관찰 단위로 fail-closed (기존 메커니즘).
-- **언어 커버리지**: v1 TS/JS 한정. 미지원 언어는 `code_extraction_unsupported`로 정직 공시
-  (DD4·DD7) — 실사용 레포는 이 행이 다수가 될 수 있음(v1 한계의 가시화이지 고장 아님).
+- **언어 커버리지**: v1 동봉 문법 = TS/JS + Python. 그 외 언어는
+  `code_extraction_unsupported`로 정직 공시 (DD4·DD7) — 추가 언어는 문법 wasm + kind 매핑
+  테이블 추가로 확장 (구조 확장 불요).
+- **tree-sitter 신규 리스크 (O-4 개정으로 도입)**: 문법별 품질/노드 어휘 편차(kind 매핑
+  테이블이 흡수), wasm 로딩의 Node 버전 호환(프로브가 실증), 문법 버전 업그레이드 시 관찰
+  결정론 회전(의도된 동작 — 문법 sha 폴딩, DD4).
 - **reuse 키 회전 1회** (§2 DD3): 코어 추출 시 `semanticMapGateLogicSha256` 회전 — 예상된
   동작, 릴리스 노트에 명기. (code 프롬프트는 DD6의 별도 계약으로 spreadsheet fingerprint
   회전을 **일으키지 않는다** — 초안에서 이 축의 누락을 리뷰 ct-F2가 적발.)
