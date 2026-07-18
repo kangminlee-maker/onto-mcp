@@ -40,6 +40,24 @@ describe("classifySystemicDispatchFailure", () => {
     expect(
       classifySystemicDispatchFailure("You have hit your session limit for opus"),
     ).toBe("rate_limit");
+    // Provider capacity shedding (codex/openai refusal observed live
+    // 2026-07-18) — systemic rate_limit class, same as "overloaded".
+    expect(
+      classifySystemicDispatchFailure(
+        "ERROR: Selected model is at capacity. Please try a different model.",
+      ),
+    ).toBe("rate_limit");
+    expect(
+      classifySystemicDispatchFailure("You've hit your usage limit."),
+    ).toBe("rate_limit");
+    // Item-local contract failure whose echoed ref contains the bare words —
+    // must NOT become breaker fuel (the pattern is anchored to the full
+    // provider phrase).
+    expect(
+      classifySystemicDispatchFailure(
+        "submit_issue_synthesis_response.source_refs_used contains unsupported ref: warehouse at capacity",
+      ),
+    ).toBe(null);
     expect(
       classifySystemicDispatchFailure(
         '[model-call] claude call FAILED: exit_code=1 message="claude: not logged in"',

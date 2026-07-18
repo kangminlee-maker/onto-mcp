@@ -34,6 +34,7 @@
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import { awaitChildExit } from "../child-process-exit.js";
 import {
   buildNestingBatchWorkerPrompt,
   parseNestingBatchSummary,
@@ -189,24 +190,15 @@ export async function spawnOuterClaude(
     child.kill("SIGKILL");
   }, options.timeout_ms);
 
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", (err: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      if (err.code === "ENOENT") {
-        reject(
-          new Error(
+  const exitCode = await awaitChildExit(child, {
+    onSettled: () => clearTimeout(timer),
+    mapError: (err) =>
+      err.code === "ENOENT"
+        ? new Error(
             `Claude Code CLI not found (${options.claude_bin}). ` +
               "Install/login claude or set ONTO_CLAUDE_BIN.",
-          ),
-        );
-      } else {
-        reject(err);
-      }
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(code ?? 1);
-    });
+          )
+        : err,
   });
 
   // Flush & close tee streams before returning so downstream stats see

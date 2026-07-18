@@ -27,6 +27,7 @@ import {
   type NormalizedLlmSelection,
 } from "./model-switcher.js";
 import { resolveClaudeBin } from "./claude-bin.js";
+import { awaitChildExit } from "../child-process-exit.js";
 import {
   appendRuntimeModelCallLogFromCurrentContext,
   appendRuntimeStreamChunkFromCurrentContextSync,
@@ -960,21 +961,14 @@ async function callCodexCli(
     clearTimeout(timeoutHandle);
     if (sigkillHandle) clearTimeout(sigkillHandle);
   };
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", (err: NodeJS.ErrnoException) => {
-      clearTimers();
-      if (err.code === "ENOENT") {
-        reject(new Error(
-          "codex CLI not found on PATH. Install codex to use the OAuth subscription path: https://github.com/openai/codex",
-        ));
-      } else {
-        reject(err);
-      }
-    });
-    child.on("close", (code) => {
-      clearTimers();
-      resolve(code ?? 1);
-    });
+  const exitCode = await awaitChildExit(child, {
+    onSettled: clearTimers,
+    mapError: (err) =>
+      err.code === "ENOENT"
+        ? new Error(
+            "codex CLI not found on PATH. Install codex to use the OAuth subscription path: https://github.com/openai/codex",
+          )
+        : err,
   });
 
   if (timedOut) {
@@ -1017,6 +1011,16 @@ async function callCodexCli(
   }
 
   const text = stdout.trim();
+  if (text.length === 0) {
+    // Exit 0 with no stdout is never a valid model response. Reachable when
+    // the CLI dies after fork but before writing, or when settlement's
+    // post-exit stream grace elapsed before a straggling pipe flush — either
+    // way, failing loud here beats returning an empty "success" downstream
+    // code would misattribute.
+    throw new Error(
+      `codex CLI exited 0 but produced no stdout (model="${modelId ?? "codex-default"}") — refusing to report an empty success`,
+    );
+  }
   // codex exec does not return usage metadata in stdout; estimate by char count.
   // LlmCallResult carries these as approximate; audit may flag via declared_billing_mode=subscription.
   const estimateTokens = (s: string) => Math.max(1, Math.ceil(s.length / 4));
@@ -1172,21 +1176,14 @@ async function callClaudeCli(
     clearTimeout(timeoutHandle);
     if (sigkillHandle) clearTimeout(sigkillHandle);
   };
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", (err: NodeJS.ErrnoException) => {
-      clearTimers();
-      if (err.code === "ENOENT") {
-        reject(new Error(
-          `Claude Code CLI not found (${claudeBin}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
-        ));
-      } else {
-        reject(err);
-      }
-    });
-    child.on("close", (code) => {
-      clearTimers();
-      resolve(code ?? 1);
-    });
+  const exitCode = await awaitChildExit(child, {
+    onSettled: clearTimers,
+    mapError: (err) =>
+      err.code === "ENOENT"
+        ? new Error(
+            `Claude Code CLI not found (${claudeBin}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
+          )
+        : err,
   });
 
   if (timedOut) {

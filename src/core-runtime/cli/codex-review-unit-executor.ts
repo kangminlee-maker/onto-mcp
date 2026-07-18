@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import { awaitChildExit } from "../child-process-exit.js";
 import {
   appendRuntimeStreamChunkSync,
   appendRuntimeStreamEventSync,
@@ -293,21 +294,15 @@ async function runCodexWorker(
     }, timeoutMs);
   }
 
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", (err: NodeJS.ErrnoException) => {
+  const exitCode = await awaitChildExit(child, {
+    onSettled: () => {
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
-      if (err.code === "ENOENT") {
-        reject(new Error("codex CLI not found. Install codex or use a different executor."));
-      } else {
-        reject(err);
-      }
-    });
-    child.on("close", (code) => {
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      resolve(code ?? 1);
-    });
+    },
+    mapError: (err) =>
+      err.code === "ENOENT"
+        ? new Error("codex CLI not found. Install codex or use a different executor.")
+        : err,
   });
 
   if (timedOut) {
