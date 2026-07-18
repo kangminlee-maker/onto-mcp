@@ -37,6 +37,11 @@ import type {
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
 import type { ColumnValueTiles } from "../spreadsheet-structure-observer.js";
+import { observeCodeStructure, type CodeStructureInventory } from "../code-structure-observer.js";
+import type {
+  CodeSemanticSynthesisInput,
+  CodeSemanticSynthesisOutput,
+} from "./comprehension-semantic-map-code.js";
 import type { ReconstructSemanticMapCensus } from "./artifact-types.js";
 import { assertGatingKeyExcludesInEpochOutput } from "./llm-touch-fingerprint.js";
 import { unitIdForAuthoredArtifactName } from "./execution-telemetry.js";
@@ -1806,5 +1811,337 @@ describe("resolveSemanticMapKinds (step 6 DD7 — 광고 부재 = 기존 계약�
     expect(() =>
       resolveSemanticMapKinds({ synthesizeSemanticMapNode: synthesize, supportedSemanticMapKinds: ["code"] }),
     ).toThrow(/capability is a PAIR/);
+  });
+});
+
+// ── step 6 (multi-artifact design §7): stage kind 라우팅 — G-L2 스테이지 절반 + G-OFF + census ────
+
+const CODE_FIXTURE = [
+  'import { a } from "./a.js";',
+  'import { b } from "./b.js";',
+  "",
+  "/** Adds two numbers. */",
+  "export function add(x: number, y: number): number {",
+  "  return x + y;",
+  "}",
+  "",
+  "/** Orchestrates example work. */",
+  "export class Service {",
+  "  private count = 0;",
+  "",
+  "  run(): number {",
+  "    this.count += 1;",
+  "    return this.count;",
+  "  }",
+  "}",
+].join("\n");
+
+const CODE_FILE = "src/example/service.ts";
+
+const CODE_PRE_IMAGE_BASE = {
+  reduce_reader_model_identity: "mock/none",
+  reduce_prompt_sha256: "code-p",
+  reduce_schema_tool_version: "code-v1",
+  comprehension_version: "c1",
+  over_context_gate_config_sha256: "cfg",
+  over_context_gate_logic_sha256: "logic",
+};
+
+async function codeInventory(): Promise<CodeStructureInventory> {
+  const observed = await observeCodeStructure({ ref: CODE_FILE, text: CODE_FIXTURE });
+  if (observed.status !== "ok") throw new Error("code fixture must observe ok");
+  return observed.inventory;
+}
+
+function mixedObservationsArtifact(args: {
+  spreadsheet?: boolean;
+  code?: { structural: Record<string, unknown> };
+}): Parameters<typeof runSemanticMapStage>[0]["sourceObservations"] {
+  const observations: unknown[] = [];
+  if (args.spreadsheet !== false) {
+    observations.push({
+      observation_id: "obs-sheet",
+      target_material_kind: "spreadsheet",
+      structural_data: {
+        workbook_inventory: {
+          segmented_value_tiles: [{ sheet: "S", window: 1024, columns: [richColumn(0)], retained_segments: 0 }],
+        },
+      },
+    });
+  }
+  if (args.code) {
+    observations.push({
+      observation_id: "obs-code",
+      target_material_kind: "code",
+      source_ref: CODE_FILE,
+      structural_data: args.code.structural,
+    });
+  }
+  return { observations } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+}
+
+/** Both-kind mock author (DD7 광고 포함) with per-kind attempt counters. */
+function mockCodeAuthor(opts: { advertiseCode?: boolean } = {}): {
+  author: ReconstructDirectiveAuthor;
+  counters: { synthesize: number; verify: number; codeSynthesize: number; codeVerify: number };
+} {
+  const counters = { synthesize: 0, verify: 0, codeSynthesize: 0, codeVerify: 0 };
+  const author = {
+    ...(opts.advertiseCode === false ? {} : { supportedSemanticMapKinds: ["spreadsheet", "code"] as const }),
+    async synthesizeSemanticMapNode(
+      input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
+    ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput> {
+      if ("target_material_kind" in input && input.target_material_kind === "code") {
+        counters.codeSynthesize += 1;
+        const seam = input.symbol_seams[0];
+        return {
+          semantic_summary: `mock ${input.node_ref.file}:${input.node_ref.line_start}-${input.node_ref.line_end}`,
+          boundaries: [
+            ...(seam ? [{ line: seam.line, character_before: "seam-prev", character_after: "seam-next" }] : []),
+            { line: input.node_ref.line_start + 1000, character_before: "far", character_after: "far" },
+          ],
+        };
+      }
+      counters.synthesize += 1;
+      const seam = (input as SemanticSynthesisInput).value_shape_seams[0];
+      const ref = (input as SemanticSynthesisInput).node_ref;
+      return {
+        semantic_summary: `mock ${ref.sheet}#${ref.column_index}:${ref.row_start}-${ref.row_end}`,
+        boundaries: [
+          ...(seam ? [{ row: seam.row, character_before: "seam-prev", character_after: "seam-next" }] : []),
+        ],
+      };
+    },
+    async verifySemanticMapBoundary(
+      input: SemanticBoundaryVerifyInput | { node_ref: { file: string }; boundary: { line: number } },
+    ): Promise<SemanticBoundaryVerification> {
+      if ("file" in input.node_ref) {
+        counters.codeVerify += 1;
+        return (input.boundary as { line: number }).line % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted";
+      }
+      counters.verify += 1;
+      return (input.boundary as { row: number }).row % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted";
+    },
+  } as unknown as ReconstructDirectiveAuthor;
+  return { author, counters };
+}
+
+describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-OFF + census)", () => {
+  it("routes an eligible code observation through the real L2 core: produced unit, projection > 0, sidecar 판별자, per-kind fingerprints (G-L2)", async () => {
+    const inventory = await codeInventory();
+    const { author, counters } = mockCodeAuthor();
+    const sessionRoot = await tempRoot();
+    const result = await runSemanticMapStage({
+      sourceObservations: mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } }),
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+
+    expect(counters.codeSynthesize).toBeGreaterThan(0); // cardinality: the code path actually dispatched.
+    expect(counters.codeVerify).toBeGreaterThan(0); // the far-line unanchored boundary was adversarially processed.
+    expect(result.census?.observations_total).toBe(2);
+    expect(result.census?.observations_map_present).toBe(2);
+
+    const codeRow = result.census!.by_observation.find((r) => r.observation_id === "obs-code");
+    expect(codeRow?.target_material_kind).toBe("code");
+    expect(codeRow?.map_present).toBe(true);
+    expect(codeRow?.columns).toHaveLength(1);
+    const unit = codeRow!.columns[0] as { file: string; status: string; produced_nodes: number; synthesize_calls: number };
+    expect(unit.file).toBe(CODE_FILE);
+    expect(unit.status).toBe("produced");
+    expect(unit.produced_nodes).toBeGreaterThan(0);
+    expect(unit.synthesize_calls).toBe(counters.codeSynthesize);
+
+    const sheetRow = result.census!.by_observation.find((r) => r.observation_id === "obs-sheet");
+    expect(sheetRow?.target_material_kind).toBeUndefined(); // spreadsheet rows stay pre-extension shaped.
+    expect(sheetRow?.fingerprint).not.toBe(codeRow?.fingerprint); // per-kind fingerprints diverge.
+
+    const codeProjection = result.projectionByObservation.get("obs-code");
+    expect(codeProjection).toBeDefined();
+    expect(codeProjection!.nodes_total).toBeGreaterThan(0);
+    const firstRef = codeProjection!.nodes[0]!.node_ref as { file?: string };
+    expect(firstRef.file).toBe(CODE_FILE);
+
+    // DD9 render: code rows carry file:line vocabulary + the CODE note.
+    const rendered = renderSemanticMapProjection(codeProjection!, 4000, true, "code") as {
+      note?: string;
+      nodes: { region: string; boundaries: Record<string, unknown>[] }[];
+    };
+    expect(rendered.note).toContain("code file regions");
+    expect(rendered.nodes[0]!.region).toMatch(new RegExp(`^${CODE_FILE.replace(/[./]/g, "\\$&")}:\\d+-\\d+$`));
+    for (const b of rendered.nodes.flatMap((n) => n.boundaries)) {
+      expect(b).toHaveProperty("line");
+      expect(b).not.toHaveProperty("row");
+    }
+
+    // Sidecar artifact truth: 판별자 on the code row ONLY (spreadsheet rows byte-shape unchanged).
+    const sidecar = parseYaml(await fs.readFile(result.sidecarPath!, "utf8")) as {
+      observations: { observation_id: string; target_material_kind?: string }[];
+    };
+    expect(sidecar.observations.find((o) => o.observation_id === "obs-code")?.target_material_kind).toBe("code");
+    expect("target_material_kind" in sidecar.observations.find((o) => o.observation_id === "obs-sheet")!).toBe(false);
+    expect(result.aggregateFingerprint).not.toBeNull();
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("G-OFF (i): settings opt-in absent → code observation invisible; outputs byte-identical to a code-less run; 0 code dispatches", async () => {
+    const inventory = await codeInventory();
+    const withCode = mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } });
+    expect(withCode.observations.some((o) => o.target_material_kind === "code")).toBe(true); // non-vacuous.
+
+    const run = async (
+      sourceObservations: Parameters<typeof runSemanticMapStage>[0]["sourceObservations"],
+      optIn: boolean,
+    ): Promise<{ census: string; sidecar: string; aggregate: string | null; counters: ReturnType<typeof mockCodeAuthor>["counters"] }> => {
+      const { author, counters } = mockCodeAuthor();
+      const sessionRoot = await tempRoot();
+      const result = await runSemanticMapStage({
+        sourceObservations,
+        directiveAuthor: author,
+        sessionRoot,
+        config: CONFIG,
+        preImageBase: PRE_IMAGE_BASE,
+        ...(optIn ? { codeKindOptIn: true } : {}),
+        codePreImageBase: CODE_PRE_IMAGE_BASE,
+        verifyModelIdentity: "mock/none",
+      });
+      const census = await fs.readFile(result.censusPath!, "utf8");
+      const sidecar = await fs.readFile(result.sidecarPath!, "utf8");
+      await fs.rm(sessionRoot, { recursive: true, force: true });
+      return { census, sidecar, aggregate: result.aggregateFingerprint, counters };
+    };
+
+    const off = await run(withCode, false);
+    const codeless = await run(mixedObservationsArtifact({}), false);
+    expect(off.census).toBe(codeless.census); // byte-identical stage artifacts (G-OFF).
+    expect(off.sidecar).toBe(codeless.sidecar);
+    expect(off.aggregate).toBe(codeless.aggregate);
+    expect(off.counters.codeSynthesize).toBe(0);
+    expect(off.counters.codeVerify).toBe(0);
+
+    // Negative control (the check CAN fail): with the opt-in ON the same inputs produce code rows.
+    const on = await run(withCode, true);
+    expect(on.census).not.toBe(off.census);
+    expect(on.counters.codeSynthesize).toBeGreaterThan(0);
+  });
+
+  it("G-OFF (ii): author without code 광고 → code observation invisible even with the opt-in on", async () => {
+    const inventory = await codeInventory();
+    const { author, counters } = mockCodeAuthor({ advertiseCode: false });
+    const sessionRoot = await tempRoot();
+    const result = await runSemanticMapStage({
+      sourceObservations: mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } }),
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    expect(result.census?.observations_total).toBe(1); // spreadsheet only.
+    expect(result.census?.by_observation.map((r) => r.observation_id)).toEqual(["obs-sheet"]);
+    expect(counters.codeSynthesize).toBe(0);
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("census skips (gf-F5): unsupported language vs missing inventory vs empty file are deterministically distinct", async () => {
+    const { author, counters } = mockCodeAuthor();
+    const sessionRoot = await tempRoot();
+    const emptyObserved = await observeCodeStructure({ ref: "src/example/empty.ts", text: "" });
+    if (emptyObserved.status !== "ok") throw new Error("empty fixture must observe ok");
+    const sourceObservations = {
+      observations: [
+        {
+          observation_id: "obs-unsupported",
+          target_material_kind: "code",
+          source_ref: "tool.rb",
+          structural_data: { code_structure_unsupported: { reason: "language not supported: .rb" } },
+        },
+        {
+          observation_id: "obs-no-inventory",
+          target_material_kind: "code",
+          source_ref: "mystery.py",
+          structural_data: {},
+        },
+        {
+          observation_id: "obs-empty-file",
+          target_material_kind: "code",
+          source_ref: "src/example/empty.ts",
+          structural_data: { code_structure_inventory: emptyObserved.inventory },
+        },
+      ],
+    } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+    const result = await runSemanticMapStage({
+      sourceObservations,
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    expect(counters.codeSynthesize).toBe(0); // none of the three dispatches.
+    const rows = new Map(result.census!.by_observation.map((r) => [r.observation_id, r]));
+    expect(rows.get("obs-unsupported")?.skip_reason).toBe("code_extraction_unsupported");
+    expect(rows.get("obs-unsupported")?.skip_detail).toBe("language not supported: .rb");
+    expect(rows.get("obs-no-inventory")?.skip_reason).toBe("no_code_inventory");
+    const emptyRow = rows.get("obs-empty-file");
+    expect(emptyRow?.skip_reason).toBeNull();
+    expect(emptyRow?.fingerprint).not.toBeNull(); // evaluated (deterministic empty), not skipped-before-fingerprint.
+    expect((emptyRow?.columns[0] as { status?: string } | undefined)?.status).toBe("empty");
+    expect(result.census?.observations_total).toBe(3);
+    expect(result.census?.observations_map_absent).toBe(3);
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("fingerprint 격리 (ct-F2): a code prompt-contract sha change rotates ONLY the code fingerprint", async () => {
+    const inventory = await codeInventory();
+    const run = async (codePromptSha: string): Promise<{ sheet: string | null; code: string | null }> => {
+      const { author } = mockCodeAuthor();
+      const sessionRoot = await tempRoot();
+      const result = await runSemanticMapStage({
+        sourceObservations: mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } }),
+        directiveAuthor: author,
+        sessionRoot,
+        config: CONFIG,
+        preImageBase: PRE_IMAGE_BASE,
+        codeKindOptIn: true,
+        codePreImageBase: { ...CODE_PRE_IMAGE_BASE, reduce_prompt_sha256: codePromptSha },
+        verifyModelIdentity: "mock/none",
+      });
+      await fs.rm(sessionRoot, { recursive: true, force: true });
+      const rows = new Map(result.census!.by_observation.map((r) => [r.observation_id, r.fingerprint]));
+      return { sheet: rows.get("obs-sheet") ?? null, code: rows.get("obs-code") ?? null };
+    };
+    const a = await run("code-p");
+    const b = await run("code-p-EDITED");
+    expect(a.code).not.toBeNull();
+    expect(a.code).not.toBe(b.code); // code fingerprint rotates with the code contract sha…
+    expect(a.sheet).toBe(b.sheet); // …while the spreadsheet fingerprint is untouched (격리).
+  });
+
+  it("fail-loud: code kind eligible without codePreImageBase", async () => {
+    const inventory = await codeInventory();
+    const { author } = mockCodeAuthor();
+    const sessionRoot = await tempRoot();
+    await expect(
+      runSemanticMapStage({
+        sourceObservations: mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } }),
+        directiveAuthor: author,
+        sessionRoot,
+        config: CONFIG,
+        preImageBase: PRE_IMAGE_BASE,
+        codeKindOptIn: true,
+        verifyModelIdentity: "mock/none",
+      }),
+    ).rejects.toThrow(/codePreImageBase is missing/);
+    await fs.rm(sessionRoot, { recursive: true, force: true });
   });
 });
