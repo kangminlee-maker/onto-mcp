@@ -1,0 +1,317 @@
+schema_version: 1
+session_id: 20260718-4065ab62
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: InventoryRecord / InventoryAggregate inventory authority and allocation
+      timing
+    evidence_anchor: "Target:
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:81,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:86,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:111,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:115. Value authority anchor:
+      .onto/review/20260718-4065ab62/execution-preparation/review-value-alignme\
+      nt-criteria.yaml:6, statement requires suitability as a WMS/TMS/ERP
+      integration concept standard centered on authority, temporality, units,
+      status models, and logistics operating risk."
+    claim: Nightly ERP-aligned inventory snapshots are misaligned with the
+      ontology's declared purpose as an integration concept standard for
+      inventory authority and time-sensitive allocation.
+    what: The ontology says WMS and ERP each hold quantity_on_hand, ERP is
+      reconciled nightly, InventoryAggregate.available_qty is a daily snapshot,
+      and intraday order allocation reads that snapshot. It also lacks an as_of
+      concept for inventory records.
+    why: "For an integration reference document whose review purpose explicitly
+      centers authority, temporality, and logistics operating risk, making
+      intraday allocation depend on a nightly aggregate accepts a hidden
+      tradeoff: accounting reconciliation convenience overrides operational
+      stock truth at the moment orders are accepted. This weakens the ontology's
+      ability to define which system is authoritative for allocation-time
+      inventory and when a quantity is valid."
+    how_to_fix: Separate physical, accounting, and allocatable inventory concepts;
+      add as_of/effective_at timestamps; define the authority for
+      allocation-time availability, and require allocations to reference a
+      current WMS-backed or event-sourced availability record rather than a
+      daily ERP-aligned snapshot.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use the ontology as the WMS/TMS/ERP integration concept
+        baseline for order, inventory, shipment, and delivery concepts,
+        especially authority and temporality.
+      failure_condition: During intraday order allocation, the ontology directs
+        consumers to a daily InventoryAggregate snapshot while operational WMS
+        and accounting ERP quantities may diverge until nightly reconciliation.
+      impact: The reference model can drive oversell, under-allocation, and audit
+        disputes because it does not identify the valid inventory authority or
+        validity time for allocation decisions.
+      evidence_refs:
+        - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:81
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:86
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:111
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:115
+    causal_path:
+      root_cause_candidate: The ontology optimizes for nightly ERP reconciliation as
+        the inventory integration authority without modeling allocation-time
+        validity or separating physical, accounting, and allocatable inventory
+        purposes.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: InventoryRecord.quantity_on_hand is explicitly shared by WMS and ERP, and
+            discrepancies are adjusted to ERP at night.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:81
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:115
+        - cause_id: axiology-candidate-001.cause-002
+          claim: InventoryAggregate.available_qty is a nightly snapshot but is used for
+            intraday allocation.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:86
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:111
+        - cause_id: axiology-candidate-001.cause-003
+          claim: Because the review purpose requires authority and temporality suitability
+            for WMS/TMS/ERP integration, this snapshot allocation rule
+            undermines the declared purpose.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: Sku.weight / Sku.dims and Shipment.total_weight
+    evidence_anchor: "Target:
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:37,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:38,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:48. Value authority anchor:
+      .onto/review/20260718-4065ab62/execution-preparation/review-value-alignme\
+      nt-criteria.yaml:6, statement requires a WMS/TMS/ERP integration concept
+      standard centered on unit consistency and logistics operating risk."
+    claim: Leaving product measurements in source-system units while summing total
+      shipment weight is misaligned with the unit-consistency purpose of the
+      integration ontology.
+    what: Sku.weight keeps each warehouse's kg/lb convention, dims is a unitless
+      string whose units vary by source system, and Shipment.total_weight is
+      calculated as the sum of OrderLine weights at shipment confirmation.
+    why: A concept baseline for WMS/TMS/ERP integration should prevent unit
+      ambiguity at integration boundaries. Here, the local convenience of
+      preserving source units is accepted without a canonical unit or conversion
+      model, while downstream shipment total_weight depends on those
+      measurements. That hidden tradeoff can corrupt carrier rating, capacity
+      planning, and exception handling.
+    how_to_fix: Represent weight and dimensions as structured measurements with
+      value, unit, source, and conversion policy; define canonical integration
+      units for shipment totals; store total_weight with its unit and derivation
+      timestamp/source.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept baseline for unit-consistent
+        WMS/TMS/ERP integration and logistics risk control.
+      failure_condition: When SKUs from different warehouses or source systems are
+        combined into shipments, total_weight may sum values recorded in
+        incompatible or unknown units.
+      impact: The model can produce incorrect shipment weight and dimensions,
+        weakening carrier integration, cost calculation, load planning, and
+        operational trust in the reference ontology.
+      evidence_refs:
+        - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:37
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:38
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:48
+    causal_path:
+      root_cause_candidate: The ontology preserves source-system measurement
+        conventions instead of defining a canonical measurement concept for
+        integration use.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: Sku.weight and Sku.dims allow source-specific or unspecified units.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:37
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:38
+        - cause_id: axiology-candidate-002.cause-002
+          claim: Shipment.total_weight is derived by summing line weights, so unit
+            ambiguity propagates into a shipment-level operational value.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:48
+        - cause_id: axiology-candidate-002.cause-003
+          claim: Because the declared review purpose prioritizes unit consistency and
+            logistics operating risk, this choice undermines the ontology's
+            intended integration role.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-003
+    target: TrackingEvent.event_type and independent status management rule
+    evidence_anchor: "Target:
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:44,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:63,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:66,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:112. Value authority anchor:
+      .onto/review/20260718-4065ab62/execution-preparation/review-value-alignme\
+      nt-criteria.yaml:6, statement requires suitability as an integration
+      concept standard centered on status model and authority."
+    claim: Delegating shipment/tracking status mapping to each integration is
+      misaligned with the ontology's purpose as a status-model authority for
+      WMS/TMS/carrier integration.
+    what: The ontology defines Shipment.status and TrackingEvent.event_type
+      separately, then states carrier-specific status mapping is handled by each
+      integration and OMS/TMS/carrier statuses are independently managed.
+    why: The declared purpose asks whether this is a concept standard for
+      integration, especially status model and authority. By leaving status
+      correspondence to per-integration decisions, the ontology avoids the exact
+      cross-system alignment it is supposed to provide. This permits
+      inconsistent delivered/exception/in_transit interpretations across
+      consumers.
+    how_to_fix: Define a canonical lifecycle/status mapping table with source
+      status, canonical status, transition rules, terminal-state precedence,
+      exception handling, and the authority that may advance or correct each
+      state.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the WMS/TMS/ERP integration status-model
+        and authority baseline for shipments and delivery tracking.
+      failure_condition: Different integrations map carrier TrackingEvent.event_type
+        values to Shipment.status independently, while systems manage statuses
+        separately.
+      impact: Consumers can disagree about shipment state and terminal delivery,
+        weakening operational coordination, customer notifications, exception
+        management, and auditability.
+      evidence_refs:
+        - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:44
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:63
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:66
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:112
+    causal_path:
+      root_cause_candidate: The ontology treats cross-system status alignment as an
+        adapter responsibility rather than a central concept-standard
+        responsibility.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: Shipment.status and TrackingEvent.event_type are separate status
+            vocabularies.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:44
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:63
+        - cause_id: axiology-candidate-003.cause-002
+          claim: Carrier-status mapping is explicitly delegated to each integration, and
+            OMS/TMS/carrier status fields are independently managed.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:66
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:112
+        - cause_id: axiology-candidate-003.cause-003
+          claim: Because status model and authority are declared review-purpose criteria,
+            the delegation weakens the ontology's suitability as a shared
+            integration standard.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-004
+    target: OrderLine fulfillment traceability through Shipment / DeliveryLeg
+    evidence_anchor: "Target:
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:25,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:30,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:105,
+      .onto/review/20260718-4065ab62/execution-preparation/materialized-input.m\
+      d:109. Value authority anchor:
+      .onto/review/20260718-4065ab62/execution-preparation/review-value-alignme\
+      nt-criteria.yaml:6, statement requires an
+      order/inventory/shipment/delivery concept standard focused on logistics
+      operating risk."
+    claim: Omitting OrderLine-to-shipment fulfillment mapping is misaligned with the
+      ontology's fulfillment integration purpose because it sacrifices
+      operational traceability for a simpler order-level relation.
+    what: OrderLine has sku and quantity but no reference to the shipment or leg
+      that fulfilled it. The sole fulfills relation connects Shipment to Order
+      and explicitly excludes OrderLine-level mapping.
+    why: A logistics fulfillment concept baseline must support the operational
+      question of which ordered item moved in which shipment, especially for
+      partial shipments and exceptions. The model chooses a simpler order-level
+      relation, but that local simplification weakens the broader purpose of
+      coordinating orders, freight, and delivery across systems.
+    how_to_fix: Add a fulfillment allocation/detail concept linking OrderLine to
+      Shipment or DeliveryLeg with shipped quantity, split/partial flags,
+      timestamps, and exception/cancellation state.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as a concept standard across order, freight,
+        and delivery workflows while controlling logistics operating risk.
+      failure_condition: An order is partially shipped, split across shipments, or has
+        an exception on one line, but the ontology only records a
+        Shipment-to-Order relation.
+      impact: The reference model cannot explain which ordered quantities were
+        fulfilled by which physical movements, undermining exception resolution,
+        customer service, reconciliation, and auditability.
+      evidence_refs:
+        - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:25
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:30
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:105
+        - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:109
+    causal_path:
+      root_cause_candidate: The ontology optimizes for order-level fulfillment
+        simplicity instead of preserving line-level operational traceability.
+      root_cause_step_id: axiology-candidate-004.cause-003
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: OrderLine contains product and quantity but no fulfillment shipment or
+            leg reference.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:25
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:30
+        - cause_id: axiology-candidate-004.cause-002
+          claim: The only fulfills relation is Shipment to Order and explicitly omits
+            OrderLine-level mapping.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:105
+            - .onto/review/20260718-4065ab62/execution-preparation/materialized-input.md:109
+        - cause_id: axiology-candidate-004.cause-003
+          claim: Because the declared review purpose is suitability as an order, freight,
+            and delivery integration standard with logistics risk focus, this
+            omission weakens purpose alignment.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-4065ab62/execution-preparation/review-value-alignment-criteria.yaml:6
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific rule document was used.
+  - The explicit review-value-alignment criterion is treated as the value
+    authority for purpose alignment because it captures the confirmed invocation
+    intent and dispatch criterion.
+  - Axiology-specific value_authority_anchor/value_type/alignment_direction
+    fields were not emitted as separate fields because the runtime sidecar
+    output contract only accepts the listed semantic finding fields; their
+    substance is preserved in evidence_anchor, claim, and why.
+validation:
+  unaddressable_candidates: []

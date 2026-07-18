@@ -1,0 +1,261 @@
+schema_version: 1
+session_id: 20260718-3c9b2434
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 출처·권위·유효시점이 없는 스냅샷형 재고 모델이 할당 근거의 일관성과 재현성을 훼손한다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 현재 할당과 다중 원장 전환 모두에 영향을 주는 공통 모델 원인이며, 적용 렌즈들이 high 판단에 합의했다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-013
+  - issue_id: issue-002
+    problem_definition: 주문 전체에 고정된 충족 관계 때문에 주문선·수량 수준의 부분 충족을 표현할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 부분·분할 출하라는 핵심 주문충족 경로를 닫지 못하는 직접적인 개념 누락이며 high 판단에 이견이 없다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 단위가 결합되지 않은 측정값 모델이 수량·중량·치수 계산과 소스 간 통합을 불안정하게 한다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 공통 측정값 결손과 high 결론은 유지됐지만, axiology는 직접 근거 범위를 중량·치수 중심의 medium으로 한정해
+      이견이 남아 있다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-009
+      - finding-014
+  - issue_id: issue-004
+    problem_definition: 상태의 의미·권위·전이·매핑·예외 생명주기를 포괄하는 중앙 계약이 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 연동별 상태 해석이 자동화·통지·정산의 불일치를 유발하는 공통 원인으로 합의되었으며 high 영향이다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-010
+      - finding-011
+      - finding-023
+  - issue_id: issue-005
+    problem_definition: 할당을 지속되는 연결 개체로 모델링하지 않아 예약 결과와 생성·해제·재할당 이력을 보존할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 주문선과 재고 사이의 할당 권위가 비어 있어 경합 상황의 중복 할당과 과판매 위험을 만드는 high 문제다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 주문 단위 완결 관계의 결과로 부분·분할·합배송의 실제 주문선별 출하 수량을 추적할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 주문선·수량 수준 충족 개념 부재가 드러내는 직접적인 운영 증상이며, 잘못된 완료와 잔량 산정을 초래하는 high 문제다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-025
+  - issue_id: issue-007
+    problem_definition: 무시간성 재고 스칼라 때문에 재고 신선도와 과거 시점의 잔액을 판정할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 더 넓은 재고 관측 모델 결손이 기준시각·유효기간·변경 이력 부재로 나타난 경우이며, 현재 할당을 위협하는 high 문제다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: 실물 재고와 회계 재고를 하나의 수량으로 축약해 관점별 권위와 조정 사건을 표현하지 못한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 서로 다른 권위의 사실을 단일 개념으로 합친 것이 대사와 감사 불능의 직접 원인이며 high 판단에 이견이 없다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 단일 ETA 덮어쓰기로 예측·보정·표시값의 출처, 시점, 변경 계보와 선택 근거를 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 현재 경로는 가능하지만 고객 안내와 사후 감사의 신뢰성을 의미 있게 약화하는 medium 문제다.
+    related_surface_finding_ids:
+      - finding-012
+      - finding-024
+  - issue_id: issue-010
+    problem_definition: 외부 상태 코드와 canonical 상태의 매핑이 버전·유효기간·원본 보존을 갖는 자산으로 관리되지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 코드 체계 변경 시 매핑 드리프트와 과거 해석 손실을 만드는 medium 진화성 문제로 합의되었다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-011
+    problem_definition: 다중 구간 계층 결손과 분할·합배송 충족 결손이 복합 운송 확장에서 함께 재설계를 요구한다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 숙의 결과 하나의 뿌리가 아니라 부분-전체 분류와 충족 할당이라는 두 원인의 결합 증상으로 좁혀졌으며, 구현 경계 증거가
+      후속으로 필요하다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-012
+    problem_definition: 문서 버전만 존재해 개념·관계·상태·계산 규칙 변경 전후의 데이터 의미를 유지할 전환 계약이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 현재 버전 내부의 즉시 실패보다 장기 호환성과 감사 가능한 전환을 약화하는 medium 문제다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-013
+    problem_definition: 경로의 부분인 DeliveryLeg를 종단 간 Shipment의 하위 타입으로 둬 유효 사례와 상위 정의가 양립하지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 명시된 중간 구간 사례가 상속된 Shipment 정의의 반례가 되는 직접적인 타입 계약 오류다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-014
+    problem_definition: quantity_on_hand가 실물 수량과 회계 수량이라는 권위가 다른 사실로 동시에 해석된다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 동일 필드에 상충하는 두 의미가 부여되어 시스템별 재고 조회·대사·할당 해석이 달라지는 high 문제다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-015
+    problem_definition: available_qty가 산식·차감 요소·정책·기준시각 없는 독립 숫자로 표현되어 현재 가용성으로 오인될 수 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 시간·정책 의존 파생값의 계보가 끊겨 중복 할당과 과판매 판단을 유발할 수 있는 high 문제다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-016
+    problem_definition: 단위 없는 중량·치수가 정규화 없이 총중량 계산에 사용될 수 있다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 계산 신뢰 저하에 따른 medium 문제는 확정됐지만, 실제 혼합 단위 유입과 비용·용량 판단 경로가 없어 high 영향에
+      대한 semantics 이견이 남아 있다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-017
+    problem_definition: 부분-전체 관계를 상속으로 표현해 전체 Shipment와 부분 DeliveryLeg가 동일 종류로 취급된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 식별자·상태·ETA·충족 의미를 잘못 상속시키는 직접적인 part-of/is-a 유형 오류이며 medium으로 합의되었다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-018
+    problem_definition: OrderLine과 실제 Shipment 사이에 충족 수량을 보유하는 구조적 경로가 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 주문 단위 충족 모델의 결손이 구조적 단절로 나타난 것으로, 부분출하 추적과 대사를 막는 high 문제다.
+    related_surface_finding_ids:
+      - finding-026
+  - issue_id: issue-019
+    problem_definition: 독립 할당 레코드 부재로 선언된 주문→재고 할당 흐름과 OMS–WMS/ERP 대사 경로가 닫히지 않는다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 구조적 미완결과 대사 불능의 medium 영향은 관찰됐지만, 중복 할당·과판매에 따른 high 상향은 실행 증거가 부족해
+      이견이 남아 있다.
+    related_surface_finding_ids:
+      - finding-027
+  - issue_id: issue-020
+    problem_definition: DeliveryLeg의 부모 Shipment 귀속이 없어 구간 순서와 연속성을 특정 화물 경로 안에서 재구성할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 부분-전체 관계를 상속으로 대체한 결과 나타난 구조적 증상이며, 다중 구간 경로 표현을 막는 medium 문제다.
+    related_surface_finding_ids:
+      - finding-028

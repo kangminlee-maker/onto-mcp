@@ -1,0 +1,298 @@
+{
+  "schema_version": "m3-report/5",
+  "judge_model": "claude-opus-4-8",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "verdict_policy": {
+    "min_adequate_runs": 8,
+    "dominant_min_fraction": 0.85,
+    "significant_mode_fraction": 0.15
+  },
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "evidence_session": "20260716-49a71a98",
+      "review_sessions": [
+        "20260716-49a71a98",
+        "20260716-4d4a75e9",
+        "20260718-0c3a8973"
+      ],
+      "review_reps": 3,
+      "judge_runs": 24,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "below",
+        "noise_rate": 0.08333333333333337,
+        "band_frequencies": {
+          "exceeds": 2,
+          "below": 22
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0.125,
+          "band_frequencies": {
+            "exceeds": 1,
+            "below": 7
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0.125,
+          "band_frequencies": {
+            "below": 7,
+            "exceeds": 1
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        }
+      ],
+      "intra_model_stable": true,
+      "recall_material": {
+        "n": 24,
+        "min": 0.7142857142857143,
+        "max": 1,
+        "mean": 0.8333333333333336,
+        "stdev": 0.07896725691322377
+      },
+      "recall_overall": {
+        "n": 24,
+        "min": 0.7,
+        "max": 1,
+        "mean": 0.8458333333333333,
+        "stdev": 0.09565200236040833
+      },
+      "precision": {
+        "n": 24,
+        "min": 0.7333333333333333,
+        "max": 1,
+        "mean": 0.8506944444444443,
+        "stdev": 0.08339985770630608
+      }
+    },
+    {
+      "fixture": "credit-risk-taxonomy",
+      "evidence_session": "20260716-acee24d9",
+      "review_sessions": [
+        "20260716-acee24d9",
+        "20260716-ea9773ff",
+        "20260718-1bb88da9"
+      ],
+      "review_reps": 3,
+      "judge_runs": 24,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "indeterminate",
+        "band": null,
+        "noise_rate": null,
+        "band_frequencies": {
+          "below": 14,
+          "exceeds": 10
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "below": 6,
+            "exceeds": 2
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "exceeds",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "exceeds": 8
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        }
+      ],
+      "intra_model_stable": false,
+      "recall_material": {
+        "n": 24,
+        "min": 0.75,
+        "max": 1,
+        "mean": 0.9583333333333334,
+        "stdev": 0.07795119555779043
+      },
+      "recall_overall": {
+        "n": 24,
+        "min": 0.8,
+        "max": 1,
+        "mean": 0.9583333333333334,
+        "stdev": 0.06400954789890505
+      },
+      "precision": {
+        "n": 24,
+        "min": 0.7647058823529411,
+        "max": 1,
+        "mean": 0.8836898395721927,
+        "stdev": 0.09148723053970924
+      }
+    },
+    {
+      "fixture": "logistics-fulfillment",
+      "evidence_session": "20260716-9ee88c8b",
+      "review_sessions": [
+        "20260716-9ee88c8b",
+        "20260716-e3fc23c8",
+        "20260718-4065ab62"
+      ],
+      "review_reps": 3,
+      "judge_runs": 24,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "below",
+        "noise_rate": 0.125,
+        "band_frequencies": {
+          "below": 21,
+          "exceeds": 3
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        },
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "below": 5,
+            "exceeds": 3
+          }
+        }
+      ],
+      "intra_model_stable": false,
+      "recall_material": {
+        "n": 24,
+        "min": 0.8888888888888888,
+        "max": 1,
+        "mean": 0.902777777777778,
+        "stdev": 0.036746545987008224
+      },
+      "recall_overall": {
+        "n": 24,
+        "min": 0.9,
+        "max": 1,
+        "mean": 0.9125,
+        "stdev": 0.03307189138830738
+      },
+      "precision": {
+        "n": 24,
+        "min": 0.9333333333333333,
+        "max": 1,
+        "mean": 0.9777777777777779,
+        "stdev": 0.031426968052735454
+      }
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "evidence_session": "20260716-533b3a03",
+      "review_sessions": [
+        "20260716-533b3a03",
+        "20260716-e5e2a98b",
+        "20260718-8d90017a"
+      ],
+      "review_reps": 3,
+      "judge_runs": 24,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "indeterminate",
+        "band": null,
+        "noise_rate": null,
+        "band_frequencies": {
+          "exceeds": 10,
+          "below": 14
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "dominant",
+          "band": "exceeds",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "exceeds": 8
+          }
+        },
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "below": 6,
+            "exceeds": 2
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        }
+      ],
+      "intra_model_stable": false,
+      "recall_material": {
+        "n": 24,
+        "min": 0.875,
+        "max": 1,
+        "mean": 0.9270833333333334,
+        "stdev": 0.06162583107395435
+      },
+      "recall_overall": {
+        "n": 24,
+        "min": 0.8,
+        "max": 1,
+        "mean": 0.866666666666667,
+        "stdev": 0.06871842709362766
+      },
+      "precision": {
+        "n": 24,
+        "min": 0.7272727272727273,
+        "max": 1,
+        "mean": 0.9356060606060606,
+        "stdev": 0.0998592903520005
+      }
+    }
+  ]
+}

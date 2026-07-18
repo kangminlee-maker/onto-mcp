@@ -1,0 +1,153 @@
+schema_version: 1
+session_id: 20260718-4065ab62
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: logistics-fulfillment-ontology.yaml / OrderLine- Shipment 연결 구조
+    evidence_anchor: "materialized-input.md: OrderLine attributes only include
+      sku_ref and qty; comment states no reference from the line to the actual
+      fulfilling shipment/leg. relations defines only fulfills from Shipment to
+      Order with note that OrderLine-level mapping is not included."
+    claim: OrderLine fulfillment is structurally disconnected from Shipment and
+      DeliveryLeg.
+    what: The ontology declares order lines and shipments, but the only fulfillment
+      relation is Shipment -> Order. There is no relation or attribute that
+      connects a specific OrderLine to the Shipment or DeliveryLeg that
+      fulfilled it.
+    why: The target’s own comments identify partial-shipment traceability as
+      impossible, and Shipment.total_weight is defined as the sum of constituent
+      OrderLine weights while no structural edge identifies those constituent
+      lines. For a WMS/TMS/ERP integration reference, this weakens the
+      structural basis for reconciling line-level allocation, picking, shipment
+      contents, and delivery evidence.
+    how_to_fix: Add a line-level fulfillment/allocation structure, such as
+      ShipmentLine or FulfillmentAllocation, linking OrderLine to Shipment and
+      optionally DeliveryLeg, with shipped/allocated quantity and
+      status-relevant timestamps.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Concept reference document for WMS/TMS/ERP integration across
+        order, inventory, shipment, and delivery concepts.
+      failure_condition: When one order is split across multiple shipments or one
+        shipment contains selected lines from multiple orders, the ontology
+        cannot identify which OrderLine quantity was fulfilled by which physical
+        movement.
+      impact: Integration consumers cannot reliably reconcile OMS line status, WMS
+        pick/pack records, TMS shipment contents, and carrier delivery events at
+        the line level, reducing the ontology’s usefulness as a concept
+        standard.
+      evidence_refs:
+        - "materialized-input.md: OrderLine has sku_ref and qty only, plus an
+          explicit comment that no reference exists to the shipment/leg that
+          fulfilled the line."
+        - "materialized-input.md: relations contains only fulfills from Shipment
+          to Order and notes that OrderLine-level mapping is omitted."
+        - "materialized-input.md: Shipment.total_weight note says it is the sum
+          of constituent OrderLine weights."
+    causal_path:
+      root_cause_candidate: The fulfillment relation is modeled only at order
+        granularity even though shipment composition is described in terms of
+        order lines.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: OrderLine has no attribute or relation to Shipment or DeliveryLeg.
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: OrderLine attributes list only sku_ref and
+              qty."
+            - "materialized-input.md: OrderLine comment says there is no
+              reference to the actual shipment/leg that fulfilled the line."
+        - cause_id: structure-candidate-001.cause-002
+          claim: The only explicit fulfillment edge connects Shipment to Order, not
+            Shipment to OrderLine.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "materialized-input.md: relations entry name fulfills, from
+              Shipment, to Order."
+            - "materialized-input.md: fulfills note says it is an order-level
+              relation and does not include OrderLine-level mapping."
+        - cause_id: structure-candidate-001.cause-003
+          claim: Shipment composition nevertheless depends on OrderLine membership.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: Shipment.total_weight note says it is
+              calculated as the sum of constituent OrderLine weights."
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: logistics-fulfillment-ontology.yaml / DeliveryLeg 경로 구성 구조
+    evidence_anchor: "materialized-input.md: Shipment definition says DeliveryLeg is
+      also a kind of Shipment; DeliveryLeg has leg_seq, from_ref, and to_ref;
+      relations contains only fulfills from Shipment to Order and no parent
+      shipment, route, or next-leg relation."
+    claim: DeliveryLeg has no structural link that groups legs into a shipment route.
+    what: DeliveryLeg is defined as one segment of a cargo route and has a sequence
+      number, but the ontology does not provide a parent shipment, route
+      identifier, or adjacency relation that ties multiple legs into one
+      end-to-end movement.
+    why: A sequence number is only meaningful within a containing route or shipment.
+      Because DeliveryLeg is modeled only as an is_a Shipment subtype, each leg
+      inherits shipment-level behavior but lacks a structural edge that says
+      which shipment route it belongs to or which legs precede/follow it.
+    how_to_fix: Introduce a parent/composition relation such as Shipment has_many
+      DeliveryLeg, DeliveryLeg belongs_to Shipment, or a separate Route entity
+      with ordered legs; scope leg_seq to that parent.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Concept reference document for shipment and delivery
+        integration between WMS/TMS/carrier systems.
+      failure_condition: When a delivery has multiple legs, consumers cannot
+        reconstruct the end-to-end route or associate leg-level tracking and
+        locations with one parent shipment.
+      impact: TMS/carrier integration loses a stable structural path for multi-leg
+        delivery state, ETA, and exception handling, even though DeliveryLeg is
+        declared as part of the shipment model.
+      evidence_refs:
+        - "materialized-input.md: DeliveryLeg definition says it is one segment
+          of a cargo route."
+        - "materialized-input.md: DeliveryLeg attributes include leg_seq,
+          from_ref, and to_ref but no parent shipment or route reference."
+        - "materialized-input.md: relations contains only fulfills from Shipment
+          to Order."
+    causal_path:
+      root_cause_candidate: The ontology uses inheritance to relate DeliveryLeg to
+        Shipment but omits the composition or ordering relation required for
+        route-level structure.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: DeliveryLeg is a route segment with leg_seq/from/to attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: DeliveryLeg definition and attributes."
+        - cause_id: structure-candidate-002.cause-002
+          claim: No explicit relation groups DeliveryLeg instances under a parent shipment
+            or route.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "materialized-input.md: relations contains only fulfills from
+              Shipment to Order."
+            - "materialized-input.md: DeliveryLeg attributes do not include
+              parent shipment or route reference."
+        - cause_id: structure-candidate-002.cause-003
+          claim: The is_a Shipment link makes each leg a kind of shipment but does not
+            provide route containment or adjacency.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: Shipment definition says DeliveryLeg is
+              also a kind of Shipment."
+            - "materialized-input.md: DeliveryLeg has is_a: Shipment."
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific structure specification was
+    applied.
+  - Structural review is limited to the embedded single-file ontology and the
+    role definition; no web research or recursive reference expansion was used.
+  - In this lens, explicit target comments describing absent links are treated
+    as evidence of structural design intent and omission.
+validation:
+  unaddressable_candidates: []

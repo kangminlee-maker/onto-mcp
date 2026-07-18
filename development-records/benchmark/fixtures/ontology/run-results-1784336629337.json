@@ -1,0 +1,42 @@
+[
+  {
+    "fixture": "clinical-lab-workflow",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-499Zbu/.onto/review/20260718-f461553b",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/clinical-lab-workflow/evidence/20260718-f461553b",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-499Zbu",
+    "elapsed_sec": 990,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  },
+  {
+    "fixture": "credit-risk-taxonomy",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-YUsPsC/.onto/review/20260718-41224df0",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/credit-risk-taxonomy/evidence/20260718-41224df0",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-YUsPsC",
+    "elapsed_sec": 717,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  },
+  {
+    "fixture": "manufacturing-bom",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-3dqRel/.onto/review/20260718-e047c9c7",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/manufacturing-bom/evidence/20260718-e047c9c7",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-3dqRel",
+    "elapsed_sec": 863,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  },
+  {
+    "fixture": "logistics-fulfillment",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-logistics-fulfillment-E65MiD/.onto/review/20260718-3c9b2434",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/logistics-fulfillment/evidence/20260718-3c9b2434",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-logistics-fulfillment-E65MiD",
+    "elapsed_sec": 898,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  }
+]

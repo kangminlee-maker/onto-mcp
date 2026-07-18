@@ -1,0 +1,268 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Multiple rating scales lack an ontology-owned, versioned
+      conversion authority for shared grade meaning.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The issue is framed as a shared authority failure: grade conversion
+      is delegated to external or consumer logic, so engine and reporting
+      consumers can preserve inconsistent meanings under the same ontology."
+    related_surface_finding_ids:
+      - finding-001
+      - finding-009
+  - issue_id: issue-002
+    problem_definition: Limit utilization lacks an authoritative calculation-output
+      contract for timing, freshness, FX basis, numerator, denominator, and
+      limit-source inputs.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The formula can be implemented with different as-of, cutoff, FX, and
+      denominator semantics, directly weakening shared risk-control values
+      across systems.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-010
+  - issue_id: issue-003
+    problem_definition: Externally owned default/delinquency status has no modeled
+      boundary projection or relation to shared credit-risk interpretation.
+    issue_role: evidence_gap
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The deliberated claim is not that the ontology must own the status
+      internally, but that the boundary relation is missing for a
+      purpose-critical external concept.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Manual risk-grade overrides lack an explicit
+      value-resolution and audit-evidence model.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The ontology permits adjusted Exposure.risk_grade values but does not
+      represent derived versus adjusted state, precedence, source value, actor,
+      time, reason, or approval evidence.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: Time-dependent risk inputs lack consistent validity,
+      history, version, and FX timing semantics for point-in-time
+      reconstruction.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Ratings, limits, mappings, and exchange rates are time-sensitive but
+      selectively or not temporally qualified, making historical calculations
+      and reports non-reproducible.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Shared cross-system values lack authority-bearing concepts
+      for mapping, limit availability, and exchange-rate precedence.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "This is the broad authority root behind several
+      consumer-reconciliation risks: no canonical owner, version, source,
+      precedence, or conflict-resolution concept is modeled."
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: Default/delinquency lifecycle status is omitted without a
+      minimal external-status projection or explicit non-consumption rule.
+    issue_role: evidence_gap
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The issue remains material but depends on an owner decision: either
+      model an externally owned lifecycle-status boundary or explicitly state
+      that this ontology must not be used to consume that status."
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: Stateful risk objects are modeled as current-value records
+      without lifecycle, terminal, remediation, or correction states.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The absence of lifecycle state or event history leaves inclusion,
+      exclusion, closure, release, and correction behavior to consumers rather
+      than the shared ontology.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Changeable business classifications are closed enum literals
+      rather than governed, versioned code-set concepts.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Closed enums are not inherently wrong, but for changing product,
+      collateral, segment, and grade classifications they enable schema-change
+      churn and weaken versioned identity.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: Collateral is incorrectly asserted as an Exposure subtype
+      despite being defined and related as a separate securing asset.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The model simultaneously uses inheritance and association for
+      Collateral versus Exposure, creating a concrete type-boundary
+      contradiction.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-011
+    problem_definition: RiskAppetite breach logic uses an entity-level comparison
+      instead of a scoped attribute-level predicate.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Only total_amount and threshold are comparable numeric attributes;
+      the current prose forces consumers to infer projections and scope.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-012
+    problem_definition: Collateral is semantically misclassified as an Exposure
+      subtype, breaking a foundational taxonomy boundary.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "This is the semantic form of the Collateral inheritance defect:
+      downstream systems could count, filter, validate, or report collateral
+      under exposure semantics."
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-013
+    problem_definition: Overlapping borrower, engine, and exposure grade concepts
+      lack authoritative internal mapping and override semantics.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue captures the semantic grade-authority problem behind
+      divergent conversion and reporting behavior, overlapping with but distinct
+      from the structural conversion-authority issue.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: LTV lacks an explicit contract distinguishing authoritative
+      derived ratio from manual review metric.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The core problem is an unresolved meaning choice: if derived, LTV
+      needs formula and source semantics; if manual, it needs provenance and
+      naming or boundary clarity."
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-015
+    problem_definition: Limit semantics conflate approved amount, available limit,
+      utilized exposure, and per-system FX conversion basis.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The same utilization and limit terms can denote different denominator
+      and currency-conversion meanings, allowing divergent control and reporting
+      outcomes.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-016
+    problem_definition: RiskAppetite is structurally orphaned from the aggregate or
+      scope it governs.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The missing relation is a graph-level symptom of the broader scoped
+      compliance-model gap, but it is independently actionable because
+      RiskAppetite cannot be traversed from the ontology structure.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-017
+    problem_definition: RiskRating.grade to Exposure.risk_grade lineage is
+      prose-only and absent as a structural dependency.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The missing edge is a material lineage facet of the broader
+      grade-mapping authority problem; it should be handled with source path,
+      join scope, precedence, and override semantics rather than as a bare
+      relation alone.
+    related_surface_finding_ids:
+      - finding-019

@@ -1,0 +1,90 @@
+schema_version: 1
+session_id: 20260718-41224df0
+planned_issues:
+  - issue_id: issue-008
+    priority: 30
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+    conflict_summary: 네 렌즈는 연체·부실 상태를 실제 소비 범위에 포함하는 경우에만 경계 계약 누락을 medium 이슈로
+      인정하지만, logic과 semantics는 해당 소비 범위를 입증할 경계 내 증거가 없어 원인과 심각도를 확정할 수 없다고 본다.
+    resolution_question: 현재 증거만으로 연체·부실 lifecycle 경계 계약 부재를 material issue로 확정할 수
+      있는가, 아니면 실제 소비 범위가 확인될 때까지 조건부 증거 공백으로 남겨야 하는가?
+  - issue_id: issue-005
+    priority: 20
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+      - issue-stance-matrix.yaml#stances.issue-005.structure
+    conflict_summary: 모든 참여 렌즈가 RiskAppetite의 범위·정책·평가 역할 분리 필요성에는 동의하지만, coverage는
+      직접 증거가 범위 차원 누락만 확정한다며 medium을 주장하고 semantics와 structure는 역할 혼합과 구조적 고립까지
+      근거로 high를 유지한다.
+    resolution_question: RiskAppetite의 적용 범위 누락, 역할 혼합, 구조적 고립을 결합한 증거가 지원 사용자·경로의
+      목적 달성 실패를 입증해 high를 정당화하는가, 아니면 신뢰성과 결정 품질 약화에 해당하는 medium으로 낮춰야 하는가?
+  - issue_id: issue-009
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - logic
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+    conflict_summary: evolution과 axiology는 무버전 폐쇄형 enum이 범주 변경 시 소비자 동시 변경과 과거 의미
+      손실을 초래하므로 high라고 보지만, logic은 고정된 단일 버전에서는 모순이 없다며 문제를 변경 이후의 교차 버전 해석으로
+      한정하고 심각도를 낮춘다.
+    resolution_question: 분류 코드 결함의 평가 범위를 현재 단일 버전에 한정해야 하는가, 아니면 선언된 변경·확장 목적과 교차
+      버전 영향까지 포함해 high로 유지해야 하는가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 통합 근본 원인과 high 심각도를 지지해 통제된 숙의가 필요한 충돌이 없다.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 공유 계산 입력의 권위·시점 누락이라는 원인과 medium 심각도에 동의한다.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: structure의 범위 축소는 스냅샷과 준수 평가 사이의 구조적 연결을 강조한 렌즈별 한정이며, 다른 렌즈의 시간 의미 충돌
+      주장이나 medium 심각도를 부정하지 않는다.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: structure는 버전형 상태·정책과 결과 참조의 구조적 부재로 원인을 구체화했을 뿐, 공통 근본 원인이나 high 심각도와
+      실질적으로 충돌하지 않는다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 canonical rating scale과 권위 있는 매핑의 누락 및 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 수동 조정을 감사 가능한 별도 사건으로 모델링해야 한다는 원인과 medium 심각도에 동의한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 버전형 RatingMapping 부재라는 원인과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: coverage의 적용 불가는 렌즈 범위 한계이며, 적용 가능한 나머지 렌즈는 잘못된 상속 관계의 제거와 high 심각도에 동의한다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: structure는 정확한 LTV 도메인 산식보다 파생값 provenance 부재로 직접 확정 범위를 좁혔지만, 제안된
+      원천·시점·산식 연결이나 medium 심각도와 충돌하지 않는다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 집계 원천 관계와 범위 조건의 누락이라는 원인 및 medium 심각도에 동의한다.

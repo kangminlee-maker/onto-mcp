@@ -1,0 +1,191 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml / rating scale model
+    evidence_anchor: 'materialized-input.md: Borrower.internal_rating note says
+      "1~10 숫자 등급 체계"; RiskRating.grade enum values [R1, R2, R3, R4, R5] says
+      mapping table is in the risk-team wiki; Exposure.risk_grade enum values
+      [AAA, AA, A, BBB, BB, B, CCC]; notes say the three borrower grade scales
+      coexist and each consumer system performs conversion.'
+    claim: 등급 체계가 온톨로지 내부에서 버전 있는 변환 개념으로 모델링되지 않아 등급 체계 변경 시 소비 시스템별 재해석이 필요하다.
+    what: 공유 권위 문서를 지향하면서도 internal_rating, RiskRating.grade, Exposure.risk_grade의 세
+      등급 스케일을 각각 별도 속성과 enum/string으로 두고, 변환 권위는 외부 위키와 각 소비 시스템에 맡긴다. 새 등급 단계
+      추가, 등급 스케일 개편, 보고 등급 변경이 생기면 온톨로지 안의 안정된 변환 규칙이나 버전 식별자로 기존 데이터와 새 데이터를 이어
+      붙일 수 없다.
+    why: evolution 관점에서 변경 내성의 핵심은 외부 표준이나 내부 등급 정책이 바뀌어도 기존 데이터와 규칙의 연속성이 유지되는지다.
+      현재 증거는 세 스케일의 병존과 소비자별 변환을 명시하므로, 리스크 엔진과 보고 시스템이 같은 차주/익스포저를 다르게 매핑할 수 있고
+      새 스케일 도입 시 모든 소비 시스템의 변환 로직을 동시에 수정해야 한다. 이는 공유 개념 기준이라는 목적을 직접 약화한다.
+    how_to_fix: 등급 스케일을 독립 개념으로 승격하고 scale_id, grade_code,
+      effective_from/effective_to, version, source_authority를 둔다.
+      RiskRating.grade와 Exposure.risk_grade는 원천 등급과 보고 등급을 구분해 참조하게 하고, 변환은 온톨로지
+      안의 RatingMapping 엔티티 또는 규칙 세트로 버전 관리한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 여신 리스크 등급의 개념 기준과 변경 후 데이터 연속성.
+      failure_condition: 등급 단계가 추가되거나 기존 R1~R5, 1~10, AAA~CCC 중 하나가 개편될 때 변환 권위가 온톨로지
+        밖의 위키와 소비 시스템별 구현으로 분산된다.
+      impact: 같은 원천 등급이 시스템마다 다른 보고 등급으로 해석될 수 있어 과거/현재 보고 비교와 리스크 엔진 산출물의 재현성이 약해진다.
+      evidence_refs:
+        - "materialized-input.md: Borrower.internal_rating note"
+        - "materialized-input.md: RiskRating.grade note"
+        - "materialized-input.md: Exposure.risk_grade values and note"
+        - "materialized-input.md: notes entry about three scales and
+          consumer-system conversion"
+    causal_path:
+      root_cause_candidate: 등급 변환을 온톨로지의 버전 있는 권위 개념으로 닫지 않고 외부 위키 및 소비 시스템별 변환에 위임한다.
+      root_cause_step_id: evolution-candidate-001.cause-004
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 대상은 세 개의 등급 표현을 별도 속성으로 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: Borrower.internal_rating"
+            - "materialized-input.md: RiskRating.grade"
+            - "materialized-input.md: Exposure.risk_grade"
+        - cause_id: evolution-candidate-001.cause-002
+          claim: RiskRating.grade의 Borrower.internal_rating 매핑은 온톨로지 내부가 아니라 리스크팀 위키를
+            참조한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "materialized-input.md: RiskRating.grade note"
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 세 스케일의 변환은 각 소비 시스템이 수행한다고 명시되어 공유 변환 권위가 분산된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "materialized-input.md: notes entry about three scales"
+        - cause_id: evolution-candidate-001.cause-004
+          claim: 등급 스케일 변경 시 기존 데이터와 새 데이터의 연속 비교를 온톨로지 자체로 보장할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: notes entry about three scales"
+            - "materialized-input.md: RiskRating.grade note"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml / exposure aggregation and limit-utilization rule
+    evidence_anchor: "materialized-input.md: ExposureAggregate.total_amount note
+      says monthly batch storage excludes intraday new loans until next batch;
+      classification rule says currency conversion uses each system's same-day
+      FX table; Limit.approved_amount note says CRM available_limit is jointly
+      managed."
+    claim: 한도 소진율과 총익스포저 계산이 계산시점·환율권위·외부 한도 권위를 버전 있는 입력으로 고정하지 않아 신규 데이터 주기나 환율 정책
+      변경에 취약하다.
+    what: Limit 소진율은 ExposureAggregate.total_amount / Limit.approved_amount로 정의되지만,
+      총익스포저는 월말 배치 저장값이고 일중 신규 여신은 미반영된다. 통화 환산은 각 시스템의 당일 환율 테이블을 사용한다고 되어 있으며,
+      승인 한도는 CRM의 available_limit과 합산 관리된다고만 되어 있다. 계산 기준일, 환율 소스, 외부 한도 합산 기준이
+      온톨로지의 참조 가능한 개념으로 닫혀 있지 않다.
+    why: 새로운 실시간 심사, 일중 리스크 모니터링, 다통화 포트폴리오 보고, 외부 CRM 교체 같은 변경이 들어오면 기존 Limit 소진율
+      의미가 그대로 확장되지 않는다. 같은 borrower와 amount라도 월말 배치/일중 값, 시스템별 환율 테이블, CRM 합산
+      방식에 따라 결과가 달라질 수 있어 보고 시스템과 리스크 엔진의 공유 기준이 변경에 따라 갈라진다.
+    how_to_fix: ExposureAggregate와 LimitUtilization을 계산 산출물로 모델링하고
+      calculation_as_of, data_cutoff_at, calculation_version, fx_rate_source,
+      fx_rate_date, included_limit_sources를 속성 또는 참조로 둔다. CRM available_limit 같은
+      외부 기여분은 ExternalLimitComponent로 분리해 source_system과 effective interval을
+      명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 한도 소진율, 총익스포저, 다통화 환산 기준.
+      failure_condition: 일중 데이터 수용, 환율 테이블 변경, CRM 한도 소스 변경, 또는 다통화 보고 확장 시 계산 입력 권위와
+        기준시점이 시스템별로 달라진다.
+      impact: 한도 위반 여부나 소진율 보고가 계산 시점과 소비 시스템에 따라 달라져 변경 후에도 같은 개념을 유지한다는 신뢰가 낮아진다.
+      evidence_refs:
+        - "materialized-input.md: ExposureAggregate.total_amount note"
+        - "materialized-input.md: classification_rules Limit 소진율 rule"
+        - "materialized-input.md: Limit.approved_amount note"
+    causal_path:
+      root_cause_candidate: 계산 산출물의 시간성, 환율 권위, 외부 한도 구성요소를 온톨로지 내부의 버전 있는 입력으로 모델링하지 않는다.
+      root_cause_step_id: evolution-candidate-002.cause-005
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: ExposureAggregate.total_amount는 월말 배치 저장값이며 일중 신규 여신은 다음 배치까지 제외된다.
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: ExposureAggregate.total_amount note"
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Limit 소진율은 이 저장 집계값을 분자로 사용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: classification_rules Limit 소진율 rule"
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 다통화 환산은 각 시스템의 당일 환율 테이블을 사용한다고 되어 있어 단일 환율 권위나 버전 식별자가 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "materialized-input.md: classification_rules Limit 소진율 rule"
+        - cause_id: evolution-candidate-002.cause-004
+          claim: 승인 한도는 CRM available_limit과 합산 관리된다고 되어 있지만 합산 구성요소와 기준시점이 개념화되어 있지 않다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "materialized-input.md: Limit.approved_amount note"
+        - cause_id: evolution-candidate-002.cause-005
+          claim: 데이터 주기나 환율/CRM 소스가 변경되면 같은 Limit 소진율 개념의 연속성과 재현성이 깨질 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: ExposureAggregate.total_amount note"
+            - "materialized-input.md: classification_rules Limit 소진율 rule"
+            - "materialized-input.md: Limit.approved_amount note"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml / closed categorical enums
+    evidence_anchor: "materialized-input.md: Borrower.segment enum values [retail,
+      sme, corporate]; Exposure.product_type enum values [term_loan, revolving,
+      guarantee]; Collateral.collateral_type enum values [real_estate, deposit,
+      securities]; RiskRating.grade and Exposure.risk_grade also use closed
+      value lists."
+    claim: 핵심 분류값들이 닫힌 enum으로만 표현되어 새 상품·담보·차주 세그먼트 추가가 데이터 확장이 아니라 온톨로지 스키마 변경이 된다.
+    what: 차주 세그먼트, 상품 유형, 담보 유형, 등급 값이 모두 속성 내부의 고정 enum 값으로 박혀 있다. 각 값의 정의, 유효기간,
+      폐기 여부, 상위/하위 분류, 외부 코드 매핑을 담는 별도 분류 엔티티나 코드셋 개념이 없다.
+    why: 여신 리스크 분류체계는 새 상품, 새 담보 유형, 새 고객 세그먼트를 지속적으로 받아들여야 한다. 현재 구조에서는 예컨대 정책금융
+      상품, 파생 보증, 지식재산 담보, 플랫폼 사업자 세그먼트 같은 새 범주가 생길 때 기존 속성 정의를 직접 수정해야 한다. 이 방식은
+      기존 데이터의 과거 코드 의미와 새 코드 의미를 함께 유지하기 어렵고, 리스크 엔진/보고 시스템 동시 배포 요구를 만든다.
+    how_to_fix: enum 값 목록을 ProductType, CollateralType, BorrowerSegment, GradeCode
+      같은 코드셋 엔티티로 분리하고 code, label, definition, parent_code, status,
+      effective_from/effective_to, source_authority를 둔다. 속성은 enum literal 대신 코드셋
+      참조를 사용하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 여신 리스크 분류 온톨로지의 확장성과 리스크 엔진/보고 시스템 간 분류 기준 공유.
+      failure_condition: 새 상품 유형, 담보 유형, 차주 세그먼트, 등급 코드가 추가되거나 기존 코드가 폐기될 때 속성 enum 자체를 수정해야 한다.
+      impact: 분류 변경이 데이터/코드셋 관리가 아니라 스키마 변경과 소비자 배포 문제가 되어 변경 비용과 호환성 위험이 커진다.
+      evidence_refs:
+        - "materialized-input.md: Borrower.segment enum"
+        - "materialized-input.md: Exposure.product_type enum"
+        - "materialized-input.md: Collateral.collateral_type enum"
+        - "materialized-input.md: RiskRating.grade enum"
+        - "materialized-input.md: Exposure.risk_grade enum"
+    causal_path:
+      root_cause_candidate: 변경 가능한 업무 분류값을 버전 관리되는 코드셋 개념이 아니라 속성 내부의 닫힌 enum literal로 모델링한다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 주요 분류 속성이 고정 enum 값 목록으로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: Borrower.segment enum"
+            - "materialized-input.md: Exposure.product_type enum"
+            - "materialized-input.md: Collateral.collateral_type enum"
+        - cause_id: evolution-candidate-003.cause-002
+          claim: enum 값에 대한 유효기간, 상태, 상하위 관계, 외부 코드 매핑을 담는 별도 분류 엔티티가 보이지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "materialized-input.md: entities section"
+            - "materialized-input.md: relations section"
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 새 범주 수용 시 기존 ontology schema의 속성 값 목록 수정이 필요하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: Borrower.segment enum"
+            - "materialized-input.md: Exposure.product_type enum"
+            - "materialized-input.md: Collateral.collateral_type enum"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검토 대상 온톨로지는 리스크 엔진과 보고 시스템 사이에서 장기간 공유되는 개념 기준으로 사용된다고 보았다.
+  - 등급, 상품, 담보, 세그먼트, 환율, 한도 소스는 운영 중 추가·변경될 가능성이 있는 업무 분류와 계산 권위라고 보았다.
+  - session_domain이 none이므로 별도 도메인 문서나 외부 표준은 사용하지 않았다.
+validation:
+  unaddressable_candidates: []

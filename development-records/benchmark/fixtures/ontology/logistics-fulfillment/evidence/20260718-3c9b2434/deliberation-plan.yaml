@@ -1,0 +1,128 @@
+schema_version: 1
+session_id: 20260718-3c9b2434
+planned_issues:
+  - issue_id: issue-019
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.structure
+      - issue-stance-matrix.yaml#stances.issue-019.axiology
+      - issue-stance-matrix.yaml#stances.issue-019.coverage
+    conflict_summary: 구조 렌즈는 실행 가능한 할당 경로의 부재를 medium으로 유지하지만, axiology와 coverage는
+      중복 할당·과판매 및 대사 불능의 운영 영향을 근거로 high 상향을 주장한다.
+    resolution_question: 할당 근거 레코드 부재가 지원 흐름의 구조적 불완전성인 medium 문제인지, 중복 할당·과판매를 초래할
+      수 있는 high 문제인지 결정해야 하는가?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+    conflict_summary: coverage·evolution·semantics·structure는 수량·중량·치수 전반의 공통 측정값
+      결손과 high 심각도를 지지하지만, axiology는 직접 근거가 중량·치수와 파생 총중량에 한정된다며 범위를 좁히고
+      medium으로 낮춘다.
+    resolution_question: 수량·중량·치수를 하나의 high 심각도 측정값 문제로 유지할 충분한 공통 원인과 영향이 있는가, 아니면
+      중량·치수 중심의 medium 범위로 좁히거나 분리해야 하는가?
+  - issue_id: issue-016
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+      - issue-stance-matrix.yaml#stances.issue-016.axiology
+    conflict_summary: 두 렌즈 모두 단위 없는 중량·치수와 총중량 산식의 결함을 인정하지만, semantics는 high를 유지하고
+      axiology는 직접 입증된 영향이 계산 신뢰 저하에 집중된다는 이유로 medium을 주장한다.
+    resolution_question: 혼합 단위 총중량 오류의 지원 경로 영향이 high 분류를 요구하는가, 아니면 현재 근거로는 medium이 적절한가?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - logic
+      - semantics
+      - axiology
+      - coverage
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+    conflict_summary: evolution·axiology·coverage·structure는 Shipment 계층과 분할·합배송 충족
+      관계를 포괄하는 단일 확장성 문제를 지지하지만, logic과 semantics는 직접 성립하는 원인을
+      Shipment–DeliveryLeg의 part-of/is-a 오류와 여정 귀속으로 한정하며 충족 문제 전체를 같은 원인으로 환원하지
+      않는다.
+    resolution_question: 다중 구간 계층 오류와 분할·합배송 충족 결손을 하나의 공통 뿌리 문제로 유지해야 하는가, 아니면
+      부분-전체 분류 문제와 충족 관계 문제로 분리해야 하는가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 재고 권위·시간성 결손의 뿌리, high 심각도와 관측 모델 조치를 일관되게 지지한다.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 주문선·수량 수준 충족 개념의 필요성과 high 심각도에 합의한다.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: coverage의 narrow는 직접 근거 범위를 예외·정정 및 상태 정규화로 한정한 것이며, 중앙 상태 계약의 필요성이나
+      high 심각도와 충돌하지 않는다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 지속되는 할당 개체와 생명주기 부재의 원인·영향·조치에 합의한다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 주문선별 충족 수량 연결 부재와 high 심각도에 합의한다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: structure의 narrow는 구조 렌즈가 확인한 결손 범위를 명시한 것으로, 무시간성 재고 모델이라는 뿌리나 high
+      심각도를 반박하지 않는다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 실물·회계 재고의 의미와 권위 분리 필요성에 일관되게 동의한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 단일 ETA 덮어쓰기 모델의 문제와 버전 있는 관측·수정 모델 조치에 합의한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 외부 상태 매핑을 버전 있는 독립 자산으로 관리해야 한다는 판단과 medium 심각도에 합의한다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: structure의 narrow는 구조적 계약 부재까지만 직접 판정한다는 렌즈 경계이며, 버전 전환 계약의 필요성이나 medium
+      심각도와 실질적으로 충돌하지 않는다.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: coverage는 논리적 양립 불가능성보다 시나리오 결손으로 근거 범위를 한정하지만, 모든 적용 렌즈가 is_a를 구성 관계로
+      바꿔야 한다는 핵심 결론에 합의한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 quantity_on_hand의 실물·회계 의미 혼합과 high 심각도에 합의한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: structure의 narrow는 파생값 계보 단절에 대한 렌즈 범위를 표시할 뿐, available_qty의 시간·정책 의존
+      원인과 high 심각도를 반박하지 않는다.
+  - issue_id: issue-017
+    reason_code: no_material_conflict
+    reason: coverage는 유형 오류 판정보다 다구간 시나리오 결손에 근거를 한정하지만, 모든 적용 렌즈가 part-of/is-a 문제와
+      구성 관계 조치에 합의한다.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들이 OrderLine–Shipment 충족 수량 경로 부재의 원인·영향·high 심각도에 합의한다.
+  - issue_id: issue-020
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 DeliveryLeg의 부모 Shipment 귀속과 구간 순서 범위가 필요하다는 판단 및 medium 심각도에 합의한다.

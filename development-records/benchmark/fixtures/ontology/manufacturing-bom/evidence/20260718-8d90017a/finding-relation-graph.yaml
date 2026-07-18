@@ -1,0 +1,143 @@
+schema_version: 1
+session_id: 20260718-8d90017a
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: BomLine.scrap_rate is a copied, externally maintained
+      process/yield value without explicit source authority, synchronization
+      semantics, or separation from BOM product-structure meaning.
+    shared_cause: null
+    rationale: "Both findings target BomLine.scrap_rate and identify the same
+      failure mode: a production-planning Excel value is copied into the
+      ontology/BOM line where PLM/MES consumers may treat it as authoritative,
+      weakening trust and authority boundaries."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-002
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: Part revision/current-change fields are named or positioned as
+      current item state while the authoritative production revision is governed
+      by ECO effectivity and delayed asynchronous synchronization.
+    shared_cause: null
+    rationale: "Both findings describe the same ECO/Part.rev inconsistency: after
+      ECO.effective_date and before weekly Part.rev synchronization, consumers
+      may disagree on whether Part.rev or ECO effectivity determines the current
+      production revision."
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-002
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: The change-management model lacks a separate authoritative
+      effectivity concept that distinguishes applicability state from
+      synchronized display or item attributes.
+    shared_cause:
+      cause_claim: ECO applicability is modeled through affected parts and an
+        effective date, while production revision and Part.rev synchronization
+        are not represented as separate effectivity/synchronization concepts.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-006.cause-002
+    rationale: finding-002 focuses on the current lag between ECO effectivity and
+      Part.rev synchronization; finding-006 generalizes the same modeling gap to
+      future phased or scoped effectivity cases. Both depend on the absence of a
+      first-class effectivity/synchronization authority.
+    confidence: medium
+  - relation_id: rel-004
+    from_finding_id: finding-003
+    to_finding_id: finding-004
+    relation: shared_cause_candidate
+    root_hypothesis: Unit-of-measure semantics are not modeled as authoritative,
+      extensible concepts with conversion rules, leaving cross-unit
+      interpretation to external practice.
+    shared_cause:
+      cause_claim: Part.uom is a limited enum and item-specific conversion factors are
+        absent, with conversion deferred to shop-floor practice.
+      from_cause_ref: finding-003.cause-001
+      to_cause_ref: finding-004.cause-002
+    rationale: finding-003 names the value-alignment risk of local UOM conversion
+      practice; finding-004 names the evolution/extensibility risk of the same
+      UOM modeling choice. The relation is supported by their shared causal step
+      around missing conversion authority.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-003
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: Manufacturing measurement semantics are left implicit instead
+      of being standardized in the ontology, so consumers cannot reliably
+      interpret quantity or capacity values across contexts.
+    shared_cause:
+      cause_claim: WorkCenter.capacity_per_shift is represented as a numeric value
+        whose unit varies by work center, while the ontology lacks a standard
+        unit/basis concept for capacity.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-005.cause-002
+    rationale: finding-003 combines UOM and work-center capacity unit ambiguity as a
+      value-alignment issue; finding-005 isolates the work-center capacity half
+      as an extensibility issue. Both rest on the same implicit-unit capacity
+      cause.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: WorkCenter.capacity_per_shift is a bare numeric attribute whose
+      unit or basis varies by work center, making MES capacity interpretation
+      unstable.
+    shared_cause: null
+    rationale: "Both findings target WorkCenter.capacity_per_shift and describe the
+      same underlying defect: a single numeric capacity field can mean count,
+      time, or another local basis, so scheduling/routing consumers cannot
+      safely compare or aggregate values."
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-007
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: The BOM model uses the same parent-child containment relation
+      for an acyclic product-structure invariant and for scrap reinsertion
+      self-containment, creating an immediate cycle exception/contradiction.
+    shared_cause: null
+    rationale: Both findings target the BOM acyclicity rule and scrap reinsertion
+      self-containment. The evolution lens frames it as extension-hostile
+      exception modeling; the logic lens frames the same self-cycle as a direct
+      acyclicity conflict.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-009
+    to_finding_id: finding-012
+    relation: duplicates
+    root_hypothesis: AlternatePart conflates symmetric alternate equivalence with
+      directed substitution by asserting reciprocal substitutability while
+      allowing/defaulting a one_way direction.
+    shared_cause: null
+    rationale: "Both findings identify the same internal contradiction in
+      AlternatePart: the definition says alternates are reciprocal, but
+      direction permits one_way substitution. The affected PLM/MES substitution
+      behavior and failure condition are materially the same."
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-012
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: AlternatePart directionality is not made authoritative in the
+      relation model, so consumers can lose or misread whether substitution is
+      directed or symmetric.
+    shared_cause:
+      cause_claim: The relation-level Part-to-Part alternate_of shortcut hides or
+        bypasses the AlternatePart object that carries direction metadata.
+      from_cause_ref: finding-012.cause-003
+      to_cause_ref: finding-015.cause-002
+    rationale: finding-012 notes that the alternate_of shorthand obscures whether
+      the relationship is directed or symmetric; finding-015 shows the
+      structure-level consequence that relation traversal bypasses AlternatePart
+      and its direction metadata. These are not duplicates, but they share the
+      same relation-shortcut cause.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-014
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

@@ -1,0 +1,47 @@
+schema_version: 1
+session_id: 20260718-41224df0
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml::entities.ExposureAggregate
+    evidence_anchor: .onto/review/20260718-41224df0/execution-preparation/materialized-input.md:69-76
+    claim: ExposureAggregate.total_amount의 전수 합계 정의와 일중 신규 여신 미반영 규칙은 일중 상태에서 동시에
+      만족될 수 없다.
+    what: ExposureAggregate는 모든 Exposure.amount의 합으로 정의되지만, 같은 속성은 월말 배치 사이에 발생한 신규
+      여신을 다음 배치까지 제외한다고 명시한다.
+    why: 신규 여신이 존재하는 일중 시점에는 total_amount가 ‘모든 Exposure.amount의 합’이면서 동시에 그 신규
+      Exposure.amount를 포함하지 않아야 한다. 이는 시간 한정 없는 총계 정의와 배치 스냅숏 규칙 사이의 inter-claim
+      충돌이며, modality는 necessary이다. 공유 소비자가 이 값을 현재 총익스포저로 해석하면 한도 소진율 등 파생 결과가
+      시스템별로 달라질 수 있다.
+    how_to_fix: 정의를 ‘as_of 시점에 data_cutoff까지 반영된 Exposure.amount의 합’으로 한정하고
+      data_cutoff 또는 refresh_status를 명시한다. 현재 총계가 필요하다면 별도 개념으로 분리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 총익스포저 개념 기준
+      failure_condition: 월말 배치 이후 신규 여신이 발생했지만 다음 배치가 아직 실행되지 않은 기간
+      impact: 동일한 total_amount를 전수 현재 합계와 지연된 배치 스냅숏으로 동시에 해석할 수 있어 공유 기준의 시간적 일관성과 파생
+        지표의 신뢰성이 약화된다.
+      evidence_refs:
+        - .onto/review/20260718-41224df0/execution-preparation/materialized-input.md:69-76
+        - .onto/review/20260718-41224df0/execution-preparation/materialized-input.md:94
+    causal_path:
+      root_cause_candidate: ExposureAggregate의 총계 의미에 기준 시점과 데이터 반영 마감 시점이 구분되어 있지 않다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 일중 신규 여신이 존재하면 저장된 total_amount는 모든 Exposure.amount를 포함하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-41224df0/execution-preparation/materialized-input.md:73-76
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 불완전성은 전수 합계 정의와 배치 스냅숏 저장 규칙을 동일 속성에 시간 한정 없이 결합한 결과다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260718-41224df0/execution-preparation/materialized-input.md:69-76
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

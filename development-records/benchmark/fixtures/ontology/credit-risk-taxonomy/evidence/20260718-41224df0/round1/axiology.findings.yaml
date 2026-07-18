@@ -1,0 +1,150 @@
+schema_version: 1
+session_id: 20260718-41224df0
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml의 신용등급 분류 권위
+    evidence_anchor: "materialized-input.md:6-8, 31-34, 48-57, 92-98;
+      review-value-alignment-criteria.yaml:6-18 (criterion_id:
+      user-request-intent)"
+    claim: 소비 시스템별 등급 변환과 보고팀의 임의 조정을 허용해, 리스크 엔진과 보고 시스템이 공유할 단일 개념 권위라는 목적에서 이탈한다.
+    what: 차주·엔진·익스포저 등급의 세 척도가 병존하고 변환을 각 소비 시스템이 수행한다. 또한 보고팀은 엔진에서 도출된 익스포저 등급을 시장
+      상황에 따라 수동 조정할 수 있지만, 정규 매핑·우선순위·조정 근거·유효시점·원본 보존 규칙이 온톨로지에 없다.
+    why: 확정된 가치 기준은 이 온톨로지가 리스크 엔진과 보고 시스템이 공유할 개념 기준이어야 한다는 것이다. 소비자마다 변환과 조정을 결정하면
+      동일 차주나 익스포저가 시스템별로 다른 등급을 가질 수 있고, 어느 값이 권위적인지 온톨로지 자체로 판정할 수 없다.
+    how_to_fix: 세 척도를 별도 등급체계 개념으로 명시하고, 버전·유효기간이 있는 정규 매핑과 변환 책임자를 온톨로지에 둔다. 수동 조정은
+      원본 엔진 등급과 분리된 override 개념으로 모델링하고 사유, 승인 주체, 적용 범위, 유효시점 및 우선순위를 필수화한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서
+      failure_condition: 두 소비자가 각자 등급 매핑을 적용하거나 보고팀이 엔진 등급을 수동 조정할 때
+      impact: 동일 위험 대상에 대한 분류가 소비자별로 달라져 공동 기준과 보고 재현성을 신뢰할 수 없다.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:31-34
+        - materialized-input.md:48-57
+        - materialized-input.md:92-98
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: 등급 변환과 조정의 권위·우선순위·시간 규칙을 온톨로지가 소유하지 않고 소비 시스템에 위임한다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 세 개의 신용등급 척도가 동시에 존재하며 보고팀은 도출 등급을 수동 조정할 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-22
+            - materialized-input.md:31-34
+            - materialized-input.md:53-56
+            - materialized-input.md:92-98
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 각 소비 시스템이 척도 변환을 수행하도록 명시되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:97-98
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 정규 매핑과 override 권위가 공유 온톨로지에 고정되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:56
+            - materialized-input.md:93
+            - materialized-input.md:98
+      unresolved_beyond_evidence: 실제 소비 시스템의 매핑 결과가 얼마나 다른지는 현재 경계에서 확인할 수 없지만, 분기 가능성 자체는 대상 계약에 명시되어 있다.
+  - candidate_id: axiology-candidate-002
+    target: credit-risk-ontology.yaml의 한도 소진율 통화 환산 규칙
+    evidence_anchor: "materialized-input.md:59-76, 92-94;
+      review-value-alignment-criteria.yaml:6-18 (criterion_id:
+      user-request-intent)"
+    claim: 통화 환산 권위를 각 시스템의 환율표에 맡겨 공유 지표인 한도 소진율의 일관성을 희생한다.
+    what: 한도 소진율은 총익스포저와 승인 한도의 비율로 정의되지만, 통화가 다르면 각 시스템이 자체 당일 환율표를 사용한다. 환율 출처,
+      기준시각, 통화쌍, 반올림 및 재현 규칙은 공유 계약에 없다.
+    why: 리스크 엔진과 보고 시스템이 서로 다른 당일 환율값이나 기준시각을 사용하면 같은 차주와 기준일에도 소진율 및 한도 초과 판단이 달라질
+      수 있다. 시스템 자율성이라는 국소 편의가 공유 개념 기준이라는 목적을 훼손한다.
+    how_to_fix: 소진율 계산에 사용되는 정규 환율 출처, valuation timestamp/as-of, 통화쌍 방향, 반올림 규칙과 환율
+      버전 식별자를 공유 개념으로 정의하고 결과가 해당 입력을 참조하도록 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템 사이의 공유 한도·익스포저 기준
+      failure_condition: 익스포저와 한도의 통화가 다르고 소비 시스템의 당일 환율표 값 또는 기준시각이 다를 때
+      impact: 동일 포지션에서 소진율과 한도 상태가 달라져 보고와 엔진 판단을 조정할 공통 근거가 사라진다.
+      evidence_refs:
+        - materialized-input.md:59-76
+        - materialized-input.md:92-94
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: 환율 및 계산시점의 권위를 공유 온톨로지가 정하지 않고 소비 시스템별 데이터에 위임한다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 한도 소진율이 총익스포저와 승인 한도의 비율로 정의되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-76
+            - materialized-input.md:94
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 통화가 다를 때 각 시스템이 자체 당일 환율표를 사용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:94
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 공유 계산 입력의 출처와 시점이 시스템별로 분기된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:94
+      unresolved_beyond_evidence: 실제 환율표 간 차이와 소진율 차이의 크기는 현재 경계에서 확인할 수 없다.
+  - candidate_id: axiology-candidate-003
+    target: credit-risk-ontology.yaml의 ExposureAggregate 및 RiskAppetite 시간 기준
+    evidence_anchor: "materialized-input.md:69-83, 92-94;
+      review-value-alignment-criteria.yaml:6-18 (criterion_id:
+      user-request-intent)"
+    claim: 시차가 있는 총익스포저를 시간 기준 없는 RiskAppetite 준수 상태와 결합해, 공유 리스크 상태의 시점 의미를 보장하지 못한다.
+    what: ExposureAggregate.total_amount는 월말 배치 값이며 일중 신규 여신을 반영하지 않는다. 반면
+      RiskAppetite.threshold와 compliance_status에는 기준시점이나 적용기간이 없고, 준수 상태가 어느
+      aggregate 시점에서 산출됐는지도 연결되지 않는다.
+    why: 리스크 엔진은 최신 익스포저를 알고 보고 시스템은 월말 aggregate를 사용할 수 있는데도 둘 다 동일한
+      compliant/breached 값을 표현할 수 있다. 시간성이 핵심 검토 기준인 상황에서 상태의 기준시점이 권위화되지 않으면 준수
+      판단이 사실상 소비자 해석에 맡겨진다.
+    how_to_fix: RiskAppetite에 effective_from/effective_to 또는 as_of를 추가하고, compliance
+      상태를 특정 ExposureAggregate 및 계산시점에 연결된 파생 결과로 모델링한다. 월말 공식 상태와 일중 잠정 상태를
+      구분하고 신선도 정책을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 시간적으로 해석 가능한 리스크 상태
+      failure_condition: 월말 배치 이후 신규 여신이 발생하거나 RiskAppetite 임계값이 변경된 상태에서 준수 여부를 조회할 때
+      impact: 같은 준수 상태가 서로 다른 시점의 익스포저와 임계값을 뜻할 수 있어 운영 판단과 보고의 일치성을 신뢰할 수 없다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:92-94
+        - review-value-alignment-criteria.yaml:6-18
+    causal_path:
+      root_cause_candidate: 준수 상태를 산출한 익스포저 스냅샷과 임계값의 유효시점을 함께 권위화하지 않았다.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 총익스포저는 월말 배치로 저장되고 일중 신규 여신은 지연 반영된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-76
+        - cause_id: axiology-candidate-003.cause-002
+          claim: RiskAppetite 준수 상태는 aggregate 초과 여부로 정의되지만 산출 기준시점 연결이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:78-83
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 공유 상태의 시간적 의미가 소비 시스템의 선택에 따라 달라질 수 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:75-83
+      unresolved_beyond_evidence: 실제 엔진이 일중 데이터를 별도로 사용하는지는 현재 경계에서 확인할 수 없으나, 대상
+        온톨로지만으로 상태 시점을 판정할 수 없는 점은 확정적이다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 확정된 review 가치 기준에 따라 '공유 개념 기준'은 동일 대상·동일 기준시점에 대해 소비 시스템들이 동일한 분류와 산출 근거를
+    재현할 수 있어야 한다고 해석했다.
+  - session_domain이 none이므로 금융 규제나 조직별 외부 규정은 판단 근거로 사용하지 않았다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,185 @@
+schema_version: 1
+session_id: 20260718-41224df0
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 신용등급의 정규 의미, 변환 권위, 산출 원천과 수동 조정 우선순위가 하나의 권위 모델로 구조화되어 있지 않다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 등급·조정 결함을 함께 설명하는 통합 원인이며, 소비자별 해석과 최종 권위값의 불일치를 초래해 공유 개념 기준이라는
+      핵심 목적을 막는다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-015
+      - finding-020
+  - issue_id: issue-002
+    problem_definition: 소진율 계산에 쓰이는 한도와 환율이 출처·기준시점이 식별된 권위 있는 공유 입력으로 모델링되어 있지 않다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 권위와 시점이 없는 계산 입력은 동일 포지션에 복수의 소진율과 한도 초과 판단을 허용한다. 공유 계산을 운영에 사용하기 전에
+      닫아야 하는 중간 심각도 결함이다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-007
+  - issue_id: issue-003
+    problem_definition: ExposureAggregate의 평가 기준시점과 데이터 반영 마감시점이 구분되지 않아 월말 스냅샷과 현재 총계의 의미가 충돌한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 현재 전수 합계와 지연된 배치 결과를 같은 총계 및 준수 상태로 표현하면 조회 시점에 따라 사실 판단이 달라진다. 운영
+      판정에 연결하기 전에 시간 의미를 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-013
+  - issue_id: issue-004
+    problem_definition: 시간가변 리스크 값과 산출 규칙이 버전·유효기간을 가진 권위 개념 및 결과 입력 참조로 분리되어 있지 않다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 현재 속성과 자유문장만으로는 과거 기준일에 적용된 값과 규칙을 식별할 수 없어 재현과 감사를 광범위하게 실패시킨다. 공유
+      권위 모델 자체의 핵심 결함이다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-012
+  - issue_id: issue-005
+    problem_definition: RiskAppetite가 적용 범위가 있는 정책, 수치 기준, 시점별 평가 결과로 분리되지 않고 관계상 고립된 엔터티에 혼합되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 숙의 결과 범위 누락, 역할 혼합, 구조적 고립의 결합 증거가 확인되었으며, 복수 정책이나 범위에서 준수 상태의
+      대상·기준·시점을 결정할 수 없어 지원 경로의 목적 달성을 막는다.
+    related_surface_finding_ids:
+      - finding-009
+      - finding-017
+      - finding-018
+  - issue_id: issue-006
+    problem_definition: 병존하는 신용등급 체계를 통합하는 canonical scale과 온톨로지 내부의 권위 있는 변환 개념이 없다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 이 누락은 issue-001의 소비자별 등급 해석 분산을 직접 가능하게 하는 구조적 조건이다. 동일 대상의 공통 분류를
+      보장할 수 없어 현재 공유 모델의 핵심 목적을 막는다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-007
+    problem_definition: 수동 등급 조정이 원본 등급과 분리된 감사 가능한 사건이 아니라 상태 덮어쓰기로만 표현된다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: issue-001의 권위·원천·우선순위 결함이 수동 조정 계보와 승인 정보의 소실로 나타난 표면 문제다. 조정 경로를
+      운영하거나 보고에 사용하기 전에 감사 가능성을 확보해야 한다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-008
+    problem_definition: 연체·부실 상태가 실제 공유 소비 범위에 포함되는지와 외부 상태 권위의 현행 경계 계약이 존재하는지 확인할 증거가 부족하다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: completeness
+    timing_class: defer_watch
+    closure_class: needs_evidence
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 조건이 충족되면 lifecycle 경계 계약 누락이 중요해진다는 점에는 합의가 있지만, 현재 경계에서는 실제 소비 범위와
+      medium 심각도를 확정할 수 없다. logic과 semantics의 잔여 불확실성을 보존한다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 변경 가능한 분류값이 수명주기를 가진 코드 목록이 아니라 버전 없는 폐쇄형 enum으로 고정되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 숙의에서 선언된 변경·확장 목적과 교차 버전 영향을 평가 범위에 포함하기로 수렴했다. 현재 구조는 범주 변경 시 하위
+      호환성, 과거 의미와 시스템 간 연속성을 보장하지 못한다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-010
+    problem_definition: 등급 스케일 간 변환이 온톨로지의 버전형 권위 개념이 아니라 외부 문서와 소비자별 무버전 로직에 분산되어 있다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-006과 issue-001의 등급 권위 결함이 변경 시 결과 불연속과 과거 산출 재현 실패로 나타난 진화
+      표면이다. 소비자별 변환 결과가 갈리므로 공유 등급 기준의 핵심 목적을 막는다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-011
+    problem_definition: Collateral을 Exposure의 하위 유형으로 선언하면서 독립 담보 자산으로도 연결하여 유형 추론과 관계 의미가 충돌한다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 명시된 상속과 secured_by 관계 사이의 직접적인 존재론적 충돌이며 다른 통합 원인에 종속되지 않는다. 담보가
+      익스포저로 처리되어 계산·집계 대상이 달라질 수 있으므로 현재 대상에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-012
+    problem_definition: LTV가 산식·기준시점·원천 참조·산식 버전이 있는 파생 결과가 아니라 출처 없는 독립 입력으로 모델링되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 파생값 provenance 부재가 직접 확인되며 원천 금액 변경이나 시점 차이 뒤에도 상충하는 LTV를 허용한다. 담보
+      리스크 분류와 보고에 사용하기 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-013
+    problem_definition: ExposureAggregate와 합산 원천 Exposure 사이의 명시적 집계 의존 관계와 포함 범위 조건이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 관계 그래프만으로 특정 집계의 입력 집합과 계보를 결정할 수 없는 구조적 누락이다. 총익스포저를 공유 계산·보고 기준으로
+      사용하기 전에 원천 범위를 판정 가능하게 해야 한다.
+    related_surface_finding_ids:
+      - finding-019

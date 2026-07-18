@@ -1,0 +1,212 @@
+schema_version: 1
+session_id: 20260718-e047c9c7
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 단위·물리 차원·적용별 변환 규칙을 결합한 Quantity 계약 부재로 BOM 수량과 작업장 능력 계산이 비결정적이다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Quantity·UnitConversion 부재가 직접 원인이라는 결론은 지지되지만, 권위·동기화 거버넌스까지 같은 근원에
+      포함할지는 이견과 추가 증거 요구가 남아 있다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-009
+  - issue_id: issue-002
+    problem_definition: 도면 표시 리비전과 제조 적용 리비전의 권위 및 효력 의미가 분리되지 않아 생산 적용 구성을 일관되게 결정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 적용 렌즈가 갱신 시점이 다른 리비전과 효력 정보를 함께 권위로 사용한 원인과 구 리비전 생산 위험에 동의했다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-019
+  - issue_id: issue-003
+    problem_definition: 제품 구성과 공정 재투입 흐름의 혼합이 자기참조 BOM이라는 표면으로 나타나 비순환 전개를 훼손한다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 숙의 결과 issue-012와 동일한 원인·조치 범위의 파생 표면으로 좁혀졌으나, 일부 렌즈는 독립 이슈로 유지해야 한다는
+      이견을 보존했다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 시점별 제조 구성의 정체성·유효구간과 ECO 변경 구성 탐색 경로가 없어 적용 구성을 판정하고 재현할 수 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 구성 기준선·효력과 ECO 탐색 단절은 직접 지지되지만, 일반 ChangeItem과 ProductionOrder 전체
+      결손까지 같은 원인으로 묶는 데에는 이견과 증거 공백이 남아 있다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-005
+      - finding-006
+      - finding-023
+  - issue_id: issue-005
+    problem_definition: 현재 상태값만 존재하고 lifecycle 전이와 승인 행위 증거가 없어 생산 허용과 변경 적용을 감사할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 상태 현재값이 과거 전이·승인 근거를 대체할 수 없다는 점과 감사 가능성 결손에 실질적 이견이 없다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-006
+    problem_definition: 병행 저장되는 제조 계수에 권위 원본, 복제 계보, 동기화 및 충돌 판정 계약이 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 provenance·동기화 계약 부재가 기준값 드리프트와 비결정적 선택을 만든다는 데 동의했다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-007
+    problem_definition: 리비전과 유효성이 독립 버전 객체와 시간 범위로 표현되지 않아 과거 구성과 전환 시점의 연속성을 보존할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 적용 렌즈들이 현재값 리비전과 단일 시작일로는 시점별 적용 BOM·라우팅을 결정하거나 재현할 수 없다는 데 일치했다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: 폐쇄형 단위 enum과 모델 외부의 품목별 환산 규칙 때문에 새 단위 수용과 환산 재현이 어렵다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 새 단위마다 계약과 소비자를 수정해야 하고 품목별 환산 결과를 결정할 수 없다는 확장성 결함에 모든 렌즈가 동의했다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-009
+    problem_definition: 공정 정의와 라우팅 내 발생을 분리하지 않은 선형 ordered_list가 비선형 실행 흐름의 표현을 막는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 비선형 요구가 존재할 때 분기·병렬·반복·재작업 의미를 보존할 수 없다는 데 합의했으며, 현재 선형 범위 자체는 동작 가능하다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-010
+    problem_definition: 제품 구성과 회수·재투입 흐름을 같은 BomLine에 결합해 확장할수록 검증·전개 예외가 누적된다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 숙의는 예외 누적을 증상으로 보되, 서로 다른 생명주기·종료·수율 의미를 결합한 원인을 좁은 독립 이슈로 유지했다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-011
+    problem_definition: 무조건적 대칭성과 기본 one_way 방향성이 동일 대체 레코드에 상반된 역방향 허용 의미를 부여한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 허용된 기본 인스턴스가 역방향 대체를 동시에 요구하고 금지하는 직접적인 계약 모순이며, 하나의 정준 의미 선택이 필요하다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-012
+    problem_definition: 제품 구성과 스크랩 재투입이 구분 없이 같은 BomLine을 공유해 필연적 순환과 제품 구조 의미 훼손을 일으킨다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 의무적 BOM 비순환성과 규정된 자기참조가 함께 만족될 수 없다는 직접 모순과 운영 계산 영향이 확인되었고 숙의에서 high
+      영향에 합의했다.
+    related_surface_finding_ids:
+      - finding-015
+      - finding-018
+  - issue_id: issue-013
+    problem_definition: 대체품의 권위 관계와 단축 관계 사이에 정준 방향성 계약과 방향 보존 투영이 없어 대체 판정이 반전될 수 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 의미 모순과 direction 유실이 하나의 방향성 계약 부재에서 발생한다는 결합 가설에 숙의 참여 렌즈들이 수렴했다.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-022
+  - issue_id: issue-014
+    problem_definition: 검사 규격·계획 객체를 실행 공정의 하위 유형으로 분류해 계획과 실행의 정체성 및 속성을 혼동한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 계획 인스턴스가 실행 공정의 성질을 잘못 상속하는 분류 오류와 검사 기준·작업장 적용 위험에 모든 렌즈가 동의했다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-015
+    problem_definition: scrap_rate가 손실 비율과 소요량 보정 승수라는 서로 다른 수치 의미를 동시에 허용한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 출처·분모·범위·산식이 없는 단일 숫자로 인해 소비자별 계산식이 달라질 수 있다는 의미 불확정성에 실질적 이견이 없다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-016
+    problem_definition: capacity_per_shift가 처리량과 가용시간이라는 서로 다른 물리 차원을 단위 없이 같은 숫자로 표현한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 수량/교대와 시간/교대를 같은 무단위 속성으로 비교·계산할 수 없다는 차원 충돌과 운영 계산 위험에 모든 렌즈가 동의했다.
+    related_surface_finding_ids:
+      - finding-021

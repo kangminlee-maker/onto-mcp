@@ -1,0 +1,239 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: The ontology lacks an authoritative internal mapping and
+      governance boundary for overlapping credit-grade concepts, allowing
+      consumer-specific grade meanings.
+    shared_cause: null
+    rationale: "Both findings target the same rating-grade authority defect: three
+      coexisting grade scales, consumer-side conversion, and manual adjustment
+      create divergent shared meaning for engine and reporting classifications.
+      finding-001 frames the purpose/authority drift; finding-015 frames the
+      semantic overlap, but the evidence and proposed fix substantially
+      coincide."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Rating conversion is not modeled as a governed, versioned
+      ontology concept, so grade meaning and continuity are delegated to
+      external wiki or consumer implementations.
+    shared_cause: null
+    rationale: finding-001 identifies ungoverned rating conversion and override
+      authority; finding-009 identifies the same missing versioned mapping as an
+      evolution risk when rating scales change. Both causal paths point to
+      conversion authority outside the ontology rather than a canonical internal
+      mapping.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-006
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: The ontology acknowledges multiple cross-system sources but
+      does not promote their authority, precedence, and conflict rules into
+      governed concepts.
+    shared_cause:
+      cause_claim: No canonical source, precedence rule, owner, version, or
+        conflict-resolution concept is modeled for shared grade conversion and
+        other cross-system values.
+      from_cause_ref: finding-006.cause-002
+      to_cause_ref: finding-015.cause-003
+    rationale: finding-006 generalizes the missing single-authority pattern across
+      mappings, limits, and exchange rates; finding-015 is the rating-grade
+      semantic instance of that pattern. The findings share the consumer-side
+      conversion cause and differ mainly in breadth.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-004
+    to_finding_id: finding-001
+    relation: symptom_of
+    root_hypothesis: Manual grade override provenance is a concrete symptom of the
+      broader absence of governed rating override authority and precedence in
+      the ontology.
+    shared_cause: null
+    rationale: finding-001 states that manual reporting adjustments lack canonical
+      precedence and audit semantics. finding-004 narrows that to the missing
+      override action, actor, timestamp, rationale, approval, and
+      source-versus-adjusted value needed to audit those adjustments.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-019
+    to_finding_id: finding-015
+    relation: symptom_of
+    root_hypothesis: The missing structural derivation edge from RiskRating.grade to
+      Exposure.risk_grade is a graph-level symptom of the absent authoritative
+      semantic mapping among grade concepts.
+    shared_cause: null
+    rationale: finding-015 says the grade concepts overlap without ontology-governed
+      mapping; finding-019 shows the required derivation is only prose and not
+      represented structurally. The structural gap reinforces the same missing
+      grade lineage/authority rather than a separate root.
+    confidence: medium
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: Limit-utilization is modeled without versioned calculation
+      inputs for data cutoff, calculation time, FX source, and external limit
+      source authority.
+    shared_cause: null
+    rationale: finding-002 focuses on stale month-end aggregate use as current
+      utilization; finding-010 focuses on evolution fragility from unstated
+      calculation time, FX authority, and CRM limit source changes. Both arise
+      because utilization inputs are not modeled as governed, time-bound
+      calculation inputs.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-002
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: The utilization rule lacks stable authority and semantics for
+      its numerator, denominator, and currency basis.
+    shared_cause:
+      cause_claim: Limit utilization uses ExposureAggregate.total_amount and
+        Limit.approved_amount while leaving denominator meaning, CRM
+        available-limit contribution, and per-system FX conversion authority
+        unresolved.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-017.cause-003
+    rationale: finding-002 emphasizes freshness ambiguity in the numerator and
+      denominator; finding-017 emphasizes semantic ambiguity in approved versus
+      available limit and FX basis. Both are supported by the same utilization
+      rule using a cross-system aggregate and limit amount without authoritative
+      calculation semantics.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-005
+    to_finding_id: finding-010
+    relation: shared_cause_candidate
+    root_hypothesis: Point-in-time reconstruction fails because time-dependent risk
+      calculation inputs are not consistently represented with validity, source,
+      or version metadata.
+    shared_cause:
+      cause_claim: Classification and utilization depend on values whose calculation
+        time, effective interval, FX source, or external source version are
+        absent from the ontology.
+      from_cause_ref: finding-005.cause-003
+      to_cause_ref: finding-010.cause-005
+    rationale: finding-005 covers missing point-in-time validity for ratings,
+      limits, mappings, and exchange rates. finding-010 is the evolution-focused
+      version for utilization when data cycles, FX policy, or CRM sources
+      change. The common defect is missing temporal/versioned authority for
+      calculation inputs.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-003
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: Default/delinquency status is excluded as a separate-system
+      concern without a boundary projection or relation in the shared
+      credit-risk ontology.
+    shared_cause: null
+    rationale: Both findings rely on the same scope note excluding
+      delinquency/default status and the same absence of a modeled status
+      concept or relation. finding-003 frames the stakeholder boundary problem;
+      finding-007 frames domain coverage, but they assert the same material gap.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-012
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: Collateral is incorrectly asserted as an Exposure subtype even
+      though the ontology defines it as a separate securing asset and already
+      has a secured_by association.
+    shared_cause: null
+    rationale: "The logic and semantics findings cite the same contradiction:
+      Collateral.is_a Exposure conflicts with definitions that distinguish
+      exposure from collateral and with the separate Exposure secured_by
+      Collateral relation. They differ only by lens emphasis."
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-013
+    to_finding_id: finding-018
+    relation: shared_cause_candidate
+    root_hypothesis: RiskAppetite is specified in prose without a complete
+      attribute-level and graph-level relation to the ExposureAggregate it
+      governs.
+    shared_cause:
+      cause_claim: RiskAppetite compliance depends on comparing ExposureAggregate with
+        RiskAppetite, but the ontology lacks both the precise attribute-level
+        predicate and a relation linking RiskAppetite into the graph.
+      from_cause_ref: finding-013.cause-001
+      to_cause_ref: finding-018.cause-001
+    rationale: finding-013 identifies the invalid entity-level comparison instead of
+      comparing total_amount to threshold. finding-018 identifies the missing
+      structural edge involving RiskAppetite. Together they reflect an
+      under-modeled compliance concept expressed only in prose.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-005
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: The ontology models stateful risk records primarily as current
+      values rather than lifecycle- and history-bearing concepts.
+    shared_cause:
+      cause_claim: Missing effective periods, history, lifecycle states, or correction
+        events prevents consistent reconstruction of past or terminal states for
+        risk/reporting objects.
+      from_cause_ref: finding-005.cause-002
+      to_cause_ref: finding-008.cause-003
+    rationale: finding-005 focuses on point-in-time reconstruction for
+      time-dependent inputs, while finding-008 focuses on lifecycle states from
+      creation through closure and correction. Both point to insufficient
+      temporal/lifecycle modeling for shared risk and reporting interpretation.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-011
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: Changeable classification values are embedded as fixed literals
+      instead of governed, versioned code or scale concepts.
+    shared_cause:
+      cause_claim: Rating and classification codes are modeled as closed enum values
+        without effective periods, status, hierarchy, or source authority,
+        making business classification changes schema changes.
+      from_cause_ref: finding-011.cause-003
+      to_cause_ref: finding-009.cause-004
+    rationale: finding-011 generalizes closed-enum evolution risk across product,
+      collateral, segment, and grade codes. finding-009 is the rating-scale
+      instance where versioned mapping is missing. Both recommend promoting
+      changeable values into versioned code/scale concepts.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-016
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: Manual LTV without source-value, derivation, or valuation-time
+      semantics is a specific manifestation of missing temporal and
+      point-in-time authority for calculated risk inputs.
+    shared_cause: null
+    rationale: finding-016 identifies LTV as a ratio-like manual input lacking
+      derivation and temporal basis despite exposure amount and collateral
+      appraisal timing. finding-005 covers the broader absence of validity/as-of
+      semantics for time-dependent classification inputs, including exposure
+      risk values and collateral-related metrics.
+    confidence: medium
+  - relation_id: rel-015
+    from_finding_id: finding-006
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: Cross-system values are referenced without an ontology-owned
+      authority concept, allowing different consumers to reconcile limits and FX
+      differently.
+    shared_cause:
+      cause_claim: External or per-system sources for limit availability and exchange
+        rates are acknowledged, but no canonical source, precedence rule, or
+        conflict-resolution concept is modeled.
+      from_cause_ref: finding-006.cause-001
+      to_cause_ref: finding-017.cause-003
+    rationale: finding-006 states the broad single-authority gap for shared values,
+      including available limit and exchange rates. finding-017 focuses on the
+      limit-utilization semantics produced by that gap. The same unresolved
+      source authority drives both.
+    confidence: high
+singleton_findings: []

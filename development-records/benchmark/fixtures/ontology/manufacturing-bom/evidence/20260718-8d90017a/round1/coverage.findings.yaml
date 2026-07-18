@@ -1,0 +1,12 @@
+schema_version: 1
+session_id: 20260718-8d90017a
+lens_id: coverage
+human_output_ref: null
+findings: []
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []
+  no_findings_rationale: "Cannot complete: the response was accidentally sent to
+    the constrained final schema before reading required packet files. No review
+    finding is asserted."

@@ -1,0 +1,105 @@
+schema_version: 1
+session_id: 20260718-e047c9c7
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: AlternatePart와 대체품 관계 구조
+    evidence_anchor: manufacturing-bom-ontology.yaml > entities.AlternatePart;
+      relations의 Part→Part alternate_of 항목
+    claim: 대체품 연관 엔티티가 공식 관계 구조에서 우회되어 direction 속성이 연결되지 않는다.
+    what: AlternatePart는 primary_ref, alternate_ref, direction을 보유하지만 relations에는
+      AlternatePart를 출발점으로 하는 관계가 없고 Part→Part alternate_of 단축 관계만 선언되어 있다.
+    why: 관계 카탈로그만 소비하는 PLM/MES는 대체 관계를 찾을 수 있어도 그 관계를 AlternatePart 인스턴스와 연결해 방향 정보를
+      조회할 수 없다. 따라서 엔티티 설계와 공개 연결 구조가 일치하지 않는다.
+    how_to_fix: AlternatePart→Part의 primary 및 alternate 관계를 명시하고, Part→Part 단축 관계가
+      해당 엔티티에서 파생되는 투영임을 규칙으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목 및 대체품 관계의 개념 기준 제공
+      failure_condition: 통합 소비자가 relations를 기준으로 대체 가능 품목과 방향을 함께 해석할 때
+      impact: 대체품 방향을 보존하는 정규 경로가 없어 시스템별로 상이한 관계 해석이나 방향 정보 유실이 발생할 수 있다.
+      evidence_refs:
+        - entities.AlternatePart.primary_ref
+        - entities.AlternatePart.alternate_ref
+        - entities.AlternatePart.direction
+        - "relations: Part→Part alternate_of"
+    causal_path:
+      root_cause_candidate: 관계 카탈로그가 AlternatePart 연관 엔티티를 연결하지 않고 Part 간 단축 관계로 우회한다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: AlternatePart의 direction을 공식 relations 경로로 도달할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.AlternatePart.direction
+            - relations 전체 목록
+        - cause_id: structure-candidate-001.cause-002
+          claim: AlternatePart에서 primary_ref 및 alternate_ref 대상 Part로 향하는 관계 선언이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.AlternatePart.primary_ref
+            - entities.AlternatePart.alternate_ref
+            - relations 전체 목록
+        - cause_id: structure-candidate-001.cause-003
+          claim: 유일한 공개 대체 관계는 AlternatePart를 통하지 않는 Part→Part alternate_of이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "relations: Part→Part alternate_of note"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: ECO와 BOM·라우팅 변경 대상의 연결 구조
+    evidence_anchor: manufacturing-bom-ontology.yaml >
+      entities.Part.rev/current_eco, entities.ECO, relations의 ECO→Part changes,
+      세 번째 integrity_rule
+    claim: ECO가 변경되는 BOM 또는 라우팅 구성에 연결되지 않아 변경 효력 규칙을 구조적으로 추적할 수 없다.
+    what: ECO는 Part만 affected_parts/changes로 연결하며, 변경 대상 BomLine이나 Routing과의 관계가 없다.
+      신규 rev 역시 Part의 문자열 속성일 뿐 ECO 또는 해당 BOM·라우팅 상태와 연결되지 않는다.
+    why: 효력일 이후 신규 rev를 적용한다는 규칙이 있어도 어떤 BOM 라인과 라우팅 구성이 그 변경에 속하는지 탐색할 경로가 없다. 특히
+      Part.rev가 주간 배치로 늦게 갱신되는 동안 PLM 변경과 MES 실행 구성을 구조적으로 대조할 수 없다.
+    how_to_fix: ECO가 변경 전후의 식별 가능한 품목 개정 상태를 참조하게 하고, 그 개정 상태에 적용되는 BomLine과
+      Routing을 연결한다. 최소 수정으로는 ECO에 affected_bom_lines 및 affected_routings 관계와 목표
+      revision 식별자를 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 BOM·라우팅·변경관리의 일관된 개념 기준 제공
+      failure_condition: ECO 효력일을 기준으로 MES가 적용할 BOM 및 라우팅 구성을 결정하거나 PLM 상태와 대조할 때
+      impact: 변경 문서에서 실제 제조 구성으로 이어지는 경로가 끊겨 있어 신규 rev 적용 여부를 온톨로지만으로 판정하거나 감사할 수 없다.
+      evidence_refs:
+        - entities.Part.rev
+        - entities.Part.current_eco
+        - entities.ECO.affected_parts
+        - "relations: ECO→Part changes"
+        - "integrity_rules: ECO.effective_date 이후 생산분은 신규 rev를 따른다"
+    causal_path:
+      root_cause_candidate: 변경관리가 버전이 식별된 제조 구성 대신 현재 Part에 대한 포괄적 연결로만 모델링되어 있다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: ECO에서 변경된 BomLine 또는 Routing으로 도달하는 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.ECO
+            - relations 전체 목록
+        - cause_id: structure-candidate-002.cause-002
+          claim: ECO의 유일한 변경 대상 연결은 Part에 대한 affected_parts/changes이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.ECO.affected_parts
+            - "relations: ECO→Part changes"
+        - cause_id: structure-candidate-002.cause-003
+          claim: 신규 rev는 Part의 문자열 속성이고 ECO나 BOM·라우팅 구성과 연결된 개정 상태가 아니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Part.rev
+            - "integrity_rules: ECO.effective_date 이후 생산분은 신규 rev를 따른다"
+      unresolved_beyond_evidence: 개정별 BOM·라우팅을 외부 PLM이 별도로 관리하는지는 현재 경계에서 확인할 수 없지만, 이
+        온톨로지 자체에는 그 외부 상태를 연결할 구조도 선언되어 있지 않다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 소비자는 이 문서의 entities, ref 속성, relations, integrity_rules를 통합 개념 계약으로
+    사용한다고 가정했다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,149 @@
+schema_version: 1
+session_id: 20260718-0c3a8973
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml relations graph
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25,31,54,100,108
+    claim: Several declared entities are structurally absent from the explicit
+      relations graph.
+    what: "`Patient`, `StatOrder`, `Assay`, and `CriticalValue` are declared as
+      entities, but none appears as `from` or `to` in the explicit `relations:`
+      list. Some are referenced through attributes or `is_a`, but the relation
+      graph itself cannot show their required connections."
+    why: The ontology is intended as a concept authority for EMR/LIS integration,
+      and the relations section is the visible structural graph. If core
+      entities are omitted from that graph, consumers relying on relations
+      cannot traverse Order-to-Patient, Test-to-Assay execution, or
+      CriticalValue-to-result/notification paths, and subtype participation for
+      STAT orders is implicit rather than structurally visible.
+    how_to_fix: "Either define that `type: ref` and `is_a` entries are first-class
+      graph edges, or add explicit relations for these entities, such as `Order
+      -> Patient`, `StatOrder -> Order`, `Test -> Assay` or an equivalent
+      catalog/execution mapping, and `CriticalValue -> Test/Result` plus its
+      notification target if that concept remains in scope."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of the ontology as the EMR/LIS integration concept
+        authority for entities, relationships, and states.
+      failure_condition: A downstream consumer treats the `relations:` section as the
+        authoritative relationship graph and therefore sees no structural path
+        for Patient, StatOrder, Assay, or CriticalValue.
+      impact: The integration design can omit or inconsistently implement patient
+        association, STAT subtype handling, assay execution mapping, or
+        critical-value handling because those concepts are not connected in the
+        explicit graph.
+      evidence_refs:
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:7
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:31
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+    causal_path:
+      root_cause_candidate: The ontology mixes attribute references, subtype
+        declarations, and explicit relations without making all declared entity
+        connections available in the explicit `relations:` graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: The explicit relation list starts at `relations:` and contains no
+            relation whose `from` or `to` is Patient, StatOrder, Assay, or
+            CriticalValue.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:109
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:119
+        - cause_id: structure-candidate-001.cause-002
+          claim: Those omitted names are declared entities, so their absence from the
+            relation list creates graph-orphan behavior for relation-based
+            consumers.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:25
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:31
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:100
+        - cause_id: structure-candidate-001.cause-003
+          claim: The target declares itself as an EMR/LIS concept authority for entities,
+            relations, and states, so relation-graph omissions weaken the
+            intended authority surface.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:6
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:7
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:8
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml Assay structure
+    evidence_anchor: .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46,54,108,127
+    claim: Assay lacks the required structural connection to Test despite being
+      maintained alongside Test.
+    what: "`Test` is defined as the orderable catalog unit and `Assay` as the
+      analyzer execution unit, and the notes say new items are currently
+      registered in both places. However, the relation list has no
+      `Test`-to-`Assay` or equivalent mapping relation."
+    why: "This is a structural gap rather than only a naming issue: the document
+      declares two catalog-like entities that must be co-maintained, but
+      provides no graph edge that lets an integration determine which executable
+      assay realizes a requested test."
+    how_to_fix: Add an explicit mapping relation such as `Test -> Assay` with a
+      clear kind like `realized_by`, `maps_to`, or `performed_as`, or define a
+      join entity if one Test can map to multiple assays by specimen type or
+      analyzer.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS integration design from orderable tests to
+        LIS/analyzer execution units.
+      failure_condition: A workflow needs to route an ordered Test to the
+        corresponding Assay, but the ontology provides no explicit relation
+        connecting the two.
+      impact: Implementers may create local, incompatible mappings outside the concept
+        authority, weakening traceability from orders to executed assays and
+        produced results.
+      evidence_refs:
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+        - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+    causal_path:
+      root_cause_candidate: The model introduces `Assay` as a separate execution
+        concept but leaves its relationship to `Test` as an unresolved note
+        instead of an explicit relation.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: "`Test` and `Assay` are separate declared entities with catalog/execution
+            roles."
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:46
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:54
+        - cause_id: structure-candidate-002.cause-002
+          claim: The note states new items are currently registered in both `Test` and
+            `Assay`, implying an operational co-maintenance relationship.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:127
+        - cause_id: structure-candidate-002.cause-003
+          claim: The explicit relation list contains `Test -> Result` but no `Test ->
+            Assay` or equivalent mapping edge.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:108
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:111
+            - .onto/review/20260718-0c3a8973/execution-preparation/materialized-input.md:119
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The explicit `relations:` section is intended to be consumed as the
+    ontology's relationship graph unless the ontology states that attribute
+    references and `is_a` declarations are also first-class graph edges.
+  - Because session_domain is none, no external clinical-domain structure rule
+    was applied.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,159 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / entities.Collateral
+    evidence_anchor: "Embedded Materialized Input: `Collateral.definition` states
+      collateral is an asset securing an exposure, while `Collateral.is_a:
+      Exposure` declares Collateral as a subtype of Exposure."
+    claim: "`Collateral` is simultaneously defined as a securing asset and declared
+      to be an `Exposure`, creating an explicit class-membership conflict."
+    what: "The ontology says collateral is the asset that secures an exposure, but
+      also models `Collateral` as `is_a: Exposure`. Under the declared `is_a`
+      rule, every collateral instance would also be an exposure instance, while
+      the same entity definition distinguishes collateral from the exposure it
+      secures."
+    why: "The contradiction is internal to the present claim set: `Exposure` is
+      defined as credit exposure to a borrower, while `Collateral` is defined as
+      an asset that secures that exposure. The relation `Exposure -> Collateral`
+      (`secured_by`) also treats them as separate roles. For a shared concept
+      authority between a risk engine and reporting system, this weakens
+      classification because collateral records can be logically admitted
+      wherever exposure records are expected."
+    how_to_fix: "Remove `Collateral.is_a: Exposure` and model collateral only as a
+      separate entity related to `Exposure` through `secured_by`, or introduce a
+      separate parent such as `RiskMitigant` if inheritance is needed."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's purpose as a shared concept authority for risk
+        engine and reporting systems.
+      failure_condition: When systems interpret `is_a` as subtype inheritance or type
+        membership, collateral instances become valid exposure instances despite
+        being separately defined as securing assets.
+      impact: Risk engines or reports can include collateral objects in
+        exposure-oriented logic, aggregations, or validations, undermining the
+        shared classification contract.
+      evidence_refs:
+        - "Embedded Materialized Input: `Exposure.definition`: 차주에 대한 신용
+          익스포저(대출, 한도성 여신 포함)."
+        - "Embedded Materialized Input: `Collateral.definition`: 익스포저를 담보하는 자산.
+          담보 평가의 기본 단위."
+        - "Embedded Materialized Input: `Collateral.is_a: Exposure`"
+        - "Embedded Materialized Input: relation `{ from: Exposure, to:
+          Collateral, kind: secured_by }`"
+    causal_path:
+      root_cause_candidate: The ontology uses subtype inheritance (`is_a`) to connect
+        a role/entity that is explicitly defined as a separate secured asset
+        rather than a credit exposure.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: "`Collateral` is declared as a subtype of `Exposure` through `is_a:
+            Exposure`."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Collateral.is_a: Exposure`"
+        - cause_id: logic-candidate-001.cause-002
+          claim: "`Collateral` is also defined as an asset that secures an exposure, not
+            as the exposure itself."
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Collateral.definition`: 익스포저를 담보하는
+              자산. 담보 평가의 기본 단위."
+        - cause_id: logic-candidate-001.cause-003
+          claim: The relation set separately links `Exposure` to `Collateral` with
+            `secured_by`, reinforcing that the claims treat them as distinct
+            roles while inheritance collapses them into one type hierarchy.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relation `{ from: Exposure, to:
+              Collateral, kind: secured_by }`"
+      unresolved_beyond_evidence: A formal metamodel defining `is_a` is not included,
+        so the finding assumes the ordinary ontology meaning of subtype/class
+        inclusion.
+  - candidate_id: logic-candidate-002
+    target: credit-risk-ontology.yaml / RiskAppetite.definition
+    evidence_anchor: "Embedded Materialized Input: `RiskAppetite.definition`:
+      `ExposureAggregate가 RiskAppetite를 초과하면 RiskAppetite 위반이며, 위반 여부는
+      RiskAppetite 준수 상태로 정의된다`; attributes include `threshold` and
+      `compliance_status`, but no amount-valued RiskAppetite field."
+    claim: The breach rule compares `ExposureAggregate` to `RiskAppetite` as an
+      entity, while the comparable numeric attribute is
+      `RiskAppetite.threshold`.
+    what: The definition says an `ExposureAggregate` exceeds `RiskAppetite`, but the
+      ontology defines `ExposureAggregate` as an entity with `total_amount` and
+      `RiskAppetite` as an entity with `threshold`. The rule omits the numeric
+      sides of the comparison, so the stated comparison is type-inconsistent as
+      written.
+    why: The present claims declare `ExposureAggregate.total_amount` and
+      `RiskAppetite.threshold` as numbers, but not `ExposureAggregate` or
+      `RiskAppetite` themselves as numeric values. A greater-than comparison
+      between an aggregate entity and an appetite entity is not simultaneously
+      satisfiable with the declared attribute typing unless an unstated
+      projection is assumed. In a shared engine/reporting contract, this makes
+      the compliance rule ambiguous at the formal level where the engine needs
+      an executable predicate and reports need the same predicate.
+    how_to_fix: Rewrite the rule as an attribute-level predicate, e.g.
+      `RiskAppetite.compliance_status = breached iff
+      ExposureAggregate.total_amount > RiskAppetite.threshold` for the
+      applicable borrower/scope/as_of, and define the required relation/scope
+      between the aggregate and appetite.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared definition of risk appetite breach/compliance between
+        risk engine and reporting systems.
+      failure_condition: When consumers implement the breach predicate from the
+        ontology text, the rule compares entity objects rather than declared
+        numeric attributes.
+      impact: Different consumers may choose different implicit projections or reject
+        the rule as invalid, so breach status can diverge between engine and
+        reports.
+      evidence_refs:
+        - "Embedded Materialized Input: `ExposureAggregate.total_amount: type:
+          number`"
+        - "Embedded Materialized Input: `RiskAppetite.threshold: type: number`"
+        - "Embedded Materialized Input: `RiskAppetite.compliance_status: enum
+          [compliant, breached]`"
+        - "Embedded Materialized Input: `RiskAppetite.definition` comparison
+          text"
+    causal_path:
+      root_cause_candidate: The rule is stated at entity level even though the
+        ontology declares the comparable quantities only as attributes.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: "`RiskAppetite.definition` states the violation condition as
+            `ExposureAggregate` exceeding `RiskAppetite`."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `RiskAppetite.definition`"
+        - cause_id: logic-candidate-002.cause-002
+          claim: The ontology declares the numeric measure for the aggregate as
+            `ExposureAggregate.total_amount`, not as the `ExposureAggregate`
+            entity itself.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input:
+              `ExposureAggregate.attributes.total_amount.type: number`"
+        - cause_id: logic-candidate-002.cause-003
+          claim: The ontology declares the numeric appetite value as
+            `RiskAppetite.threshold`, not as the `RiskAppetite` entity itself.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input:
+              `RiskAppetite.attributes.threshold.type: number`"
+      unresolved_beyond_evidence: No formal comparison semantics or implicit
+        entity-to-value coercion rule is provided within the allowed boundary.
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`is_a` is interpreted in its standard ontology sense: subtype/class
+    inclusion, where instances of the child type are also instances of the
+    parent type."
+  - Numeric exceedance/comparison rules require both operands to be numeric
+    values or explicitly defined projections to numeric values.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,183 @@
+schema_version: 1
+session_id: 20260718-f461553b
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — entities.Assay and relations
+    evidence_anchor: Assay is defined as the analyzer execution unit; notes require
+      new catalog items to be registered in both Test and Assay, but neither
+      Assay attributes nor relations define a Test↔Assay mapping.
+    claim: The assay execution unit lacks the relationship that connects it to the
+      ordered test it realizes.
+    what: Assay is connected only to Department and has no structural link to Test,
+      Order, Specimen, or Result.
+    why: The main workflow orders Test and records Result for Test, while analyzer
+      execution is represented by Assay. Without a Test↔Assay relationship, an
+      EMR/LIS integration cannot trace an ordered catalog item to its execution
+      unit using this authority document. Dual registration does not establish
+      correspondence.
+    how_to_fix: Add a canonical, cardinality-explicit Test↔Assay realization
+      relationship, including any required specimen compatibility constraint,
+      and make one side authoritative rather than relying on parallel
+      registration.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        integration from ordering through reporting.
+      failure_condition: Whenever an ordered Test must be translated to or reconciled
+        with the Assay executed by the analyzer.
+      impact: The central order-to-execution path is structurally incomplete, forcing
+        integrations to invent an external mapping and weakening
+        interoperability and auditability.
+      evidence_refs:
+        - entities.Assay.definition
+        - entities.Test.definition
+        - notes[0]
+        - relations
+    causal_path:
+      root_cause_candidate: Test and Assay are maintained as parallel catalog concepts
+        without a canonical realization relationship.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay has no relationship to Test or another workflow object that
+            identifies which ordered test it executes.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Assay.attributes
+            - relations
+        - cause_id: structure-candidate-001.cause-002
+          claim: The missing execution link is a symptom of retaining two catalog
+            registrations without modeling their correspondence.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[0]
+            - entities.Test.definition
+            - entities.Assay.definition
+      unresolved_beyond_evidence: The required cardinality—one-to-one, one-to-many, or
+        context-dependent—cannot be determined from the bounded artifact.
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — Order completion state rule and Result
+      ownership
+    evidence_anchor: state_rules[0] says an Order becomes completed when all Result
+      values are final, while Result has no order_ref and relations provide only
+      separate Result→Specimen→Order and Result→Report→Order paths.
+    claim: The result set governing Order completion is not structurally scoped to a
+      single Order.
+    what: No canonical ownership relationship identifies exactly which Result
+      instances are included by “all Result” for an Order.
+    why: Result can reach Order through both Specimen and Report, but the ontology
+      does not require those paths to resolve to the same Order. Consequently,
+      the completion rule lacks a determinate subject set and different EMR/LIS
+      consumers may calculate completion differently.
+    how_to_fix: Define one canonical Order–Result membership path, or an explicitly
+      derived relationship with a constraint that the specimen and report paths
+      resolve to the same Order; rewrite the completion rule against that
+      bounded set.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A shared and operationally reliable Order lifecycle contract
+        for EMR/LIS integration.
+      failure_condition: When an Order has multiple specimens/reports or a Result is
+        associated through paths that do not unambiguously identify the same
+        Order.
+      impact: Consumers can mark orders completed over different result sets, causing
+        lifecycle divergence across systems.
+      evidence_refs:
+        - state_rules[0]
+        - entities.Result.attributes
+        - "relations: Result→Specimen"
+        - "relations: Specimen→Order"
+        - "relations: Result→Report"
+        - "relations: Report→Order"
+    causal_path:
+      root_cause_candidate: Result ownership was modeled through multiple transitive
+        paths without a canonical Order-scoping relationship or consistency
+        constraint.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: The completion rule quantifies over Result without defining which Results
+            belong to the Order.
+          relation_to_previous: null
+          evidence_refs:
+            - state_rules[0]
+        - cause_id: structure-candidate-002.cause-002
+          claim: That undefined set is enabled by two separate Result-to-Order paths with
+            no same-order constraint.
+          relation_to_previous: enables
+          evidence_refs:
+            - "relations: Result→Specimen→Order"
+            - "relations: Result→Report→Order"
+        - cause_id: structure-candidate-002.cause-003
+          claim: The competing paths are a symptom of omitted canonical Result ownership
+            at the Order boundary.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Result.attributes
+            - relations
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml — entities.CriticalValue notification structure
+    evidence_anchor: CriticalValue.notified is a boolean whose note says
+      notification time and recipient exist in a telephone log, but no
+      notification record entity or relationship appears in the ontology.
+    claim: Critical-value notification completion is disconnected from the record
+      that substantiates it.
+    what: The ontology exposes a notified state but provides no relationship to
+      notification time, recipient, responsible staff, or an external
+      notification-record reference.
+    why: A consumer can observe that notification is claimed but cannot navigate to
+      evidence of who was notified or when. Because the file is intended as the
+      integration authority, leaving the supporting record outside its
+      relationship graph makes the operational state unauditable across systems.
+    how_to_fix: Model a CriticalValueNotification record, or at minimum an
+      authoritative external-record reference, and link it to CriticalValue,
+      recipient, notification time, and responsible staff; derive notified from
+      the existence/status of that record.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of the ontology as an operational integration authority
+        for critical-result handling.
+      failure_condition: When EMR or LIS consumers must verify, reconcile, or audit a
+        CriticalValue marked notified.
+      impact: The notification flag cannot be structurally reconciled with its
+        evidence, allowing inconsistent or unsupported completion states between
+        systems.
+      evidence_refs:
+        - entities.CriticalValue.attributes.notified
+        - relations
+    causal_path:
+      root_cause_candidate: Notification evidence is delegated to an external
+        telephone log without representing that log or a reference to it in the
+        ontology.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: CriticalValue.notified has no link to the notification record that
+            supports the boolean.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.CriticalValue.attributes.notified
+            - relations
+        - cause_id: structure-candidate-003.cause-002
+          claim: The missing link is a symptom of placing time and recipient data in an
+            external log without modeling its identity or relationship.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.CriticalValue.attributes.notified.note
+      unresolved_beyond_evidence: The bounded artifact does not specify whether the
+        telephone log is held by EMR, LIS, or another authoritative system.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Attribute references, inheritance declarations, explicit relations, and
+    state-rule ownership clauses were treated as structural connections.
+  - Operational impact was evaluated only against the artifact's declared
+    purpose as an EMR/LIS conceptual authority, without importing external
+    clinical-domain rules.
+validation:
+  unaddressable_candidates: []

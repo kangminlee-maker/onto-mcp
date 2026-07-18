@@ -1,0 +1,124 @@
+schema_version: 1
+session_id: 20260718-3c9b2434
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: logistics-fulfillment-ontology.yaml — OrderLine/Shipment 연결 구조
+    evidence_anchor: entities.OrderLine.attributes의 주석 및 relations[fulfills]
+    claim: OrderLine과 이를 실제로 충족한 Shipment 사이의 필수 연결이 누락되어 있다.
+    what: Shipment는 Order 전체에만 `fulfills`로 연결되고, OrderLine별 출하 수량이나 대응 Shipment를
+      나타내는 관계가 없다.
+    why: 대상 자체가 부분출하 시 어느 주문 줄이 어느 Shipment로 나갔는지 추적할 수 없다고 명시한다. 따라서 주문 줄과 물리적 출하
+      사이의 핵심 경로가 끊겨 WMS/TMS/ERP가 동일한 충족 내역을 공유할 수 없다.
+    how_to_fix: OrderLine과 Shipment를 잇고 충족 수량을 보유하는 `FulfillmentLine` 같은 연결 엔티티를
+      추가한다. 최소 필드는 `order_line_ref`, `shipment_ref`, `fulfilled_qty`이다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문→출하 추적을 포함한 WMS/TMS/ERP 통합 개념 기준 제공
+      failure_condition: 한 주문 줄이 여러 Shipment로 나뉘거나 한 Shipment가 일부 수량만 충족하는 경우
+      impact: 시스템 간 출하 수량 대사, 부분출하 상태 산정, 미충족 수량 추적의 공통 구조가 없어 통합 기준으로 신뢰할 수 없다.
+      evidence_refs:
+        - "entities.OrderLine 주석: 실제 충족 Shipment 참조가 없어 부분출하 추적 불가"
+        - "relations[fulfills]: Shipment에서 Order로 향하는 주문 단위 관계만 존재"
+    causal_path:
+      root_cause_candidate: 충족 관계를 주문 단위 `Shipment -> Order` 하나로만 모델링하고 주문 줄 단위 연결을 의도적으로 제외했다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: OrderLine별로 실제 Shipment와 충족 수량을 찾는 경로가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.OrderLine.attributes
+            - relations[fulfills]
+        - cause_id: structure-candidate-001.cause-002
+          claim: 유일한 충족 관계가 주문 단위이며 OrderLine 매핑을 두지 않는다고 선언되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - relations[fulfills].note
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: logistics-fulfillment-ontology.yaml — 주문·재고 할당 연결 구조
+    evidence_anchor: 문서 서두, entities.Order.fulfillment_status,
+      entities.InventoryRecord, entities.InventoryAggregate, integrity_rules[0]
+    claim: 선언된 재고 할당 단계가 주문 줄 및 재고 레코드와 연결되지 않는다.
+    what: Order에는 `allocated` 상태가 있고 할당 시 InventoryAggregate를 확인한다는 규칙도 있지만, 어떤
+      OrderLine에 어느 창고·SKU 재고를 몇 개 할당했는지 나타내는 엔티티나 관계가 없다.
+    why: 구조상 주문과 재고는 공통 Sku를 통해서만 간접 연결된다. 이 연결만으로는 특정 주문에 대한 예약·할당 내역을 식별할 수 없어,
+      선언된 주문→재고 할당→출하 흐름 중 할당 단계가 실행 가능한 개념 경로로 닫히지 않는다.
+    how_to_fix: "`InventoryAllocation` 연결 엔티티를 추가하여 `order_line_ref`,
+      `inventory_record_ref` 또는 `warehouse_ref`/`sku_ref`, `allocated_qty`를
+      연결하고, 필요하면 해당 할당과 출하 충족 연결도 연계한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문→재고 할당→출하 흐름을 WMS/ERP 간 공통 개념으로 제공
+      failure_condition: 주문에 재고를 할당하거나 할당 내역을 취소·대사·출하 전환해야 하는 경우
+      impact: "`allocated` 상태의 근거 레코드가 존재하지 않아 OMS 상태와 WMS/ERP 재고 변동을 구조적으로 대사할 수 없다."
+      evidence_refs:
+        - "문서 서두: 주문 → 재고 할당 → 출하 → 배송의 개념 모델"
+        - entities.Order.fulfillment_status.values에 allocated 존재
+        - "integrity_rules[0]: 할당 시 InventoryAggregate.available_qty 확인"
+        - entities.InventoryRecord 및 entities.InventoryAggregate에 주문 참조 부재
+    causal_path:
+      root_cause_candidate: 할당을 독립된 연결 개념으로 모델링하지 않고 집계 재고 조회 규칙과 주문 상태만 배치했다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: 특정 OrderLine에서 할당된 재고 및 수량으로 이어지는 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.OrderLine.attributes
+            - entities.InventoryRecord.attributes
+            - entities.InventoryAggregate.attributes
+        - cause_id: structure-candidate-002.cause-002
+          claim: 할당은 InventoryAggregate 조회 규칙과 Order의 `allocated` 상태로만 표현된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - integrity_rules[0]
+            - entities.Order.fulfillment_status
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg 경로 구조
+    evidence_anchor: entities.Shipment.definition 및 entities.DeliveryLeg
+    claim: DeliveryLeg를 상위 Shipment나 동일 경로의 다른 구간과 묶는 필수 관계가 없다.
+    what: "DeliveryLeg에는 `leg_seq`, 출발지, 도착지가 있지만 소속 Shipment 또는 경로를 가리키는 참조가 없고,
+      `is_a: Shipment`만 선언되어 있다."
+    why: "`leg_seq`는 어느 화물 경로 안의 순서인지 결정할 부모 연결이 있어야 의미가 있다. 현재 구조에서는 여러
+      DeliveryLeg가 하나의 화물 이동을 구성한다는 경로를 복원할 수 없어 다구간 배송의 연결성이 닫히지 않는다."
+    how_to_fix: 물리적 화물인 Shipment와 구간을 구분하고 `DeliveryLeg.shipment_ref -> Shipment` 또는
+      `Shipment.legs -> DeliveryLeg[]`를 추가한다. 순서의 범위와 구간 간 연속성도 해당 부모 관계 안에서
+      정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shipment와 배송 구간을 통합 시스템의 공통 물류 경로로 표현
+      failure_condition: 한 Shipment가 둘 이상의 창고·허브·고객 구간을 거치는 경우
+      impact: 구간을 화물별로 묶거나 순서대로 재구성할 수 없어 TMS 경로와 OMS/WMS 출하를 같은 Shipment 기준으로 연결할 수
+        없다.
+      evidence_refs:
+        - "entities.Shipment.definition: 배송 구간도 Shipment의 일종이라고 선언"
+        - "entities.DeliveryLeg.attributes: leg_seq/from_ref/to_ref만 존재"
+        - entities.DeliveryLeg에 부모 Shipment 참조 부재
+    causal_path:
+      root_cause_candidate: 구간 소속 관계를 두지 않고 DeliveryLeg를 Shipment의 하위 유형으로만 모델링했다.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: DeliveryLeg의 `leg_seq`를 특정 Shipment 경로에 귀속시키는 연결이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.DeliveryLeg
+        - cause_id: structure-candidate-003.cause-002
+          claim: DeliveryLeg와 Shipment 사이에는 `is_a`만 있고 구성·소속 관계가 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.DeliveryLeg.is_a
+            - entities.Shipment.definition
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 부분출하, 재고 할당, 다구간 배송은 외부 도메인 규칙이 아니라 대상 문서가 명시한 설계 의도와 주석 범위에서만 평가했다.
+validation:
+  unaddressable_candidates: []

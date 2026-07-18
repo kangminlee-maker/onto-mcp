@@ -1,0 +1,278 @@
+schema_version: 1
+session_id: 20260718-f461553b
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: 분석 수행 및 품질관리 개념 범위
+    evidence_anchor: entities.Assay 전체, relations 전체, entities.Result.definition
+    claim: 검사실의 실제 분석 수행을 표현하는 실행·장비·품질관리 하위 영역이 빠져 있다.
+    what: Assay는 정의되어 있지만 이를 Specimen, Test, Result와 연결하는 분석 수행 사건이 없고, 분석기·시약/로트·분석
+      런·재검·교정·품질관리 결과를 나타내는 개념도 없다.
+    why: Result가 어떤 수행 과정과 품질 근거에서 생성됐는지 표현할 수 없어, 주문부터 보고까지를 포괄하는 EMR/LIS 개념 권위
+      문서로는 분석 단계가 공백으로 남는다.
+    how_to_fix: AnalysisExecution 같은 수행 사건을 추가해 Specimen/Test/Assay/Result를 연결하고, 수행
+      시각·분석기·시약 로트·수행자·재검 여부·QC 승인 근거를 최소 속성 또는 관계로 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문부터 보고까지의 임상검사 파이프라인을 정의하는 EMR/LIS 통합 개념 권위 문서
+      failure_condition: 결과의 생성 경로, 재검 여부 또는 품질 승인 근거를 시스템 간에 교환하거나 추적해야 할 때
+      impact: 분석 단계의 핵심 사실을 공통 모델로 표현할 수 없어 시스템별 비공식 필드와 해석이 권위 문서를 대체하게 된다.
+      evidence_refs:
+        - entities.Assay
+        - entities.Result.definition
+        - relations
+    causal_path:
+      root_cause_candidate: 분석 수행을 독립된 도메인 사건으로 모델링하지 않고 카탈로그 항목과 최종 결과만 정의했다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: Assay를 포함하는 관계와 분석 수행·장비·QC 엔티티가 존재하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Assay
+            - relations
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 따라서 Result를 생성한 실제 분석 과정과 품질 근거를 표현할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Result.definition
+            - relations
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 이는 분석 수행 사건 개념 자체가 모델 범위에서 누락된 결과다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities
+            - relations
+      unresolved_beyond_evidence: 구체적으로 요구되는 장비·QC 세분화 수준은 기관 운영 규정 확인이 필요하다.
+  - candidate_id: coverage-candidate-002
+    target: Specimen lifecycle 및 전처리·종결 처리
+    evidence_anchor: entities.Specimen.lifecycle, state_rules[2]
+    claim: 검체 lifecycle이 채취 이후부터 분석 완료까지만 다루며 전처리 예외와 보관·폐기 구간을 표현하지 못한다.
+    what: 상태가 collected, received, in_analysis, analyzed로 끝나며 채취 실패, 미수령, 부적합/거부,
+      재채취, 분주, 운송, 보관, 폐기 같은 상태나 사건이 없다. 보관·폐기는 부서 내규로만 외부화되어 있다.
+    why: 검체 거부·재채취 및 분석 후 보관/폐기는 주문 진행과 결과 신뢰성에 직접 영향을 주지만 공통 온톨로지에서 상태와 이력을 교환할 수
+      없다.
+    how_to_fix: 검체 lifecycle을 주문/채취 예정부터 운송·접수·적합성 판정·분주·분석·보관·폐기까지 확장하고, 거부·재채취·폐기는
+      사유·행위자·시각을 가진 사건으로 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 검체를 포함한 주문-보고 전 과정의 EMR/LIS 통합 상태 모델
+      failure_condition: 검체 부적합, 재채취, 보관 또는 폐기 상태를 시스템 간 조정하거나 과거 상태를 재구성해야 할 때
+      impact: 실제 운영에서 빈번한 예외와 종결 상태가 권위 문서 밖에 남아 주문 완료 판단과 검체 추적이 시스템마다 달라질 수 있다.
+      evidence_refs:
+        - entities.Specimen.lifecycle
+        - state_rules[2]
+    causal_path:
+      root_cause_candidate: Specimen lifecycle 범위를 정상적인 분석 완료 경로로 한정하고 전처리 예외와 종결 구간을 외부 규정에 위임했다.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Specimen lifecycle은 analyzed에서 종료되고 보관·폐기는 모델이 아닌 부서 내규를 따른다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Specimen.lifecycle
+            - state_rules[2]
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 이로 인해 거부·재채취·보관·폐기 상태와 그 전이를 공통 모델에서 기록할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Specimen.lifecycle
+            - state_rules[2]
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 이는 정상 경로만 포함한 불완전한 lifecycle 범위의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Specimen.lifecycle
+      unresolved_beyond_evidence: 필수 보관 기간과 폐기 절차 자체는 부서별 규정 확인이 필요하다.
+  - candidate_id: coverage-candidate-003
+    target: 승인·검증·정정·통보 행위의 감사 증거
+    evidence_anchor: entities.Result.attributes.verified_by,
+      entities.Report.attributes.released_at,
+      entities.CriticalValue.attributes.notified
+    claim: 통제가 필요한 행위를 완전한 감사 사건으로 표현할 개념이 없다.
+    what: 결과 검증은 verified_by만, 보고서 공개는 released_at만, 중대값 통보는 notified boolean만 가진다.
+      행위자·시각·수신자·근거·이전 값·사유를 함께 보존하는 Verification, Release, Amendment,
+      Notification 사건이 없다.
+    why: 누가 언제 무엇을 근거로 승인·정정·통보했는지 재구성할 수 없고, 특히 통보 증거는 온톨로지 밖 전화 기록 대장에 의존한다.
+    how_to_fix: VerificationEvent, ReportReleaseEvent, AmendmentEvent,
+      CriticalNotificationEvent를 추가하고 행위자, 발생 시각, 대상, 사유/근거, 수신자 및 결과를 명시한다. 외부
+      전화 기록을 유지한다면 해당 기록의 식별자와 권위 시스템도 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 간 결과 승인·공개·정정·중대값 통보의 공통 권위 모델
+      failure_condition: 감사, 분쟁, 환자안전 조사 또는 재처리 과정에서 통제 행위의 책임과 시점을 입증해야 할 때
+      impact: 현재 상태만으로는 행위 증거를 복원할 수 없어 임상의가 신뢰하는 보고 상태와 실제 통제 이력 사이의 검증 가능성이 사라진다.
+      evidence_refs:
+        - entities.Result.attributes.verified_by
+        - entities.Report.attributes.released_at
+        - entities.CriticalValue.attributes.notified
+    causal_path:
+      root_cause_candidate: 통제 행위를 독립된 감사 사건이 아니라 현재 속성이나 boolean으로 축약했다.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: 검증·공개·통보 각각에 행위자·시각·근거를 모두 담는 사건 개념이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Result.attributes.verified_by
+            - entities.Report.attributes.released_at
+            - entities.CriticalValue.attributes.notified
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 따라서 통제 행위의 완전한 감사 흔적과 순서를 재구성할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Result
+            - entities.Report
+            - entities.CriticalValue
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 이는 행위 이력을 상태 속성으로만 표현한 모델링 선택의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Result.attributes
+            - entities.Report.attributes
+            - entities.CriticalValue.attributes
+      unresolved_beyond_evidence: 전화 기록 대장의 실제 필드와 보존 정책은 현재 경계에서 확인할 수 없다.
+  - candidate_id: coverage-candidate-004
+    target: Result 및 Report의 정정·재발행 이력
+    evidence_anchor: entities.Result.attributes.status,
+      entities.Report.attributes.result_status, state_rules[1]
+    claim: 정정과 개정 상태는 있으나 결과·보고서의 버전 및 유효 이력을 보존할 개념이 없다.
+    what: Result.status의 corrected와 Report.result_status의 amended는 현재 상태만 나타내며, 정정 전
+      값, 정정 사유, 버전 번호, 대체 관계, 각 버전의 유효/발행 시각이 없다.
+    why: 정정 후 과거에 어떤 값이 임상의에게 공개됐는지 재구성할 수 없으며, finalized 이후의 반복 정정·재발행도 단일 amended
+      상태로 축약된다.
+    how_to_fix: ResultVersion 또는 Amendment 사건을 도입해 이전 버전과 대체 버전을 연결하고 값·상태·유효기간·발행
+      시각·정정 사유를 불변 이력으로 보존한다. Report도 버전별 공개 이력을 갖게 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 임상의가 신뢰하는 결과와 보고 상태의 권위 및 과거 시점 재구성
+      failure_condition: 최종 결과가 한 번 이상 정정·철회·재발행되거나 특정 시점에 공개된 내용을 확인해야 할 때
+      impact: 현재 상태는 알 수 있어도 과거 공개 내용과 변경 순서를 증명할 수 없어 권위 문서의 시간적 완전성이 무너진다.
+      evidence_refs:
+        - entities.Result.attributes.status
+        - entities.Report.attributes.result_status
+        - state_rules[1]
+    causal_path:
+      root_cause_candidate: 결과와 보고서를 버전이 누적되는 기록이 아니라 덮어쓰는 현재 상태로 모델링했다.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: corrected와 amended가 정의되어 있지만 버전, 이전 값, 대체 관계 또는 유효기간이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+        - cause_id: coverage-candidate-004.cause-002
+          claim: 정정 전 공개 값과 반복 정정 순서를 재구성할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Result.attributes
+            - entities.Report.attributes
+            - state_rules[1]
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 이는 시간에 따라 변하는 임상 결과에 이력 차원을 부여하지 않은 모델링의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Result
+            - entities.Report
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: Test와 Assay 카탈로그 권위 및 변경 이력
+    evidence_anchor: entities.Test, entities.Assay, notes[0]
+    claim: 병행 관리되는 Test와 Assay에 단일 권위, 대응 관계, 버전·유효기간이 없다.
+    what: 신규 항목을 두 곳 모두 등록한다고 명시하지만 어느 카탈로그가 원본인지, 두 코드가 어떻게 매핑되는지, 매핑과 항목 정의가 언제
+      유효했는지를 나타내지 않는다.
+    why: EMR 주문 코드와 LIS 수행 코드가 독립적으로 변경되면 같은 검사인지 판정할 공통 근거가 없고 과거 주문·결과의 의미도 재구성할 수
+      없다.
+    how_to_fix: Test를 주문 카탈로그, Assay를 수행 카탈로그로 명확히 구분하고 TestAssayMapping을 추가한다. 각
+      항목과 매핑에 권위 시스템, 버전, valid_from/valid_to, 활성 상태를 두며 생성·변경 책임을 지정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR 주문 개념과 LIS 수행 개념 사이의 단일한 통합 권위
+      failure_condition: 한 Test가 여러 Assay로 수행되거나 카탈로그 코드·명칭·검체 요구사항이 서로 다른 시점에 변경될 때
+      impact: 중복 등록 정책만으로는 코드 대응과 변경 우선순위를 결정할 수 없어 주문-수행-결과 연결이 시스템별 해석에 의존한다.
+      evidence_refs:
+        - entities.Test
+        - entities.Assay
+        - notes[0]
+    causal_path:
+      root_cause_candidate: 주문 카탈로그와 수행 카탈로그를 병행 유지하면서 그 사이의 권위·매핑·시간성 계약을 정의하지 않았다.
+      root_cause_step_id: coverage-candidate-005.cause-003
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: Test와 Assay가 별도 엔티티이며 신규 항목은 양쪽에 등록되지만 두 엔티티를 잇는 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Test
+            - entities.Assay
+            - notes[0]
+            - relations
+        - cause_id: coverage-candidate-005.cause-002
+          claim: 코드 불일치 시 어느 정의가 우선하는지와 특정 시점의 대응을 판정할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[0]
+            - entities.Test.attributes
+            - entities.Assay.attributes
+        - cause_id: coverage-candidate-005.cause-003
+          claim: 이는 병행 카탈로그에 단일 권위와 매핑 lifecycle을 지정하지 않은 결과다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[0]
+      unresolved_beyond_evidence: 실제 EMR 또는 LIS 중 어느 시스템이 각 카탈로그의 원본이어야 하는지는 현재 경계에서 결정할 수 없다.
+  - candidate_id: coverage-candidate-006
+    target: CriticalValue 임계값의 적용 문맥과 시간성
+    evidence_anchor: entities.CriticalValue.attributes
+    claim: 중대값 임계범위에 적용 대상의 임상 문맥과 유효 이력이 없다.
+    what: CriticalValue는 Test와 상·하한만 연결하며 단위, 검체 종류, 환자군, 검사 방법/Assay, 기관 또는 유효기간을
+      표현하지 않는다.
+    why: 같은 Test라도 단위·방법·검체·환자군 또는 정책 시점에 따라 다른 임계값이 필요할 수 있는데, 현재 모델은 어느 규칙을 적용했는지와
+      과거 임계값을 재구성하지 못한다.
+    how_to_fix: CriticalValueRule로 승격해 단위, Test/Assay, 검체 문맥, 적용 환자 조건, 기관/부서,
+      valid_from/valid_to, 버전 및 승인 근거를 추가하고 통보 사건이 적용한 규칙 버전을 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS가 공유하는 중대값 판정 및 통보의 개념 권위
+      failure_condition: 동일 검사에 복수 단위·방법·검체·환자군별 임계값이 존재하거나 임계값 정책이 변경될 때
+      impact: 시스템이 서로 다른 임계값을 적용하거나 과거 판정의 근거를 설명하지 못해 통보 일관성과 추적성이 약화된다.
+      evidence_refs:
+        - entities.CriticalValue.attributes
+        - entities.Test.attributes.requires_specimen_type
+        - entities.Assay.attributes.specimen_kind
+    causal_path:
+      root_cause_candidate: 중대값을 문맥과 버전을 가진 판정 규칙이 아니라 Test별 정적 숫자 범위로 모델링했다.
+      root_cause_step_id: coverage-candidate-006.cause-003
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: CriticalValue에는 Test 참조와 상·하한만 있고 단위·방법·적용 조건·유효기간이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.CriticalValue.attributes
+        - cause_id: coverage-candidate-006.cause-002
+          claim: 어떤 문맥과 시점의 임계값이 결과에 적용됐는지 표현할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.CriticalValue.attributes
+            - entities.Result.attributes.unit
+        - cause_id: coverage-candidate-006.cause-003
+          claim: 이는 시간 의존적 판정 규칙의 차원들을 정적 범위로 축약한 결과다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.CriticalValue.definition
+            - entities.CriticalValue.attributes
+      unresolved_beyond_evidence: 필요한 환자군 및 방법별 세분화는 기관의 실제 중대값 정책 확인이 필요하다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 선언된 목적인 'Order부터 Report까지의 임상검사 파이프라인'에는 전처리, 분석 수행, 결과 검증, 보고 및 사후 정정의 운영
+    사실을 표현할 수 있어야 한다고 보았다.
+  - EMR/LIS 통합의 개념 권위 문서는 복수 시스템에 중복되는 값의 원본·우선순위와 시간에 따른 변경 이력을 명시해야 한다고 보았다.
+  - 승인, 결과 정정 및 중대값 통보는 행위자·시각·근거를 추적해야 하는 통제 행위로 보았다.
+validation:
+  unaddressable_candidates: []

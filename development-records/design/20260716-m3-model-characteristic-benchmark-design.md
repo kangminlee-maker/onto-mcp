@@ -345,3 +345,20 @@ R<2면 directional, untrustworthy/unstable verdict는 비교서 제외(§3-3 int
 **남은 것**: precision 질문의 확답엔 **R≥3(또는 관측 리뷰-level SD 유도 reps)**로 양 arm이 공유 fixture에서
 intra-model 안정 도달해야 — 그때만 R=1이 제기한 질문에 답 가능(현재는 미결). P1 잔여(review-pipeline-benchmark
 RUN 통합 등)는 standalone 하니스가 이미 전 흐름 제공해 **대부분 무의미/불필요**로 재평가됨(§12 상단 P1 재구성).
+
+## 13. P2 종결 — R=3 확정 재현 (2026-07-18, owner-spend)
+
+owner 지시("R≥3 재현해서 확정")로 rep-3 실행: arm당 4 fixture 라이브 리뷰(계 8회,
+`run-ontology-review.mts` + `p2-eval-settings`, 계기 불변 — `ontological_anchoring`은
+eval settings 부재로 OFF, R=1/2와 동일 프롬프트) + rep-3만 신규 judge(K=8, oauth) +
+기존 R=2 capture와 병합 replay(digest 검증 통과).
+
+**최종 판정: 셀당 24 pooled runs에서도 비교 가능 셀 0/4** — sol은 4/4 intra-model
+UNSTABLE(R=2의 manufacturing STABLE도 상실), 5.5는 clinical만 STABLE. `m3-compare`
+전 지표 `insufficient`. **R=1 "5.5 precision 우세"는 최종 기각**(R=2·R=3 연속 비재현).
+불안정성은 검정력 부족이 아니라 이 계기 해상도의 리뷰-생성 분산 자체다(rep 증가 시
+악화). 게이트 무관 확정 소견: recall 동등(3회 연속) · wall-time "비중첩" 신호는
+R=3에서 격하(5.5 credit rep-3 1232s가 sol 초과; 11/12는 여전히 5.5 빠름) · canary
+24/24. **결론: 이 워크로드에서 두 모델은 품질로 구별 불가 — seat 선택은 비용/속도
+경향/quota 축으로. 추가 R 구매 근거 없음. M3 P2 종결.**
+disclosure: `development-records/benchmark/m3/20260718-p2r3-comparison/README.md`.

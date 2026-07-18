@@ -1,0 +1,96 @@
+schema_version: 1
+session_id: 20260718-8d90017a
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules BOM acyclicity rule
+    evidence_anchor: .onto/review/20260718-8d90017a/execution-preparation/materialized-input.md:93-95
+    claim: BOM 비순환 필수 규칙과 스크랩 재투입을 자기 하위 포함으로 모델링한다는 예외가 동일 규칙 안에서 순환 허용/요구와 충돌한다.
+    what: "`BOM은 비순환이어야 한다`는 전역 제약과 `Assembly가 자기 하위에 자신을 포함`한다는 모델링 규칙은 같은 BOM 그래프에
+      대해 동시에 참일 수 없습니다."
+    why: 자기 하위 포함은 길이 1의 순환이므로 비순환 BOM 제약을 직접 위반합니다. 예외 의도가 있더라도 현재 문장은 스크랩 재투입 BOM을
+      비순환 BOM으로 검증해야 하는지, 순환 BOM으로 허용해야 하는지 형식적으로 닫지 못합니다.
+    how_to_fix: 스크랩 재투입을 BOM parent-child 순환으로 표현하지 않는 별도 관계로 분리하거나, 비순환 규칙을 `일반 생산
+      BOM은 비순환이며, Rework/ReclaimFlow는 별도 그래프로 관리한다`처럼 적용 범위를 명시하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 BOM 개념 기준과 invalid input behavior.
+      failure_condition: 스크랩 재투입 Assembly가 자기 자신을 child로 갖는 경우, 동일 데이터가 필수 비순환 검증에서는
+        invalid이고 재생 원료 회수 모델링 규칙에서는 required/valid가 된다.
+      impact: 통합 검증기나 MES 전개 로직이 같은 BOM을 승인해야 하는지 거부해야 하는지 결정할 수 없어 생산 전개, 원가 롤업, 자재
+        소요 산출의 기준 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:93-95
+    causal_path:
+      root_cause_candidate: 순환 금지 대상인 BOM 그래프와 스크랩 재투입 흐름을 같은 Assembly-child 관계로 모델링했다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 명시 규칙은 BOM을 비순환이어야 한다고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-95
+        - cause_id: logic-candidate-001.cause-002
+          claim: 같은 규칙은 스크랩 재투입을 Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다고 선언한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:93-95
+        - cause_id: logic-candidate-001.cause-003
+          claim: 자기 하위 포함은 자기 순환이므로 비순환 제약과 동시 만족 불가능하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:93-95
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: manufacturing-bom-ontology.yaml AlternatePart definition and direction
+      attribute
+    evidence_anchor: .onto/review/20260718-8d90017a/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart는 정의에서 항상 대칭 관계라고 하면서 direction enum에서는 one_way를 기본값으로 허용한다.
+    what: "`A의 대체가 B이면 B의 대체도 A`는 대체 관계의 양방향성을 필수로 선언하지만, `direction`은 `one_way` 값을
+      허용하고 기본값도 `one_way`라고 설명합니다."
+    why: "동일 AlternatePart 인스턴스에 대해 관계가 반드시 bidirectional이어야 한다는 정의와 one_way일 수 있다는
+      속성 제약이 동시에 존재합니다. 이는 modality 충돌입니다: definition은 necessary
+      bidirectionality를 만들고 enum/default는 possible one-way를 만듭니다."
+    how_to_fix: 대체 관계가 항상 대칭이라면 `direction` 속성과 `one_way` 값을 제거하십시오. 단방향 대체도 필요하다면
+      정의를 `대체 가능 부품 관계이며 direction에 따라 단방향 또는 양방향으로 해석한다`로 바꾸십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 대체품 개념 기준과 production substitution rule.
+      failure_condition: AlternatePart.direction이 one_way인 인스턴스가 생성되면, 정의상으로는 B도 A를
+        대체해야 하지만 속성상으로는 A만 B로 대체되는 상태가 허용된다.
+      impact: 자재 대체 승인, 재고 소진, 생산 오더의 대체품 선택에서 같은 관계를 양방향으로 해석할지 단방향으로 해석할지 시스템 간 기준이
+        갈라진다.
+      evidence_refs:
+        - materialized-input.md:37-45
+    causal_path:
+      root_cause_candidate: AlternatePart의 관계 대칭성을 정의 문장과 direction 속성 양쪽에서 서로 다른 modality로 선언했다.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: AlternatePart 정의는 A의 대체가 B이면 B의 대체도 A라고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-39
+        - cause_id: logic-candidate-002.cause-002
+          claim: AlternatePart.direction은 one_way와 bidirectional을 모두 허용하며 기본을 one_way라고
+            설명한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-002.cause-003
+          claim: 필수 양방향성과 허용된 단방향성은 같은 대체 관계 인스턴스에서 동시에 만족될 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:37-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 제조 도메인 규칙 없이, 패킷에 포함된 target claim 자체의 형식적 양립
+    가능성만 판단했다.
+  - 한국어 문장의 `단`은 예외 의도를 나타내지만, 현재 ontology artifact 안에는 예외 타입이나 검증 범위를 기계적으로
+    구분하는 별도 구조가 없다고 보았다.
+validation:
+  unaddressable_candidates: []

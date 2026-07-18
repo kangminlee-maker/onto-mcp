@@ -1,0 +1,527 @@
+schema_version: 1
+session_id: 20260718-8d90017a
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: 운영 핵심 값의 원본 권한과 동기화 계약을 온톨로지 개념으로 승격하지 않고 복사본 속성으로 수용한 설계 결정.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 생산계획팀 엑셀 값을 복사해 둔 scrap_rate는 PLM/MES 통합 기준 문서라는 목적과 어긋난다.
+    proposed_action: scrap_rate의 authoritative source, 적용 범위, 유효일자, 갱신 책임을 온톨로지에
+      명시하고, 단순 복사 필드라면 derived/cache 속성으로 낮추어 원본 계획 데이터와 동기화 계약을 분리한다.
+    affected_purpose: PLM/MES 통합의 개념 기준 문서로서 BOM과 제조 운영 값의 신뢰 가능한 의미와 권한 경계를 제공하는 목적.
+    failure_condition: BOM 소요량 또는 생산계획이 scrap_rate를 참조할 때 엑셀 원본과 온톨로지/MES 복사본이 어긋나는 경우.
+    impact: BOM 기준 수량과 제조 운영 계획이 서로 다른 값을 기준으로 계산될 수 있어 통합 기준 문서로서의 실행 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:29-35
+      - review-value-alignment-criteria.yaml:criteria[0].statement
+      - .onto/review/20260718-8d90017a/execution-preparation/materialized-input.md:29-35;
+        .onto/review/20260718-8d90017a/execution-preparation/review-value-alignment-criteria.yaml:criteria[0].statement
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-002
+    root_cause_hypothesis: 변경 적용의 권한 상태와 표시/동기화 상태를 같은 품목 리비전 개념 안에서 충분히 분리하지 않은 설계.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: ECO 적용일 이후 생산은 신규 rev를 따른다고 하면서 Part.rev는 주간 배치로 늦게 동기화해 변경관리 기준의 목적을 훼손한다.
+    proposed_action: ECO 적용 상태와 Part.rev 표시 상태를 분리해 각각의 권한과 유효시점을 명시하거나, 생산 오더 생성
+      기준이 Part.rev가 아니라 approved/applied ECO의 effective revision을 참조하도록 개념 계약을
+      명확히 한다.
+    affected_purpose: 품목, BOM, 라우팅, 변경관리 개념의 정합성을 갖춘 PLM/MES 통합 기준 제공.
+    failure_condition: ECO.effective_date는 지났지만 Part.rev 주간 배치 동기화가 아직 완료되지 않은 기간에
+      생산 오더나 현장 기준 정보가 Part.rev를 참조하는 경우.
+    impact: 동일 품목이 생산 기준으로는 신규 리비전, 품목 속성으로는 구 리비전처럼 보일 수 있어 변경 적용 추적과 생산 통제가 흔들린다.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:20-21
+      - materialized-input.md:69-76
+      - materialized-input.md:96
+      - review-value-alignment-criteria.yaml:criteria[0].statement
+      - .onto/review/20260718-8d90017a/execution-preparation/materialized-input.md:14-21,69-76,93-96;
+        .onto/review/20260718-8d90017a/execution-preparation/review-value-alignment-criteria.yaml:criteria[0].statement
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-003
+    root_cause_hypothesis: Operational measurement semantics for UOM conversion and
+      work-center capacity are left to local practice instead of being
+      standardized as ontology concepts.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: The ontology accepts a hidden tradeoff where quantity and
+      capacity interpretation depend on shop-floor or work-center practice.
+    proposed_action: Introduce explicit UOM conversion and capacity unit/basis
+      concepts so operational calculations have stable shared semantics.
+    affected_purpose: PLM/MES integration concept baseline for common calculation
+      rules across item, BOM, routing, and manufacturing operations.
+    failure_condition: When different UOM items or differently based work-center
+      capacities are used together in MES planning, BOM requirements, or routing
+      capacity calculations.
+    impact: The same quantity or capacity value can be interpreted differently by
+      site or consumer, weakening the ontology as a stable operating baseline.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:19
+      - materialized-input.md:63-67
+      - materialized-input.md:100
+      - review-value-alignment-criteria.yaml:criteria[0].statement
+      - .onto/review/20260718-8d90017a/execution-preparation/materialized-input.md:19,63-67,98-100;
+        .onto/review/20260718-8d90017a/execution-preparation/review-value-alignment-criteria.yaml:criteria[0].statement
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only shared_cause_candidate relations connect this finding to
+      narrower UOM and capacity findings; the relation graph does not support
+      same-root merging for it.
+  - issue_id: issue-004
+    root_cause_hypothesis: Unit semantics are modeled as a closed Part.uom enum
+      while item-specific conversion authority is absent from the ontology.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: New units and deterministic cross-unit BOM/MES flows require
+      schema change or external manual interpretation.
+    proposed_action: Replace the closed UOM enum with a UnitOfMeasure
+      reference/entity and add item-specific conversion-factor concepts with
+      authority, effective dating, and validity constraints.
+    affected_purpose: PLM/MES integration concept baseline for item, BOM, routing,
+      and manufacturing operations.
+    failure_condition: When a new unit or cross-unit BOM/MES flow requiring
+      deterministic conversion is introduced.
+    impact: Quantity semantics remain partly outside the ontology, making
+      integrations brittle as item classes and operational units expand.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/evolution.findings.yaml#evolution-candidate-001
+      - manufacturing-bom-ontology.yaml:14
+      - manufacturing-bom-ontology.yaml:95
+      - manufacturing-bom-ontology.yaml:14,95
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only a shared_cause_candidate relation connects this finding
+      to finding-003; no same-root/duplicate relation supports merging.
+  - issue_id: issue-005
+    root_cause_hypothesis: Work-center capacity is represented as an untyped number
+      while its unit is declared variable by work center.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: Work-center capacity has no unit/dimension model, so adding
+      heterogeneous work centers forces implicit reinterpretation of the same
+      numeric field.
+    proposed_action: Model capacity as a measured quantity with explicit unit,
+      capacity basis/type, calendar or shift context, and optional
+      conversion/normalization rules. Keep WorkCenter.capacity as a reference to
+      that structured capacity concept rather than a bare number.
+    affected_purpose: MES routing and production-order readiness concept baseline
+      for work centers and operations.
+    failure_condition: When heterogeneous work centers are integrated or a new
+      capacity basis is introduced, consumers cannot know how to interpret
+      capacity_per_shift from the ontology alone.
+    impact: This reduces extensibility and integration safety because scheduling
+      behavior depends on hidden local conventions instead of stable model
+      semantics.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/evolution.findings.yaml#evolution-candidate-002
+      - manufacturing-bom-ontology.yaml:58
+      - manufacturing-bom-ontology.yaml:62
+      - manufacturing-bom-ontology.yaml:58-62
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-006
+    root_cause_hypothesis: ECO applicability is modeled with affected parts plus a
+      single effective date rather than a versioned effectivity scope.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: The ECO model cannot represent phased, lot/serial, plant,
+      BOM-line, routing, or scoped cutover effectivity without external
+      exception logic or model changes.
+    proposed_action: Introduce an Effectivity concept referenced by ECO that scopes
+      applicability by relevant date/time, lot, serial, site, BOM, routing,
+      operation, and revision-transition dimensions.
+    affected_purpose: Change-management concept baseline for PLM/MES production applicability.
+    failure_condition: When a change must apply by plant, lot, serial range,
+      routing, BOM line, or phased cutover rather than a single date for all
+      affected parts.
+    impact: Existing change records would need reinterpretation or migration,
+      undermining traceability between engineering change and MES production
+      execution.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/evolution.findings.yaml#evolution-candidate-003
+      - manufacturing-bom-ontology.yaml:64-70
+      - manufacturing-bom-ontology.yaml:91
+      - manufacturing-bom-ontology.yaml:64-70,91
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only a shared_cause_candidate relation connects this finding
+      to finding-002; no same-root/duplicate relation supports merging.
+  - issue_id: issue-007
+    root_cause_hypothesis: Process recirculation is represented inside BOM
+      containment rather than as a separate process/material-flow concept.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: The acyclic BOM rule is immediately overridden by modeling
+      scrap reinsertion as self-containment, making future circular
+      recovery/rework cases extension-hostile.
+    proposed_action: Keep product BOM acyclic and introduce a separate
+      material-recovery, rework, or process-output relationship for scrap
+      reinsertion. Add explicit allowed cycle semantics there instead of
+      weakening the BOM containment rule.
+    affected_purpose: BOM and routing concept baseline for manufacturing operations
+      and future process extensions.
+    failure_condition: When more recovery, rework, by-product, or recirculation
+      scenarios are introduced, the model either violates its own acyclicity
+      invariant or requires ad hoc exceptions for each scenario.
+    impact: This reduces extensibility because a core structural rule becomes
+      exception-driven, making downstream BOM traversal, planning, and
+      integration semantics unstable.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/evolution.findings.yaml#evolution-candidate-004
+      - manufacturing-bom-ontology.yaml:88-89
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-008
+    root_cause_hypothesis: 순환 금지 대상인 BOM 그래프와 스크랩 재투입 흐름을 같은 Assembly-child 관계로 모델링했다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: BOM 비순환 필수 규칙과 스크랩 재투입을 자기 하위 포함으로 모델링한다는 예외가 동일 규칙 안에서 순환 허용/요구와 충돌한다.
+    proposed_action: 스크랩 재투입을 BOM parent-child 순환으로 표현하지 않는 별도 관계로 분리하거나, 비순환 규칙을
+      `일반 생산 BOM은 비순환이며, Rework/ReclaimFlow는 별도 그래프로 관리한다`처럼 적용 범위를 명시하십시오.
+    affected_purpose: PLM/MES 통합의 BOM 개념 기준과 invalid input behavior.
+    failure_condition: 스크랩 재투입 Assembly가 자기 자신을 child로 갖는 경우, 동일 데이터가 필수 비순환 검증에서는
+      invalid이고 재생 원료 회수 모델링 규칙에서는 required/valid가 된다.
+    impact: 통합 검증기나 MES 전개 로직이 같은 BOM을 승인해야 하는지 거부해야 하는지 결정할 수 없어 생산 전개, 원가 롤업, 자재
+      소요 산출의 기준 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/logic.findings.yaml#logic-candidate-001
+      - materialized-input.md:93-95
+      - .onto/review/20260718-8d90017a/execution-preparation/materialized-input.md:93-95
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-009
+    root_cause_hypothesis: AlternatePart의 관계 대칭성을 정의 문장과 direction 속성 양쪽에서 서로 다른 modality로 선언했다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: AlternatePart는 정의에서 항상 대칭 관계라고 하면서 direction enum에서는 one_way를 기본값으로 허용한다.
+    proposed_action: 대체 관계가 항상 대칭이라면 `direction` 속성과 `one_way` 값을 제거하십시오. 단방향 대체도
+      필요하다면 정의를 `대체 가능 부품 관계이며 direction에 따라 단방향 또는 양방향으로 해석한다`로 바꾸십시오.
+    affected_purpose: PLM/MES 통합의 대체품 개념 기준과 production substitution rule.
+    failure_condition: AlternatePart.direction이 one_way인 인스턴스가 생성되면, 정의상으로는 B도 A를
+      대체해야 하지만 속성상으로는 A만 B로 대체되는 상태가 허용된다.
+    impact: 자재 대체 승인, 재고 소진, 생산 오더의 대체품 선택에서 같은 관계를 양방향으로 해석할지 단방향으로 해석할지 시스템 간 기준이
+      갈라진다.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/logic.findings.yaml#logic-candidate-002
+      - materialized-input.md:37-45
+      - .onto/review/20260718-8d90017a/execution-preparation/materialized-input.md:37-45
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-010
+    root_cause_hypothesis: The model assigns an externally maintained, rate-like
+      process/yield value to the BOM-line concept without separating authority
+      from visibility.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: "`scrap_rate` is named as a derived rate but modeled as an
+      independently copied input from a planning spreadsheet."
+    proposed_action: Model scrap/yield as a separately governed process or planning
+      parameter with its source authority and effective scope, or define
+      `scrap_rate` as a derived projection from authoritative defect/yield
+      inputs. If it remains visible on `BomLine`, mark it explicitly as
+      non-authoritative cached data with synchronization semantics.
+    affected_purpose: PLM/MES integration concept baseline for BOM and process concepts.
+    failure_condition: When MES, planning, or costing consumes BOM lines as
+      authoritative product structure, the copied `scrap_rate` can diverge from
+      the planning source or be applied as if it were intrinsic BOM semantics.
+    impact: This weakens trust in the ontology as an integration reference because a
+      key manufacturing quantity can drift between systems and the model does
+      not identify the authoritative semantic owner.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/semantics.findings.yaml#semantics-candidate-001
+      - "manufacturing-bom-ontology.yaml > BomLine.definition: BOM line
+        describes parent-child quantity usage"
+      - "manufacturing-bom-ontology.yaml > BomLine.attributes.scrap_rate.note:
+        separately managed in production planning Excel and copied"
+      - "manufacturing-bom-ontology.yaml > notes: standard cost also has manual
+        reconciliation fields"
+      - manufacturing-bom-ontology.yaml > entities.BomLine.attributes.scrap_rate
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-011
+    root_cause_hypothesis: The work-center capacity concept omits unit/basis from
+      the modeled value while allowing multiple measurement dimensions.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: "`capacity_per_shift` has a numeric name but no stable semantic
+      unit, mixing count capacity and time capacity under one attribute."
+    proposed_action: Split the measure into explicit concepts such as
+      `capacity_quantity_per_shift` and `available_time_per_shift`, or add a
+      required `capacity_unit`/`capacity_basis` enum and conversion rule so
+      every value has a stable interpretation.
+    affected_purpose: PLM/MES integration concept baseline for routing and
+      manufacturing operations.
+    failure_condition: When routing or scheduling logic consumes work-center
+      capacity values across multiple work centers, identical numeric fields may
+      represent incompatible dimensions.
+    impact: The ontology cannot reliably support MES capacity planning semantics
+      because a core capacity attribute lacks a consistent unit of measure.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/semantics.findings.yaml#semantics-candidate-002
+      - manufacturing-bom-ontology.yaml > entities.WorkCenter.definition
+      - manufacturing-bom-ontology.yaml >
+        entities.WorkCenter.attributes.capacity_per_shift.note
+      - "manufacturing-bom-ontology.yaml > relations: Operation performed_at
+        WorkCenter"
+      - manufacturing-bom-ontology.yaml >
+        entities.WorkCenter.attributes.capacity_per_shift
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-012
+    root_cause_hypothesis: The alternate-part concept conflates symmetric
+      equivalence with directed substitution approval.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: "`AlternatePart` defines alternates as symmetric while also
+      modeling one-way direction, so the concept name/definition conflicts with
+      its attribute semantics."
+    proposed_action: Revise the definition to describe an approved substitution
+      relationship with explicit direction, or remove `one_way` and make the
+      relation truly symmetric. Rename fields if needed, for example
+      `source_part_ref` and `substitute_part_ref` for directed substitution.
+    affected_purpose: PLM/MES integration concept baseline for BOM substitution and
+      change-controlled manufacturing execution.
+    failure_condition: When a substitution is one-way, a consumer following the
+      entity definition may permit the reverse substitution even though the
+      modeled direction defaults to one-way.
+    impact: This can cause incorrect part substitution decisions in BOM consumption
+      or MES execution because the semantic contract of alternates is internally
+      contradictory.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/semantics.findings.yaml#semantics-candidate-003
+      - manufacturing-bom-ontology.yaml > entities.AlternatePart.definition
+      - manufacturing-bom-ontology.yaml >
+        entities.AlternatePart.attributes.direction.values
+      - manufacturing-bom-ontology.yaml >
+        entities.AlternatePart.attributes.direction.note
+      - "manufacturing-bom-ontology.yaml > relations: Part to Part kind
+        alternate_of"
+      - manufacturing-bom-ontology.yaml > entities.AlternatePart.definition and
+        attributes.direction
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-013
+    root_cause_hypothesis: The Part concept uses current-state naming for externally
+      governed, asynchronously synchronized change-management projections.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-013
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: "`Part.rev` and `current_eco` are named like current
+      authoritative item state but defined as delayed or external projections."
+    proposed_action: Separate authoritative effectivity from cached/display fields.
+      For example, model `effective_revision` or `revision_effectivity` as
+      ECO-governed, and mark `drawing_rev_snapshot`/`latest_eco_snapshot` as
+      synchronized projections with freshness metadata.
+    affected_purpose: PLM/MES integration concept baseline for item revision and
+      engineering change management.
+    failure_condition: During the interval after `ECO.effective_date` and before
+      weekly `Part.rev` synchronization, consumers may choose different
+      revisions depending on whether they trust `Part.rev` or ECO effectivity.
+    impact: This undermines change-management semantics and creates manufacturing
+      execution risk because the ontology does not clearly name the
+      authoritative current revision for production.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/semantics.findings.yaml#semantics-candidate-004
+      - manufacturing-bom-ontology.yaml > entities.Part.attributes.rev.note
+      - manufacturing-bom-ontology.yaml >
+        entities.Part.attributes.current_eco.note
+      - "manufacturing-bom-ontology.yaml > integrity_rules: ECO.effective_date
+        이후 생산분은 신규 rev를 따른다... 주간 배치로 동기화"
+      - manufacturing-bom-ontology.yaml >
+        entities.Part.attributes.rev/current_eco and integrity_rules ECO
+        effective-date rule
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-014
+    root_cause_hypothesis: The ontology conflates executable inspection activity
+      with the inspection specification that governs it by typing InspectionPlan
+      as an Operation.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: InspectionPlan instances inherit routing-step semantics even
+      though their name and attributes describe a plan/specification.
+    proposed_action: Model InspectionOperation as an Operation subtype if needed,
+      and model InspectionPlan as a separate specification referenced by that
+      operation.
+    affected_purpose: PLM/MES integration concept baseline for routing, operation,
+      and quality inspection concepts.
+    failure_condition: When routing consumers treat every Operation subtype as an
+      executable ordered step, InspectionPlan instances may be scheduled or
+      sequenced instead of referenced as quality specifications.
+    impact: MES routing execution semantics become less reliable because a
+      plan/specification is classified as a process step.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/semantics.findings.yaml#semantics-candidate-005
+      - manufacturing-bom-ontology.yaml > entities.Operation.definition
+      - manufacturing-bom-ontology.yaml > entities.Routing.attributes.operations
+      - manufacturing-bom-ontology.yaml > entities.InspectionPlan.definition
+      - manufacturing-bom-ontology.yaml > entities.InspectionPlan.is_a
+      - manufacturing-bom-ontology.yaml > entities.InspectionPlan.definition and
+        is_a Operation
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Runtime relation graph lists no accepted semantic relation
+      covering this causal-analysis finding.
+  - issue_id: issue-015
+    root_cause_hypothesis: The ontology defines AlternatePart as an entity but
+      represents its canonical relation path as a direct Part-to-Part
+      alternate_of shortcut instead of connecting the entity in the relation
+      graph.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-015
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Consumers traversing the relations section can bypass
+      AlternatePart and lose relationship-level direction metadata.
+    proposed_action: Model AlternatePart explicitly in relations and make any
+      Part-to-Part alternate_of shortcut derived or remove it from the canonical
+      relation list.
+    affected_purpose: PLM/MES integration concept baseline across items, BOM,
+      routing, and change-management concepts.
+    failure_condition: When substitute-part relationships are consumed from the
+      relations section, AlternatePart and its direction metadata are not
+      reachable from the declared alternate_of path.
+    impact: Downstream mappings can preserve that Parts are alternates while losing
+      whether the substitution is directed, weakening integration trust.
+    evidence_refs:
+      - .onto/review/20260718-8d90017a/round1/structure.findings.yaml#structure-candidate-001
+      - "materialized-input.md: entities.AlternatePart attributes primary_ref,
+        alternate_ref, direction"
+      - "materialized-input.md: relations Part -> Part alternate_of note says it
+        is a shorthand through AlternatePart"
+      - 'materialized-input.md: entities.AlternatePart declares primary_ref,
+        alternate_ref, and direction; relations only declares Part -> Part
+        alternate_of with note "AlternatePart를 통해 표현되는 관계의 단축 표기".'
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Only a shared_cause_candidate relation connects this finding
+      to finding-012; no same-root/duplicate relation supports merging.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-002
+      - issue-006
+    relation_refs:
+      - rel-003
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (ECO applicability is modeled through affected parts
+      and an effective date, while production revision and Part.rev
+      synchronization are not represented as separate
+      effectivity/synchronization concepts.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-004
+    relation_refs:
+      - rel-004
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Part.uom is a limited enum and item-specific
+      conversion factors are absent, with conversion deferred to shop-floor
+      practice.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-005
+    relation_refs:
+      - rel-005
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (WorkCenter.capacity_per_shift is represented as a
+      numeric value whose unit varies by work center, while the ontology lacks a
+      standard unit/basis concept for capacity.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-012
+      - issue-015
+    relation_refs:
+      - rel-009
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (The relation-level Part-to-Part alternate_of shortcut
+      hides or bypasses the AlternatePart object that carries direction
+      metadata.)."
+validation:
+  unclustered_finding_ids: []

@@ -1,0 +1,287 @@
+schema_version: 1
+session_id: 20260718-1bb88da9
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml / classification_rules[0] and notes[0]
+    evidence_anchor: "Embedded Materialized Input: target header states the ontology
+      is a shared authority document for risk engine and reports;
+      classification_rules[0] says `Exposure.risk_grade` is derived from
+      `RiskRating.grade` but can be manually adjusted by the reporting team;
+      notes[0] says the three rating scales coexist and conversion is performed
+      by each consuming system."
+    claim: Shared concept authority is weakened by delegating rating-scale
+      conversion and report-grade override authority to consumers.
+    what: The ontology declares itself as the shared concept authority between the
+      risk engine and reporting system, but it leaves the conversion among
+      `internal_rating`, `RiskRating.grade`, and `Exposure.risk_grade` to each
+      consuming system and permits the reporting team to manually adjust the
+      report-facing exposure grade.
+    why: "For an ontology whose stated purpose is to provide shared conceptual
+      authority, the rating concepts are purpose-critical because risk engines
+      and reports both depend on them. Letting each consumer perform its own
+      conversion, while also allowing one consumer group to override a derived
+      grade, creates ungoverned local authority over a core risk classification.
+      This is a value/purpose drift: local reporting flexibility is accepted
+      without a declared governance seat, precedence rule, audit trail, or
+      canonical mapping, so the shared basis can diverge exactly where shared
+      meaning is most needed."
+    how_to_fix: "Make one canonical authority path for rating conversion and
+      overrides: define the authoritative mapping among the three grade scales
+      in the ontology or a governed referenced artifact, specify precedence
+      between engine-derived and manually adjusted grades, and require override
+      reason, actor, timestamp/as_of, and audit status if report-grade
+      adjustments remain allowed."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The ontology's declared purpose as the shared concept
+        authority for risk engines and reporting systems.
+      failure_condition: When the engine, reporting team, or another consumer maps
+        rating scales differently, or when reporting manually adjusts
+        `Exposure.risk_grade` without canonical precedence and audit semantics.
+      impact: The same borrower or exposure can carry different risk classifications
+        across engine and reporting outputs, weakening trust in risk decisions
+        and reports produced from the supposedly shared ontology.
+      evidence_refs:
+        - "Embedded Materialized Input: target description says the ontology
+          aims to be a shared concept authority for risk engine and reporting
+          systems."
+        - "Embedded Materialized Input: `classification_rules[0]` permits
+          reporting-team manual adjustment of `Exposure.risk_grade`."
+        - "Embedded Materialized Input: `notes[0]` leaves conversion among the
+          three rating scales to each consuming system."
+    causal_path:
+      root_cause_candidate: The ontology does not assign canonical authority,
+        precedence, or governance for translating and overriding its core rating
+        concepts.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: The target states that the ontology is intended to be the shared concept
+            authority for risk engine and reporting systems.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: header comment says it defines
+              exposure, rating, limit, and collateral and aims to be a shared
+              concept authority document for the risk engine and reporting
+              system."
+        - cause_id: axiology-candidate-001.cause-002
+          claim: The target contains three coexisting grade scales and says conversion is
+            performed by each consuming system.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Borrower.internal_rating` note
+              describes a 1-10 scale."
+            - "Embedded Materialized Input: `RiskRating.grade` uses R1-R5 and
+              points to a risk-team wiki mapping."
+            - "Embedded Materialized Input: `Exposure.risk_grade` uses AAA-CCC."
+            - "Embedded Materialized Input: `notes[0]` says conversion is
+              performed by each consumer system."
+        - cause_id: axiology-candidate-001.cause-003
+          claim: The reporting team may manually adjust a grade that is otherwise said to
+            be derived from engine output.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: `classification_rules[0]` says
+              `Exposure.risk_grade` is derived from `RiskRating.grade` but
+              reporting can manually adjust it according to market conditions."
+        - cause_id: axiology-candidate-001.cause-004
+          claim: These local conversions and adjustments can produce divergent risk
+            classifications under a document whose purpose is shared authority.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: shared-authority header comment."
+            - "Embedded Materialized Input: `classification_rules[0]`."
+            - "Embedded Materialized Input: `notes[0]`."
+      unresolved_beyond_evidence: The bounded target does not show whether the
+        referenced risk-team wiki or consumer systems enforce a common mapping,
+        so this finding is limited to the ontology's failure to carry that
+        authority itself.
+  - candidate_id: axiology-candidate-002
+    target: credit-risk-ontology.yaml / ExposureAggregate and Limit utilization rule
+    evidence_anchor: "Embedded Materialized Input: `ExposureAggregate.total_amount`
+      is stored from a month-end batch and intraday new loans are excluded until
+      the next batch; `classification_rules[1]` defines limit utilization as
+      `ExposureAggregate.total_amount / Limit.approved_amount`;
+      `Limit.approved_amount` notes CRM available_limit is jointly managed."
+    claim: A stale batch aggregate is used as the authoritative numerator for limit
+      utilization without temporal freshness boundaries.
+    what: The ontology defines limit utilization using
+      `ExposureAggregate.total_amount`, but that aggregate explicitly excludes
+      intraday new lending until the next month-end batch. It also says approved
+      limits are jointly managed with CRM data, without defining a shared as-of
+      or freshness rule for the denominator side.
+    why: "The declared purpose is a shared concept basis for risk engine and
+      reporting. A limit utilization concept used for credit risk control is
+      purpose-critical, but the model bakes in a known temporal lag without
+      naming it as a stale snapshot, without defining when it is valid for
+      decisions, and without separating reporting snapshot semantics from
+      real-time risk-control semantics. This accepts a hidden tradeoff:
+      operational convenience of batch storage over timely risk appetite and
+      limit visibility."
+    how_to_fix: Define separate concepts for batch reporting exposure and
+      decision-current exposure, require `as_of`/calculation timestamp and
+      source freshness on both numerator and denominator, and constrain
+      limit-utilization use by context, for example `reporting_utilization`
+      versus `decision_utilization`.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The ontology's purpose as a shared concept basis for risk
+        engine and reporting, especially for limit utilization and risk exposure
+        controls.
+      failure_condition: When intraday lending or CRM limit changes occur after the
+        month-end aggregate but before the next batch, and systems use the
+        ontology's limit-utilization formula as if it represented current
+        exposure.
+      impact: Risk engine or reports can understate utilization and risk appetite
+        pressure, making the shared ontology operationally misleading for
+        control decisions or cross-system reconciliation.
+      evidence_refs:
+        - "Embedded Materialized Input: `ExposureAggregate.definition` says it
+          is total borrower exposure and all `Exposure.amount` sum."
+        - "Embedded Materialized Input: `ExposureAggregate.total_amount` note
+          says it is calculated by month-end batch and intraday new lending is
+          not reflected until the next batch."
+        - "Embedded Materialized Input: `classification_rules[1]` defines
+          utilization as `ExposureAggregate.total_amount /
+          Limit.approved_amount`."
+        - "Embedded Materialized Input: `Limit.approved_amount` note says CRM
+          `available_limit` is jointly managed."
+    causal_path:
+      root_cause_candidate: The ontology does not separate reporting snapshots from
+        decision-current exposure/limit semantics despite using the stale
+        aggregate in a control formula.
+      root_cause_step_id: axiology-candidate-002.cause-005
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: The target defines borrower total exposure as an aggregate of all
+            exposure amounts.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `ExposureAggregate.definition` says
+              borrower-level total exposure is the sum of all
+              `Exposure.amount`."
+        - cause_id: axiology-candidate-002.cause-002
+          claim: The stored aggregate is only calculated by month-end batch and omits
+            intraday new lending until the next batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `ExposureAggregate.total_amount`
+              note."
+        - cause_id: axiology-candidate-002.cause-003
+          claim: The ontology uses that stored aggregate directly as the numerator for
+            limit utilization.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `classification_rules[1]`."
+        - cause_id: axiology-candidate-002.cause-004
+          claim: The denominator is also cross-system because `Limit.approved_amount` is
+            jointly managed with CRM `available_limit`, but no common freshness
+            or as-of rule is defined for the utilization calculation.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: `Limit.approved_amount` note."
+            - "Embedded Materialized Input: `classification_rules[1]`."
+        - cause_id: axiology-candidate-002.cause-005
+          claim: A known-lag aggregate can therefore be interpreted as current utilization
+            by the shared risk/reporting ontology.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: shared-authority header comment."
+            - "Embedded Materialized Input: `ExposureAggregate.total_amount`
+              note."
+            - "Embedded Materialized Input: `classification_rules[1]`."
+      unresolved_beyond_evidence: The bounded target does not show downstream runtime
+        usage, so the finding is about the concept contract permitting
+        stale/current ambiguity rather than proving an observed production
+        miscalculation.
+  - candidate_id: axiology-candidate-003
+    target: credit-risk-ontology.yaml / scope notes excluding default status
+    evidence_anchor: "Embedded Materialized Input: notes[1] says default/delinquency
+      status is outside this ontology because a separate delinquency-management
+      system handles it; the header says the ontology is for credit-risk
+      management and shared risk/reporting concepts."
+    claim: Excluding default status from a credit-risk shared ontology leaves a
+      purpose-critical stakeholder boundary undefined.
+    what: The ontology explicitly excludes delinquency/default status because
+      another system handles it, but it does not preserve any boundary relation,
+      reference concept, or integration contract for how default status affects
+      borrower/exposure risk classification, limits, collateral treatment, or
+      reporting.
+    why: "Boundary exclusions can be valid, but for credit risk management,
+      default/delinquency status is central to the meaning and operational use
+      of risk grades, exposure control, and reports. A shared ontology can
+      delegate ownership to another system while still defining the boundary
+      concept and relation. Here the exclusion is accepted without a
+      compensating interface, which risks purpose drift: the ontology optimizes
+      scope neatness over the completeness needed for shared risk
+      interpretation."
+    how_to_fix: Keep delinquency/default ownership outside if needed, but add a
+      boundary concept or relation such as `DefaultStatus`/`DelinquencyStatus`
+      with source authority, join key, as-of time, and effects on ratings,
+      exposure classification, limit compliance, and reporting eligibility.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's declared credit-risk management purpose and its
+        role as a shared basis for risk engine and reporting systems.
+      failure_condition: When a borrower or exposure has delinquency/default state in
+        the external system, but risk engine or reporting consumers rely on this
+        ontology without a defined boundary relation to that state.
+      impact: Core credit-risk outputs can omit or inconsistently join a
+        purpose-critical status, weakening shared interpretation across
+        stakeholders even if another system owns the source data.
+      evidence_refs:
+        - "Embedded Materialized Input: header comment describes a credit-risk
+          management concept model shared by risk engine and report system."
+        - "Embedded Materialized Input: `notes[1]` excludes default/delinquency
+          status because it is handled by a separate system."
+        - "Embedded Materialized Input: entities and relations do not include a
+          relation to delinquency/default status in the materialized target."
+    causal_path:
+      root_cause_candidate: The ontology treats an ownership boundary as a scope
+        exclusion instead of modeling the boundary relation for a
+        purpose-critical risk concept.
+      root_cause_step_id: axiology-candidate-003.cause-004
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: The ontology is scoped as a credit-risk management concept model for
+            shared engine/reporting use.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: header comment."
+        - cause_id: axiology-candidate-003.cause-002
+          claim: The ontology excludes default/delinquency status entirely because a
+            separate system handles it.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `notes[1]`."
+        - cause_id: axiology-candidate-003.cause-003
+          claim: No visible entity or relation in the bounded target links borrower,
+            exposure, rating, limit, or report concepts to the external
+            default/delinquency status.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: visible `entities` list."
+            - "Embedded Materialized Input: visible `relations` list."
+        - cause_id: axiology-candidate-003.cause-004
+          claim: This leaves a core risk-status boundary undefined for systems expected to
+            share concepts through the ontology.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: header comment."
+            - "Embedded Materialized Input: `notes[1]`."
+      unresolved_beyond_evidence: The bounded target does not show the separate
+        delinquency-management ontology or integration layer; if one exists, it
+        is not represented in this shared concept authority document.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific rule document was used.
+  - Axiology judgment used the target's own declared purpose in the embedded
+    materialized input as the value authority available within the bounded
+    packet.
+validation:
+  unaddressable_candidates: []

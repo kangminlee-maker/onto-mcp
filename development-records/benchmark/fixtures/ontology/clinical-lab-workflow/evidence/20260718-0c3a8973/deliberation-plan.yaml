@@ -1,0 +1,130 @@
+schema_version: 1
+session_id: 20260718-0c3a8973
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - semantics
+      - logic
+      - coverage
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: Most lenses accept the broad duplicated Result.status and
+      Report.result_status authority root, while logic narrows the root to
+      missing temporal precedence after correction and semantics supports the
+      semantic defect but lowers severity relative to the operational
+      high-severity framing.
+    resolution_question: Should issue-001 be resolved as a broad
+      split-authority/synchronization status contract problem, or narrowed to a
+      temporal precedence/mapping defect, and should the severity remain high
+      when semantic evidence alone would rate it medium?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - semantics
+      - structure
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+    conflict_summary: Coverage, axiology, and evolution support issue-003 as a
+      high-severity missing audit-evidence concept, while semantics and
+      structure narrow it toward the first-class notification event/graph-node
+      boundary and semantics lowers severity, creating uncertainty about whether
+      this is a standalone high issue or a scoped instance of the CriticalValue
+      notification modeling cluster.
+    resolution_question: Should issue-003 remain a standalone high-severity coverage
+      issue for missing notification audit authority, or be merged/narrowed into
+      the CriticalValue notification event-modeling issue with a lower or more
+      scoped resolution?
+  - issue_id: issue-005
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.evolution
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+      - issue-stance-matrix.yaml#stances.issue-005.structure
+    conflict_summary: Coverage, evolution, axiology, and structure support a broad
+      high-severity governed/versionable authority-concept action across
+      catalog, threshold, TAT, and specimen-kind values, while semantics narrows
+      the root to shared-code-set meaning boundaries and lowers severity for its
+      narrower evidence basis.
+    resolution_question: Should issue-005 require the broad governed versionable
+      authority-concept action at high severity, or should it be narrowed to a
+      specimen/code-set semantic normalization problem with lower severity?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: The narrow stances from coverage and evolution refine emphasis toward
+      per-occurrence event coverage and future workflow extensibility, but all
+      applicable lenses support the same threshold-versus-notification
+      separation and compatible action.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the TAT authority/formula gap,
+      while logic and semantics are not applicable rather than conflicting.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support resolving the Test/Assay boundary
+      with merge-or-map semantics; not-applicable logic does not create a
+      material conflict.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the post-analysis specimen
+      lifecycle coverage gap; non-applicable logic and semantics do not
+      materially dispute the issue.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the post-analysis specimen
+      lifecycle extensibility gap; non-applicable logic and semantics do not
+      materially dispute the issue.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the Order.completed versus later
+      Result.corrected temporal-state issue; non-applicable semantics does not
+      create a material conflict.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the overlapping
+      Report.result_status predicate conflict and compatible
+      precedence/versioning action; non-applicable semantics does not materially
+      dispute it.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: Structure narrows the STAT issue to the unconnected subtype/attribute
+      split, but that is compatible with the semantic
+      canonicalization/equivalence action supported by the other applicable
+      lenses.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the missing explicit
+      relation-graph paths; logic and semantics are not applicable rather than
+      conflicting.
+  - issue_id: issue-013
+    reason_code: non_material_issue
+    reason: The issue is low severity and explicitly non-material in the projection,
+      so it is outside planned material deliberation despite surface-level
+      stance variation.

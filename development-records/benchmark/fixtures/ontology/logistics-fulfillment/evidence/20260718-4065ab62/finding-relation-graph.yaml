@@ -1,0 +1,275 @@
+schema_version: 1
+session_id: 20260718-4065ab62
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-004
+    to_finding_id: finding-005
+    relation: duplicates
+    root_hypothesis: "Both findings are the same material issue: fulfillment is
+      modeled only at Shipment-to-Order granularity and lacks an OrderLine-level
+      allocation/fulfillment concept."
+    shared_cause: null
+    rationale: "finding-004 and finding-005 cite the same omission: OrderLine
+      carries product and quantity but no link to the shipment or delivery leg
+      that fulfilled it, while the only fulfillment relation is Shipment
+      fulfills Order. Their impacts are the same partial-shipment and
+      reconciliation failure at line quantity level."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-005
+    to_finding_id: finding-019
+    relation: duplicates
+    root_hypothesis: "Both findings identify the same structural coverage defect:
+      OrderLine fulfillment is disconnected from Shipment/DeliveryLeg despite
+      shipment composition depending on order lines."
+    shared_cause: null
+    rationale: finding-005 frames the gap as missing partial shipment coverage;
+      finding-019 frames it as structural disconnection. Both causal paths point
+      to OrderLine lacking shipment/leg references and the fulfills edge
+      existing only from Shipment to Order.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-005
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: Both findings describe the same root defect that the authority
+      unit for fulfillment is the whole Order rather than the fulfilled quantity
+      of an OrderLine.
+    shared_cause: null
+    rationale: "finding-010 is the evolution lens version of the same issue in
+      finding-005: partial shipment, multi-warehouse fulfillment, or backorder
+      scenarios require redefining the current Shipment-to-Order fulfillment
+      meaning because no OrderLine-level allocation exists."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: Inventory allocation depends on non-temporal current/nightly
+      quantity surfaces rather than a time-scoped, source-authoritative
+      availability model.
+    shared_cause: null
+    rationale: finding-001 emphasizes the authority/value misalignment of intraday
+      allocation from a nightly ERP-aligned aggregate; finding-006 emphasizes
+      the coverage gap for effective time and movement history. Both causal
+      paths center on InventoryAggregate.available_qty being a nightly snapshot
+      used for intraday allocation and InventoryRecord lacking time authority.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-006
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: "Both findings identify the same temporal inventory modeling
+      issue: current/nightly inventory quantities cannot support real-time,
+      audit, or multi-authority inventory use."
+    shared_cause: null
+    rationale: "finding-006 and finding-013 cite the same evidence pattern:
+      InventoryRecord has no as_of concept, InventoryAggregate is nightly, and
+      intraday allocation reads that aggregate. The difference is lens framing,
+      not a distinct issue."
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-001
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: Inventory allocation trust and quantity semantics both fail
+      because the model collapses WMS physical inventory and ERP accounting
+      inventory into one insufficiently scoped inventory quantity concept.
+    shared_cause:
+      cause_claim: InventoryRecord.quantity_on_hand is shared by WMS and ERP even
+        though WMS and ERP quantities have different operational/accounting
+        meanings and are reconciled nightly.
+      from_cause_ref: finding-001.cause-001
+      to_cause_ref: finding-015.cause-003
+    rationale: finding-001 focuses on allocation-time authority of inventory
+      availability, while finding-015 focuses on the semantic ambiguity of
+      quantity_on_hand. Both depend on the same unresolved WMS-versus-ERP
+      inventory authority distinction.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-007
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: The ontology describes multi-source controlled values without a
+      source-of-truth/provenance concept, causing both inventory quantity
+      ambiguity and broader authority gaps.
+    shared_cause: null
+    rationale: finding-007 generalizes missing authority/provenance for WMS/ERP
+      inventory and carrier/manual ETA. finding-015 is the inventory-specific
+      semantic instance where physical and accounting quantities share one
+      property name. The common root is absent source authority and provenance
+      for multi-source values.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: Allocation risk and cross-system trust risk share the cause
+      that inventory quantities are represented without explicit governing
+      source, validity time, or provenance.
+    shared_cause:
+      cause_claim: The ontology accepts WMS/ERP divergent inventory quantities and
+        nightly ERP adjustment without modeling which source governs which
+        consuming context.
+      from_cause_ref: finding-001.cause-001
+      to_cause_ref: finding-007.cause-001
+    rationale: finding-001 is the allocation-time consequence of unclear inventory
+      authority; finding-007 captures the broader missing authority/provenance
+      pattern across inventory and ETA. The shared cause is explicit
+      multi-source inventory with no governing-value concept.
+    confidence: medium
+  - relation_id: rel-009
+    from_finding_id: finding-002
+    to_finding_id: finding-017
+    relation: duplicates
+    root_hypothesis: "Both findings identify the same measurement-semantics issue:
+      source-system units are not modeled, so Shipment.total_weight cannot be a
+      stable unit-consistent aggregate."
+    shared_cause: null
+    rationale: finding-002 and finding-017 cite Sku.weight using kg/lb conventions,
+      Sku.dims varying by source, and Shipment.total_weight summing line
+      weights. They differ by axiology versus semantics lens, but the defect and
+      proposed fix are the same.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-002
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Freight measurement failures stem from representing logistics
+      measurements as bare numbers or strings instead of structured
+      value/unit/source measurements.
+    shared_cause: null
+    rationale: finding-002 focuses on unit-consistency misalignment for shipment
+      totals; finding-009 expands the same modeling weakness to freight/package
+      handling coverage. Both causal paths rely on Sku.weight, Sku.dims, and
+      Shipment.total_weight lacking explicit units and measurement basis.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-011
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: The unit model is not evolvable because measurement unit is not
+      part of the measurement value concept.
+    shared_cause: null
+    rationale: finding-011 describes future breakage when new
+      warehouses/carriers/countries introduce different unit systems;
+      finding-017 describes the present semantic instability of the same
+      value/unit omission. The common root is measurement values without unit
+      and source-unit authority.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-009
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: Coverage and evolution concerns for freight measurements share
+      the cause that no normalized measurement or handling-unit concept exists.
+    shared_cause:
+      cause_claim: SKU weight/dimensions and shipment total weight are modeled without
+        explicit units, source, conversion basis, or package/handling-unit
+        level.
+      from_cause_ref: finding-009.cause-003
+      to_cause_ref: finding-011.cause-004
+    rationale: finding-009 flags under-modeled measurement and package coverage;
+      finding-011 flags future migration and continuity risk. Both are supported
+      by the same absence of structured measurement and package-level concepts.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-003
+    to_finding_id: finding-018
+    relation: duplicates
+    root_hypothesis: "Both findings identify the same status-authority defect:
+      carrier TrackingEvent.event_type to Shipment.status mapping is delegated
+      to integrations rather than defined by the ontology."
+    shared_cause: null
+    rationale: finding-003 and finding-018 both cite independent OMS/TMS/carrier
+      status management and per-integration mapping from carrier event_type to
+      Shipment.status. Their impacts are inconsistent delivery state,
+      notifications, exception handling, and auditability.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-003
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: Status-model inconsistency and evolution fragility both stem
+      from lacking a versioned canonical status/event mapping between external
+      carrier codes and internal shipment states.
+    shared_cause: null
+    rationale: finding-003 frames per-integration status mapping as misaligned with
+      status-model authority; finding-012 frames the same lack of mapping
+      authority as an evolution problem for new carriers and codes. Both causal
+      paths point to fixed enums plus adapter-owned mapping.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-012
+    to_finding_id: finding-018
+    relation: duplicates
+    root_hypothesis: Both findings describe the same missing canonical mapping
+      between source carrier events and internal shipment status semantics.
+    shared_cause: null
+    rationale: finding-012 and finding-018 cite TrackingEvent.event_type as
+      carrier-specific, Shipment.status as separate, and mapping left to each
+      integration. The evolution lens adds change pressure, but the underlying
+      finding is the same mapping gap.
+    confidence: high
+  - relation_id: rel-016
+    from_finding_id: finding-008
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: Lifecycle coverage gaps and carrier-status evolution gaps share
+      a status model that is too fixed and too happy-path oriented for logistics
+      exceptions and reversals.
+    shared_cause:
+      cause_claim: Shipment and tracking status concepts use limited fixed enums
+        without a central extensible transition/mapping model for exception,
+        return, reissue, correction, or external carrier status changes.
+      from_cause_ref: finding-008.cause-003
+      to_cause_ref: finding-012.cause-004
+    rationale: finding-008 addresses omitted non-happy-path lifecycle states;
+      finding-012 addresses new carrier and exception-code evolution. Both arise
+      because the ontology lacks a canonical extensible lifecycle/status model
+      beyond fixed forward-progress states and delegated mappings.
+    confidence: medium
+  - relation_id: rel-017
+    from_finding_id: finding-014
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: "Both findings identify the same type-modeling error:
+      DeliveryLeg is a route segment but is declared as a subtype of whole
+      Shipment."
+    shared_cause: null
+    rationale: finding-014 states the formal necessary-type conflict; finding-016
+      states the semantic confusion. Both cite Shipment as warehouse-to-customer
+      movement, DeliveryLeg as a segment such as warehouse-to-hub or
+      hub-to-customer, and DeliveryLeg is_a Shipment.
+    confidence: high
+  - relation_id: rel-018
+    from_finding_id: finding-014
+    to_finding_id: finding-020
+    relation: same_root_candidate
+    root_hypothesis: DeliveryLeg route reasoning is unstable because the ontology
+      uses inheritance where it needs shipment-route composition and ordering.
+    shared_cause: null
+    rationale: finding-014 focuses on the incorrect subtype relation between
+      DeliveryLeg and Shipment; finding-020 focuses on the missing parent/route
+      relation and leg ordering scope. Both share the root modeling choice of
+      using is_a instead of composition for route segments.
+    confidence: high
+  - relation_id: rel-019
+    from_finding_id: finding-016
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: Semantic and structural DeliveryLeg issues share the cause that
+      a leg is modeled as a Shipment subtype rather than as a contained segment
+      of a parent shipment route.
+    shared_cause:
+      cause_claim: DeliveryLeg is declared is_a Shipment and lacks a
+        parent_shipment/route containment relation, so leg status and shipment
+        fulfillment semantics can be conflated.
+      from_cause_ref: finding-016.cause-002
+      to_cause_ref: finding-020.cause-003
+    rationale: finding-016 explains how DeliveryLeg inherits whole-shipment
+      semantics; finding-020 explains how that same modeling choice fails to
+      group legs into an end-to-end route. The shared cause is the missing
+      composition relation paired with the inheritance declaration.
+    confidence: high
+singleton_findings: []
