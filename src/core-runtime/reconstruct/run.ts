@@ -357,6 +357,8 @@ import {
   buildCodeSynthesisMeta,
   projectCodeSemanticMapToSeed,
   reconcileCodeBoundaries,
+  CODE_SOURCE_LINES_CHAR_CAP,
+  CODE_SYMBOL_NAMES_DISPLAY_CAP,
   type CodeSemanticBoundaryVerifyInput,
   type CodeSemanticSeedBoundary,
   type CodeSemanticSeedProjection,
@@ -2356,9 +2358,16 @@ export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
 // them rotates code reuse keys (old code sidecars fail closed on fingerprint mismatch) while every
 // spreadsheet key stays byte-identical.
 
-/** DD10: CODE render budget — 12,000 chars ≈ 40~60 admitted nodes with relative-path labels
- *  (spreadsheet 4,000 불변; the v1 shared budget admitted 4/109 nodes on the live N=1 — 기아). */
-export const CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 12_000;
+/** DD10: CODE render budget — 40,000 chars ≈ 65 admitted nodes on the N=1 target (spreadsheet
+ *  4,000 불변; the v1 shared budget admitted 4/109 nodes on the live N=1 — 기아).
+ *  ⚠️ CORRECTED 2026-07-19 (§10 addendum 개정 v2.2): the pinned 12,000 realized the design's stated
+ *  "40~60 nodes" intent from a per-node cost estimate of ~81 chars (relative-label savings only),
+ *  but the no-spend ablation measured ~850 chars/node (region label + up to a 600-char summary +
+ *  boundaries + JSON indentation), so 12,000 admitted only 12 nodes — below the reevaluation
+ *  validity floor (admit ≥30). Empirical budget→admit curve (ablation): 24,000→30, 40,000→65,
+ *  64,000→109(no truncation). Owner decision 2026-07-19: 40,000 (design's 40~60-node intent,
+ *  faithfully realized). The value folds by VALUE into semanticMapCodeObservationFingerprint. */
+export const CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 40_000;
 
 /** DD10: CODE projection display cap (1a single-file headroom; spreadsheet stage-config 60 불변).
  *  Applied at the projection call — the stage config's shared max_nodes never caps code. */
@@ -2780,6 +2789,15 @@ function semanticMapCodeObservationFingerprint(args: {
     projection_contract_version: CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
     render_char_budget: CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
     code_max_nodes: CODE_SEMANTIC_MAP_MAX_NODES,
+    // DD6′ envelope content-shaping caps (교차검증 inv M1): these bound what the LLM actually
+    // READS in a frontier envelope, so a cap change changes the summary the sidecar caches —
+    // the same "value shapes the prompt but not the key" class as render_char_budget above, and
+    // reduce_schema_tool_version is contractually the ENVELOPE-SHAPE lever (field set), not a
+    // value lever, so a cap-value edit would not bump it. Fold by VALUE. (CODE_ENVELOPE_LINE_
+    // FIELD_CAP=200 is omitted deliberately: it is a defensive seal dominated by the observer's
+    // 140-char doc/signature bound, so it never actually truncates and cannot shape the prompt.)
+    source_lines_char_cap: CODE_SOURCE_LINES_CHAR_CAP,
+    symbol_names_display_cap: CODE_SYMBOL_NAMES_DISPLAY_CAP,
   };
   assertGatingKeyExcludesInEpochOutput("semanticMapCodeStageFingerprint", fingerprintPreImage);
   return sha256Text(stableJson(fingerprintPreImage));

@@ -1,9 +1,17 @@
 # semantic-map v2 무-spend ablation 사전 등록 프로토콜 (2026-07-19)
 
 > 규범 SSOT: `development-records/design/20260718-semantic-map-multi-artifact-phase1-detailed-design.md`
-> §10 v2.1 재평정 게이트 1·2·3항. v1 실험: `../20260719-semantic-map-gsem-n1/` (G-SEM FAIL 0/5).
+> §10 v2.1/v2.2 재평정 게이트 1·2·3항. v1 실험: `../20260719-semantic-map-gsem-n1/` (G-SEM FAIL 0/5).
 > **이 문서는 v2 렌더 생성·열람 전에 커밋된다** (재평정 게이트 1항 — 수치 선핀·질문 사후
 > 선택 금지). 커밋 해시가 그 증거다.
+>
+> **정정 이력 (재등록, 재평정 게이트 2항의 "config 정정 후 재실행" 발동)**: 최초 등록(커밋
+> `f953beb`)은 budget **12,000자**를 핀했다. 그 budget로 ablation을 재구성한 결과 admit
+> **12노드** (유효성 floor admit≥30 미달) → **시험 무효**. 원인은 §10 최초 "40~60노드"
+> 추정이 노드당 비용을 ~81자로 잡은 오류(실측 ~850자). budget→admit 곡선(mechanical,
+> judge 무접촉: `budget-sweep.json`)에서 owner가 **40,000자**(설계 40~60노드 의도)로 결정
+> → 본 문서·코드·§10 v2.2 동시 재핀 후 재실행. **judge 응답은 이 시점 존재하지 않으므로
+> 정정은 결과가 아니라 유효성 floor 도달을 위한 config 수정이다**(goalpost 이동 아님).
 
 ## 목적 · 인과 분리 (재평정 게이트 3항)
 
@@ -18,7 +26,8 @@ lex-컷이므로 ablation 소스로 쓰지 않는다 (리뷰 gh m-1).
 
 - code admission comparator 총순서 (리뷰 gh M-2, 잔여 자유도 0): ① span 크기 내림차순
   (`line_end - line_start`) ② `line_start` 오름차순 ③ nodeKey lex.
-- code 렌더 budget = **12,000자** (`CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET`).
+- code 렌더 budget = **40,000자** (`CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET`; 정정 v2.2 —
+  위 정정 이력 참조. 최초 12,000자는 admit 12로 시험 무효).
 - code `max_nodes` = **512** (`CODE_SEMANTIC_MAP_MAX_NODES`), `max_disclosure` = 30 불변.
 - 상대경로 라벨: labelRoot = repo 루트 (렌더 표면 한정, artifact 권위 절대경로 유지).
 - (참고 — 이 ablation 비관여) DD6′ per-envelope 소스 캡 = 12,000자: ablation은 replay라

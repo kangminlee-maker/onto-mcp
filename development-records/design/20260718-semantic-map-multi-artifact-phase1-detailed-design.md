@@ -536,14 +536,28 @@ source-safety 전제 폐기). 보안 경계는 봉투가 아니라 **seat 모델
   **code comparator 총순서(지금 핀, 잔여 자유도 0 — 리뷰 gh M-2)**:
   ① span 크기 내림차순(`line_end - line_start`), ② `line_start` 오름차순, ③ nodeKey lex
   (최종 동률). 루트/대영역 우선 — 파일-수준 이해가 먼저 admit된다.
-- **code 전용 수치 (지금 핀 — 리뷰 gh M-1·inv M1)**: code `max_nodes` = **512**(1a 단일
-  파일 상한 여유; spreadsheet 60 불변), code 렌더 budget = **12,000자**(spreadsheet 4,000
-  불변 — 공유 상수 대신 **per-kind 상수 신설**). 상대경로 라벨(실측 회수 ~81자/노드)과
-  결합 시 40~60노드 admit 예상.
+- **code 전용 수치 (핀 — 리뷰 gh M-1·inv M1)**: code `max_nodes` = **512**(1a 단일
+  파일 상한 여유; spreadsheet 60 불변), code 렌더 budget = **40,000자**(spreadsheet 4,000
+  불변 — 공유 상수 대신 **per-kind 상수 신설**). 상대경로 라벨과 결합 시 ~65노드 admit.
+  > **정정 v2.2 (2026-07-19, 무-spend ablation 실측)**: 최초 핀은 12,000자·"40~60노드
+  > 예상"이었으나, 그 추정은 노드당 비용을 **~81자(상대경로 라벨 절감분만)** 로 잡은
+  > 오류였다. ablation이 노드당 실측 **~850자**(region 라벨 + summary 최대 600자 +
+  > boundaries + pretty-JSON 들여쓰기)를 측정 → 12,000자는 **12노드만 admit**(유효성
+  > floor admit≥30 미달). budget→admit 곡선(ablation): 24,000→30·40,000→65·64,000→109(무절단).
+  > owner 결정(2026-07-19): **40,000자**(설계의 40~60노드 의도를 실측 비용으로 충실 실현).
+  > 라인 커버리지는 root-first admission 특성상 모든 budget에서 ~100%(파일-루트 1-노드가
+  > 전 라인 span) — 유효성 게이트의 실질 구속 조건은 admit≥30이다.
 - **회전 격리 (리뷰 inv M1 — ct-F2 전례)**: 공유 `SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION`
   bump **금지**. 신설 **code 전용 projection 계약 버전**(+ per-kind budget 값)을
   `semanticMapCodeObservationFingerprint` pre-image에만 fold — spreadsheet 키 무회전·code
   구 sidecar resume는 fingerprint 불일치로 fail-closed(silent-stale 차단).
+  > **정정 v2.2 (2026-07-19, 구현 후 교차검증 inv M1)**: DD6′ 봉투 content-shaping 캡
+  > (`CODE_SOURCE_LINES_CHAR_CAP`·`CODE_SYMBOL_NAMES_DISPLAY_CAP`)도 LLM-가시 봉투 내용을
+  > 형성하므로(캡 변경 → LLM이 읽는 본문·이름 목록 변화 → sidecar 캐시 요약 변화) code
+  > pre-image에 **값으로 fold**한다. `reduce_schema_tool_version`은 계약상 봉투 SHAPE(필드
+  > 집합) 레버라 캡-값 변경에 회전하지 않으므로, 미-fold 시 캡 변경이 reuse 키를 회전시키지
+  > 않는 silent-stale이 된다(render_char_budget과 동일 클래스). `CODE_ENVELOPE_LINE_FIELD_CAP`
+  > 은 observer 140자 bound에 지배되어 실절단 불가 → inert, 의도적 제외.
 - **렌더 골든 신설 (리뷰 inv M2)**: G-SS-e는 봉투 바이트만 잠근다 — 리팩터 **전에**
   spreadsheet fixture projection의 `renderSemanticMapProjection` 출력 바이트를 골든으로
   채집(G-SS-f). 렌더 공유부 리팩터의 spreadsheet 무접촉을 이것이 잠근다.

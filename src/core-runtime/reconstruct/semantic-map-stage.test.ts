@@ -929,7 +929,9 @@ function codeSeedProjectionWithFiles(files: string[]): CodeSemanticSeedProjectio
 
 describe("DD10 (§10 v2.1): per-kind render knobs + code label root", () => {
   it("선핀 값 회귀 잠금 (재평정 게이트 1항): the pre-registered v2 numbers are EXACTLY these — a drift here invalidates the pre-registration copy-pin", () => {
-    expect(CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET).toBe(12_000);
+    // budget CORRECTED 12,000→40,000 (§10 v2.2, owner 2026-07-19): the ablation measured ~850
+    // chars/node so 12,000 admitted only 12 (<30 유효성 floor); 40,000 admits ~65 (설계 40~60 의도).
+    expect(CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET).toBe(40_000);
     expect(CODE_SEMANTIC_MAP_MAX_NODES).toBe(512);
     expect(CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION).toBe("code-projection-render:1");
     // spreadsheet 불변 쌍 (리뷰 inv M1 — collateral rotation 차단의 반대편 고정점).

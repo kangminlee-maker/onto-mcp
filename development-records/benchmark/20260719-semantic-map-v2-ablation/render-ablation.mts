@@ -50,8 +50,10 @@ const TARGET_SHA_PREFIX = "8f055465204ffb4e";
 /** v1 실측: synthesize 정확히 109 (결정론 프로브 일치) — 복원이 이보다 적으면 fail-loud. */
 const EXPECTED_SYNTHESIZE = 109;
 
+// 프롬프트 서두 프리픽스 (extractDispatches는 startsWith로 매칭 — 부분문자열 금지).
 const SYNTH_ANCHOR = "You are reading ONE code file region";
-const VERIFY_ANCHOR = "re-checker for ONE proposed semantic boundary in a code file region";
+const VERIFY_ANCHOR =
+  "You are an INDEPENDENT adversarial re-checker for ONE proposed semantic boundary in a code file region";
 
 interface StreamEvent {
   stream: string;
@@ -78,11 +80,16 @@ function braceDelta(line: string): number {
   return depth;
 }
 
-/** anchor 이벤트 뒤의 "---" 이후 pretty-JSON 페이로드와, 그 뒤 첫 stdout JSON 응답을 짝짓는다. */
+/** anchor 이벤트 뒤의 "---" 이후 pretty-JSON 페이로드와, 그 뒤 stdout 응답을 짝짓는다.
+ *  응답 규칙: 다음 dispatch 앵커(synth/verify) 전까지의 stdout 라인 중 responseHead로
+ *  시작하고 **JSON.parse가 성공하는 첫 라인** — 원 응답이 invalid JSON이면 런타임의
+ *  parse-repair 재호출("Repair malformed JSON…" 블록, 앵커 무)이 뒤따르고 그 stdout이
+ *  런타임이 실제 수용한 수리본이다 (broken 라인은 parse 실패로 자연 스킵). */
 function extractDispatches(
   events: StreamEvent[],
   anchor: string,
   responseHead: string,
+  allAnchors: string[],
 ): { payload: Record<string, unknown>; response: Record<string, unknown> }[] {
   const out: { payload: Record<string, unknown>; response: Record<string, unknown> }[] = [];
   for (let i = 0; i < events.length; i += 1) {
@@ -103,15 +110,23 @@ function extractDispatches(
     }
     const payload = JSON.parse(lines.join("\n")) as Record<string, unknown>;
     let response: Record<string, unknown> | null = null;
+    let sawUnparsable = 0;
     for (let k = j + 1; k < events.length; k += 1) {
       const e = events[k]!;
-      if (e.stream === "stdout" && e.message.startsWith(responseHead)) {
+      if (allAnchors.some((a) => e.message.startsWith(a))) break; // 다음 dispatch 시작
+      if (e.stream !== "stdout" || !e.message.startsWith(responseHead)) continue;
+      try {
         response = JSON.parse(e.message) as Record<string, unknown>;
         break;
+      } catch {
+        sawUnparsable += 1; // broken 원 응답 — repair본을 계속 스캔
       }
-      if (e.message.startsWith(anchor)) break; // 다음 dispatch 시작 — 응답 미발견은 fail-loud로
     }
-    if (!response) throw new Error(`ablation: no response found for dispatch at event ${i}`);
+    if (!response) {
+      throw new Error(
+        `ablation: no parseable response for dispatch at event ${i} (unparsable candidates: ${sawUnparsable}) — fail-loud.`,
+      );
+    }
     out.push({ payload, response });
   }
   return out;
@@ -136,7 +151,7 @@ async function main(): Promise<void> {
       return { stream: e.stream ?? "", message: e.message ?? "" };
     });
 
-  const synth = extractDispatches(events, SYNTH_ANCHOR, '{"semantic_summary"');
+  const synth = extractDispatches(events, SYNTH_ANCHOR, '{"semantic_summary"', [SYNTH_ANCHOR, VERIFY_ANCHOR]);
   if (synth.length !== EXPECTED_SYNTHESIZE) {
     throw new Error(`ablation: restored ${synth.length} synthesize dispatches, expected ${EXPECTED_SYNTHESIZE}.`);
   }
@@ -148,7 +163,7 @@ async function main(): Promise<void> {
     outputByKey.set(key, response as unknown as CodeSemanticSynthesisOutput);
   }
 
-  const verifies = extractDispatches(events, VERIFY_ANCHOR, '{"verdict"').map(({ payload, response }) => {
+  const verifies = extractDispatches(events, VERIFY_ANCHOR, '{"verdict"', [SYNTH_ANCHOR, VERIFY_ANCHOR]).map(({ payload, response }) => {
     const ref = payload.node_ref as { file: string; line_start: number; line_end: number };
     const boundary = payload.boundary as { line: number; character_before: string; character_after: string };
     return {
@@ -223,6 +238,30 @@ async function main(): Promise<void> {
   const coverage = covered.size / inventory.line_count;
 
   await fs.writeFile(path.join(OUT_DIR, "treatment-render-v2.json"), `${JSON.stringify(render, null, 2)}\n`, "utf8");
+
+  // DIAGNOSTIC (등록 산출물 아님): budget→admit 곡선 — 노드당 실측 비용에서 유효성 floor
+  // (admit≥30)를 만족하는 budget을 owner에게 정량 제시하기 위함. treatment-render-v2.json
+  // (선핀 budget 12,000)은 불변; 이 스윕은 결정 근거 자료다.
+  const sweep = [8_000, 12_000, 16_000, 24_000, 32_000, 40_000, 48_000, 64_000].map((b) => {
+    const rr = renderSemanticMapProjection(projection, b, false, "code", REPO_ROOT) as {
+      nodes: { region: string }[];
+      render_truncated: boolean;
+    };
+    const cov = new Set<number>();
+    for (const n of rr.nodes) {
+      const mm = /:(\d+)-(\d+)$/.exec(n.region);
+      if (mm) for (let ln = Number(mm[1]); ln <= Number(mm[2]); ln += 1) cov.add(ln);
+    }
+    return {
+      budget: b,
+      admitted: rr.nodes.length,
+      truncated: rr.render_truncated,
+      coverage: Number((cov.size / inventory.line_count).toFixed(4)),
+      admit_ge_30: rr.nodes.length >= 30,
+    };
+  });
+  await fs.writeFile(path.join(OUT_DIR, "budget-sweep.json"), `${JSON.stringify(sweep, null, 2)}\n`, "utf8");
+  console.log("budget sweep:", JSON.stringify(sweep));
   const metrics = {
     restored_synthesize: synth.length,
     restored_verify: verifies.length,
