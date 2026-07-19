@@ -23,6 +23,7 @@ import {
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import { SPREADSHEET_OBSERVER_ADAPTER_ID } from "../spreadsheet-structure-observer.js";
+import { codeStructureLanguageForExtension } from "../code-structure-observer.js";
 
 describe("isFullExcerptCaptureEligible (M3a shared whole-capture policy)", () => {
   it("whole-captures source-language code; bounds config/data code (the M3a allowlist)", () => {
@@ -32,6 +33,16 @@ describe("isFullExcerptCaptureEligible (M3a shared whole-capture policy)", () =>
     // config/data extensions the classifier also maps to `code` default to bounded.
     for (const ext of [".json", ".yaml", ".yml", ".toml", ".xml", ".env", ".cfg", ".conf", ".lock"]) {
       expect(isFullExcerptCaptureEligible("code", `src/config${ext}`)).toBe(false);
+    }
+  });
+
+  it("DD6′ 단일화: every structure-observer-supported extension is whole-captured (the .mts/.cts/.cjs gap class is closed BY CONSTRUCTION)", () => {
+    // The v2 excerpt admission guard skips any structure-observed file whose capture stayed at the
+    // bounded sample — so observer support ⊆ whole-capture must hold for every grammar, present
+    // and future (the predicate consults codeStructureLanguageForExtension directly).
+    for (const ext of [".mts", ".cts", ".cjs", ".mjs", ".ts", ".tsx", ".js", ".jsx", ".py"]) {
+      expect(codeStructureLanguageForExtension(ext)).not.toBeNull(); // non-vacuous: these ARE observer-supported.
+      expect(isFullExcerptCaptureEligible("code", `src/feature${ext}`)).toBe(true);
     }
   });
 

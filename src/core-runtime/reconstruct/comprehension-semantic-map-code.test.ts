@@ -6,6 +6,7 @@ import {
   type CodeReduceNode,
 } from "./comprehension-reduce-code.js";
 import {
+  CODE_SOURCE_LINES_CHAR_CAP,
   CODE_SYMBOL_NAMES_DISPLAY_CAP,
   accumulateCodeSemanticMap,
   assertCodeSynthesisInputBounded,
@@ -63,7 +64,9 @@ async function buildFixtureTree() {
   if (observed.status !== "ok") throw new Error(`fixture must observe ok, got ${observed.status}`);
   const inventory = observed.inventory;
   const { root, trace, nodesByKey } = foldCodeStructureInventory(FILE, inventory, 2);
-  return { inventory, root, trace, nodesByKey, meta: buildCodeSynthesisMeta(FILE, inventory) };
+  // DD6′: the fixture text doubles as the observation-time whole-capture excerpt (sha-coherent
+  // by construction — the observer extracted from the same text).
+  return { inventory, root, trace, nodesByKey, meta: buildCodeSynthesisMeta(FILE, inventory, FIXTURE) };
 }
 
 describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-L2 module half)", () => {
@@ -220,6 +223,34 @@ describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-
     expect(rootInput.symbol_names).toContain("add");
     expect(rootInput.symbol_names.length).toBeLessThanOrEqual(CODE_SYMBOL_NAMES_DISPLAY_CAP);
     expect(rootInput.child_summaries.length).toBeGreaterThan(0); // accumulating root consumes children.
+
+    // DD6′: childless envelopes carry the EXACT span slice of the fixture text; merge envelopes
+    // stay body-free (본문은 frontier에서만).
+    expect(rootInput.source_lines).toBeNull();
+    expect(addLeaf!.source_lines).not.toBeNull();
+    const fixtureLines = FIXTURE.split("\n");
+    const addRef = addLeaf!.node_ref;
+    expect(addLeaf!.source_lines!.text).toBe(fixtureLines.slice(addRef.line_start - 1, addRef.line_end).join("\n"));
+    expect(addLeaf!.source_lines!.text).toContain("return x + y;"); // the BODY is present (O-6 — v1 never shipped it).
+    expect(addLeaf!.source_lines!.truncated).toBe(false);
+    expect(addLeaf!.source_lines!.total_lines).toBe(addRef.line_end - addRef.line_start + 1);
+  });
+
+  it("DD6′ per-envelope source cap: an over-cap span head-truncates at 12,000 chars with the explicit flag and an authoritative total_lines", async () => {
+    const { trace, nodesByKey, meta } = await buildFixtureTree();
+    const modes = classifyFrontierCore(trace, 10_000); // root = frontier — the whole file is one envelope.
+    const rootRef = trace.nodes.get(trace.root_key)!.node_ref;
+    const spanLineCount = rootRef.line_end - rootRef.line_start + 1;
+    // Same line COUNT as the real capture (the slice-integrity guard must pass); one giant line
+    // pushes the joined span far over the cap.
+    const giantLines = meta.sourceLines.map((line, i) => (i === 0 ? "x".repeat(CODE_SOURCE_LINES_CHAR_CAP + 3_000) : line));
+    const giantMeta = { ...meta, sourceLines: giantLines };
+    const input = buildCodeSynthesisInputForNode(giantMeta, trace, nodesByKey, modes, trace.root_key, new Map());
+    assertCodeSynthesisInputBounded(input); // the capped envelope passes its own guard.
+    expect(input.source_lines).not.toBeNull();
+    expect(input.source_lines!.truncated).toBe(true);
+    expect(input.source_lines!.text.length).toBe(CODE_SOURCE_LINES_CHAR_CAP);
+    expect(input.source_lines!.total_lines).toBe(spanLineCount);
   });
 
   it("fails closed on envelope violations: extra field, wrong discriminator, unbounded identity line, malformed output boundary", async () => {
@@ -240,6 +271,43 @@ describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-
     expect(() =>
       assertCodeSynthesisInputBounded({ ...input, symbol_names_total: input.symbol_names.length - 1 }),
     ).toThrow(/symbol_names_total/);
+
+    // DD6′ frontier ⇔ source biconditional + source bounds (fail-closed both directions).
+    expect(input.child_summaries.length).toBe(0); // this IS a frontier envelope — non-vacuous below.
+    expect(() => assertCodeSynthesisInputBounded({ ...input, source_lines: null })).toThrow(
+      /null on a frontier/,
+    );
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: null,
+        child_summaries: [{ key: "1-1", summary: "s" }],
+      }),
+    ).not.toThrow(); // a merge envelope is body-free by contract.
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        child_summaries: [{ key: "1-1", summary: "s" }],
+      }),
+    ).toThrow(/source on a merge/);
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: { ...input.source_lines!, extra: 1 } as never,
+      }),
+    ).toThrow(/unexpected field 'extra'/);
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: { ...input.source_lines!, text: "x".repeat(CODE_SOURCE_LINES_CHAR_CAP + 1) },
+      }),
+    ).toThrow(/source cap/);
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: { ...input.source_lines!, total_lines: 0 },
+      }),
+    ).toThrow(/total_lines/);
 
     expect(() =>
       assertCodeSynthesisOutputBounded({

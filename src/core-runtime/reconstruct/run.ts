@@ -2173,12 +2173,15 @@ export const SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT =
 // there would rotate spreadsheet reuse keys and break in-flight spreadsheet resumes (리뷰 ct-F2).
 // The code contract sha folds into the CODE observation fingerprint only (DD6 fingerprint 격리).
 
-/** DD6: the code synthesize prompt — identifier-only envelope (names + doc first line + signature
- *  first line, O-5); declaration bodies are never provided, so grounding restricts to stated facts. */
+/** DD6′ (O-6): the code synthesize prompt — frontier envelopes now carry the region's SOURCE
+ *  (source_lines); merge envelopes stay body-free (child-summary recursion absorbs context). The
+ *  opening anchor sentence is PINNED ("You are reading ONE code file region" — the mock dispatcher
+ *  key and the spreadsheet-prompt disambiguator); the BOUNDARIES clause is PINNED verbatim (리뷰
+ *  ct m-3 — seam 제약 유지). Editing rotates the CODE contract sha tautologically. */
 export const CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT =
-  "You are reading ONE code file region through its deterministic symbol structure. No source-code bodies are provided — only structural identity facts. Input fields: target_material_kind (\"code\"), node_ref (file, line_start, line_end), symbol_path (containing declaration labels, outermost first), signal_clusters (symbol-kind tokens present in the region), symbol_seams (lines where the dominant symbol kind changes, with prev_kind/new_kind), symbol_names (declaration identifiers covered by the region; symbol_names_total is the AUTHORITATIVE count when the list was bounded), doc_comment_first_line (the author's stated purpose — first line only), signature_line (the declaration's first source line), child_summaries (semantic summaries of child sub-regions; present only on merge nodes). Reply with STRICT JSON only, no prose outside it: {\"semantic_summary\": string, \"boundaries\": [{\"line\": integer, \"character_before\": string, \"character_after\": string}]}. semantic_summary: at most 600 characters — one plain-language reading of what this region appears to implement, grounded ONLY in the given identifiers, kind tokens, seams, doc/signature lines, and child summaries; never invent function bodies, algorithms, or behavior you were not shown. boundaries: at most 16 items — lines where you judge the PURPOSE of the code changes; character_before/character_after describe the character of the code before/after that line in structural terms, each at most 120 characters; propose ONLY boundaries you can ground in the input — an empty array is honest and acceptable. No additional fields.\n\n" +
+  "You are reading ONE code file region through its deterministic symbol structure and, on frontier regions, its source text. Input fields: target_material_kind (\"code\"), node_ref (file, line_start, line_end), symbol_path (containing declaration labels, outermost first), signal_clusters (symbol-kind tokens present in the region), symbol_seams (lines where the dominant symbol kind changes, with prev_kind/new_kind), symbol_names (declaration identifiers covered by the region; symbol_names_total is the AUTHORITATIVE count when the list was bounded), doc_comment_first_line (the author's stated purpose — first line only), signature_line (the declaration's first source line), source_lines (present ONLY on frontier envelopes: text is the region's source, head-truncated when truncated is true; total_lines is the AUTHORITATIVE span line count), child_summaries (semantic summaries of child sub-regions; present only on merge nodes — merge nodes carry no source text). Reply with STRICT JSON only, no prose outside it: {\"semantic_summary\": string, \"boundaries\": [{\"line\": integer, \"character_before\": string, \"character_after\": string}]}. semantic_summary: at most 600 characters — one plain-language reading of what this region implements, grounded ONLY in the given source text, identifiers, kind tokens, seams, doc/signature lines, and child summaries; never invent behavior you were not shown. boundaries: at most 16 items — lines where you judge the PURPOSE of the code changes; character_before/character_after describe the character of the code before/after that line in structural terms, each at most 120 characters; propose ONLY boundaries you can ground in the input — an empty array is honest and acceptable. No additional fields.\n\n" +
   "OUTPUT DISCIPLINE: Reply with ONLY the raw JSON object. Do NOT wrap it in markdown code fences or backticks, and do NOT write any text before or after the JSON.\n" +
-  "GROUNDING: Describe ONLY what the given identifiers, kind tokens, doc first lines, and signature lines state. Do not guess implementation details, runtime behavior, or unstated dependencies; if nothing beyond the structure is stated, say the region is the declarations it names.\n" +
+  "GROUNDING: Ground every claim in what you were given. On frontier regions, read source_lines and describe what the code actually does; when truncated is true, describe only the visible head without extrapolating the cut tail. On merge regions, rely on the child summaries and the structural facts. Do not guess unstated dependencies, callers, or behavior outside the provided input.\n" +
   "BOUNDARIES: A boundary's line should correspond to a symbol_seam (or a transition a child_summary explicitly reports). Do not invent split points at lines with no supporting seam.";
 
 /** DD6: the code adversarial verify prompt — refute-by-default lens for ONE unanchored boundary. */
@@ -2795,13 +2798,38 @@ function semanticMapCodeStructural(observation: SemanticMapObservation): {
   };
 }
 
+/** DD6′ frontier-source admission guard — the ONE predicate the stage AND the resume partition
+ *  share (DD7 same-predicate discipline), so the two can never disagree about whether a code
+ *  observation's excerpt is sliceable. Returns the failure description, or null when admitted:
+ *  the excerpt must exist, be the EXACT text the inventory was extracted from (sha equality), and
+ *  be complete (untruncated) — a drifted or partial slice would silently attribute wrong source. */
+function semanticMapCodeSourceExcerptGuardFailure(
+  observation: SemanticMapObservation,
+  inventory: CodeStructureInventory,
+): string | null {
+  const structural = observation.structural_data as Record<string, unknown>;
+  if (typeof structural.content_excerpt !== "string") {
+    return "structural_data.content_excerpt is absent — code whole-capture did not run for this ref";
+  }
+  if (structural.content_sha256 !== inventory.content_sha256) {
+    return "structural_data.content_sha256 does not match the inventory's content_sha256 — the excerpt is not the extracted text";
+  }
+  if (structural.excerpt_truncated !== false) {
+    return "structural_data.excerpt_truncated is not false — the capture is incomplete";
+  }
+  return null;
+}
+
 function semanticMapSkipReasonForCurrentObservation(
   observation: SemanticMapObservation,
-): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | null {
+): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | "code_source_excerpt_unavailable" | null {
   if (observation.target_material_kind === "code") {
     const { inventory, unsupportedReason } = semanticMapCodeStructural(observation);
     if (unsupportedReason !== undefined) return "code_extraction_unsupported";
-    return inventory ? null : "no_code_inventory";
+    if (!inventory) return "no_code_inventory";
+    return semanticMapCodeSourceExcerptGuardFailure(observation, inventory) === null
+      ? null
+      : "code_source_excerpt_unavailable";
   }
   const inventory = observation.structural_data.workbook_inventory as
     | WorkbookStructuralInventory
@@ -3107,7 +3135,8 @@ function buildSemanticMapResumeValidationArtifact(args: {
         row.skip_reason !== "no_workbook_inventory" &&
         row.skip_reason !== "no_value_tiles" &&
         row.skip_reason !== "no_code_inventory" &&
-        row.skip_reason !== "code_extraction_unsupported"
+        row.skip_reason !== "code_extraction_unsupported" &&
+        row.skip_reason !== "code_source_excerpt_unavailable"
       ) {
         nonReusableRetainedIds.push(id);
         continue;
@@ -3881,6 +3910,15 @@ export async function runSemanticMapStage(args: {
       recordSkippedObservation(observation.observation_id, "no_code_inventory", undefined, "code");
       return;
     }
+    // DD6′ source admission (리뷰 ct M-1, fail-closed): frontier envelopes slice the
+    // observation-time whole-capture excerpt — never a stage-time disk re-read (DD4 TOCTOU).
+    // Shared predicate with the resume partition (DD7 discipline).
+    const excerptGuardFailure = semanticMapCodeSourceExcerptGuardFailure(observation, inventory);
+    if (excerptGuardFailure !== null) {
+      recordSkippedObservation(observation.observation_id, "code_source_excerpt_unavailable", excerptGuardFailure, "code");
+      return;
+    }
+    const sourceExcerpt = (observation.structural_data as Record<string, unknown>).content_excerpt as string;
     census.observations_total += 1;
     let breakerObservationFailure: {
       failureClass: ReturnType<typeof classifySystemicDispatchFailure>;
@@ -3937,7 +3975,8 @@ export async function runSemanticMapStage(args: {
       } else {
         try {
           // §3 bridge pre-compute — bottom-up, single-source envelope builder, full guards.
-          const meta = buildCodeSynthesisMeta(file, inventory);
+          // sourceExcerpt is guard-admitted above (sha-matched, untruncated — DD6′).
+          const meta = buildCodeSynthesisMeta(file, inventory, sourceExcerpt);
           const preByKey = new Map<string, CodeSemanticMapBridgeRecord>();
           const summaryByKey = new Map<string, string>();
           const order: string[] = [];
@@ -16194,7 +16233,9 @@ export async function runReconstruct(
     reduce_reader_model_identity: directiveAuthor.semanticMapSynthesizeModelIdentity ??
       directiveAuthor.reuseModelIdentity ?? "unspecified",
     reduce_prompt_sha256: codeAuthoringPromptContractSha256(),
-    reduce_schema_tool_version: "semantic-map-code:v1",
+    // DD6′ 봉투 SHAPE 레버 (리뷰 ct m-1): prompt edits rotate via the contract sha above; an
+    // ENVELOPE-shape change (v2 = frontier source_lines) bumps this knob — code preImage 한정.
+    reduce_schema_tool_version: "semantic-map-code:v2",
     comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
     over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
     over_context_gate_logic_sha256: semanticMapGateLogicSha256(),

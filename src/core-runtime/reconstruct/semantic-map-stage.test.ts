@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -959,6 +960,16 @@ describe("DD10 (§10 v2.1): per-kind render knobs + code label root", () => {
       nodes: { region: string }[];
     };
     expect(relRendered.nodes[0]!.region).toBe("src/fixture.ts:1-9"); // non-absolute fixture path untouched.
+  });
+
+  it("DD6′ prompt pins: mock-키 서두 앵커 유지·identifier-only 문구 제거·source_lines 서술·BOUNDARIES seam 절 축어 불변 (리뷰 ct m-3)", () => {
+    const prompt = CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.code_semantic_map_synthesize!;
+    expect(prompt.startsWith("You are reading ONE code file region")).toBe(true); // mock dispatcher key + spreadsheet 구분자 — 무회전.
+    expect(prompt).not.toContain("No source-code bodies"); // O-6: the source-safety framing is repealed.
+    expect(prompt).toContain("source_lines");
+    expect(prompt).toContain(
+      "BOUNDARIES: A boundary's line should correspond to a symbol_seam (or a transition a child_summary explicitly reports). Do not invent split points at lines with no supporting seam.",
+    );
   });
 
   it("relative labels reclaim real budget: a budget that starves absolute-labeled nodes admits MORE nodes under labelRoot (기아 해소의 실측 가능 신호)", () => {
@@ -1952,7 +1963,15 @@ function mixedObservationsArtifact(args: {
       observation_id: "obs-code",
       target_material_kind: "code",
       source_ref: CODE_FILE,
-      structural_data: args.code.structural,
+      structural_data: {
+        // DD6′ 소스 admission 3전제 (실 materialize shape): whole-capture excerpt = 관찰 텍스트
+        // 그대로, sha = 그 텍스트의 sha(관찰자 inventory와 일치), 무절단. 개별 테스트는 뒤의
+        // spread로 오버라이드해 가드 실패 분기를 구동한다.
+        content_excerpt: CODE_FIXTURE,
+        content_sha256: createHash("sha256").update(CODE_FIXTURE).digest("hex"),
+        excerpt_truncated: false,
+        ...args.code.structural,
+      },
     });
   }
   return { observations } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
@@ -2067,6 +2086,81 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
     await fs.rm(sessionRoot, { recursive: true, force: true });
   });
 
+  it("DD6′: the EXACT transmitted frontier envelopes carry the guarded span source (본문 실재), merge envelopes stay body-free", async () => {
+    const inventory = await codeInventory();
+    const { author } = mockCodeAuthor();
+    const captured: CodeSemanticSynthesisInput[] = [];
+    const capturingAuthor = {
+      ...author,
+      async synthesizeSemanticMapNode(input: CodeSemanticSynthesisInput | SemanticSynthesisInput) {
+        if ("file" in input.node_ref) captured.push(structuredClone(input as CodeSemanticSynthesisInput));
+        return (author.synthesizeSemanticMapNode as (i: unknown) => unknown)(input);
+      },
+    } as unknown as ReconstructDirectiveAuthor;
+    const sessionRoot = await tempRoot();
+    const result = await runSemanticMapStage({
+      sourceObservations: mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } }),
+      directiveAuthor: capturingAuthor,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    expect(result.census?.by_observation.find((r) => r.observation_id === "obs-code")?.map_present).toBe(true);
+
+    const frontierInputs = captured.filter((i) => i.child_summaries.length === 0);
+    const mergeInputs = captured.filter((i) => i.child_summaries.length > 0);
+    expect(frontierInputs.length).toBeGreaterThan(0); // cardinality — a source claim over 0 envelopes is vacuous.
+    expect(mergeInputs.length).toBeGreaterThan(0);
+    const fixtureLines = CODE_FIXTURE.split("\n");
+    for (const input of frontierInputs) {
+      expect(input.source_lines).not.toBeNull();
+      expect(input.source_lines!.text).toBe(
+        fixtureLines.slice(input.node_ref.line_start - 1, input.node_ref.line_end).join("\n"),
+      );
+      expect(input.source_lines!.truncated).toBe(false);
+    }
+    expect(frontierInputs.some((i) => i.source_lines!.text.includes("this.count += 1;"))).toBe(true); // a real BODY line reached an envelope (O-6).
+    for (const input of mergeInputs) expect(input.source_lines).toBeNull();
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("DD6′ 소스 admission 가드: sha 불일치·절단·부재 각각 → 결정론 skip census(code_source_excerpt_unavailable, 사유 기록)·code dispatch 0", async () => {
+    const inventory = await codeInventory();
+    const cases: { override: Record<string, unknown>; detail: RegExp }[] = [
+      { override: { content_sha256: "0".repeat(64) }, detail: /content_sha256/ },
+      { override: { excerpt_truncated: true }, detail: /excerpt_truncated/ },
+      { override: { content_excerpt: undefined }, detail: /content_excerpt is absent/ },
+    ];
+    for (const { override, detail } of cases) {
+      const { author, counters } = mockCodeAuthor();
+      const sessionRoot = await tempRoot();
+      const result = await runSemanticMapStage({
+        sourceObservations: mixedObservationsArtifact({
+          code: { structural: { code_structure_inventory: inventory, ...override } },
+        }),
+        directiveAuthor: author,
+        sessionRoot,
+        config: CONFIG,
+        preImageBase: PRE_IMAGE_BASE,
+        codeKindOptIn: true,
+        codePreImageBase: CODE_PRE_IMAGE_BASE,
+        verifyModelIdentity: "mock/none",
+      });
+      const codeRow = result.census!.by_observation.find((r) => r.observation_id === "obs-code");
+      expect(codeRow?.map_present).toBe(false);
+      expect(codeRow?.skip_reason).toBe("code_source_excerpt_unavailable");
+      expect(codeRow?.skip_detail).toMatch(detail);
+      expect(codeRow?.target_material_kind).toBe("code");
+      expect(counters.codeSynthesize).toBe(0); // the guard is pre-dispatch — no source ever leaves.
+      // Containment: the sibling spreadsheet observation still produces (관찰 단위 격리).
+      expect(result.census!.by_observation.find((r) => r.observation_id === "obs-sheet")?.map_present).toBe(true);
+      await fs.rm(sessionRoot, { recursive: true, force: true });
+    }
+  });
+
   it("G-OFF (i): settings opt-in absent → code observation invisible; outputs byte-identical to a code-less run; 0 code dispatches", async () => {
     const inventory = await codeInventory();
     const withCode = mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } });
@@ -2151,7 +2245,14 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
           observation_id: "obs-empty-file",
           target_material_kind: "code",
           source_ref: "src/example/empty.ts",
-          structural_data: { code_structure_inventory: emptyObserved.inventory },
+          structural_data: {
+            code_structure_inventory: emptyObserved.inventory,
+            // DD6′ admission triple (real materialize shape for an empty file) — the empty-file
+            // row must reach the EVALUATED "empty" branch, not the excerpt-guard skip.
+            content_excerpt: "",
+            content_sha256: createHash("sha256").update("").digest("hex"),
+            excerpt_truncated: false,
+          },
         },
       ],
     } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
