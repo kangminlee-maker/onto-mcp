@@ -43,13 +43,13 @@
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
   <div class="card focus"><h3>현재 목표</h3>
-    <p><b>semantic-map multi-artifact Phase 1a (코드/AST)</b> — 설계 §7 step 1~6 main 착지(#225/#227/#228/#230) + <b>step 7a E2E mock 완료</b>(api 전 구간, 텔레메트리 매핑 라이브 결함 1건 적발·수정 포함). 다음 실작업 = <b>step 7b live N=1</b>(owner: 대상 파일·seat 확인 + spend, 수용 기준 <b>G-SEM 블라인드</b>) → step 8 Phase 1b set-tier(O-3). cert v3 A-4(2026-07-15 disclosure run)·M3 벤치(P2 R=3 종결: seat 품질 구별 불가)는 완료.</p></div>
+    <p><b>semantic-map multi-artifact Phase 1a (코드/AST)</b> — step 1~7a main 착지(#225/#227/#228/#230/#231) 후 <b>step 7b live N=1 완주 → G-SEM 블라인드 FAIL 0/5 → 재설계 스톱</b>(disclosure <code>benchmark/20260719-semantic-map-gsem-n1/</code>). 진단 2층위: 렌더 기아(4/109 노드 admit — 경로 바이트·lex 순서)+의미 상한(outline 재서술). <code>semantic_map_code</code> 미승격, step 8(1b)은 보류. cert v3 A-4·M3 벤치는 완료.</p></div>
   <div class="card"><h3>Phase</h3>
     <p>semantic-map 코드 확장: 골든/프로브(<span class="ok">#225</span>)·L1 코어+관찰 옵트인(<span class="ok">#227/#228</span>)·L2 코어+kind 라우팅/봉투/DD9(<span class="ok">#230</span>)·E2E mock+G-SEM 대조군 스크립트(<span class="ok">step 7a 브랜치</span>) · 선행 착지: cert v3 A 전체·breaker-observation 5종 ON(#203)·per-call llmOverride·MCP self-description·review ontological-anchoring 양 플래그 ON(#222).</p></div>
   <div class="card"><h3>Health</h3>
     <p><span class="ok">vitest 200 files / 3,274 passed</span>(+1 todo) · <span class="ok">G-SS 골든 바이트 동일</span> · <span class="ok">reduce-proof·import-boundary·tsc green</span> · guards green(G1~G7).</p></div>
   <div class="card"><h3>다음 결정 (owner)</h3>
-    <p><b>step 7b live N=1</b>(owner spend, O-2로 원칙 승인 완료): 소형 실파일 1개(TS/JS/Python) 지정 + seat 확인(synthesize <code>gpt-5.6-luna@low</code>·verify <code>gpt-5.6-sol@medium</code>) + repo settings <code>semantic_map_code: true</code> — 수용 기준 = <b>G-SEM 대조군 블라인드 평정</b>(실패 시 재설계 스톱, O-5 fallback 소진). 이후 <b>step 8</b>(1b set-tier) 착수 시점 결정.</p></div>
+    <p><b>G-SEM FAIL 후 재설계 스톱 처분</b>: ①렌더-계층 재설계 재착수 여부(경로 직렬화·admission 순서·budget — 설계 §8이 live 실측 후 재조정으로 예정한 축; 봉투 확장 재제안은 프로토콜상 금지) ②의미 상한(요약이 outline 재서술)을 감안한 코드 트랙 지속/보류 판단 ③step 8(1b set-tier) 보류 확정. 참고: G-OFF 보증으로 제품 spreadsheet 경로는 무손상, 옵트인은 OFF 유지.</p></div>
   <div class="card"><h3>주요 리스크</h3>
     <p><span class="warn">승격 관찰 waived</span>: #203이 관찰 게이트 <b>0/3</b>에서 owner-directed로 켬 — 실 halt/rate-limit 행동은 형식상 미관측. <span class="warn">§4-4 natural incident 미관측</span>: injected/deterministic 429까지가 달성 가능 증거 경계(자연 incident 제조 불가). <span class="warn">core recall 하한</span>: grounding·final_result·artifact recall 3종은 실 완주 run 무발화 → 하한이 합성 테스트로만 성립(v3 비목표, A-4로도 불변).</p></div>
 </div>
