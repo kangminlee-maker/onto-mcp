@@ -106,10 +106,47 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
         "region": "<projectRoot>/src/alpha-service.ts:4-5",
         "summary": "mock <projectRoot>/src/alpha-service.ts:4-5 kids=0",
       },
+      {
+        "boundaries": [
+          {
+            "after": "seam-next",
+            "before": "seam-prev",
+            "disposition": "structural_location_only",
+            "line": 8,
+          },
+          {
+            "after": "next",
+            "before": "prev",
+            "disposition": "adversarial_confirmed",
+            "line": 6,
+          },
+        ],
+        "region": "<projectRoot>/src/alpha-service.ts:6-21",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:6-21 kids=2",
+      },
+      {
+        "boundaries": [
+          {
+            "after": "next",
+            "before": "prev",
+            "disposition": "adversarial_confirmed",
+            "line": 6,
+          },
+        ],
+        "region": "<projectRoot>/src/alpha-service.ts:6-7",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:6-7 kids=0",
+      },
     ],
     "nodes_total": 11,
     "provisional": true,
-    "refuted_disclosure": [],
+    "refuted_disclosure": [
+      {
+        "after": "next",
+        "before": "prev",
+        "line": 1,
+        "region": "<projectRoot>/src/alpha-service.ts:1-1",
+      },
+    ],
     "refuted_disclosure_total": 3,
     "render_truncated": true,
     "unanchored_unverified_total": 3,

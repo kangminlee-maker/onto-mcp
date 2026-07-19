@@ -275,9 +275,25 @@ describe("reconstruct api mock E2E over a 2-file code fixture (§6-4)", () => {
       // DD9 renderer over the seed surface (includeNote=false — the seed payload form): region
       // labels use the code `file:line_start-line_end` vocabulary and boundaries carry `line`,
       // never the spreadsheet `row`.
+      // Normalize the tmp root BEFORE rendering (교차검증 M-1): the renderer's char-budget
+      // admission measures the RAW serialization, so node_ref.file/summary path bytes decide how
+      // many nodes admit — a post-render replace would pin the snapshot to the writing machine's
+      // tmpdir length (macOS /var/folders/… vs CI /tmp) and fail deterministically elsewhere.
+      // realpath spelling replaced first: on macOS it is a superstring of the raw root.
+      const realRoot = await fs.realpath(projectRoot);
+      const normalizeProjection = (
+        projection: CodeSemanticSeedProjection,
+      ): CodeSemanticSeedProjection =>
+        JSON.parse(
+          JSON.stringify(projection)
+            .split(realRoot)
+            .join("<projectRoot>")
+            .split(projectRoot)
+            .join("<projectRoot>"),
+        ) as CodeSemanticSeedProjection;
       const renders = codeRows.map((row) =>
         renderSemanticMapProjection(
-          row.projection,
+          normalizeProjection(row.projection as CodeSemanticSeedProjection),
           SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
           false,
         ),
@@ -289,24 +305,16 @@ describe("reconstruct api mock E2E over a 2-file code fixture (§6-4)", () => {
         }>;
         expect(nodes.length).toBeGreaterThan(0);
         for (const node of nodes) {
-          expect(node.region).toMatch(/\/src\/(alpha-service|beta-tools)\.ts:\d+-\d+$/);
+          expect(node.region).toMatch(
+            /^<projectRoot>\/src\/(alpha-service|beta-tools)\.ts:\d+-\d+$/,
+          );
           for (const boundary of node.boundaries) {
             expect(boundary).toHaveProperty("line");
             expect(boundary).not.toHaveProperty("row");
           }
         }
       }
-      // Snapshot the exact DD9 render with the tmp root normalized (os.tmpdir may be a symlink —
-      // normalize both spellings so the snapshot is byte-stable across runs and machines).
-      const realRoot = await fs.realpath(projectRoot);
-      const normalized = JSON.parse(
-        JSON.stringify(renders)
-          .split(projectRoot)
-          .join("<projectRoot>")
-          .split(realRoot)
-          .join("<projectRoot>"),
-      ) as unknown;
-      expect(normalized).toMatchSnapshot();
+      expect(renders).toMatchSnapshot();
     } finally {
       for (const [key, value] of Object.entries(previousEnv)) {
         if (value === undefined) delete process.env[key];
