@@ -293,19 +293,21 @@ async function deriveArm(
     // includeNote=false) plus a tight-budget arm that forces the truncation loop. This is the sole
     // lock proving the DD10 render refactor leaves the spreadsheet surface byte-identical.
     const renders: Record<string, string> = {};
+    // labelRoot=null: spreadsheet renders never label file paths — the DD10 root param must be
+    // byte-inert here (the golden proves it stays inert across the refactor).
     for (const [obsId, projection] of [...result.projectionByObservation.entries()].sort(([x], [y]) => (x < y ? -1 : 1))) {
       renders[`${obsId}/observation`] = JSON.stringify(
-        renderSemanticMapProjection(projection, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, true),
+        renderSemanticMapProjection(projection, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, true, "spreadsheet", null),
         null,
         2,
       );
       renders[`${obsId}/seed`] = JSON.stringify(
-        renderSemanticMapProjection(projection, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, false),
+        renderSemanticMapProjection(projection, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, false, "spreadsheet", null),
         null,
         2,
       );
       renders[`${obsId}/tight`] = JSON.stringify(
-        renderSemanticMapProjection(projection, GSSF_TIGHT_RENDER_CHAR_BUDGET, false),
+        renderSemanticMapProjection(projection, GSSF_TIGHT_RENDER_CHAR_BUDGET, false, "spreadsheet", null),
         null,
         2,
       );

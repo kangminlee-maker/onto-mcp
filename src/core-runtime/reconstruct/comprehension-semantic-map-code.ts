@@ -111,6 +111,13 @@ export const CODE_SEMANTIC_ADAPTER: SemanticCoordAdapter<
   }),
   boundaryPos: (b) => b.line,
   boundaryPosLabel: (b) => `line${b.line}`,
+  // DD10 (§10 v2.1 — 리뷰 gh M-2 선핀 총순서, 잔여 자유도 0): ① span 크기 내림차순
+  // ② line_start 오름차순 ③ nodeKey lex. 루트/대영역이 먼저 admit되므로 maxNodes 컷이
+  // 파일-수준 이해가 아니라 leaf를 굶긴다 (7b 기아 진단 ①의 해소 지점).
+  admissionCompare: (a, b) =>
+    (b.line_end - b.line_start) - (a.line_end - a.line_start) ||
+    a.line_start - b.line_start ||
+    cmpStr(codeReduceNodeKey(a), codeReduceNodeKey(b)),
 };
 
 // ── N1/N2 reconcile (code-typed façade) ──────────────────────────────────────

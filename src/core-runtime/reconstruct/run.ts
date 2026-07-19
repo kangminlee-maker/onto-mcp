@@ -2109,7 +2109,10 @@ const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
 /** Manual version for the projection/render CONTRACT (design §5 X9 / W3 review W3-003): cap VALUES
  *  are folded via stage_config, but the projection RULES (projectSemanticMapToSeed + the observation
  *  merge) and — from W4 — the prompt RENDERER change what the seed actually sees without any config
- *  change. Bump on any projection/merge/renderer semantics edit. */
+ *  change. Bump on any projection/merge/renderer semantics edit that reaches the SPREADSHEET
+ *  surface. ⚠️ This knob folds into every spreadsheet fingerprint — CODE-only projection/render
+ *  semantics bump CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION instead (DD10 회전 격리, 리뷰
+ *  inv M1: a shared bump would rotate every spreadsheet reuse key as collateral). */
 const SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION = "projection-merge:1";
 
 /** First MEASURED defaults (real-LLM cut design 20260703 §3; previous 200/100 PRELIMINARY values
@@ -2339,9 +2342,45 @@ export function projectCodeSemanticMapSynthesisOutput(raw: Record<string, unknow
   return { semantic_summary: summary, boundaries };
 }
 
-/** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
- *  it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION with it (X9). */
+/** ⚠️ PRELIMINARY prompt-render budget (chars) for one SPREADSHEET observation's semantic-map
+ *  render. Changing it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_
+ *  VERSION with it (X9). CODE renders use the per-kind constant below (DD10 — never this one). */
 export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
+
+// ── DD10 (§10 v2.1) CODE-only projection/render knobs — 회전 격리 (리뷰 inv M1/gh M-1) ────────────
+// The three values below are 선핀 (재평정 게이트 1항: v2 렌더 생성·열람 전에 사전 등록 커밋에
+// 그대로 복사·핀); they fold by VALUE into semanticMapCodeObservationFingerprint ONLY, so tuning
+// them rotates code reuse keys (old code sidecars fail closed on fingerprint mismatch) while every
+// spreadsheet key stays byte-identical.
+
+/** DD10: CODE render budget — 12,000 chars ≈ 40~60 admitted nodes with relative-path labels
+ *  (spreadsheet 4,000 불변; the v1 shared budget admitted 4/109 nodes on the live N=1 — 기아). */
+export const CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 12_000;
+
+/** DD10: CODE projection display cap (1a single-file headroom; spreadsheet stage-config 60 불변).
+ *  Applied at the projection call — the stage config's shared max_nodes never caps code. */
+export const CODE_SEMANTIC_MAP_MAX_NODES = 512;
+
+/** DD10 (리뷰 inv M1): CODE-only projection/render contract version — the shared X9 knob above is
+ *  spreadsheet-golden-locked, so code projection/render semantics edits bump THIS knob. */
+export const CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION = "code-projection-render:1";
+
+/** DD10 per-kind render budget selector — the single point where a render surface picks its
+ *  budget (every renderSemanticMapProjection caller routes through this, never the raw consts). */
+export function semanticMapRenderCharBudget(kind: SemanticMapArtifactKind): number {
+  return kind === "code"
+    ? CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET
+    : SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET;
+}
+
+/** DD10: render-surface file label — artifact 권위는 절대경로 유지, 라벨만 root-상대화
+ *  (실측 절대경로 ~81자/노드가 budget을 잠식한 7b 기아 요인 ②). Non-absolute fixture paths pass
+ *  through unchanged; a file outside root renders as `../…` (허용 — 리뷰 inv MN2 확인). */
+function semanticMapFileLabel(labelRoot: string | null, file: string): string {
+  // typeof guard (not !== null): tests are outside the tsc project, so an arity-loose JS caller
+  // can leak `undefined` here — that must degrade to v1 passthrough, never path.relative(undefined).
+  return typeof labelRoot === "string" && path.isAbsolute(file) ? path.relative(labelRoot, file) : file;
+}
 
 /** W4 §4 shared renderer — BOTH prompt surfaces ((A) seed payload field, (B) observation-prompt
  *  replace) derive from this one projection-to-prompt shape (single truth). Deterministic; bounded
@@ -2355,9 +2394,12 @@ export function renderSemanticMapProjection(
   includeNote: boolean,
   /** Step 6 (DD9): which artifact's caveat NOTE to render when includeNote — row vocabulary is
    *  derived from each node's node_ref shape (discriminated union), but an EMPTY projection has no
-   *  node to sniff, so the note kind is caller-declared. Default keeps every existing call
-   *  byte-identical. */
-  noteKind: SemanticMapArtifactKind = "spreadsheet",
+   *  node to sniff, so the note kind is caller-declared. */
+  noteKind: SemanticMapArtifactKind,
+  /** DD10 (리뷰 inv MN2): REQUIRED so the compiler forces every render surface — resume 검증
+   *  사이트 포함 — to decide its label root. null = v1 absolute-passthrough (spreadsheet-only
+   *  surfaces / legacy script callers without a project root). */
+  labelRoot: string | null,
 ): Record<string, unknown> {
   if (!Number.isSafeInteger(charBudget) || charBudget <= 0) {
     throw new Error(`semantic-map render: charBudget must be a positive safe integer, got ${charBudget} (issue-012 fail-loud).`);
@@ -2415,7 +2457,7 @@ export function renderSemanticMapProjection(
             })),
           }
         : {
-            region: `${node.node_ref.file}:${node.node_ref.line_start}-${node.node_ref.line_end}`,
+            region: `${semanticMapFileLabel(labelRoot, node.node_ref.file)}:${node.node_ref.line_start}-${node.node_ref.line_end}`,
             summary: node.semantic_summary,
             boundaries: (node.boundaries as CodeSemanticSeedBoundary[]).map((b) => ({
               line: b.line,
@@ -2441,7 +2483,7 @@ export function renderSemanticMapProjection(
             after: refuted.character_after,
           }
         : {
-            region: `${refuted.node_ref.file}:${refuted.node_ref.line_start}-${refuted.node_ref.line_end}`,
+            region: `${semanticMapFileLabel(labelRoot, refuted.node_ref.file)}:${refuted.node_ref.line_start}-${refuted.node_ref.line_end}`,
             line: (refuted as CodeSemanticSeedRefutedDisclosure).line,
             before: refuted.character_before,
             after: refuted.character_after,
@@ -2729,8 +2771,12 @@ function semanticMapCodeObservationFingerprint(args: {
     pre_image_base: args.preImageBase,
     verify_model_identity: args.verifyModelIdentity,
     stage_config: args.config,
-    projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
-    render_char_budget: SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+    // DD10 (리뷰 inv M1): CODE-only projection contract + per-kind VALUES fold HERE only — the
+    // shared X9 knob stays out so spreadsheet keys never rotate on code tuning, and v1 code
+    // sidecars fail closed on the mismatch (silent-stale 차단).
+    projection_contract_version: CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
+    render_char_budget: CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+    code_max_nodes: CODE_SEMANTIC_MAP_MAX_NODES,
   };
   assertGatingKeyExcludesInEpochOutput("semanticMapCodeStageFingerprint", fingerprintPreImage);
   return sha256Text(stableJson(fingerprintPreImage));
@@ -2807,16 +2853,29 @@ function isSemanticMapSidecar(value: unknown): value is ReconstructSemanticMapSi
   );
 }
 
+/** Step 6 (DD9)/DD10 discriminator over a PROJECTION: code ⇔ a node/disclosure node_ref carries
+ *  `file` (the same sniff appendSemanticMapSeedNotes uses); an empty projection defaults to
+ *  spreadsheet (note-kind caller-declared 규약과 동일 — X5상 map_present projection은 비지 않음). */
+function semanticMapProjectionKind(projection: SemanticMapAnyProjection): SemanticMapArtifactKind {
+  const ref = projection.nodes[0]?.node_ref ?? projection.refuted_disclosure[0]?.node_ref;
+  return ref && "file" in ref ? "code" : "spreadsheet";
+}
+
 function projectionIsRenderable(
   projection: SemanticMapAnyProjection,
-  noteKind: SemanticMapArtifactKind = "spreadsheet",
+  noteKind: SemanticMapArtifactKind,
+  labelRoot: string | null,
 ): boolean {
   try {
+    // Per-kind budget (DD10) — the resume check must judge renderability against the SAME budget
+    // the live prompt surfaces will use, else a code projection sized for 12,000 would fail the
+    // 4,000 check and silently doom valid resumes (or vice versa).
     renderSemanticMapProjection(
       projection,
-      SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+      semanticMapRenderCharBudget(noteKind),
       true,
       noteKind,
+      labelRoot,
     );
     return true;
   } catch (error) {
@@ -2857,6 +2916,9 @@ function buildSemanticMapResumeValidationArtifact(args: {
   codePreImageBase?: SemanticMapPreImageBase;
   verifyModelIdentity: string;
   config: SemanticMapStageConfig;
+  /** DD10 (리뷰 inv MN2): render-label root for the renderability re-check — the SAME root the
+   *  live prompt surfaces use, so resume validation judges the projection the seed will see. */
+  labelRoot: string | null;
   backupRefs?: Partial<ReconstructSemanticMapResumeValidationArtifact["backup_refs"]>;
 }): {
   artifact: ReconstructSemanticMapResumeValidationArtifact;
@@ -3141,7 +3203,7 @@ function buildSemanticMapResumeValidationArtifact(args: {
       }));
     }
     sidecarRowsById.set(row.observation_id, row);
-    if (!projectionIsRenderable(row.projection, row.target_material_kind === "code" ? "code" : "spreadsheet")) {
+    if (!projectionIsRenderable(row.projection, row.target_material_kind === "code" ? "code" : "spreadsheet", args.labelRoot)) {
       projectionRenderable = false;
     }
     if (
@@ -3387,6 +3449,9 @@ export async function prepareSemanticMapResumeContext(args: {
   codePreImageBase?: SemanticMapPreImageBase;
   verifyModelIdentity: string;
   config: SemanticMapStageConfig;
+  /** DD10 (리뷰 inv MN2): render-label root threaded to the renderability re-check (null = v1
+   *  absolute-passthrough — callers without a project root). */
+  labelRoot: string | null;
 }): Promise<SemanticMapRecoveryContext | null> {
   const dispatchPath = dispatchIncompleteArtifactPath(args.sessionRoot);
   if (!(await exists(dispatchPath))) return null;
@@ -3478,6 +3543,7 @@ export async function prepareSemanticMapResumeContext(args: {
     ...(args.codePreImageBase !== undefined ? { codePreImageBase: args.codePreImageBase } : {}),
     verifyModelIdentity: args.verifyModelIdentity,
     config: args.config,
+    labelRoot: args.labelRoot,
     backupRefs,
   });
   artifact.violations.push(...parseViolations);
@@ -3933,7 +3999,9 @@ export async function runSemanticMapStage(args: {
             overContextBudget: cfg.over_context_budget,
             seedBound: false, // the projection is the sole refuted-exclusion layer (module input contract).
           });
-          projection = projectCodeSemanticMapToSeed(map, { maxNodes: cfg.max_nodes, maxDisclosure: cfg.max_disclosure });
+          // DD10: the CODE display cap (512) replaces the shared stage-config 60 — the shared cap
+          // was the 109→60 starvation cut; the value folds into the code fingerprint above.
+          projection = projectCodeSemanticMapToSeed(map, { maxNodes: CODE_SEMANTIC_MAP_MAX_NODES, maxDisclosure: cfg.max_disclosure });
 
           let anchored = 0;
           let unanchored = 0;
@@ -9797,6 +9865,9 @@ interface ObservationPromptPayloadOptions {
    *  labels (D-REL); not_examined_capped is always preserved (X4 — the two censuses are different
    *  universes). */
   semanticMapByObservation?: ReadonlyMap<string, SemanticMapAnyProjection>;
+  /** DD10: render-label root paired with semanticMapByObservation (the author closure always
+   *  supplies it; absent/null = v1 absolute-passthrough). */
+  semanticMapLabelRoot?: string | null;
   /**
    * P1-C2-B′ §2.2 Step E: read-candidate columns the fan-out cap left UNREAD, per observation_id
    * (formatted "colN (name)"). Surfaced as an explicit "not examined (capped)" census so the
@@ -10018,9 +10089,13 @@ export function observationPromptPayload(
           payload.provisional_labels = {
             ...renderSemanticMapProjection(
               semanticMap,
-              SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+              // DD10 per-kind budget — code renders get the code budget, spreadsheet stays 4,000.
+              semanticMapRenderCharBudget(
+                observation.target_material_kind === "code" ? "code" : "spreadsheet",
+              ),
               true,
               observation.target_material_kind === "code" ? "code" : "spreadsheet",
+              options.semanticMapLabelRoot ?? null,
             ),
             ...(hasCapped
               ? {
@@ -11273,6 +11348,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    */
   enableSemanticMapAuthoring?: boolean;
   /**
+   * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
+   * (observation replace + seed payload) — absolute code node_ref.file paths label as
+   * path.relative(projectRoot, file); artifact truth stays absolute. Absent = v1 absolute
+   * passthrough (spreadsheet-only callers unchanged). The PRODUCTION wiring (reconstruct-api)
+   * always passes the run's resolved projectRoot.
+   */
+  projectRoot?: string;
+  /**
    * Reasoning-effort override for the semantic-map SYNTHESIZE author only (replay A/B
    * 2026-07-03: gpt-5.5 low ≈ medium at the same-config retest noise floor; verify stays on
    * the base llmConfig — outside the validated scope). Absent = base config (byte-parity).
@@ -11412,7 +11495,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         ? { provisionalLabelsByObservation: leafReadProvisionalLabels }
         : {}),
       ...(leafReadCappedColumns ? { cappedColumnsByObservation: leafReadCappedColumns } : {}),
-      ...(semanticMapProjection ? { semanticMapByObservation: semanticMapProjection } : {}),
+      ...(semanticMapProjection
+        ? {
+            semanticMapByObservation: semanticMapProjection,
+            semanticMapLabelRoot: args.projectRoot ?? null,
+          }
+        : {}),
     });
 
   return {
@@ -12417,10 +12505,22 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         semanticMapProjection
           ? ids
               .filter((id) => semanticMapProjection!.has(id))
-              .map((id) => ({
-                observation_id: id,
-                ...renderSemanticMapProjection(semanticMapProjection!.get(id)!, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, false),
-              }))
+              .map((id) => {
+                const projection = semanticMapProjection!.get(id)!;
+                // DD10: per-kind budget + label root — kind via the node_ref sniff (the same
+                // discriminator appendSemanticMapSeedNotes uses below).
+                const kind = semanticMapProjectionKind(projection);
+                return {
+                  observation_id: id,
+                  ...renderSemanticMapProjection(
+                    projection,
+                    semanticMapRenderCharBudget(kind),
+                    false,
+                    kind,
+                    args.projectRoot ?? null,
+                  ),
+                };
+              })
           : [];
       const seedObservationIds = ontologySeedObservationIds({
         candidateInventory: input.candidateInventory,
@@ -16124,6 +16224,7 @@ export async function runReconstruct(
     codePreImageBase: semanticMapCodePreImageBase,
     verifyModelIdentity: semanticMapVerifyModelIdentity,
     config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+    labelRoot: projectRoot,
   });
   const semanticMapResumeValidationRef =
     await exists(semanticMapResumeValidationPath(sessionRoot))
@@ -16350,6 +16451,7 @@ export async function runReconstruct(
       codePreImageBase: semanticMapCodePreImageBase,
       verifyModelIdentity: semanticMapVerifyModelIdentity,
       config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+      labelRoot: projectRoot,
     });
     if (
       !exactRecoveryContext ||

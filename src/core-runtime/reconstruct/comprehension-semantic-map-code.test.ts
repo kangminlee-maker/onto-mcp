@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { observeCodeStructure } from "../code-structure-observer.js";
 import {
+  codeReduceNodeKey,
   foldCodeStructureInventory,
   type CodeReduceNode,
 } from "./comprehension-reduce-code.js";
@@ -135,6 +136,48 @@ describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-
         expect(b.disposition === "structural_location_only" || b.disposition === "adversarial_confirmed").toBe(true);
       }
     }
+  });
+
+  it("DD10 admission order (리뷰 gh M-2 선핀 총순서): span-desc → line_start-asc → nodeKey lex; the maxNodes cut keeps the WIDEST regions, and the order provably differs from the v1 lex cut", async () => {
+    const { trace, nodesByKey, meta } = await buildFixtureTree();
+    const map = accumulateCodeSemanticMap(meta, trace, nodesByKey, {
+      synthesize: (input) => ({
+        semantic_summary: `s ${input.node_ref.line_start}-${input.node_ref.line_end}`,
+        boundaries: [],
+      }),
+      verifyUnanchored: () => "adversarial_refuted",
+      preImageBase: PRE_IMAGE_BASE,
+      overContextBudget: 2,
+      seedBound: false,
+    });
+
+    const projection = projectCodeSemanticMapToSeed(map);
+    expect(projection.nodes.length).toBeGreaterThan(2); // cardinality — an order claim over ≤2 nodes is near-vacuous.
+    const spans = projection.nodes.map((n) => n.node_ref);
+    // ① the file-level ROOT (widest span) admits FIRST — the starvation fix's essence.
+    const widest = Math.max(...spans.map((s) => s.line_end - s.line_start));
+    expect(spans[0]!.line_end - spans[0]!.line_start).toBe(widest);
+    // ①②③ pinned total order holds pairwise across the whole projection.
+    for (let i = 1; i < spans.length; i += 1) {
+      const a = spans[i - 1]!;
+      const b = spans[i]!;
+      const cmp =
+        (b.line_end - b.line_start) - (a.line_end - a.line_start) ||
+        a.line_start - b.line_start ||
+        (codeReduceNodeKey(a) < codeReduceNodeKey(b) ? -1 : 1);
+      expect(cmp).toBeLessThan(0);
+    }
+    // Negative control: the v1 lex order over the SAME refs is a DIFFERENT sequence — if this ever
+    // collapses to equal, the fixture can no longer falsify an admissionCompare regression.
+    const lexOrder = [...spans].sort((a, b) => (codeReduceNodeKey(a) < codeReduceNodeKey(b) ? -1 : 1));
+    expect(lexOrder.map((s) => codeReduceNodeKey(s))).not.toEqual(spans.map((s) => codeReduceNodeKey(s)));
+
+    // The maxNodes cut consumes the admission order: survivors are exactly the head of the full
+    // order (root/large regions), never the lex head — with authoritative totals intact.
+    const capped = projectCodeSemanticMapToSeed(map, { maxNodes: 2 });
+    expect(capped.nodes.map((n) => codeReduceNodeKey(n.node_ref)))
+      .toEqual(spans.slice(0, 2).map((s) => codeReduceNodeKey(s)));
+    expect(capped.nodes_total).toBe(projection.nodes_total);
   });
 
   it("builds container-aware envelopes: symbol_path labels, sorted bounded symbol_names with authoritative total, O-5 doc/signature identity lines", async () => {

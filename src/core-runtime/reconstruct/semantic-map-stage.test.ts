@@ -7,8 +7,13 @@ import {
   authoringPromptContractSha256,
   buildSemanticMapBridgeCallbacks,
   CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+  CODE_SEMANTIC_MAP_MAX_NODES,
+  CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
+  CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
   codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  semanticMapRenderCharBudget,
   deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
   observationPromptPayload,
@@ -39,6 +44,7 @@ import type {
 import type { ColumnValueTiles } from "../spreadsheet-structure-observer.js";
 import { observeCodeStructure, type CodeStructureInventory } from "../code-structure-observer.js";
 import type {
+  CodeSemanticSeedProjection,
   CodeSemanticSynthesisInput,
   CodeSemanticSynthesisOutput,
 } from "./comprehension-semantic-map-code.js";
@@ -834,7 +840,7 @@ function projectionWithRefuted(nodes: number, refuted: number): SemanticSeedProj
 
 describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget contract)", () => {
   it("renders bounded nodes with AUTHORITATIVE totals and no truncation under a generous budget", () => {
-    const r = renderSemanticMapProjection(seedProjection(3), 10_000, true) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(3), 10_000, true, "spreadsheet", null) as Record<string, unknown>;
     expect(r.authority).toBe("non_authoritative");
     expect((r.nodes as unknown[]).length).toBe(3);
     expect(r.nodes_total).toBe(3);
@@ -845,13 +851,13 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
   });
 
   it("includeNote=false (seed surface): no inline note — the caveat is hoisted ONCE into the seed system prompt", () => {
-    const r = renderSemanticMapProjection(seedProjection(2), 10_000, false) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(2), 10_000, false, "spreadsheet", null) as Record<string, unknown>;
     expect("note" in r).toBe(false);
     expect((r.nodes as unknown[]).length).toBe(2);
   });
 
   it("budget truncation is a deterministic TAIL drop with an explicit flag — totals stay authoritative", () => {
-    const r = renderSemanticMapProjection(seedProjection(5), 1_000, false) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(5), 1_000, false, "spreadsheet", null) as Record<string, unknown>;
     expect((r.nodes as unknown[]).length).toBeGreaterThanOrEqual(1);
     expect((r.nodes as unknown[]).length).toBeLessThan(5);
     expect(r.nodes_total).toBe(5); // never a silent drop
@@ -862,21 +868,21 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
 
   it("EXACT budget contract (codex W4-002 ≡ onto issue-001/002/004/005): the WHOLE returned envelope's actual prompt serialization never exceeds the budget", () => {
     for (const budget of [500, 900, 1_500, 4_000]) {
-      const r = renderSemanticMapProjection(projectionWithRefuted(8, 5), budget, false);
+      const r = renderSemanticMapProjection(projectionWithRefuted(8, 5), budget, false, "spreadsheet", null);
       expect(JSON.stringify(r, null, 2).length).toBeLessThanOrEqual(budget);
     }
-    const withNote = renderSemanticMapProjection(projectionWithRefuted(8, 5), 1_500, true);
+    const withNote = renderSemanticMapProjection(projectionWithRefuted(8, 5), 1_500, true, "spreadsheet", null);
     expect(JSON.stringify(withNote, null, 2).length).toBeLessThanOrEqual(1_500);
   });
 
   it("W4-004: refuted disclosure ROWS are prompt-visible (design §4 honesty), nodes admit FIRST", () => {
     const p = projectionWithRefuted(2, 3);
-    const full = renderSemanticMapProjection(p, 100_000, false) as Record<string, unknown>;
+    const full = renderSemanticMapProjection(p, 100_000, false, "spreadsheet", null) as Record<string, unknown>;
     expect((full.refuted_disclosure as unknown[]).length).toBe(3);
     expect((full.refuted_disclosure as { row: number }[])[0]?.row).toBe(3);
     // one char under the full render: the deterministic drop is the LAST refuted row, never a node
     const fullLen = JSON.stringify(full, null, 2).length;
-    const r = renderSemanticMapProjection(p, fullLen - 1, false) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(p, fullLen - 1, false, "spreadsheet", null) as Record<string, unknown>;
     expect((r.nodes as unknown[]).length).toBe(2); // nodes-first priority intact
     expect((r.refuted_disclosure as unknown[]).length).toBe(2);
     expect(r.refuted_disclosure_total).toBe(3); // total stays authoritative
@@ -884,9 +890,9 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
   });
 
   it("fail-loud budget (issue-012 NC): NaN/zero budget throws; a budget too small for the empty envelope throws instead of silently overshooting", () => {
-    expect(() => renderSemanticMapProjection(seedProjection(1), Number.NaN, true)).toThrow(/charBudget/);
-    expect(() => renderSemanticMapProjection(seedProjection(1), 0, true)).toThrow(/charBudget/);
-    expect(() => renderSemanticMapProjection(seedProjection(1), 300, true)).toThrow(/cannot fit/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), Number.NaN, true, "spreadsheet", null)).toThrow(/charBudget/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), 0, true, "spreadsheet", null)).toThrow(/charBudget/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), 300, true, "spreadsheet", null)).toThrow(/cannot fit/);
   });
 
   it("CG-1: BOTH notes are catalog-backed; the seed note COMPOSES the shared caveat (editing either rotates the sha)", () => {
@@ -894,6 +900,74 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.observation_semantic_map_note).toBe(SEMANTIC_MAP_PROMPT_NOTE);
     expect(SEMANTIC_MAP_SEED_PROMPT_NOTE.endsWith(SEMANTIC_MAP_PROMPT_NOTE)).toBe(true);
     expect(SEMANTIC_MAP_SEED_PROMPT_NOTE).toContain("userPayload.semantic_map");
+  });
+});
+
+// ── DD10 (§10 v2.1) — per-kind knobs + render label root ──────────────────────────────────────────
+
+function codeSeedProjectionWithFiles(files: string[]): CodeSemanticSeedProjection {
+  return {
+    authority: "non_authoritative",
+    provisional: true,
+    nodes: files.map((file, i) => ({
+      node_ref: { file, line_start: i * 10 + 1, line_end: i * 10 + 9 },
+      semantic_summary: `summary-${i}`,
+      boundaries: [],
+    })),
+    nodes_total: files.length,
+    refuted_disclosure: files.slice(0, 1).map((file) => ({
+      node_ref: { file, line_start: 1, line_end: 9 },
+      line: 4,
+      character_before: "x",
+      character_after: "y",
+    })),
+    refuted_disclosure_total: Math.min(files.length, 1),
+    unanchored_unverified_total: 0,
+  };
+}
+
+describe("DD10 (§10 v2.1): per-kind render knobs + code label root", () => {
+  it("선핀 값 회귀 잠금 (재평정 게이트 1항): the pre-registered v2 numbers are EXACTLY these — a drift here invalidates the pre-registration copy-pin", () => {
+    expect(CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET).toBe(12_000);
+    expect(CODE_SEMANTIC_MAP_MAX_NODES).toBe(512);
+    expect(CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION).toBe("code-projection-render:1");
+    // spreadsheet 불변 쌍 (리뷰 inv M1 — collateral rotation 차단의 반대편 고정점).
+    expect(SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET).toBe(4_000);
+    expect(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG.max_nodes).toBe(60);
+    // the single selector every render surface routes through.
+    expect(semanticMapRenderCharBudget("code")).toBe(CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET);
+    expect(semanticMapRenderCharBudget("spreadsheet")).toBe(SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET);
+  });
+
+  it("labelRoot relativizes ABSOLUTE code file labels on nodes AND refuted rows (라벨만 — node_ref 입력 불변), `../` outside root, passthrough for relative fixtures", () => {
+    const abs = codeSeedProjectionWithFiles(["/repo/src/a.ts", "/elsewhere/b.ts"]);
+    const r = renderSemanticMapProjection(abs, 100_000, false, "code", "/repo") as {
+      nodes: { region: string }[];
+      refuted_disclosure: { region: string }[];
+    };
+    expect(r.nodes.map((n) => n.region)).toEqual(["src/a.ts:1-9", "../elsewhere/b.ts:11-19"]);
+    expect(r.refuted_disclosure[0]!.region).toBe("src/a.ts:1-9");
+    expect(abs.nodes[0]!.node_ref.file).toBe("/repo/src/a.ts"); // artifact 권위 절대경로 유지.
+
+    const nullRoot = renderSemanticMapProjection(abs, 100_000, false, "code", null) as {
+      nodes: { region: string }[];
+    };
+    expect(nullRoot.nodes[0]!.region).toBe("/repo/src/a.ts:1-9"); // v1 passthrough — labelRoot 없는 표면.
+
+    const rel = codeSeedProjectionWithFiles(["src/fixture.ts"]);
+    const relRendered = renderSemanticMapProjection(rel, 100_000, false, "code", "/repo") as {
+      nodes: { region: string }[];
+    };
+    expect(relRendered.nodes[0]!.region).toBe("src/fixture.ts:1-9"); // non-absolute fixture path untouched.
+  });
+
+  it("relative labels reclaim real budget: a budget that starves absolute-labeled nodes admits MORE nodes under labelRoot (기아 해소의 실측 가능 신호)", () => {
+    const files = Array.from({ length: 12 }, (_, i) => `/very/long/absolute/project/root/path/src/deeply/nested/module-${i}.ts`);
+    const projection = codeSeedProjectionWithFiles(files);
+    const budget = 2_000;
+    const absolute = renderSemanticMapProjection(projection, budget, false, "code", null) as { nodes: unknown[] };
+    const relative = renderSemanticMapProjection(projection, budget, false, "code", "/very/long/absolute/project/root/path") as { nodes: unknown[] };
+    expect(relative.nodes.length).toBeGreaterThan(absolute.nodes.length);
   });
 });
 
@@ -1972,7 +2046,7 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
     expect(firstRef.file).toBe(CODE_FILE);
 
     // DD9 render: code rows carry file:line vocabulary + the CODE note.
-    const rendered = renderSemanticMapProjection(codeProjection!, 4000, true, "code") as {
+    const rendered = renderSemanticMapProjection(codeProjection!, 4000, true, "code", null) as {
       note?: string;
       nodes: { region: string; boundaries: Record<string, unknown>[] }[];
     };

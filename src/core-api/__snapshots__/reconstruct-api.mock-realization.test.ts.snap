@@ -6,11 +6,6 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
     "authority": "non_authoritative",
     "nodes": [
       {
-        "boundaries": [],
-        "region": "<projectRoot>/src/alpha-service.ts:1-1",
-        "summary": "mock <projectRoot>/src/alpha-service.ts:1-1 kids=0",
-      },
-      {
         "boundaries": [
           {
             "after": "seam-next",
@@ -28,11 +23,35 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
             "after": "seam-next",
             "before": "seam-prev",
             "disposition": "structural_location_only",
-            "line": 2,
+            "line": 8,
+          },
+          {
+            "after": "next",
+            "before": "prev",
+            "disposition": "adversarial_confirmed",
+            "line": 6,
           },
         ],
-        "region": "<projectRoot>/src/alpha-service.ts:1-5",
-        "summary": "mock <projectRoot>/src/alpha-service.ts:1-5 kids=2",
+        "region": "<projectRoot>/src/alpha-service.ts:6-21",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:6-21 kids=2",
+      },
+      {
+        "boundaries": [
+          {
+            "after": "seam-next",
+            "before": "seam-prev",
+            "disposition": "structural_location_only",
+            "line": 9,
+          },
+          {
+            "after": "next",
+            "before": "prev",
+            "disposition": "adversarial_confirmed",
+            "line": 8,
+          },
+        ],
+        "region": "<projectRoot>/src/alpha-service.ts:8-21",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:8-21 kids=2",
       },
       {
         "boundaries": [
@@ -58,17 +77,11 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
             "after": "seam-next",
             "before": "seam-prev",
             "disposition": "structural_location_only",
-            "line": 3,
-          },
-          {
-            "after": "next",
-            "before": "prev",
-            "disposition": "adversarial_confirmed",
             "line": 2,
           },
         ],
-        "region": "<projectRoot>/src/alpha-service.ts:2-3",
-        "summary": "mock <projectRoot>/src/alpha-service.ts:2-3 kids=0",
+        "region": "<projectRoot>/src/alpha-service.ts:1-5",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:1-5 kids=2",
       },
       {
         "boundaries": [
@@ -94,6 +107,24 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
             "after": "seam-next",
             "before": "seam-prev",
             "disposition": "structural_location_only",
+            "line": 3,
+          },
+          {
+            "after": "next",
+            "before": "prev",
+            "disposition": "adversarial_confirmed",
+            "line": 2,
+          },
+        ],
+        "region": "<projectRoot>/src/alpha-service.ts:2-3",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:2-3 kids=0",
+      },
+      {
+        "boundaries": [
+          {
+            "after": "seam-next",
+            "before": "seam-prev",
+            "disposition": "structural_location_only",
             "line": 5,
           },
           {
@@ -109,24 +140,6 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
       {
         "boundaries": [
           {
-            "after": "seam-next",
-            "before": "seam-prev",
-            "disposition": "structural_location_only",
-            "line": 8,
-          },
-          {
-            "after": "next",
-            "before": "prev",
-            "disposition": "adversarial_confirmed",
-            "line": 6,
-          },
-        ],
-        "region": "<projectRoot>/src/alpha-service.ts:6-21",
-        "summary": "mock <projectRoot>/src/alpha-service.ts:6-21 kids=2",
-      },
-      {
-        "boundaries": [
-          {
             "after": "next",
             "before": "prev",
             "disposition": "adversarial_confirmed",
@@ -136,6 +149,29 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
         "region": "<projectRoot>/src/alpha-service.ts:6-7",
         "summary": "mock <projectRoot>/src/alpha-service.ts:6-7 kids=0",
       },
+      {
+        "boundaries": [
+          {
+            "after": "seam-next",
+            "before": "seam-prev",
+            "disposition": "structural_location_only",
+            "line": 9,
+          },
+          {
+            "after": "next",
+            "before": "prev",
+            "disposition": "adversarial_confirmed",
+            "line": 8,
+          },
+        ],
+        "region": "<projectRoot>/src/alpha-service.ts:8-9",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:8-9 kids=0",
+      },
+      {
+        "boundaries": [],
+        "region": "<projectRoot>/src/alpha-service.ts:1-1",
+        "summary": "mock <projectRoot>/src/alpha-service.ts:1-1 kids=0",
+      },
     ],
     "nodes_total": 11,
     "provisional": true,
@@ -144,11 +180,23 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
         "after": "next",
         "before": "prev",
         "line": 1,
+        "region": "<projectRoot>/src/alpha-service.ts:1-21",
+      },
+      {
+        "after": "next",
+        "before": "prev",
+        "line": 1,
+        "region": "<projectRoot>/src/alpha-service.ts:1-5",
+      },
+      {
+        "after": "next",
+        "before": "prev",
+        "line": 1,
         "region": "<projectRoot>/src/alpha-service.ts:1-1",
       },
     ],
     "refuted_disclosure_total": 3,
-    "render_truncated": true,
+    "render_truncated": false,
     "unanchored_unverified_total": 3,
   },
   {
@@ -172,11 +220,17 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
             "after": "seam-next",
             "before": "seam-prev",
             "disposition": "structural_location_only",
-            "line": 2,
+            "line": 10,
+          },
+          {
+            "after": "next",
+            "before": "prev",
+            "disposition": "adversarial_confirmed",
+            "line": 8,
           },
         ],
-        "region": "<projectRoot>/src/beta-tools.ts:1-2",
-        "summary": "mock <projectRoot>/src/beta-tools.ts:1-2 kids=0",
+        "region": "<projectRoot>/src/beta-tools.ts:8-17",
+        "summary": "mock <projectRoot>/src/beta-tools.ts:8-17 kids=0",
       },
       {
         "boundaries": [
@@ -208,17 +262,11 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
             "after": "seam-next",
             "before": "seam-prev",
             "disposition": "structural_location_only",
-            "line": 10,
-          },
-          {
-            "after": "next",
-            "before": "prev",
-            "disposition": "adversarial_confirmed",
-            "line": 8,
+            "line": 2,
           },
         ],
-        "region": "<projectRoot>/src/beta-tools.ts:8-17",
-        "summary": "mock <projectRoot>/src/beta-tools.ts:8-17 kids=0",
+        "region": "<projectRoot>/src/beta-tools.ts:1-2",
+        "summary": "mock <projectRoot>/src/beta-tools.ts:1-2 kids=0",
       },
     ],
     "nodes_total": 5,
@@ -234,12 +282,6 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
         "after": "next",
         "before": "prev",
         "line": 1,
-        "region": "<projectRoot>/src/beta-tools.ts:1-2",
-      },
-      {
-        "after": "next",
-        "before": "prev",
-        "line": 1,
         "region": "<projectRoot>/src/beta-tools.ts:1-7",
       },
       {
@@ -247,6 +289,12 @@ exports[`reconstruct api mock E2E over a 2-file code fixture (§6-4) > threads t
         "before": "prev",
         "line": 3,
         "region": "<projectRoot>/src/beta-tools.ts:3-7",
+      },
+      {
+        "after": "next",
+        "before": "prev",
+        "line": 1,
+        "region": "<projectRoot>/src/beta-tools.ts:1-2",
       },
     ],
     "refuted_disclosure_total": 4,
