@@ -1,0 +1,33 @@
+schema_version: "1"
+observations_total: 1
+observations_map_present: 1
+observations_map_absent: 0
+synthesize_calls_total: 109
+verify_calls_total: 2
+max_synthesize_calls: 2400
+max_verify_calls: 1000
+author_id: direct-call-reconstruct-directive-author
+synthesize_model_identity: synth:codex/gpt-5.6-luna@adapter=codex_cli@synthesize_effort=low
+verify_model_identity: codex/gpt-5.6-sol
+by_observation:
+  - observation_id: obs_79741899d1b88db8
+    target_material_kind: code
+    map_present: true
+    skip_reason: null
+    fingerprint: da007d7ff126db83b7553a8e35c171a4120d173d2cc42ca3fb1d464362fff534
+    columns:
+      - file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+        status: produced
+        reason: null
+        produced_nodes: 109
+        frontier_accumulating: 54
+        frontier_frontier: 55
+        frontier_subsumed: 94
+        anchored: 115
+        unanchored: 2
+        adversarial_confirmed: 1
+        adversarial_refuted: 1
+        synthesize_calls: 109
+        verify_calls: 2
+breaker_retry_synthesize_calls: 0
+breaker_retry_verify_calls: 0

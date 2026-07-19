@@ -470,3 +470,104 @@ severity floor medium+, 실코드 앵커 필수. **15건 접수 → 전건 실�
 DD1 region 리터럴 바이트 동일 건전, G2 스캐너 비접촉, 관찰 semantic-key 스캔 비충돌,
 observation_id/delta 안정, G8 비접촉, census additive 가능(단 partition 문구·skip union·resume
 분류기 확장 필요 — DD7 반영), mock boundary 적합.
+
+## 10. G-SEM live N=1 FAIL 후 재설계 (addendum 2026-07-19 · owner 결정 O-6)
+
+**결과 핀**: 7b live N=1 (`code-structure-observer.ts`) — 스택 기계 동작 완벽(synthesize 109 =
+결정론 프로브 정확 일치·verify 2·map_present 1/1)이나 **G-SEM 블라인드 0/5 FAIL** →
+프로토콜대로 재설계 스톱. disclosure = `benchmark/20260719-semantic-map-gsem-n1/`
+(사전 등록·judge 원문·양 arm·진단 포함). 진단 2층위: ①렌더 기아(seed-가시 렌더가 109노드 중
+4 admit — region 절대경로의 budget 잠식 + lex-키 admission 순서), ②의미 상한(identifier-only
+봉투가 outline 재서술 요약을 유도 + O-5 보강 대조군이 헤더 주석 전문 노출).
+
+**O-6 결정 (owner 2026-07-19, 원문 지시)**: "소스코드 유출을 막으려고 LLM에게 함수 본문을
+안 보여주고 이름·주석 첫 줄·시그니처만 주는 방식은 **폐기**. 소스코드 보안이 필요하다면
+보안에 맞는 **모델을 사용**하는 게 맞다." — §1 G-SEM의 "봉투 확장 재제안 금지"는 작업자
+재제안을 금지한 것이며, 본 결정은 owner 권한의 설계 개정으로 이를 대체한다(DD6의
+source-safety 전제 폐기). 보안 경계는 봉투가 아니라 **seat 모델 선택**(기존
+`actors.semantic_map_synthesize` 메커니즘 + repo별 옵트인)이 소유한다.
+
+**보안 결과 명시 (O-6 수반 사실)**: v2부터 대상 코드 파일의 **frontier 영역 소스 본문이
+설정된 seat 모델로 전송**된다(현 repo 설정 기준 gpt-5.6-luna@low / gpt-5.6-sol@medium, OAuth
+경로). 옵트인(`semantic_map_code`)은 repo 단위이므로 repo마다 소유자가 전송 여부·모델을
+결정한다. 확인된 디스크 표면(설계 리뷰 inv 렌즈 실사): 봉투 자체는 세션 아티팩트에 미기록
+(sidecar/census/dispatch-incomplete 전부 봉투 필드 없음); 프로브 dump는 gitignored. 단 (a)
+**seat CLI transcript 저장소**(codex/claude worker 홈)가 프롬프트 전문을 repo 밖에 보존하고,
+(b) v2 요약이 소스를 축어 인용할 수 있어 sidecar→disclosure 커밋에 소스 조각이 실릴 수 있다
+— **disclosure 스캔은 봉투 키가 아니라 요약 내용까지 커버**한다.
+
+> **개정 v2.1 (2026-07-19)**: 아래 DD6′/DD10/재평정은 독립 3-렌즈 적대 설계 리뷰
+> (gate-honesty·invariants·contract/wiring)의 **MATERIAL 5건** 반영 개정본이다. 핵심 정정:
+> ①기아의 실제 사이트는 렌더가 아니라 **projection 코어**(lex 정렬
+> comprehension-semantic-map-core.ts:844 + max_nodes 슬라이스 :884 — 109→60 lex-컷이 렌더
+> 이전에 발생, Q3/Q5 탐침 영역 탈락), ②회전 노브(X9 projection 계약 버전·렌더 budget)는
+> spreadsheet과 **공유**라 bump 시 spreadsheet 키 collateral 회전 — code 전용 분리 필수,
+> ③`source_lines` 데이터 소스가 v2.0에 부재, ④G-SS-e는 렌더를 잠그지 않음(렌더 골든 부재),
+> ⑤재평정이 조작 점검 없이는 반증 구조 불성립(operator가 judge 응답 열람 상태).
+
+### DD6′ — 봉투 v2 (frontier 본문 포함) [개정]
+
+- **frontier 봉투**(`child_summaries === []` ⇔ frontier — leaf 아님: frontier는 최대
+  `over_context_budget`개 leaf를 덮고 트리가 작으면 루트도 frontier)에 `source_lines` 추가.
+  **merge 봉투 불변**: 자식 요약 재귀가 컨텍스트 폭발을 흡수(본문은 frontier에서만 읽는다).
+- **데이터 소스·핀 계약 (리뷰 ct M-1)**: 소스는 디스크 재읽기가 아니라 **관찰 시점
+  whole-capture `structural_data.content_excerpt`를 span 줄범위로 슬라이스** — resume-안정
+  (관찰 시점 동결)·DD4 "stage-시 재파싱 금지" 유지. 가드(fail-closed):
+  `inventory.content_sha256 === structural_data.content_sha256` **AND**
+  `excerpt_truncated === false` — 불일치 시 해당 관찰은 결정론 skip(census 사유 기록).
+  전제 정비: whole-capture 확장자 집합을 observer 언어 맵과 단일화(`.mts/.cts/.cjs` 갭 해소).
+- **per-envelope 소스 캡 (리뷰 ct m-2)**: X7은 호출 수만 상한 — 입력 크기 가드는 이 캡이
+  유일. **12,000자** head-절단 + 명시 절단 플래그 + authoritative 총 줄수(최대 leaf 실측
+  2,963자의 4배 여유; minified 단일 거대 span 방어).
+- **BOUNDARIES 절 유지 (리뷰 ct m-3 핀)**: seam-대응 제약은 v2에서도 유지 — 소스는 주로
+  summary 품질을 개선한다(진단 ② 의도). 완화 시 비-seam boundary가 소스 못 보는
+  refute-default verifier로 흘러 반박 인플레 예측(live 실측: anchored 115/117이라 현
+  비대칭은 무해). verify 봉투 v1 유지.
+- **회전 레버 (리뷰 ct m-1)**: 프롬프트 edit → code 계약 sha 회전(기존) **+ 봉투 SHAPE
+  레버로 `reduce_schema_tool_version` "semantic-map-code:v1"→"v2" bump**(code preImage 한정
+  1줄). 프롬프트 서두 앵커("You are reading ONE code file region") 유지 → mock dispatcher
+  키·E2E 스냅샷 무회전(리뷰 확인: mock이 읽는 필드는 DD6′ 무접촉).
+
+### DD10 — projection/렌더 v2 (진단 ① 해소) [개정 — 사이트 정정]
+
+- **admission 순서·컷의 사이트 = projection 코어** (3-렌즈 수렴): `projectSemanticMapToSeedCore`
+  정렬(:844)과 `maxNodes` 슬라이스(:884)에 **per-adapter admission comparator** 도입.
+  spreadsheet 기본값 = 현 `cmpStr(nodeKey)` — G-SS-c projection 골든 + sidecar 바이트가 잠금.
+  **code comparator 총순서(지금 핀, 잔여 자유도 0 — 리뷰 gh M-2)**:
+  ① span 크기 내림차순(`line_end - line_start`), ② `line_start` 오름차순, ③ nodeKey lex
+  (최종 동률). 루트/대영역 우선 — 파일-수준 이해가 먼저 admit된다.
+- **code 전용 수치 (지금 핀 — 리뷰 gh M-1·inv M1)**: code `max_nodes` = **512**(1a 단일
+  파일 상한 여유; spreadsheet 60 불변), code 렌더 budget = **12,000자**(spreadsheet 4,000
+  불변 — 공유 상수 대신 **per-kind 상수 신설**). 상대경로 라벨(실측 회수 ~81자/노드)과
+  결합 시 40~60노드 admit 예상.
+- **회전 격리 (리뷰 inv M1 — ct-F2 전례)**: 공유 `SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION`
+  bump **금지**. 신설 **code 전용 projection 계약 버전**(+ per-kind budget 값)을
+  `semanticMapCodeObservationFingerprint` pre-image에만 fold — spreadsheet 키 무회전·code
+  구 sidecar resume는 fingerprint 불일치로 fail-closed(silent-stale 차단).
+- **렌더 골든 신설 (리뷰 inv M2)**: G-SS-e는 봉투 바이트만 잠근다 — 리팩터 **전에**
+  spreadsheet fixture projection의 `renderSemanticMapProjection` 출력 바이트를 골든으로
+  채집(G-SS-f). 렌더 공유부 리팩터의 spreadsheet 무접촉을 이것이 잠근다.
+- **상대경로 라벨**: 렌더 표면 한정(artifact 권위 절대경로 유지). 렌더러에 root 파라미터
+  스레딩 — **resume 검증 사이트(`projectionIsRenderable`) 포함** 전 호출 사이트(리뷰 inv
+  MN2). 라벨 round-trip/키잉 소비자 없음(리뷰 확인), root 밖 파일은 `../` 라벨 허용.
+
+### 재평정 게이트 [개정 — 유효성 전제 + 조작 점검]
+
+1. **선핀 규율 (리뷰 gh M-2)**: 위 comparator 총순서·budget·max_nodes·소스 캡 값은 이
+   개정에서 확정 — **v2 렌더 생성·열람 전에** 신규 사전 등록 커밋에 그대로 복사·핀.
+   구현은 `code-structure-observer.ts`를 **수정 금지**(G-SEM 대상 파일 — content sha
+   `8f055465…` 재핀 + run 시 단언, 리뷰 gh m-3).
+2. **유효성 전제조건 (리뷰 gh M-1 — FAIL과 시험 무효의 분리)**: v2 처치군 렌더가
+   **admit ≥30노드 AND admit 영역 라인 커버리지 ≥80%** 미달이면 결과는 FAIL이 아니라
+   **시험 무효**(config 정정 후 재실행) — 기아 잔존 상태의 FAIL을 "의미 상한 증거"로
+   오독하는 것을 차단.
+3. **무-spend ablation 선행 (리뷰 gh m-1)**: v1 run의 runtime-events에 synthesize 109응답
+   전문 잔존(실측 확인) — **DD10만 적용한 재렌더**(무캡 projection 재구성 + 새 comparator/
+   budget/상대경로)를 블라인드 재평정에 먼저 태운다(synthesize 비용 0, judge만). 인과
+   분리: DD10-only PASS면 렌더 계층이 지배 원인이었다는 판독(O-6은 원칙 결정이라 불변).
+4. **본시험**: 신규 사전 등록(같은 대상·같은 5문 = 비교가능성; **+ 문맥-무 세션이 작성한
+   held-out 3문 동봉** — 2차 강건성 신호, 1차 기준은 기존 5문 유지) → live 재실행(owner
+   spend) → 블라인드 재평정. PASS 기준 불변(기존 5문 중 처치군 우위 ≥3).
+5. **FAIL 시 주장 범위 (리뷰 gh m-2)**: 유효성 전제 충족 상태의 FAIL은 "저자-주석-풍부
+   파일 regime(N=1)에서 본문 봉투로도 대조군 미상회" — 보편적 의미 상한의 확정 증거가
+   아니라 스톱 유지·확장 판단의 입력이다.

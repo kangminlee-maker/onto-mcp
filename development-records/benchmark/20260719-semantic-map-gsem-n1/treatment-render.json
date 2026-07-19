@@ -1,0 +1,53 @@
+# treatment — recursive seed projection (observation: obs_79741899d1b88db8)
+{
+  "authority": "non_authoritative",
+  "provisional": true,
+  "nodes": [
+    {
+      "region": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-17",
+      "summary": "The region contains import declarations followed by a comment block; no named declarations, identifiers, signature, or explicit purpose are provided.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "Import declarations",
+          "after": "Comment block",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-2",
+      "summary": "The region contains import declarations only; no named declarations, purpose comment, signature, or structural seam is provided.",
+      "boundaries": []
+    },
+    {
+      "region": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-361",
+      "summary": "이 영역은 code-structure-observer.ts의 코드 구조 관찰을 위한 선언들을 포함합니다. 코드 심볼 span과 계층·인벤토리·관찰 결과를 표현하는 타입 및 관련 구조가 정의되고, 언어 로딩, 종류 매핑, 심볼명·문서 첫 줄 추출, 트리 추출과 span 키·extractor 소스 다이제스트 관련 선언이 이어집니다. 구체적 구현 동작은 제공되지 않았습니다.",
+      "boundaries": [
+        {
+          "line": 48,
+          "before": "코드 구조 메타데이터와 심볼 span을 표현하는 타입 선언 영역",
+          "after": "코드 계층·인벤토리·관찰 결과 타입과 구조 관찰 관련 선언 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-4",
+      "summary": "The region contains import declarations only; the provided structure does not identify the imported targets or their purpose.",
+      "boundaries": []
+    }
+  ],
+  "nodes_total": 109,
+  "refuted_disclosure": [
+    {
+      "region": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:36-47",
+      "line": 45,
+      "before": "The interface's member-property declaration region continues.",
+      "after": "A subsequent member-property region within CodeSymbolSpan begins."
+    }
+  ],
+  "refuted_disclosure_total": 1,
+  "unanchored_unverified_total": 1,
+  "render_truncated": true
+}

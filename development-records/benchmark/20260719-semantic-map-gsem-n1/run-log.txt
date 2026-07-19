@@ -1,0 +1,399 @@
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=669 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=669 output_tokens~=27
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=807 output_tokens~=41
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=698 output_tokens~=39
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=18
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=807 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=831 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=35
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=20
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=797 output_tokens~=23
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=39
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=34
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=815 output_tokens~=44
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=809 output_tokens~=25
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=843 output_tokens~=69
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=32
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=32
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=805 output_tokens~=32
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=29
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=51
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=821 output_tokens~=52
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=825 output_tokens~=48
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=701 output_tokens~=62
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=848 output_tokens~=59
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=701 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=708 output_tokens~=41
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=720 output_tokens~=65
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=715 output_tokens~=48
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=884 output_tokens~=100
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=714 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=689 output_tokens~=55
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=920 output_tokens~=154
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1018 output_tokens~=121
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=692 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=685 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=883 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1087 output_tokens~=124
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=396 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1096 output_tokens~=99
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1124 output_tokens~=137
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1165 output_tokens~=235
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=399 output_tokens~=235
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1211 output_tokens~=224
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1233 output_tokens~=128
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=400 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=718 output_tokens~=96
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=687 output_tokens~=34
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=917 output_tokens~=120
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=691 output_tokens~=36
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=686 output_tokens~=30
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=857 output_tokens~=101
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=969 output_tokens~=153
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=725 output_tokens~=77
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=691 output_tokens~=38
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=877 output_tokens~=86
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=696 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=717 output_tokens~=95
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=898 output_tokens~=46
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=949 output_tokens~=122
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1074 output_tokens~=171
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=711 output_tokens~=46
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1144 output_tokens~=101
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=670 output_tokens~=45
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=38
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=854 output_tokens~=87
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1197 output_tokens~=160
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=31
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=21
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=793 output_tokens~=33
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=701 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=671 output_tokens~=21
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=840 output_tokens~=52
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=862 output_tokens~=73
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1253 output_tokens~=111
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=683 output_tokens~=63
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=701 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=899 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=681 output_tokens~=65
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=693 output_tokens~=54
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=718 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=687 output_tokens~=30
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=848 output_tokens~=44
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=690 output_tokens~=31
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=689 output_tokens~=33
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=834 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=878 output_tokens~=72
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=684 output_tokens~=44
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=947 output_tokens~=90
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=978 output_tokens~=125
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=997 output_tokens~=119
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1080 output_tokens~=204
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=709 output_tokens~=85
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=698 output_tokens~=57
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=719 output_tokens~=98
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=689 output_tokens~=25
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=890 output_tokens~=91
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=685 output_tokens~=48
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=935 output_tokens~=135
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=963 output_tokens~=116
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1028 output_tokens~=241
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=681 output_tokens~=36
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=711 output_tokens~=62
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=888 output_tokens~=98
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1117 output_tokens~=201
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1360 output_tokens~=98
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1753 output_tokens~=174
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2119 output_tokens~=93
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=714 output_tokens~=51
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=725 output_tokens~=62
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=909 output_tokens~=98
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2115 output_tokens~=247
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=19206 output_tokens~=410
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=22484 output_tokens~=813
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=21584 output_tokens~=1256
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=21681 output_tokens~=901
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=21714 output_tokens~=1000
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=21598 output_tokens~=1193
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=21635 output_tokens~=770
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=21750 output_tokens~=1219
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=21658 output_tokens~=630
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=22454 output_tokens~=1393
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=11891 output_tokens~=1408
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=2568 output_tokens~=64
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=26944 output_tokens~=3853
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=28103 output_tokens~=2547
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=27088 output_tokens~=2359
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=23191 output_tokens~=26906
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=24059 output_tokens~=3691
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=6991 output_tokens~=754
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=30751 output_tokens~=5094
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=32996 output_tokens~=4844
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3853 output_tokens~=448
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3758 output_tokens~=444
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=4387 output_tokens~=386
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=4177 output_tokens~=311
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=4699 output_tokens~=371
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=4133 output_tokens~=305
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3513 output_tokens~=375
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=7237 output_tokens~=816
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=2727 output_tokens~=835
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3174 output_tokens~=325
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=18522 output_tokens~=6
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=17437 output_tokens~=1511
+status: completed
+elapsed_s: 2163
+artifactRefs: {
+  "reconstruct_run_control": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-run-control.yaml",
+  "reconstruct_run_control_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-run-control-validation.yaml",
+  "reconstruct_run_control_pre_publication_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-run-control.pre-publication-validation.yaml",
+  "reconstruct_run_bootstrap_diagnostic": null,
+  "registry_verification_evidence": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/registry-verification-evidence.yaml",
+  "registry_verification_evidence_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/registry-verification-evidence-validation.yaml",
+  "target_material_profile": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/target-material-profile.yaml",
+  "target_material_profile_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/target-material-profile-validation.yaml",
+  "source_inventory": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-inventory.yaml",
+  "initial_source_frontier": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/initial-source-frontier.yaml",
+  "source_observations": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-observations.yaml",
+  "seed_stage_prompt_source_observations": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/seed-stage-prompt-source-observations.yaml",
+  "source_observation_delta": null,
+  "source_observation_delta_validation": null,
+  "source_observation_reentry_validation": null,
+  "source_observation_lineage_index": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-observation-lineage-index.yaml",
+  "source_observation_lineage_index_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-observation-lineage-index-validation.yaml",
+  "leaf_read_census": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/comprehension/leaf-read-census.yaml",
+  "dispatch_incomplete": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/dispatch-incomplete.yaml",
+  "semantic_map_census": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/comprehension/semantic-map-census.yaml",
+  "semantic_map_sidecar": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/comprehension/semantic-map.yaml",
+  "semantic_map_resume_validation": null,
+  "source_safety_ledger": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-safety-ledger.yaml",
+  "source_safety_ledger_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-safety-ledger-validation.yaml",
+  "source_scout_pack": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-scout-pack.yaml",
+  "source_scout_pack_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-scout-pack-validation.yaml",
+  "source_scout_pack_pre_seed": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-scout-pack.pre-seed.yaml",
+  "source_scout_pack_validation_pre_seed": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-scout-pack-validation.pre-seed.yaml",
+  "source_scout_pack_post_maturation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-scout-pack.post-maturation.yaml",
+  "source_scout_pack_validation_post_maturation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-scout-pack-validation.post-maturation.yaml",
+  "post_maturation_gate_projection_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/post-maturation-gate-projection-validation.yaml",
+  "source_observation_directive": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/rounds/round-1/source-observation-directive.yaml",
+  "source_observation_directive_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/rounds/round-1/source-observation-directive-validation.yaml",
+  "lens_judgment_index": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/rounds/round-1/lens-judgment-index.yaml",
+  "exploration_synthesis": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/rounds/round-1/exploration-synthesis.yaml",
+  "source_frontier": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/rounds/round-1/source-frontier.yaml",
+  "source_frontier_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/rounds/round-1/source-frontier-validation.yaml",
+  "source_purpose_candidates": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-purpose-candidates.yaml",
+  "source_purpose_candidates_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/source-purpose-candidates-validation.yaml",
+  "purpose_confirmation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/purpose-confirmation.yaml",
+  "purpose_confirmation_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/purpose-confirmation-validation.yaml",
+  "material_admission_ledger": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/material-admission-ledger.yaml",
+  "material_admission_ledger_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/material-admission-ledger-validation.yaml",
+  "candidate_inventory": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/candidate-inventory.yaml",
+  "candidate_disposition": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/candidate-disposition.yaml",
+  "candidate_disposition_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/candidate-disposition-validation.yaml",
+  "seed_authoring_readiness": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/seed-authoring-readiness.yaml",
+  "seed_authoring_readiness_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/seed-authoring-readiness-validation.yaml",
+  "ontology_seed": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/ontology-seed.yaml",
+  "ontology_seed_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/ontology-seed-validation.yaml",
+  "claim_realization_map": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/claim-realization-map.yaml",
+  "claim_realization_map_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/claim-realization-map-validation.yaml",
+  "seed_confirmation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/seed-confirmation.yaml",
+  "seed_confirmation_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/seed-confirmation-validation.yaml",
+  "competency_questions": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/competency-questions.yaml",
+  "competency_questions_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/competency-questions-validation.yaml",
+  "competency_question_assessment": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/competency-question-assessment.yaml",
+  "competency_question_assessment_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/competency-question-assessment-validation.yaml",
+  "failure_classification": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/failure-classification.yaml",
+  "failure_classification_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/failure-classification-validation.yaml",
+  "revision_proposal": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/revision-proposal.yaml",
+  "revision_proposal_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/revision-proposal-validation.yaml",
+  "reconstruct_metrics": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-metrics.yaml",
+  "stop_decision": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/stop-decision.yaml",
+  "pre_handoff_run_manifest_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-run-manifest.pre-handoff-validation.yaml",
+  "post_publication_run_manifest_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-run-manifest.post-publication-validation.yaml",
+  "handoff_decision_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/handoff-decision-validation.yaml",
+  "maturation_baseline": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-baseline.yaml",
+  "maturation_baseline_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-baseline-validation.yaml",
+  "baseline_actionability_matrix": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/baseline-actionability-matrix.yaml",
+  "baseline_actionability_matrix_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/baseline-actionability-matrix-validation.yaml",
+  "actionability_matrix": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/actionability-matrix.yaml",
+  "actionability_matrix_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/actionability-matrix-validation.yaml",
+  "maturation_question_frontier": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-question-frontier.yaml",
+  "maturation_question_frontier_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-question-frontier-validation.yaml",
+  "maturation_closure_frontier": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-closure-frontier.yaml",
+  "maturation_closure_frontier_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-closure-frontier-validation.yaml",
+  "maturation_authority_response": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-authority-response.yaml",
+  "maturation_authority_response_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-authority-response-validation.yaml",
+  "answer_support_ledger": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/answer-support-ledger.yaml",
+  "answer_support_ledger_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/answer-support-ledger-validation.yaml",
+  "answer_support_judgment": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/answer-support-judgment.yaml",
+  "answer_support_judgment_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/answer-support-judgment-validation.yaml",
+  "maturation_answer_claims": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-answer-claims.yaml",
+  "maturation_answer_claims_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-answer-claims-validation.yaml",
+  "ontology_expansion": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/ontology-expansion.yaml",
+  "ontology_expansion_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/ontology-expansion-validation.yaml",
+  "maturation_source_delta": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-source-delta.yaml",
+  "maturation_source_delta_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-source-delta-validation.yaml",
+  "maturation_convergence_ledger": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-convergence-ledger.yaml",
+  "maturation_convergence_ledger_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-convergence-ledger-validation.yaml",
+  "maturation_continuation_decision": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-continuation-decision.yaml",
+  "maturation_continuation_decision_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/maturation-continuation-decision-validation.yaml",
+  "query_proofs": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/query-proofs.yaml",
+  "query_proofs_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/query-proofs-validation.yaml",
+  "visualization_proofs": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/visualization-proofs.yaml",
+  "visualization_proofs_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/visualization-proofs-validation.yaml",
+  "graph_exploration_proofs": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/graph-exploration-proofs.yaml",
+  "graph_exploration_proofs_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/graph-exploration-proofs-validation.yaml",
+  "actionable_ontology": null,
+  "actionable_ontology_validation": null,
+  "claim_projection": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/claim-projection.yaml",
+  "claim_projection_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/claim-projection-validation.yaml",
+  "final_output": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/final-output.md",
+  "final_output_provenance_validation": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/final-output-provenance-validation.yaml",
+  "reconstruct_run_manifest": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-run-manifest.yaml",
+  "reconstruct_record": "/Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/.onto/reconstruct/gsem-n1-20260719/reconstruct-record.yaml"
+}
