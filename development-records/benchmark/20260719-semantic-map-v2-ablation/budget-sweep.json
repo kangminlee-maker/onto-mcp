@@ -1,0 +1,58 @@
+[
+  {
+    "budget": 8000,
+    "admitted": 7,
+    "truncated": true,
+    "coverage": 1,
+    "admit_ge_30": false
+  },
+  {
+    "budget": 12000,
+    "admitted": 12,
+    "truncated": true,
+    "coverage": 1,
+    "admit_ge_30": false
+  },
+  {
+    "budget": 16000,
+    "admitted": 19,
+    "truncated": true,
+    "coverage": 1,
+    "admit_ge_30": false
+  },
+  {
+    "budget": 24000,
+    "admitted": 30,
+    "truncated": true,
+    "coverage": 1,
+    "admit_ge_30": true
+  },
+  {
+    "budget": 32000,
+    "admitted": 46,
+    "truncated": true,
+    "coverage": 1,
+    "admit_ge_30": true
+  },
+  {
+    "budget": 40000,
+    "admitted": 65,
+    "truncated": true,
+    "coverage": 1,
+    "admit_ge_30": true
+  },
+  {
+    "budget": 48000,
+    "admitted": 89,
+    "truncated": true,
+    "coverage": 1,
+    "admit_ge_30": true
+  },
+  {
+    "budget": 64000,
+    "admitted": 109,
+    "truncated": false,
+    "coverage": 1,
+    "admit_ge_30": true
+  }
+]

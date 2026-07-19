@@ -1,0 +1,994 @@
+{
+  "authority": "non_authoritative",
+  "provisional": true,
+  "nodes": [
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-414",
+      "summary": "code-structure-observer.ts의 코드 구조 관찰 관련 선언을 포함합니다. 코드 심볼 span, 계층, 인벤토리, 관찰 결과를 표현하는 타입과 구조가 정의되며, 언어 로딩·종류 매핑·심볼명 및 문서 첫 줄 추출·트리 추출·span 키와 extractor 소스 다이제스트 관련 선언이 이어집니다. 후반에는 확장자별 언어 판별 함수와 단일 코드 파일의 구조를 관찰하는 exported async 함수가 선언됩니다.",
+      "boundaries": [
+        {
+          "line": 29,
+          "before": "import 선언과 초기 모듈 구조",
+          "after": "상수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "상수 선언",
+          "after": "타입 별칭 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "타입 별칭 선언",
+          "after": "선언 헤더와 멤버 속성",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 69,
+          "before": "구조 관련 타입 선언",
+          "after": "주석 블록과 상수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 138,
+          "before": "상수 선언",
+          "after": "함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 163,
+          "before": "상수 선언",
+          "after": "함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 219,
+          "before": "선언 종료",
+          "after": "주석 블록과 함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 273,
+          "before": "선언 종료",
+          "after": "함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 353,
+          "before": "함수 선언",
+          "after": "주석 블록과 함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 370,
+          "before": "주석 블록",
+          "after": "함수 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-361",
+      "summary": "이 영역은 code-structure-observer.ts의 코드 구조 관찰을 위한 선언들을 포함합니다. 코드 심볼 span과 계층·인벤토리·관찰 결과를 표현하는 타입 및 관련 구조가 정의되고, 언어 로딩, 종류 매핑, 심볼명·문서 첫 줄 추출, 트리 추출과 span 키·extractor 소스 다이제스트 관련 선언이 이어집니다. 구체적 구현 동작은 제공되지 않았습니다.",
+      "boundaries": [
+        {
+          "line": 48,
+          "before": "코드 구조 메타데이터와 심볼 span을 표현하는 타입 선언 영역",
+          "after": "코드 계층·인벤토리·관찰 결과 타입과 구조 관찰 관련 선언 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-361",
+      "summary": "이 영역은 code-structure-observer.ts의 코드 구조 관찰을 위한 타입·const·함수 선언을 포함합니다. CodeHierarchyNode, CodeStructureInventory, CodeStructureObservationResult 및 ExtractedTree·LeafDraft 구조와 관련 속성이 정의되고, 문법 로딩, 종류 매핑(mapKind), 심볼명·문서 첫 줄 추출, 트리 추출(extractTree), span 키와 extractor 소스 다이제스트 관련 선언이 이어집니다. 구체적 구현 동작은 제공되지 않았습니다.",
+      "boundaries": [
+        {
+          "line": 138,
+          "before": "코드 구조 관찰 관련 타입·const 선언 영역",
+          "after": "문법 로딩과 구조 관찰 보조 함수 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 209,
+          "before": "구조 관찰 함수 선언 영역",
+          "after": "ExtractedTree 관련 인터페이스와 멤버 속성 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 273,
+          "before": "ExtractedTree 인터페이스 선언 영역",
+          "after": "bodyItems·extractTree·spanKey·extractorSourceDigest 함수 선언 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-361",
+      "summary": "이 영역은 code-structure-observer.ts에서 문법 로딩 관련 선언, 코드 구조 관찰용 mapKind·symbolNameOf·docFirstLineOf 함수, LeafDraft와 ExtractedTree 인터페이스, 그리고 bodyItems·extractTree·spanKey·extractorSourceDigest 함수 선언을 포함합니다. 제공된 구조만으로는 구체적 동작을 판단할 수 없습니다.",
+      "boundaries": [
+        {
+          "line": 219,
+          "before": "LeafDraft 및 문법·코드 구조 관찰 관련 선언",
+          "after": "bodyItems, ExtractedTree 및 트리 추출 관련 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:219-361",
+      "summary": "이 영역은 SyntaxNode 컨테이너를 받아 SyntaxNode 배열을 반환하는 bodyItems, hierarchy·rootKey·spans 속성을 가진 ExtractedTree 인터페이스, extractTree·spanKey·extractorSourceDigest 함수 선언으로 구성됩니다. 제공된 구조 정보만으로는 구체적 동작이나 목적을 판단할 수 없습니다.",
+      "boundaries": [
+        {
+          "line": 222,
+          "before": "주석 블록",
+          "after": "function_decl 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 267,
+          "before": "function_decl 선언",
+          "after": "decl_header 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 269,
+          "before": "decl_header",
+          "after": "member_prop 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 272,
+          "before": "member_prop 선언",
+          "after": "decl_footer",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 273,
+          "before": "decl_footer",
+          "after": "function_decl 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 351,
+          "before": "function_decl 선언",
+          "after": "주석 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 353,
+          "before": "주석 블록",
+          "after": "function_decl 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-137",
+      "summary": "이 영역은 코드 구조 관찰과 관련된 타입 선언과 const 선언을 포함합니다. CodeHierarchyNode, CodeStructureInventory, CodeStructureObservationResult 및 구조 관련 속성 이름이 나타나며, 이후 식별자가 제공되지 않은 const 선언들이 주석 블록과 함께 이어집니다. 구현 동작이나 구체적 목적은 제공되지 않았습니다.",
+      "boundaries": [
+        {
+          "line": 69,
+          "before": "member_prop 중심의 구조 속성 선언",
+          "after": "type_alias 선언으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 95,
+          "before": "주석 블록 뒤 타입·구조 선언 영역",
+          "after": "식별자가 제공되지 않은 const 선언 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:273-361",
+      "summary": "이 영역은 extractTree와 spanKey 함수 선언, 그리고 주석 블록과 함께 선언된 extractorSourceDigest 함수로 구성된 코드 영역입니다. 제공된 구조 정보만으로는 각 함수의 구체적 목적이나 내부 동작을 판단할 수 없습니다.",
+      "boundaries": [
+        {
+          "line": 351,
+          "before": "function_decl로 구성된 extractTree·spanKey 선언 영역",
+          "after": "주석 블록으로 전환되는 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 353,
+          "before": "주석 블록이 끝나는 영역",
+          "after": "extractorSourceDigest 함수 선언 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-218",
+      "summary": "이 영역은 code-structure-observer.ts에서 grammarWasmPath, loadLanguage 관련 선언과 이름이 제공되지 않은 상수 선언, 그리고 코드 구조 관찰을 위한 mapKind·symbolNameOf·docFirstLineOf 함수 및 LeafDraft 인터페이스를 포함합니다. LeafDraft는 kind, lineStart, lineEnd, astNode, docFirstLine, signatureLine, symbolNames 멤버 속성으로 관찰 결과를 나타냅니다.",
+      "boundaries": [
+        {
+          "line": 159,
+          "before": "function 관련 선언 영역",
+          "after": "주석 블록 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 161,
+          "before": "주석 블록 영역",
+          "after": "상수 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 163,
+          "before": "상수 선언 영역",
+          "after": "코드 구조 관찰 함수 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 209,
+          "before": "코드 구조 관찰 함수 선언 영역",
+          "after": "인터페이스 선언 헤더 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 211,
+          "before": "인터페이스 선언 헤더 영역",
+          "after": "LeafDraft 멤버 속성 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 218,
+          "before": "LeafDraft 멤버 속성 영역",
+          "after": "인터페이스 선언 종료 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:273-350",
+      "summary": "이 영역은 extractTree와 spanKey라는 두 함수 선언으로 구성된 코드 영역으로 보입니다. 제공된 구조 정보만으로는 각 함수의 구체적 목적이나 내부 동작을 판단할 수 없습니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:163-218",
+      "summary": "이 영역은 코드 구조 관찰을 위한 mapKind, symbolNameOf, docFirstLineOf 함수 선언과 LeafDraft 인터페이스 선언을 포함합니다. LeafDraft는 kind, lineStart, lineEnd, astNode, docFirstLine, signatureLine, symbolNames 멤버 속성으로 구조 관찰 결과를 나타냅니다.",
+      "boundaries": [
+        {
+          "line": 209,
+          "before": "함수 선언들(mapKind, symbolNameOf, docFirstLineOf)을 포함하는 영역",
+          "after": "LeafDraft 인터페이스 선언의 헤더",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 211,
+          "before": "LeafDraft 인터페이스 선언의 헤더",
+          "after": "LeafDraft의 구조 관찰 결과 멤버 속성들",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:219-272",
+      "summary": "This region contains a comment block and a declaration of partitionItems, followed by bodyItems, which accepts a SyntaxNode container and returns an array of SyntaxNode values, and an ExtractedTree interface with hierarchy, rootKey, and spans properties. No further purpose or behavior is stated by the available structure.",
+      "boundaries": [
+        {
+          "line": 222,
+          "before": "Comment block precedes the declaration region.",
+          "after": "A function declaration named partitionItems begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 267,
+          "before": "The bodyItems function declaration region ends.",
+          "after": "A declaration header for the following interface begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 269,
+          "before": "The ExtractedTree declaration header begins.",
+          "after": "Its member property declarations begin.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 272,
+          "before": "The final member property declaration ends.",
+          "after": "The declaration footer closes the interface region.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:362-414",
+      "summary": "코드 구조 관찰 모듈의 두 함수 선언을 포함합니다. codeStructureLanguageForExtension 함수와, 지원되지 않는 확장자에 대응하면서 단일 코드 파일의 구조를 관찰하는 exported async 함수 observeCodeStructure가 선언되어 있습니다.",
+      "boundaries": [
+        {
+          "line": 366,
+          "before": "codeStructureLanguageForExtension 함수 선언",
+          "after": "함수 선언 뒤의 주석 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 370,
+          "before": "주석 블록",
+          "after": "observeCodeStructure 함수 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-47",
+      "summary": "The region imports dependencies, then defines code-structure metadata: constants, a language type alias limited to TypeScript, JavaScript, and Python, and an interface for code symbol spans. Each span records line bounds, kind, depth, symbol names, the first documentation-comment line, and the signature line.",
+      "boundaries": [
+        {
+          "line": 18,
+          "before": "Imports and an initial comment block without named declarations.",
+          "after": "Code-structure metadata declarations begin.",
+          "disposition": "adversarial_confirmed"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-94",
+      "summary": "이 영역은 코드 구조 관찰과 관련된 타입 선언을 포함합니다. CodeHierarchyNode와 CodeStructureInventory가 각각 구조 노드 및 인벤토리 속성을 선언하고, CodeStructureObservationResult 타입 별칭과 식별되지 않은 const 선언 및 주석 블록이 이어집니다. 구현 동작이나 구체적 목적은 제공되지 않았습니다.",
+      "boundaries": [
+        {
+          "line": 56,
+          "before": "CodeHierarchyNode의 member_prop 및 선언 푸터",
+          "after": "다음 선언의 헤더",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 69,
+          "before": "CodeStructureInventory의 member_prop 및 선언 푸터",
+          "after": "CodeStructureObservationResult 타입 별칭",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 75,
+          "before": "타입 별칭과 인접 주석 블록",
+          "after": "식별자가 제공되지 않은 const 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 92,
+          "before": "const 선언 영역",
+          "after": "후속 주석 블록",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:370-414",
+      "summary": "This region declares the exported async function observeCodeStructure, whose stated purpose is to observe one code file's structure and account for unsupported extensions when no bundled grammar is available.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:95-137",
+      "summary": "이 영역은 구체적인 식별자·시그니처·주석 목적이 제공되지 않은 const 선언들로 구성되며, 중간에 주석 블록이 삽입된 구조입니다. 제공된 구조만으로는 구체적인 목적이나 동작을 판단할 수 없습니다.",
+      "boundaries": [
+        {
+          "line": 133,
+          "before": "const 선언 영역",
+          "after": "주석 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 135,
+          "before": "주석 블록",
+          "after": "const 선언 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:219-260",
+      "summary": "This region contains a comment block followed by the declaration of partitionItems. No signature or stated purpose is provided, so its behavior cannot be determined from the available structure.",
+      "boundaries": [
+        {
+          "line": 222,
+          "before": "Comment block",
+          "after": "Function declaration: partitionItems",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:95-132",
+      "summary": "이 영역은 이름이 제공되지 않은 const 선언들로 구성된 것으로 보이며, 식별자·주석·시그니처·구조적 전환 정보가 없어 구체적인 목적이나 동작은 판단할 수 없습니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:186-218",
+      "summary": "이 영역은 docFirstLineOf 함수 선언과 LeafDraft 인터페이스 선언을 포함합니다. LeafDraft는 kind, lineStart, lineEnd, astNode, docFirstLine, signatureLine, symbolNames 멤버 속성으로 구조 관찰 결과를 나타냅니다.",
+      "boundaries": [
+        {
+          "line": 209,
+          "before": "function_decl인 docFirstLineOf 선언 영역",
+          "after": "LeafDraft 인터페이스 선언의 헤더 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 211,
+          "before": "LeafDraft 인터페이스 헤더",
+          "after": "kind 등 멤버 속성 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 218,
+          "before": "LeafDraft 멤버 속성 선언 영역",
+          "after": "선언 종료 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:95-126",
+      "summary": "이 영역은 이름이 제공되지 않은 const 선언으로 식별되며, 식별자·주석·시그니처·자식 요약이 없어 구체적인 목적이나 동작은 판단할 수 없습니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:18-47",
+      "summary": "A region defining code-structure metadata: constants, a language type alias limited to TypeScript, JavaScript, and Python, and an interface for code symbol spans. Each span records start/end lines, kind, depth, symbol names, the first documentation-comment line, and the signature line.",
+      "boundaries": [
+        {
+          "line": 29,
+          "before": "Comment-only structural context.",
+          "after": "Constant declaration begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "Constant declarations conclude.",
+          "after": "Language type alias begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "Language type alias.",
+          "after": "Code symbol span declaration begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 38,
+          "before": "Declaration header.",
+          "after": "Interface member properties begin.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 47,
+          "before": "Interface member properties.",
+          "after": "Declaration footer closes the interface.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-74",
+      "summary": "이 영역은 코드 구조 관찰 관련 타입 선언으로 보입니다. CodeHierarchyNode는 key, kind, child_keys, symbol_name 속성을, CodeStructureInventory는 스키마·언어·라인 수·해시·symbol_tiles 속성을 선언합니다. 또한 CodeStructureObservationResult 타입 별칭과 인접 주석 블록을 포함합니다. 구현 동작이나 구체적 목적은 제공되지 않았습니다.",
+      "boundaries": [
+        {
+          "line": 69,
+          "before": "두 인터페이스 선언과 그 속성 정의가 끝나는 구조",
+          "after": "CodeStructureObservationResult 타입 별칭 선언으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-162",
+      "summary": "이 영역은 grammarWasmPath와 loadLanguage라는 이름의 함수 관련 선언, 그리고 이름이 제공되지 않은 상수 선언과 이를 앞서는 주석 블록으로 구성됩니다. 목적, 시그니처, 구현 동작은 구조 정보에 명시되지 않았습니다.",
+      "boundaries": [
+        {
+          "line": 159,
+          "before": "함수 선언 중심 영역",
+          "after": "이름이 제공되지 않은 주석 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 161,
+          "before": "주석 블록",
+          "after": "이름이 제공되지 않은 상수 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:163-185",
+      "summary": "The region contains two function declarations, mapKind and symbolNameOf. No documentation, signature lines, symbol seams, or child summaries are provided, so the region can only be identified as these named declarations.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:186-208",
+      "summary": "A function declaration named docFirstLineOf is present in this code region; no documentation, child summaries, or additional structural signals specify its purpose or behavior.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:26-47",
+      "summary": "A comment block, constant declarations, a language type alias, and an interface representing code symbol spans. The language is limited to TypeScript, JavaScript, and Python; each span records start/end lines, kind, depth, symbol names, the first documentation-comment line, and the signature line.",
+      "boundaries": [
+        {
+          "line": 29,
+          "before": "Comment block stating or introducing an unnamed structural element.",
+          "after": "Constant declaration begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 31,
+          "before": "Constant declaration ends.",
+          "after": "A new comment block begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 33,
+          "before": "Comment block ends.",
+          "after": "Another constant declaration begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "Constant declaration ends.",
+          "after": "Language type alias begins.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "Language type alias ends.",
+          "after": "Code symbol span interface declaration begins.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-68",
+      "summary": "The region declares two interfaces: CodeHierarchyNode with key, kind, child_keys, and symbol_name properties; and CodeStructureInventory with schema_version, language, line_count, content_sha256, extractor_logic_sha256, and symbol_tiles properties. No implementation behavior or purpose statement is provided.",
+      "boundaries": [
+        {
+          "line": 50,
+          "before": "The preceding declaration header begins the CodeHierarchyNode interface.",
+          "after": "A comment block introduces its member-property declarations.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 56,
+          "before": "The CodeHierarchyNode declaration ends.",
+          "after": "A new declaration header begins CodeStructureInventory.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-158",
+      "summary": "This region contains function-related declarations named grammarWasmPath and loadLanguage. No purpose, signatures, or implementation behavior is stated beyond these identifiers and the function declaration kind.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:75-94",
+      "summary": "The region contains an unnamed const declaration followed by a comment block; the provided structure does not state their identifiers or purposes.",
+      "boundaries": [
+        {
+          "line": 92,
+          "before": "const declaration with no provided identifier or stated purpose",
+          "after": "comment block with no provided stated purpose",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-17",
+      "summary": "The region contains import declarations followed by a comment block; no named declarations, identifiers, signature, or explicit purpose are provided.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "Import declarations",
+          "after": "Comment block",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:31-47",
+      "summary": "이 영역은 코드 구조 관찰에 사용되는 언어 타입 별칭과 코드 심볼 범위를 표현하는 인터페이스를 정의한다. 언어는 TypeScript, JavaScript, Python으로 제한되며, 심볼 범위는 시작·종료 줄, 종류, 깊이, 심볼 이름, 문서 주석 첫 줄, 시그니처 줄 속성으로 표현된다.",
+      "boundaries": [
+        {
+          "line": 34,
+          "before": "이름이 식별되지 않은 주석 블록과 상수 선언",
+          "after": "지원되는 코드 언어를 제한하는 타입 별칭",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "코드 언어 타입 별칭",
+          "after": "코드 심볼 범위를 표현하는 인터페이스 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 38,
+          "before": "인터페이스 선언 헤더",
+          "after": "심볼 범위의 구조적 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 47,
+          "before": "심볼 범위 속성 선언",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:75-91",
+      "summary": "The region contains a const declaration, but no identifier, signature, documentation, or child summary is provided to clarify its purpose.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:34-47",
+      "summary": "CodeStructureLanguage 타입 별칭과 CodeSymbolSpan 인터페이스를 정의한다. 전자는 TypeScript, JavaScript, Python으로 표현 가능한 코드 언어를 제한하고, 후자는 line_start, line_end, kind, depth, symbol_names, doc_first_line, signature_line 속성으로 코드 심볼 범위를 표현한다. 제공된 구조만으로 구현 동작이나 더 넓은 목적은 확인되지 않는다.",
+      "boundaries": [
+        {
+          "line": 36,
+          "before": "코드 언어 집합을 제한하는 타입 별칭 선언",
+          "after": "코드 심볼 범위를 표현하는 인터페이스 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:56-68",
+      "summary": "An interface declaration named CodeStructureInventory containing the member properties schema_version, language, line_count, content_sha256, extractor_logic_sha256, and symbol_tiles.",
+      "boundaries": [
+        {
+          "line": 58,
+          "before": "Interface declaration header for CodeStructureInventory.",
+          "after": "Member properties begin.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 68,
+          "before": "Member properties continue through the interface.",
+          "after": "Interface declaration ends.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:36-47",
+      "summary": "An interface declaration named CodeSymbolSpan containing member properties line_start, line_end, kind, depth, symbol_names, doc_first_line, and signature_line, representing a code symbol span. No implementation behavior or broader purpose is stated by the provided structure.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:261-272",
+      "summary": "This region declares a function named bodyItems that accepts a SyntaxNode container and returns an array of SyntaxNode values, followed by an ExtractedTree interface with hierarchy, rootKey, and spans properties. No further purpose or behavior is stated by the available structure.",
+      "boundaries": [
+        {
+          "line": 267,
+          "before": "A function declaration named bodyItems",
+          "after": "An interface declaration named ExtractedTree begins",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:351-361",
+      "summary": "이 영역은 extractorSourceDigest라는 함수 선언과 그 앞의 주석 블록으로 구성되어 있다. 제공된 구조 정보만으로는 함수의 목적이나 동작을 더 구체적으로 판단할 수 없다.",
+      "boundaries": [
+        {
+          "line": 353,
+          "before": "주석 블록이 이어지는 영역",
+          "after": "extractorSourceDigest 함수 선언이 시작되는 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:209-218",
+      "summary": "LeafDraft 인터페이스 선언으로, 구조 종류(kind), 시작·종료 위치(lineStart·lineEnd), AST 노드(astNode), 문서 주석 첫 줄(docFirstLine), 시그니처 줄(signatureLine), 심볼 이름 목록(symbolNames)을 나타내는 멤버 속성을 포함합니다.",
+      "boundaries": [
+        {
+          "line": 211,
+          "before": "인터페이스 선언 헤더",
+          "after": "멤버 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 218,
+          "before": "멤버 속성 선언",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-9",
+      "summary": "The region contains import declarations followed by a comment block; no declared symbols, purpose, or imported targets are identified by the provided structure.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "The region is in an import-only structural section.",
+          "after": "The region changes to a comment block without declared symbols.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:36-44",
+      "summary": "An interface declaration named CodeSymbolSpan containing member properties line_start, line_end, kind, depth, and symbol_names, representing a code symbol span. No implementation behavior or broader purpose is stated by the provided structure.",
+      "boundaries": [
+        {
+          "line": 41,
+          "before": "The interface portion containing line_start and line_end span properties.",
+          "after": "The interface portion containing kind, depth, and symbol_names properties.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:209-217",
+      "summary": "LeafDraft 인터페이스 선언 영역으로, 구조 종류(kind), 시작·종료 위치(lineStart·lineEnd), AST 노드(astNode), 문서 주석 첫 줄(docFirstLine), 시그니처 줄(signatureLine), 심볼 이름 목록(symbolNames)을 나타내는 멤버 속성을 포함합니다.",
+      "boundaries": [
+        {
+          "line": 211,
+          "before": "인터페이스 선언 헤더",
+          "after": "멤버 속성 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:10-17",
+      "summary": "이 영역은 이름 붙은 선언, 식별자, 시그니처 또는 명시된 목적 없이 주석 블록으로만 구성되어 있습니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:18-25",
+      "summary": "A comment-only region with no named declarations, stated purpose, or symbol seams; its specific meaning cannot be determined from the supplied structure.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-55",
+      "summary": "The region declares the CodeHierarchyNode interface with member properties key, kind, child_keys, and symbol_name. No purpose statement or implementation behavior is provided.",
+      "boundaries": [
+        {
+          "line": 50,
+          "before": "The interface declaration header begins.",
+          "after": "A comment block appears within the declaration.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 51,
+          "before": "A comment block precedes the members.",
+          "after": "Member property declarations begin.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 55,
+          "before": "Member property declarations are present.",
+          "after": "The interface declaration ends.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:61-68",
+      "summary": "An interface declaration named CodeStructureInventory containing the member properties content_sha256, extractor_logic_sha256, and symbol_tiles.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:362-369",
+      "summary": "코드 구조 관찰 모듈에서 codeStructureLanguageForExtension 함수 선언과 그 뒤의 주석 블록을 포함하는 영역입니다.",
+      "boundaries": [
+        {
+          "line": 366,
+          "before": "함수 선언이 이어지는 영역",
+          "after": "주석 블록으로 전환되는 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:63-68",
+      "summary": "An interface declaration named CodeStructureInventory containing the symbol_tiles member property; the region is limited to this named interface member and its declaration footer.",
+      "boundaries": [
+        {
+          "line": 68,
+          "before": "The interface's symbol_tiles member property.",
+          "after": "The closing footer of the CodeStructureInventory declaration.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:69-74",
+      "summary": "코드 구조 관찰 결과를 나타내는 CodeStructureObservationResult 타입 별칭과 인접한 주석 블록으로 구성된 영역입니다.",
+      "boundaries": [
+        {
+          "line": 73,
+          "before": "타입 별칭 선언",
+          "after": "주석 블록",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:127-132",
+      "summary": "이 영역은 식별자나 선언 목적이 제공되지 않은 const 선언으로 보입니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:261-266",
+      "summary": "A function declaration named bodyItems that accepts a SyntaxNode container and returns an array of SyntaxNode values; no further purpose or behavior is stated by the available structure.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:267-272",
+      "summary": "An interface declaration named ExtractedTree containing hierarchy, rootKey, and spans member properties. No purpose or behavior beyond these structural declarations is stated.",
+      "boundaries": [
+        {
+          "line": 269,
+          "before": "Interface declaration header for ExtractedTree.",
+          "after": "Member-property declarations hierarchy, rootKey, and spans begin.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 272,
+          "before": "Member-property declarations are present.",
+          "after": "ExtractedTree interface declaration footer ends the region.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:5-9",
+      "summary": "이 영역은 선언 없이 import와 comment_block으로 구성된 코드 구간이다.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "import 구간",
+          "after": "주석 블록 구간",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:26-30",
+      "summary": "A comment block followed by a constant declaration; no declaration identifier or stated purpose is provided.",
+      "boundaries": [
+        {
+          "line": 29,
+          "before": "comment block",
+          "after": "constant declaration",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:36-40",
+      "summary": "An interface declaration named CodeSymbolSpan that contains line_start and line_end member properties, representing a code symbol span.",
+      "boundaries": [
+        {
+          "line": 38,
+          "before": "CodeSymbolSpan interface declaration header",
+          "after": "line_start member property",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 40,
+          "before": "line_end member property",
+          "after": "following comment block",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-52",
+      "summary": "The region declares the CodeHierarchyNode interface and includes the member properties key and kind. No purpose statement or implementation behavior is provided.",
+      "boundaries": [
+        {
+          "line": 50,
+          "before": "Interface declaration header for CodeHierarchyNode",
+          "after": "Comment block within the interface declaration",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 51,
+          "before": "Comment block within the interface declaration",
+          "after": "Member property declaration",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:56-60",
+      "summary": "An interface declaration named CodeStructureInventory containing the member properties schema_version, language, and line_count.",
+      "boundaries": [
+        {
+          "line": 58,
+          "before": "Interface declaration header for CodeStructureInventory.",
+          "after": "Member-property declarations within CodeStructureInventory begin.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:133-137",
+      "summary": "이 영역은 주석 블록에 이어 식별자와 시그니처가 제공되지 않은 const 선언으로 구성됩니다. 제공된 구조만으로는 구체적 목적이나 동작을 판단할 수 없습니다.",
+      "boundaries": [
+        {
+          "line": 135,
+          "before": "주석 블록",
+          "after": "이름이 제공되지 않은 const 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:209-213",
+      "summary": "LeafDraft 인터페이스 선언으로, kind·lineStart·lineEnd 멤버 속성을 포함하는 영역입니다.",
+      "boundaries": [
+        {
+          "line": 211,
+          "before": "인터페이스 선언 헤더",
+          "after": "멤버 속성 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:267-271",
+      "summary": "An interface declaration named ExtractedTree containing hierarchy, rootKey, and spans member properties. No purpose or behavior beyond these structural declarations is stated.",
+      "boundaries": [
+        {
+          "line": 269,
+          "before": "Interface declaration header for ExtractedTree",
+          "after": "Member property declaration within ExtractedTree",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-4",
+      "summary": "The region contains import declarations only; the provided structure does not identify the imported targets or their purpose.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:10-13",
+      "summary": "이 영역은 이름 붙은 선언, 시그니처 또는 명시된 목적 없이 주석 블록으로만 구성되어 있습니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:14-17",
+      "summary": "This region appears to consist only of comment blocks, with no named declarations, identifiers, signatures, or stated purpose provided.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:18-21",
+      "summary": "A comment block with no named declarations or stated purpose in the provided structure.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:22-25",
+      "summary": "A comment-only region with no provided declaration identifiers, stated purpose, or symbol seams; its specific meaning cannot be determined from the supplied structure.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:41-44",
+      "summary": "An interface declaration named CodeSymbolSpan containing member properties kind, depth, and symbol_names, with an intervening comment; no implementation behavior or broader purpose is stated by the provided structure.",
+      "boundaries": [
+        {
+          "line": 42,
+          "before": "The interface member-property declaration context for CodeSymbolSpan.",
+          "after": "A comment block interrupts the member-property declarations.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 43,
+          "before": "A comment block within the CodeSymbolSpan interface.",
+          "after": "Member-property declarations resume, including depth and symbol_names.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    }
+  ],
+  "nodes_total": 109,
+  "refuted_disclosure": [],
+  "refuted_disclosure_total": 1,
+  "unanchored_unverified_total": 1,
+  "render_truncated": true
+}

@@ -1,0 +1,13 @@
+{
+  "restored_synthesize": 109,
+  "restored_verify": 2,
+  "map_nodes": 203,
+  "projection_nodes_total": 109,
+  "admitted_nodes": 65,
+  "render_truncated": true,
+  "file_lines": 414,
+  "covered_lines": 414,
+  "coverage": 1,
+  "validity_admit_ge_30": true,
+  "validity_coverage_ge_080": true
+}
