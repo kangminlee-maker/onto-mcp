@@ -12,6 +12,9 @@
  *   (d) EXACT LLM-facing bytes: every synthesize/verify input (stableJson) + mock output, recorded
  *       by a proxy AROUND the author — the same surface the bridge drift-detector guards (G-SS-e)
  *   (e) sidecar file bytes (sessionRoot redacted)
+ *   (f) renderSemanticMapProjection OUTPUT bytes per projection×surface (+ tight-budget truncation
+ *       arm) — the render-shared-path lock for the DD10 v2 refactor (§10 v2.1 리뷰 inv M2), in
+ *       `<arm>.render.json` so the pre-existing golden files stay byte-untouched
  *
  * SPEC BASIS (INV-TEST-1): the golden is the refactor's byte-identity SPEC — a check failure after
  * the refactor means the refactor changed observable bytes; update goldens ONLY with an explicit
@@ -37,7 +40,9 @@ import {
 } from "../src/core-runtime/reconstruct/comprehension-semantic-map.js";
 import {
   runSemanticMapStage,
+  renderSemanticMapProjection,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
   type ReconstructDirectiveAuthor,
   type SemanticMapStageConfig,
 } from "../src/core-runtime/reconstruct/run.js";
@@ -49,6 +54,13 @@ import type {
 } from "../src/core-runtime/spreadsheet-structure-observer.js";
 
 const GOLDEN_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), "goldens", "semantic-map");
+
+/** G-SS-f tight-budget render arm (§10 v2.1 DD10 — 리뷰 inv M2): a budget small enough that the
+ *  admission loop DROPS nodes (render_truncated=true), locking the truncation branch's bytes too —
+ *  a production-budget-only golden would leave the pop/flag path unlocked. The value must fit the
+ *  empty note-free envelope (~250 pretty chars) but not every fixture node; the capture-time
+ *  cardinality guard fails loud if it stops truncating. */
+const GSSF_TIGHT_RENDER_CHAR_BUDGET = 600;
 
 // ── deterministic serialization (sorted keys — script-local; goldens compare script-to-script) ──
 function stableJson(value: unknown): string {
@@ -197,7 +209,9 @@ interface RecordedCall {
   output_json: string;
 }
 
-async function deriveArm(config: SemanticMapStageConfig): Promise<Record<string, unknown>> {
+async function deriveArm(
+  config: SemanticMapStageConfig,
+): Promise<{ golden: Record<string, unknown>; renders: Record<string, string> }> {
   const artifact = fixtureArtifact();
   const calls: RecordedCall[] = [];
   const base = withMockSemanticMapCapability({
@@ -272,7 +286,32 @@ async function deriveArm(config: SemanticMapStageConfig): Promise<Record<string,
     const redactPaths = (v: unknown): unknown =>
       JSON.parse(JSON.stringify(v).replaceAll(sessionRoot, "<SESSION>"));
 
-    return {
+    // (f) G-SS-f render bytes (§10 v2.1 DD10 — 리뷰 inv M2): G-SS-e locks the LLM-facing envelope
+    // and (c) locks the projection VALUES, but nothing locked the renderSemanticMapProjection
+    // OUTPUT — the exact prompt-serialization (JSON.stringify(env, null, 2), the same measure the
+    // budget charges) on BOTH prompt surfaces (observation replace includeNote=true / seed payload
+    // includeNote=false) plus a tight-budget arm that forces the truncation loop. This is the sole
+    // lock proving the DD10 render refactor leaves the spreadsheet surface byte-identical.
+    const renders: Record<string, string> = {};
+    for (const [obsId, projection] of [...result.projectionByObservation.entries()].sort(([x], [y]) => (x < y ? -1 : 1))) {
+      renders[`${obsId}/observation`] = JSON.stringify(
+        renderSemanticMapProjection(projection, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, true),
+        null,
+        2,
+      );
+      renders[`${obsId}/seed`] = JSON.stringify(
+        renderSemanticMapProjection(projection, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, false),
+        null,
+        2,
+      );
+      renders[`${obsId}/tight`] = JSON.stringify(
+        renderSemanticMapProjection(projection, GSSF_TIGHT_RENDER_CHAR_BUDGET, false),
+        null,
+        2,
+      );
+    }
+
+    const golden = {
       gate_logic_sha256_informational: semanticMapGateLogicSha256(), // 회전 예상 값 — 비교 제외 대상 아님을 명시적으로 라벨
       ground: groundHashes,
       census: redactPaths(result.census),
@@ -283,6 +322,7 @@ async function deriveArm(config: SemanticMapStageConfig): Promise<Record<string,
       llm_facing_calls: calls,
       sidecars,
     };
+    return { golden, renders };
   } finally {
     await fs.rm(sessionRoot, { recursive: true, force: true });
   }
@@ -291,12 +331,20 @@ async function deriveArm(config: SemanticMapStageConfig): Promise<Record<string,
 async function deriveAll(): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const arm of ARMS) {
-    const derived = await deriveArm(arm.config);
+    const { golden: derived, renders } = await deriveArm(arm.config);
     // 카디널리티 가드 (설계 §1: 공허 통과 차단) — 골든이 비면 그 자체가 실패.
     const calls = derived.llm_facing_calls as RecordedCall[];
     if (calls.filter((c) => c.kind === "synthesize").length === 0) throw new Error(`arm ${arm.name}: 0 synthesize calls — vacuous golden`);
     if (Object.keys(derived.ground as Record<string, unknown>).length === 0) throw new Error(`arm ${arm.name}: 0 ground entries — vacuous golden`);
+    // G-SS-f 카디널리티 가드: 노드가 실제 admit된 렌더 ≥1 AND 절단 루프가 실제 발화한 렌더 ≥1 —
+    // 둘 중 하나라도 없으면 이 골든은 렌더 경로를 잠그지 못한 공허 골든이다.
+    const renderValues = Object.values(renders);
+    if (renderValues.length === 0) throw new Error(`arm ${arm.name}: 0 renders — vacuous G-SS-f golden`);
+    const parsed = renderValues.map((v) => JSON.parse(v) as { nodes: unknown[]; render_truncated: boolean });
+    if (!parsed.some((r) => r.nodes.length > 0)) throw new Error(`arm ${arm.name}: no render admitted any node — vacuous G-SS-f golden`);
+    if (!parsed.some((r) => r.render_truncated === true)) throw new Error(`arm ${arm.name}: no render exercised the truncation loop — G-SS-f leaves the pop/flag branch unlocked (tighten GSSF_TIGHT_RENDER_CHAR_BUDGET)`);
     out[`${arm.name}.json`] = `${JSON.stringify(JSON.parse(stableJson(derived)), null, 2)}\n`;
+    out[`${arm.name}.render.json`] = `${JSON.stringify(JSON.parse(stableJson(renders)), null, 2)}\n`;
   }
   return out;
 }
