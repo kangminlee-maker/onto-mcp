@@ -43,13 +43,13 @@
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
   <div class="card focus"><h3>현재 목표</h3>
-    <p><b>cert v3 fixture MECE 보강 Phase A 완료</b>(A-1~A-3 + V2 완비 메타테스트 머지) + <b>breaker-observation opt-in 5종 default ON 승격</b>(#203). 무-spend 코드/문서 작업은 소진됨 — 남은 실작업은 <b>A-4 v3 fresh cert run</b>·<b>M3 성능 벤치</b>·<b>Phase B(온톨로지 fixture)</b>로 전부 <b>owner spend/결정 대기</b>. §4 회복-경로 잔여 트랙은 전부 해소.</p></div>
+    <p><b>semantic-map multi-artifact Phase 1a (코드/AST)</b> — 설계 §7 step 1~6 main 착지(#225/#227/#228/#230) + <b>step 7a E2E mock 완료</b>(api 전 구간, 텔레메트리 매핑 라이브 결함 1건 적발·수정 포함). 다음 실작업 = <b>step 7b live N=1</b>(owner: 대상 파일·seat 확인 + spend, 수용 기준 <b>G-SEM 블라인드</b>) → step 8 Phase 1b set-tier(O-3). cert v3 A-4(2026-07-15 disclosure run)·M3 벤치(P2 R=3 종결: seat 품질 구별 불가)는 완료.</p></div>
   <div class="card"><h3>Phase</h3>
-    <p>cert v3 A-1~A-3(<span class="ok">#194/196/198</span>)+V2 메타테스트(<span class="ok">#202</span>) 머지 · breaker-observation 5종(resubmit·review/reconstruct breaker·semantic_map·salvage) <span class="ok">default ON 승격 #203</span> · per-call llmOverride(<span class="ok">#197/199/200</span>)·MCP self-description(<span class="ok">#192</span>) 착지 · §4 잔여 트랙(§4-4 E2E 증거경계·deliberation resubmit controlled E2E 관측·B6 흡수) <span class="ok">전부 해소</span>.</p></div>
+    <p>semantic-map 코드 확장: 골든/프로브(<span class="ok">#225</span>)·L1 코어+관찰 옵트인(<span class="ok">#227/#228</span>)·L2 코어+kind 라우팅/봉투/DD9(<span class="ok">#230</span>)·E2E mock+G-SEM 대조군 스크립트(<span class="ok">step 7a 브랜치</span>) · 선행 착지: cert v3 A 전체·breaker-observation 5종 ON(#203)·per-call llmOverride·MCP self-description·review ontological-anchoring 양 플래그 ON(#222).</p></div>
   <div class="card"><h3>Health</h3>
-    <p><span class="ok">vitest 182 files / 2,989 passed</span>(+1 todo) · <span class="ok">guards green</span>(G1~G7·invariant-drift no_drift) · <span class="ok">cert rehearsal 4×2 완주</span> · tsc/import green.</p></div>
+    <p><span class="ok">vitest 200 files / 3,274 passed</span>(+1 todo) · <span class="ok">G-SS 골든 바이트 동일</span> · <span class="ok">reduce-proof·import-boundary·tsc green</span> · guards green(G1~G7).</p></div>
   <div class="card"><h3>다음 결정 (owner)</h3>
-    <p><b>A-4 v3 fresh cert run</b>(owner spend): 등록 review 모델 <b>2종</b>(fable-5·sol@medium)로 G1/G2 첫 disclosure 측정 — <b>24 ok run/2×</b>(모델당), D4 core-floor 승격 트리거 입력. 그다음 <b>M3 성능 벤치</b>(cert 게이트와 분리)·<b>Phase B</b>(온톨로지 fixture, 별도 설계). 승격 <b>사후 관찰 3회</b>로 waived 게이트 정당화도 선택지.</p></div>
+    <p><b>step 7b live N=1</b>(owner spend, O-2로 원칙 승인 완료): 소형 실파일 1개(TS/JS/Python) 지정 + seat 확인(synthesize <code>gpt-5.6-luna@low</code>·verify <code>gpt-5.6-sol@medium</code>) + repo settings <code>semantic_map_code: true</code> — 수용 기준 = <b>G-SEM 대조군 블라인드 평정</b>(실패 시 재설계 스톱, O-5 fallback 소진). 이후 <b>step 8</b>(1b set-tier) 착수 시점 결정.</p></div>
   <div class="card"><h3>주요 리스크</h3>
     <p><span class="warn">승격 관찰 waived</span>: #203이 관찰 게이트 <b>0/3</b>에서 owner-directed로 켬 — 실 halt/rate-limit 행동은 형식상 미관측. <span class="warn">§4-4 natural incident 미관측</span>: injected/deterministic 429까지가 달성 가능 증거 경계(자연 incident 제조 불가). <span class="warn">core recall 하한</span>: grounding·final_result·artifact recall 3종은 실 완주 run 무발화 → 하한이 합성 테스트로만 성립(v3 비목표, A-4로도 불변).</p></div>
 </div>
@@ -257,6 +257,7 @@
   <tr><td><code>review.execution.retry.dispatch_breaker.enabled</code></td><td class="ok">ON (#203)</td><td>fan-out breaker 트립/포이즌/회복 · 재디스패치==미완료 집합(ledger frontier)</td></tr>
   <tr><td><code>reconstruct.execution.dispatch_breaker.enabled</code></td><td class="ok">ON (#203)</td><td>reconstruct breaker · dispatch partition + resume validation</td></tr>
   <tr><td><code>reconstruct.execution.semantic_map_authoring</code></td><td class="ok">ON (#203)</td><td>semantic-map 저작 경로 (absent→on, `!== false`)</td></tr>
+  <tr><td><code>reconstruct.execution.semantic_map_code</code></td><td class="warn">OFF (옵트인, <code>=== true</code>)</td><td>code kind 관찰+스테이지 라우팅 (multi-artifact 설계 DD4/DD7, O-1 boolean). 유효 kind = 옵트인 ∩ author 광고. step 7b live N=1(G-SEM) 통과 + owner 결정 시 승격 검토</td></tr>
   <tr><td><code>review.execution.retry.salvage.enabled</code></td><td class="ok">ON (#203, 실사용)</td><td>submit-salvage 회수. <b>cert만 명시 OFF</b>(benchmark <code>--no-salvage</code> → raw·재현성 측정, RUN_CONTROLS.salvage_enabled:false)</td></tr>
   <tr><td><code>semantic_author.llm_runtime.openai_responses_output_headroom_tokens</code></td><td class="warn">default OFF (별개)</td><td>승격 대상 아님. OpenAI Responses direct API만 base+headroom · target completion PRELIMINARY · latest terminal은 downstream confirm timeout</td></tr>
 </table>
@@ -309,6 +310,7 @@
   <li><b>spreadsheet reconstruct 활성화 (C-recon · C-review)</b> — #92·#93·#98·#105·#135·#141: 게이트 활성화 + bounded 프롬프트 투영, honesty/provenance 게이트(P6), per-column cardinality·list enum(design-C), formula-pattern dedup, P0.5 header escalation, meaning-aware review(per-ref disposition SSOT). PII/masking 축 제거(#94·#95).</li>
   <li><b>comprehension-reduce (Layer-1) + leaf-read/value-tile</b> — deterministic core(union monoid + contiguity gate), value-tile sidecar 첫 production wiring, leaf-read subsystem(capture + structure trigger + capped census), llm-touch dependency-discovery.</li>
   <li><b>Layer-2 accumulated semantic channel + semantic-map authoring</b> — S1~S4(누적 채널→over-context frontier gate→honest seed projection) + W1~W5 실 LLM production wiring + 실 LLM cut(production capability·run harness). <code>semantic_map_authoring</code> opt-in 관찰 ON(#167).</li>
+  <li><b>semantic-map multi-artifact Phase 1a — 코드/AST (task #10, 설계 20260718)</b> — 좌표-어댑터 제네릭화(DD1~DD3 L1/L2 코어 추출, G-SS 바이트 동일)·tree-sitter WASM 관찰기(O-4: TS/JS+Python, DD4/DD5)·identifier-only 봉투(DD6, O-5 보강 선행)·kind 라우팅/광고(DD7)·DD9 projection 5표면·별도 코드 프롬프트 계약(ct-F2: spreadsheet fingerprint 무회전). step 1~6 머지(#225/#227/#228/#230) + step 7a E2E mock(코드 author 호출명 텔레메트리 매핑 라이브 결함 적발·수정, G-SEM 대조군 스크립트). 남은 것: 7b live N=1(G-SEM 블라인드)·step 8 set-tier(1b).</li>
   <li><b>maturation / silent-defect / answer-support</b> — maturation value-read real raw-cell-read(Stage 2), Defect-1 leaf-read wiring, Defect-2 seed-readiness deadlock, Defect-3 answer-support unblock(source-safety 4-basis), CQ-assessment batch budget fix, silent-defect A track + M1~M4 conservation.</li>
   <li><b>graceful-terminal (Slice 3, sites 1~6)</b> — GracefulTerminalSignal·terminal_disposition, reachability manifest v2(witness-based skip_kind), zero-observation·un-observable frontier ref·잔여 batch 차단. graceful-signal-rethrow 게이트 신설.</li>
   <li><b>INV-MODEL-1 role-aware model registry (B1~B3)</b> — supported-model role 스키마, 단일 dispatch resolver + role-aware 게이트, synthesize seat + opt-in 소스층 재구조화.</li>
