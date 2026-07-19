@@ -1051,6 +1051,35 @@ export function callReconstructMockLlm(
       satisfaction_status: "inconclusive",
       rationale: "mock value-read judgment: read values do not decide the limitation",
     });
+  } else if (systemPrompt.includes("You are reading ONE code file region")) {
+    // Step 7a (multi-artifact design §6-4, INV-MOCK-1 boundary): the api-path twin of
+    // withMockCodeSemanticMapCapability's synthesize — same deterministic shape discipline
+    // (first-seam echo + one unconditional region-open boundary; the deterministic reconcile
+    // CLASSIFIES, so both anchored and unanchored→verify paths stay reachable). userPrompt is
+    // the DD6 code envelope (line vocabulary). Keyed on the prompt OPENING — the spreadsheet
+    // synthesize prompt reads "ONE spreadsheet column region" and cannot match.
+    const seam = (input.symbol_seams ?? [])[0] as { line: number } | undefined;
+    const nodeRef = input.node_ref as { file: string; line_start: number; line_end: number };
+    text = JSON.stringify({
+      semantic_summary:
+        `mock ${nodeRef.file}:${nodeRef.line_start}-${nodeRef.line_end}` +
+        ` kids=${((input.child_summaries ?? []) as unknown[]).length}`,
+      boundaries: [
+        ...(seam
+          ? [{ line: seam.line, character_before: "seam-prev", character_after: "seam-next" }]
+          : []),
+        { line: nodeRef.line_start, character_before: "prev", character_after: "next" },
+      ],
+    });
+  } else if (
+    systemPrompt.includes("re-checker for ONE proposed semantic boundary in a code file region")
+  ) {
+    // Step 7a: parity verdict on the boundary line (withMockCodeSemanticMapCapability twin) —
+    // exercises kept AND disclosed dispositions across one run.
+    const boundary = input.boundary as { line: number };
+    text = JSON.stringify({
+      verdict: boundary.line % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted",
+    });
   } else if (systemPrompt.includes("writing the final reconstruct result")) {
     text = [
       "# Reconstruct Result",

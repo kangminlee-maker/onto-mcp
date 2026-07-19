@@ -120,6 +120,12 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     // production defect this map's fail-loud contract exists to prevent).
     ["semantic-map-synthesize", "semantic_map"],
     ["semantic-map-verify", "semantic_map"],
+    // Step 7a (multi-artifact design 20260718 DD7): the CODE author call names — same unit, same
+    // fail-loud contract. Their absence was invisible to the stage tests (stage-local mock authors
+    // bypass callJsonAuthor) and surfaced only on the full api path: the pre-LLM resolve threw and
+    // X5 folded every code unit to map_absent.
+    ["code-semantic-map-synthesize", "semantic_map"],
+    ["code-semantic-map-verify", "semantic_map"],
     ["ExplorationSynthesis", "exploration_synthesis"],
     ["SourceFrontier", "source_frontier"],
     ["SourcePurposeCandidates", "source_purpose_candidates"],

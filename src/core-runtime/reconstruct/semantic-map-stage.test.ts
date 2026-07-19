@@ -694,6 +694,10 @@ describe("W3 fingerprint + registration", () => {
   it("F5 telemetry: BOTH author capability call names resolve to the semantic_map unit (Defect-1 guard)", () => {
     expect(unitIdForAuthoredArtifactName("semantic-map-synthesize")).toBe("semantic_map");
     expect(unitIdForAuthoredArtifactName("semantic-map-verify")).toBe("semantic_map");
+    // Step 7a: the CODE call names too — unmapped names throw pre-LLM inside callJsonAuthor, which
+    // the stage-local mock authors here never traverse (the step 7 api E2E caught exactly that).
+    expect(unitIdForAuthoredArtifactName("code-semantic-map-synthesize")).toBe("semantic_map");
+    expect(unitIdForAuthoredArtifactName("code-semantic-map-verify")).toBe("semantic_map");
   });
 });
 
