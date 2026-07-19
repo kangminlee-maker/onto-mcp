@@ -1,0 +1,1163 @@
+schema_version: "1"
+observations:
+  - observation_id: obs_79741899d1b88db8
+    target_material_kind: code
+    projection:
+      authority: non_authoritative
+      provisional: true
+      nodes:
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 1
+            line_end: 17
+          semantic_summary: The region contains import declarations followed by a comment
+            block; no named declarations, identifiers, signature, or explicit
+            purpose are provided.
+          boundaries:
+            - line: 6
+              character_before: Import declarations
+              character_after: Comment block
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 1
+            line_end: 2
+          semantic_summary: The region contains import declarations only; no named
+            declarations, purpose comment, signature, or structural seam is
+            provided.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 1
+            line_end: 361
+          semantic_summary: 이 영역은 code-structure-observer.ts의 코드 구조 관찰을 위한 선언들을 포함합니다. 코드
+            심볼 span과 계층·인벤토리·관찰 결과를 표현하는 타입 및 관련 구조가 정의되고, 언어 로딩, 종류 매핑, 심볼명·문서
+            첫 줄 추출, 트리 추출과 span 키·extractor 소스 다이제스트 관련 선언이 이어집니다. 구체적 구현 동작은
+            제공되지 않았습니다.
+          boundaries:
+            - line: 48
+              character_before: 코드 구조 메타데이터와 심볼 span을 표현하는 타입 선언 영역
+              character_after: 코드 계층·인벤토리·관찰 결과 타입과 구조 관찰 관련 선언 영역
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 1
+            line_end: 4
+          semantic_summary: The region contains import declarations only; the provided
+            structure does not identify the imported targets or their purpose.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 1
+            line_end: 414
+          semantic_summary: code-structure-observer.ts의 코드 구조 관찰 관련 선언을 포함합니다. 코드 심볼 span,
+            계층, 인벤토리, 관찰 결과를 표현하는 타입과 구조가 정의되며, 언어 로딩·종류 매핑·심볼명 및 문서 첫 줄 추출·트리
+            추출·span 키와 extractor 소스 다이제스트 관련 선언이 이어집니다. 후반에는 확장자별 언어 판별 함수와 단일
+            코드 파일의 구조를 관찰하는 exported async 함수가 선언됩니다.
+          boundaries:
+            - line: 29
+              character_before: import 선언과 초기 모듈 구조
+              character_after: 상수 선언
+              disposition: structural_location_only
+            - line: 34
+              character_before: 상수 선언
+              character_after: 타입 별칭 선언
+              disposition: structural_location_only
+            - line: 36
+              character_before: 타입 별칭 선언
+              character_after: 선언 헤더와 멤버 속성
+              disposition: structural_location_only
+            - line: 69
+              character_before: 구조 관련 타입 선언
+              character_after: 주석 블록과 상수 선언
+              disposition: structural_location_only
+            - line: 138
+              character_before: 상수 선언
+              character_after: 함수 선언
+              disposition: structural_location_only
+            - line: 163
+              character_before: 상수 선언
+              character_after: 함수 선언
+              disposition: structural_location_only
+            - line: 219
+              character_before: 선언 종료
+              character_after: 주석 블록과 함수 선언
+              disposition: structural_location_only
+            - line: 273
+              character_before: 선언 종료
+              character_after: 함수 선언
+              disposition: structural_location_only
+            - line: 353
+              character_before: 함수 선언
+              character_after: 주석 블록과 함수 선언
+              disposition: structural_location_only
+            - line: 370
+              character_before: 주석 블록
+              character_after: 함수 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 1
+            line_end: 47
+          semantic_summary: "The region imports dependencies, then defines code-structure
+            metadata: constants, a language type alias limited to TypeScript,
+            JavaScript, and Python, and an interface for code symbol spans. Each
+            span records line bounds, kind, depth, symbol names, the first
+            documentation-comment line, and the signature line."
+          boundaries:
+            - line: 18
+              character_before: Imports and an initial comment block without named declarations.
+              character_after: Code-structure metadata declarations begin.
+              disposition: adversarial_confirmed
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 1
+            line_end: 9
+          semantic_summary: The region contains import declarations followed by a comment
+            block; no declared symbols, purpose, or imported targets are
+            identified by the provided structure.
+          boundaries:
+            - line: 6
+              character_before: The region is in an import-only structural section.
+              character_after: The region changes to a comment block without declared symbols.
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 10
+            line_end: 11
+          semantic_summary: A comment block with no named declarations, signatures, or
+            stated purpose is present in this region.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 10
+            line_end: 13
+          semantic_summary: 이 영역은 이름 붙은 선언, 시그니처 또는 명시된 목적 없이 주석 블록으로만 구성되어 있습니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 10
+            line_end: 17
+          semantic_summary: 이 영역은 이름 붙은 선언, 식별자, 시그니처 또는 명시된 목적 없이 주석 블록으로만 구성되어 있습니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 12
+            line_end: 13
+          semantic_summary: 이 영역은 선언 식별자나 시그니처 없이 주석 블록으로만 구성되어 있습니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 127
+            line_end: 132
+          semantic_summary: 이 영역은 식별자나 선언 목적이 제공되지 않은 const 선언으로 보입니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 133
+            line_end: 135
+          semantic_summary: The region contains a comment block followed by an unnamed
+            constant declaration; no identifiers, purpose statements, or
+            signatures are provided.
+          boundaries:
+            - line: 135
+              character_before: Comment block describing preceding structural context.
+              character_after: Constant declaration begins; its identifier and purpose are not
+                provided.
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 133
+            line_end: 137
+          semantic_summary: 이 영역은 주석 블록에 이어 식별자와 시그니처가 제공되지 않은 const 선언으로 구성됩니다. 제공된
+            구조만으로는 구체적 목적이나 동작을 판단할 수 없습니다.
+          boundaries:
+            - line: 135
+              character_before: 주석 블록
+              character_after: 이름이 제공되지 않은 const 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 136
+            line_end: 137
+          semantic_summary: 이 영역은 식별자나 선언 시그니처가 제공되지 않은 const 선언으로 구성됩니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 138
+            line_end: 158
+          semantic_summary: This region contains function-related declarations named
+            grammarWasmPath and loadLanguage. No purpose, signatures, or
+            implementation behavior is stated beyond these identifiers and the
+            function declaration kind.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 138
+            line_end: 162
+          semantic_summary: 이 영역은 grammarWasmPath와 loadLanguage라는 이름의 함수 관련 선언, 그리고 이름이
+            제공되지 않은 상수 선언과 이를 앞서는 주석 블록으로 구성됩니다. 목적, 시그니처, 구현 동작은 구조 정보에 명시되지
+            않았습니다.
+          boundaries:
+            - line: 159
+              character_before: 함수 선언 중심 영역
+              character_after: 이름이 제공되지 않은 주석 블록
+              disposition: structural_location_only
+            - line: 161
+              character_before: 주석 블록
+              character_after: 이름이 제공되지 않은 상수 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 138
+            line_end: 218
+          semantic_summary: 이 영역은 code-structure-observer.ts에서 grammarWasmPath,
+            loadLanguage 관련 선언과 이름이 제공되지 않은 상수 선언, 그리고 코드 구조 관찰을 위한
+            mapKind·symbolNameOf·docFirstLineOf 함수 및 LeafDraft 인터페이스를 포함합니다.
+            LeafDraft는 kind, lineStart, lineEnd, astNode, docFirstLine,
+            signatureLine, symbolNames 멤버 속성으로 관찰 결과를 나타냅니다.
+          boundaries:
+            - line: 159
+              character_before: function 관련 선언 영역
+              character_after: 주석 블록 영역
+              disposition: structural_location_only
+            - line: 161
+              character_before: 주석 블록 영역
+              character_after: 상수 선언 영역
+              disposition: structural_location_only
+            - line: 163
+              character_before: 상수 선언 영역
+              character_after: 코드 구조 관찰 함수 선언 영역
+              disposition: structural_location_only
+            - line: 209
+              character_before: 코드 구조 관찰 함수 선언 영역
+              character_after: 인터페이스 선언 헤더 영역
+              disposition: structural_location_only
+            - line: 211
+              character_before: 인터페이스 선언 헤더 영역
+              character_after: LeafDraft 멤버 속성 영역
+              disposition: structural_location_only
+            - line: 218
+              character_before: LeafDraft 멤버 속성 영역
+              character_after: 인터페이스 선언 종료 영역
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 138
+            line_end: 361
+          semantic_summary: 이 영역은 code-structure-observer.ts에서 문법 로딩 관련 선언, 코드 구조 관찰용
+            mapKind·symbolNameOf·docFirstLineOf 함수, LeafDraft와 ExtractedTree
+            인터페이스, 그리고 bodyItems·extractTree·spanKey·extractorSourceDigest 함수
+            선언을 포함합니다. 제공된 구조만으로는 구체적 동작을 판단할 수 없습니다.
+          boundaries:
+            - line: 219
+              character_before: LeafDraft 및 문법·코드 구조 관찰 관련 선언
+              character_after: bodyItems, ExtractedTree 및 트리 추출 관련 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 14
+            line_end: 15
+          semantic_summary: This region appears to be a comment block, with no
+            declarations, identifiers, signature, or stated purpose provided.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 14
+            line_end: 17
+          semantic_summary: This region appears to consist only of comment blocks, with no
+            named declarations, identifiers, signatures, or stated purpose
+            provided.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 159
+            line_end: 162
+          semantic_summary: 이 영역은 이름이 제공되지 않은 상수 선언과 이를 앞서는 주석 블록으로 구성됩니다.
+          boundaries:
+            - line: 161
+              character_before: 주석 블록이 이어지는 구조
+              character_after: 상수 선언이 시작되는 구조
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 16
+            line_end: 17
+          semantic_summary: A comment block with no named declarations or stated purpose
+            available in the supplied structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 163
+            line_end: 185
+          semantic_summary: The region contains two function declarations, mapKind and
+            symbolNameOf. No documentation, signature lines, symbol seams, or
+            child summaries are provided, so the region can only be identified
+            as these named declarations.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 163
+            line_end: 218
+          semantic_summary: 이 영역은 코드 구조 관찰을 위한 mapKind, symbolNameOf, docFirstLineOf 함수
+            선언과 LeafDraft 인터페이스 선언을 포함합니다. LeafDraft는 kind, lineStart, lineEnd,
+            astNode, docFirstLine, signatureLine, symbolNames 멤버 속성으로 구조 관찰 결과를
+            나타냅니다.
+          boundaries:
+            - line: 209
+              character_before: 함수 선언들(mapKind, symbolNameOf, docFirstLineOf)을 포함하는 영역
+              character_after: LeafDraft 인터페이스 선언의 헤더
+              disposition: structural_location_only
+            - line: 211
+              character_before: LeafDraft 인터페이스 선언의 헤더
+              character_after: LeafDraft의 구조 관찰 결과 멤버 속성들
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 18
+            line_end: 19
+          semantic_summary: A comment block with no named declarations or stated purpose
+            in the provided structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 18
+            line_end: 21
+          semantic_summary: A comment block with no named declarations or stated purpose
+            in the provided structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 18
+            line_end: 25
+          semantic_summary: A comment-only region with no named declarations, stated
+            purpose, or symbol seams; its specific meaning cannot be determined
+            from the supplied structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 18
+            line_end: 47
+          semantic_summary: "A region defining code-structure metadata: constants, a
+            language type alias limited to TypeScript, JavaScript, and Python,
+            and an interface for code symbol spans. Each span records start/end
+            lines, kind, depth, symbol names, the first documentation-comment
+            line, and the signature line."
+          boundaries:
+            - line: 29
+              character_before: Comment-only structural context.
+              character_after: Constant declaration begins.
+              disposition: structural_location_only
+            - line: 34
+              character_before: Constant declarations conclude.
+              character_after: Language type alias begins.
+              disposition: structural_location_only
+            - line: 36
+              character_before: Language type alias.
+              character_after: Code symbol span declaration begins.
+              disposition: structural_location_only
+            - line: 38
+              character_before: Declaration header.
+              character_after: Interface member properties begin.
+              disposition: structural_location_only
+            - line: 47
+              character_before: Interface member properties.
+              character_after: Declaration footer closes the interface.
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 186
+            line_end: 208
+          semantic_summary: A function declaration named docFirstLineOf is present in this
+            code region; no documentation, child summaries, or additional
+            structural signals specify its purpose or behavior.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 186
+            line_end: 218
+          semantic_summary: 이 영역은 docFirstLineOf 함수 선언과 LeafDraft 인터페이스 선언을 포함합니다.
+            LeafDraft는 kind, lineStart, lineEnd, astNode, docFirstLine,
+            signatureLine, symbolNames 멤버 속성으로 구조 관찰 결과를 나타냅니다.
+          boundaries:
+            - line: 209
+              character_before: function_decl인 docFirstLineOf 선언 영역
+              character_after: LeafDraft 인터페이스 선언의 헤더 영역
+              disposition: structural_location_only
+            - line: 211
+              character_before: LeafDraft 인터페이스 헤더
+              character_after: kind 등 멤버 속성 선언 영역
+              disposition: structural_location_only
+            - line: 218
+              character_before: LeafDraft 멤버 속성 선언 영역
+              character_after: 선언 종료 영역
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 20
+            line_end: 21
+          semantic_summary: This region appears to be a comment block; no declaration or
+            stated purpose is provided.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 209
+            line_end: 211
+          semantic_summary: LeafDraft 인터페이스 선언과 lineStart 멤버 속성을 포함한 영역입니다.
+          boundaries:
+            - line: 211
+              character_before: 인터페이스 선언 헤더
+              character_after: lineStart 멤버 속성 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 209
+            line_end: 213
+          semantic_summary: LeafDraft 인터페이스 선언으로, kind·lineStart·lineEnd 멤버 속성을 포함하는 영역입니다.
+          boundaries:
+            - line: 211
+              character_before: 인터페이스 선언 헤더
+              character_after: 멤버 속성 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 209
+            line_end: 217
+          semantic_summary: LeafDraft 인터페이스 선언 영역으로, 구조 종류(kind), 시작·종료
+            위치(lineStart·lineEnd), AST 노드(astNode), 문서 주석 첫 줄(docFirstLine),
+            시그니처 줄(signatureLine), 심볼 이름 목록(symbolNames)을 나타내는 멤버 속성을 포함합니다.
+          boundaries:
+            - line: 211
+              character_before: 인터페이스 선언 헤더
+              character_after: 멤버 속성 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 209
+            line_end: 218
+          semantic_summary: LeafDraft 인터페이스 선언으로, 구조 종류(kind), 시작·종료
+            위치(lineStart·lineEnd), AST 노드(astNode), 문서 주석 첫 줄(docFirstLine),
+            시그니처 줄(signatureLine), 심볼 이름 목록(symbolNames)을 나타내는 멤버 속성을 포함합니다.
+          boundaries:
+            - line: 211
+              character_before: 인터페이스 선언 헤더
+              character_after: 멤버 속성 선언
+              disposition: structural_location_only
+            - line: 218
+              character_before: 멤버 속성 선언
+              character_after: 인터페이스 선언 종료
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 212
+            line_end: 213
+          semantic_summary: A LeafDraft interface region containing the member properties
+            kind and lineEnd.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 214
+            line_end: 215
+          semantic_summary: interface_decl LeafDraft로 보이며, docFirstLine과 symbolNames라는 두
+            member_prop 선언을 포함합니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 214
+            line_end: 217
+          semantic_summary: interface_decl LeafDraft로 보이며, astNode, docFirstLine,
+            signatureLine, symbolNames라는 네 member_prop 선언을 포함합니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 216
+            line_end: 217
+          semantic_summary: An interface declaration named LeafDraft with member
+            properties astNode and signatureLine.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 218
+            line_end: 218
+          semantic_summary: This region is the declaration footer of the LeafDraft
+            interface; no further semantic purpose is stated by the provided
+            structural facts.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 219
+            line_end: 260
+          semantic_summary: This region contains a comment block followed by the
+            declaration of partitionItems. No signature or stated purpose is
+            provided, so its behavior cannot be determined from the available
+            structure.
+          boundaries:
+            - line: 222
+              character_before: Comment block
+              character_after: "Function declaration: partitionItems"
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 219
+            line_end: 272
+          semantic_summary: This region contains a comment block and a declaration of
+            partitionItems, followed by bodyItems, which accepts a SyntaxNode
+            container and returns an array of SyntaxNode values, and an
+            ExtractedTree interface with hierarchy, rootKey, and spans
+            properties. No further purpose or behavior is stated by the
+            available structure.
+          boundaries:
+            - line: 222
+              character_before: Comment block precedes the declaration region.
+              character_after: A function declaration named partitionItems begins.
+              disposition: structural_location_only
+            - line: 267
+              character_before: The bodyItems function declaration region ends.
+              character_after: A declaration header for the following interface begins.
+              disposition: structural_location_only
+            - line: 269
+              character_before: The ExtractedTree declaration header begins.
+              character_after: Its member property declarations begin.
+              disposition: structural_location_only
+            - line: 272
+              character_before: The final member property declaration ends.
+              character_after: The declaration footer closes the interface region.
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 219
+            line_end: 361
+          semantic_summary: 이 영역은 SyntaxNode 컨테이너를 받아 SyntaxNode 배열을 반환하는 bodyItems,
+            hierarchy·rootKey·spans 속성을 가진 ExtractedTree 인터페이스,
+            extractTree·spanKey·extractorSourceDigest 함수 선언으로 구성됩니다. 제공된 구조
+            정보만으로는 구체적 동작이나 목적을 판단할 수 없습니다.
+          boundaries:
+            - line: 222
+              character_before: 주석 블록
+              character_after: function_decl 선언
+              disposition: structural_location_only
+            - line: 267
+              character_before: function_decl 선언
+              character_after: decl_header 선언
+              disposition: structural_location_only
+            - line: 269
+              character_before: decl_header
+              character_after: member_prop 선언
+              disposition: structural_location_only
+            - line: 272
+              character_before: member_prop 선언
+              character_after: decl_footer
+              disposition: structural_location_only
+            - line: 273
+              character_before: decl_footer
+              character_after: function_decl 선언
+              disposition: structural_location_only
+            - line: 351
+              character_before: function_decl 선언
+              character_after: 주석 블록
+              disposition: structural_location_only
+            - line: 353
+              character_before: 주석 블록
+              character_after: function_decl 선언
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 22
+            line_end: 23
+          semantic_summary: A comment block with no provided declaration identifiers or
+            stated purpose.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 22
+            line_end: 25
+          semantic_summary: A comment-only region with no provided declaration
+            identifiers, stated purpose, or symbol seams; its specific meaning
+            cannot be determined from the supplied structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 24
+            line_end: 25
+          semantic_summary: A comment block with no associated declarations or stated
+            purpose is present in this region; its specific meaning cannot be
+            determined from the supplied structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 26
+            line_end: 27
+          semantic_summary: A comment block with no declarations, symbol names, purpose
+            statement, or signature visible in the supplied structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 26
+            line_end: 30
+          semantic_summary: A comment block followed by a constant declaration; no
+            declaration identifier or stated purpose is provided.
+          boundaries:
+            - line: 29
+              character_before: comment block
+              character_after: constant declaration
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 26
+            line_end: 47
+          semantic_summary: A comment block, constant declarations, a language type alias,
+            and an interface representing code symbol spans. The language is
+            limited to TypeScript, JavaScript, and Python; each span records
+            start/end lines, kind, depth, symbol names, the first
+            documentation-comment line, and the signature line.
+          boundaries:
+            - line: 29
+              character_before: Comment block stating or introducing an unnamed structural
+                element.
+              character_after: Constant declaration begins.
+              disposition: structural_location_only
+            - line: 31
+              character_before: Constant declaration ends.
+              character_after: A new comment block begins.
+              disposition: structural_location_only
+            - line: 33
+              character_before: Comment block ends.
+              character_after: Another constant declaration begins.
+              disposition: structural_location_only
+            - line: 34
+              character_before: Constant declaration ends.
+              character_after: Language type alias begins.
+              disposition: structural_location_only
+            - line: 36
+              character_before: Language type alias ends.
+              character_after: Code symbol span interface declaration begins.
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 261
+            line_end: 266
+          semantic_summary: A function declaration named bodyItems that accepts a
+            SyntaxNode container and returns an array of SyntaxNode values; no
+            further purpose or behavior is stated by the available structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 261
+            line_end: 272
+          semantic_summary: This region declares a function named bodyItems that accepts a
+            SyntaxNode container and returns an array of SyntaxNode values,
+            followed by an ExtractedTree interface with hierarchy, rootKey, and
+            spans properties. No further purpose or behavior is stated by the
+            available structure.
+          boundaries:
+            - line: 267
+              character_before: A function declaration named bodyItems
+              character_after: An interface declaration named ExtractedTree begins
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 267
+            line_end: 269
+          semantic_summary: An interface declaration named ExtractedTree containing a
+            spans member property. The region consists of the declaration header
+            and its member property; no purpose or behavior beyond these
+            structural declarations is stated.
+          boundaries:
+            - line: 269
+              character_before: Interface declaration header for ExtractedTree
+              character_after: Member property named spans
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 267
+            line_end: 271
+          semantic_summary: An interface declaration named ExtractedTree containing
+            hierarchy, rootKey, and spans member properties. No purpose or
+            behavior beyond these structural declarations is stated.
+          boundaries:
+            - line: 269
+              character_before: Interface declaration header for ExtractedTree
+              character_after: Member property declaration within ExtractedTree
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 267
+            line_end: 272
+          semantic_summary: An interface declaration named ExtractedTree containing
+            hierarchy, rootKey, and spans member properties. No purpose or
+            behavior beyond these structural declarations is stated.
+          boundaries:
+            - line: 269
+              character_before: Interface declaration header for ExtractedTree.
+              character_after: Member-property declarations hierarchy, rootKey, and spans begin.
+              disposition: structural_location_only
+            - line: 272
+              character_before: Member-property declarations are present.
+              character_after: ExtractedTree interface declaration footer ends the region.
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 270
+            line_end: 271
+          semantic_summary: "`ExtractedTree` 인터페이스는 `hierarchy`와 `rootKey` 멤버 프로퍼티를 선언합니다."
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 272
+            line_end: 272
+          semantic_summary: The region is the footer of the ExtractedTree interface
+            declaration; no specific fields, purpose, or behavior are identified
+            by the provided structure.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 273
+            line_end: 350
+          semantic_summary: 이 영역은 extractTree와 spanKey라는 두 함수 선언으로 구성된 코드 영역으로 보입니다. 제공된
+            구조 정보만으로는 각 함수의 구체적 목적이나 내부 동작을 판단할 수 없습니다.
+          boundaries: []
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 273
+            line_end: 361
+          semantic_summary: 이 영역은 extractTree와 spanKey 함수 선언, 그리고 주석 블록과 함께 선언된
+            extractorSourceDigest 함수로 구성된 코드 영역입니다. 제공된 구조 정보만으로는 각 함수의 구체적 목적이나
+            내부 동작을 판단할 수 없습니다.
+          boundaries:
+            - line: 351
+              character_before: function_decl로 구성된 extractTree·spanKey 선언 영역
+              character_after: 주석 블록으로 전환되는 영역
+              disposition: structural_location_only
+            - line: 353
+              character_before: 주석 블록이 끝나는 영역
+              character_after: extractorSourceDigest 함수 선언 영역
+              disposition: structural_location_only
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 28
+            line_end: 30
+          semantic_summary: A comment block followed by a constant declaration; no
+            declaration identifier or stated purpose is provided.
+          boundaries:
+            - line: 29
+              character_before: Documentation/comment text
+              character_after: Constant declaration
+              disposition: structural_location_only
+      nodes_total: 109
+      refuted_disclosure:
+        - node_ref:
+            file: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts
+            line_start: 36
+            line_end: 47
+          line: 45
+          character_before: The interface's member-property declaration region continues.
+          character_after: A subsequent member-property region within CodeSymbolSpan begins.
+      refuted_disclosure_total: 1
+      unanchored_unverified_total: 1
+    node_epochs:
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-1
+        subtree_epoch_contribution: d3de7e8bb719dc425bdc22bf12e66b92b6b4ce9d81fd6d23ebcf294a72305b70
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-17
+        subtree_epoch_contribution: bf1dcad387db0f0ff5246f16836638974a8302b155ba4f802bc86ff984a05941
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-2
+        subtree_epoch_contribution: f784c19db4895ffb1e33d3a8498bbb067e2fccce03b93a3be996b1edd4a3696b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-361
+        subtree_epoch_contribution: 8727977dafa9f060d31d1627e812458ddedcc387d0e4e42e2525954894a3d5a7
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-4
+        subtree_epoch_contribution: 15bcfee7d119a8a0ad0bbf865104db54f2d5bbee651c5867b76acc1baf46fe79
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-414
+        subtree_epoch_contribution: eb44a1a2dd633e69db545a8ebbf309e2c0c1b842bea45b16e11b8e2e54282861
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-47
+        subtree_epoch_contribution: c2b183846fcd295126e34fa8b8a685034c820f7c9b3f750c0ec951e865ad2dd0
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:1-9
+        subtree_epoch_contribution: 3efd1bf778105e2f95f96fcf2f7624ac0725e465d3309a122eea0a7f88432129
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:10-10
+        subtree_epoch_contribution: 4078e23ba8f2c7a7bf4c4bd2d386b9c13faf0a7d8d41c5704463935902b3d00c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:10-11
+        subtree_epoch_contribution: 54924c63b306aadbe202c78861c68a9f5b4da97f435e74a263cea5261db8011c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:10-13
+        subtree_epoch_contribution: c4b379e05cf04faa4572d10c79c5319961ae88f54e4cc379ef9c192790decfec
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:10-17
+        subtree_epoch_contribution: f65899c0033624199ad2ce1220178e7c5ebfcd04d6e7c6e19479ca28da5aac75
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:11-11
+        subtree_epoch_contribution: 8f7406d5659f4149209847e09f6021c97745ef5fa10092d5cc5ac004eede5d44
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:116-126
+        subtree_epoch_contribution: 3fdc37e2a0721e1a7d50d290c7320e62c8c5141716fcc5f20537326b153558d1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:12-12
+        subtree_epoch_contribution: 4266e2f0fdd28402088418abe25a506c9e8f49efc219b98c4e7f1f598398003b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:12-13
+        subtree_epoch_contribution: bf7896d6e759c67bf6a74538aab00ade47a7ac5f164b9e57e15f496aac8cae3e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:127-131
+        subtree_epoch_contribution: 9a617c4fd433063a33279648af85df9451cb6bd6497925f7d3f01e3f991b498f
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:127-132
+        subtree_epoch_contribution: be583cc0160ab77f90883f5bbf5d0a0c84838c7cef4a6e8196da2c825586c412
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:13-13
+        subtree_epoch_contribution: 618428566a2ff2584405dcac1b130458752dd221dd863f544ebc5b6c5ea866a2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:132-132
+        subtree_epoch_contribution: ed94588f1545b23fbbfaf077821c3ae12102181e371f5bfdaeed0ac1cb227bd4
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:133-134
+        subtree_epoch_contribution: 8e8e0141aa4a2e9ffa6cda798ecf27bf6fd48106491753b9464457049e555cee
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:133-135
+        subtree_epoch_contribution: 27a6d49fa628659b24905bbf93da68d082512ed886b80fd52821ec8008574f0c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:133-137
+        subtree_epoch_contribution: 46f9ccf8395593c93db9ea7cc423c2ea3bf116e9b6282f5267a7fbb1ea224087
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:135-135
+        subtree_epoch_contribution: 8427e32b121532bce1923419f3a60ca90275e1a0811a3b560d897932189a2721
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:136-136
+        subtree_epoch_contribution: d14e03b25f1032f394029c75fb009c9467f7257b735cbab4962b40c5a83381b7
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:136-137
+        subtree_epoch_contribution: 791a46a8351ce330731543d24bf83f348502258c26911c5bdf57513ce5758362
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:137-137
+        subtree_epoch_contribution: d2a9dd24df38367fa8080f072b4496175624caa958cdc6dc2ce2e5dec7718362
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:138-141
+        subtree_epoch_contribution: f7276a6ffe2971aa72518004c23205d312742186a7acd002269fccc2f2b9a54a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:138-158
+        subtree_epoch_contribution: 3a9bf26085a886afd5bcde17638314ee64a13da0d6b9e1654f18f46539d5c412
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:138-162
+        subtree_epoch_contribution: 46c617d4d349358b235696e4e8a4a77a7e0414f3058f46a6cde88ac063e44642
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:138-218
+        subtree_epoch_contribution: 8c696f884d5577f3f01c3ca314d1e09217c8958bb06efe079e81ab49c40032e5
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:138-361
+        subtree_epoch_contribution: 2877feb12a1c698c2dfc61d59c59fad261a1434d76f679129b5556e3a6b668b7
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:14-14
+        subtree_epoch_contribution: dc0e2b3b4f4a174779acb553ef778cbfa8bda0064819f0ec417572974c93d3d7
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:14-15
+        subtree_epoch_contribution: c5f8aacabdda8d64d2b40faf7859d3fd84dd897539d1842f5c35740d110a7049
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:14-17
+        subtree_epoch_contribution: 8657565fcd462fa361ea6f2857d43320663f0aa0fc4f0466dc4249e8be2cb35c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:142-158
+        subtree_epoch_contribution: 8948cba58ee8e759d8c70a2587bdbf232796f301bae99b8b2c4cf2a10bd4def8
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:15-15
+        subtree_epoch_contribution: 9adb239d892a9ee6b1263954b1241e639e27099128b137c2c13f9874f8cc812b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:159-160
+        subtree_epoch_contribution: e38916b5660d43a7018cfad9bfe3c91e7659e10a458633afe56bd4aa61601840
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:159-162
+        subtree_epoch_contribution: 1235ca7a011efc0f82b732c34efd7804bb75421fdb68f70c62f835bf3ae60c74
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:16-16
+        subtree_epoch_contribution: 1b34dbdba3c77a0032448d8e21e9cb201564d045cc97a1a9ba974de7b57b577d
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:16-17
+        subtree_epoch_contribution: 75bc140e97f1d554ad5edc10c420f6aebd462c999505bac15646736dc31808d2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:161-162
+        subtree_epoch_contribution: 036dc8ede1b9187c508a78b8cd3ee8c64cd6c8efe781b3665019db2dcae40eb0
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:163-180
+        subtree_epoch_contribution: af14bacc42ab11dd1a6c32f15c98b36b8c17ba6b9a0471a01ca4937348581b57
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:163-185
+        subtree_epoch_contribution: 860ebb67ee0c09e0b770cb5016fc09481d17d6de8dea02e63d725e8d2dfd7762
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:163-218
+        subtree_epoch_contribution: bae5e4ba098e0a6b573dce9dd9e5881a9b6bab62c9909161b3c4ff344a1869ab
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:17-17
+        subtree_epoch_contribution: 339910edfbeeb8271c447b53322009c466ab864a46e5d9ffcdeb12e2d55ba6b2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:18-18
+        subtree_epoch_contribution: df45eef52e0dcabbb1331f451255b32ad0c25f997caa41d989ecd31eea19d38a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:18-19
+        subtree_epoch_contribution: bea7194eb0a1ee6fc16a2e58ee7909c80ddd0ff8054e64ca01b443f527576a64
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:18-21
+        subtree_epoch_contribution: 40cc2f788e5804a3b53694a0af59755c005cffe21a7c6126147551f53af507cc
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:18-25
+        subtree_epoch_contribution: 360a913f2d2897b7fe1cd9f3bde0a6e5fb58c10581f55e35145cc17af5b2e81c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:18-47
+        subtree_epoch_contribution: 3b03acc54b0c5c2e9825d01056e565f4946cd0cd1f1d4c477af4d6f5a11559f4
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:181-185
+        subtree_epoch_contribution: 7f0a5d928d45bd28d9faabca51f4ee9cd682318ade4dc5df5db06d654b15c735
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:186-208
+        subtree_epoch_contribution: a62d0d85b439219bd1b2d4009c5dc1d34fa5d94d3f2e0816f91ef1cc8e70cd02
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:186-218
+        subtree_epoch_contribution: 79e9b104d5348c8c8965f9a83f253005c73c2a2cd65d0ad795df14d078756ca1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:19-19
+        subtree_epoch_contribution: c2efaadd3a2c8e58970406b5418f4a9fc7ac0a08787c178cacb3cb582684fcf6
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:2-2
+        subtree_epoch_contribution: 68fb5d16fb14f328769f0d0a49049bc551438f3f1fb91d8764cec5a54b57ed03
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:20-20
+        subtree_epoch_contribution: ccfd0c3397e6167c28b7712baea9477fcd0477496cd583c649a49b71e5ccb85a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:20-21
+        subtree_epoch_contribution: 70c69c9ca26b270660fc7189aa507f3ca9f8ce6e2c2224e83909338870e8e5a7
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:209-210
+        subtree_epoch_contribution: e73327cca736a202ffbf45299b71e6311afd02baac0feb7c1a6663b9724d9148
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:209-211
+        subtree_epoch_contribution: 64bfaa44e032101ae7011370b3a19ff2a05b61e10766295b15722de2e236bd20
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:209-213
+        subtree_epoch_contribution: 828135e729ba73a3cd22a40060d744e481a487e896a37252e9627d0f63b34fc2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:209-217
+        subtree_epoch_contribution: faa6c60660ada19fa09981cd8005b669ffc448601bb9e8799bb92de75dfa8ce8
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:209-218
+        subtree_epoch_contribution: 61eee2e46d41d1dcedf0a92af0d192f9b77eda949e07387a868303968c5c7198
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:21-21
+        subtree_epoch_contribution: b32bbe15e6acd657df21982b9495427e986c8a47b4795b9edb4c25ac5b13d8a0
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:211-211
+        subtree_epoch_contribution: 0732fbd813c7ca24dfe18537d4e7de2ff5e995cfc231c2488c91f4986e67a964
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:212-212
+        subtree_epoch_contribution: 73a53bbfa26bc6dacf4afddfd2ca82558de8e801b4ae9663437adbc05b908e47
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:212-213
+        subtree_epoch_contribution: d53cb5e06e40c09d2654ff6ecca2adbadf5d90ff2592dd30f9d4fcc3e0dcf4b1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:213-213
+        subtree_epoch_contribution: 35229bf7fca836636e5b3f78363170274d143715611f4b81bca2ebabd175e6de
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:214-214
+        subtree_epoch_contribution: d4b34760b08f1fddae0f0b6b87fada7548d7b914ca6552e56bd32696ec747093
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:214-215
+        subtree_epoch_contribution: acbd048257600e863a15e947dbd833c86cc8bf0dbb6e9facf65fbca3aaf61026
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:214-217
+        subtree_epoch_contribution: 01cbd00f9fe0185a2b283073a6da23a6802c34bbaf564718692b815cf8b59a8c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:215-215
+        subtree_epoch_contribution: 36defb5ddef8f56641c22e56499ece0684ffb5787b8b466c79a8c0e03ce185ff
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:216-216
+        subtree_epoch_contribution: 426584a9ec9a7f1a4963b1de98d88c4748e423b053a97972470738c8cb41dedb
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:216-217
+        subtree_epoch_contribution: f53311779fbbbc6debbba2aceb20dc6f58e57567857c819ce0c08be05bfa3340
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:217-217
+        subtree_epoch_contribution: bc410ed828b620ab59af1f3f0e46510723aa542d96e187aa74ad2b44ff9e4870
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:218-218
+        subtree_epoch_contribution: 2b0b8dd49291ead520f6f9f100c9ae26defba098254eca6a211bd8af192766ec
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:219-221
+        subtree_epoch_contribution: b139299802cc04babc23e55f9803079a362e2aa55d2394621f0fe3bfdf5c9bd2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:219-260
+        subtree_epoch_contribution: 5a99ea00fead6374ec9425b118cbc10b254e60f302ca833649ccb8a2ee62d45b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:219-272
+        subtree_epoch_contribution: a53cf8432354ea221aaf0fa38a13672d80a7451c3ceb4c045f23812d12567141
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:219-361
+        subtree_epoch_contribution: ce24951ee87bb784cb79ff034221ab108639eb7bad021c61af1d7c262d24aea6
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:22-22
+        subtree_epoch_contribution: 3b946aae6031f58400f0445ddee61df5a54e018b6707869048fdde0101bb3166
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:22-23
+        subtree_epoch_contribution: acc3267e14e7ff39bf70b28dd83f779e45459bf785c317747b3faefd9a150f38
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:22-25
+        subtree_epoch_contribution: 0c39b4847f30280d41c942bfb4e5280cb8127937329792dc5d08739d55fd6331
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:222-260
+        subtree_epoch_contribution: b33f6b1ebca5d19462dd18f8ee5f4401b191404dd31db0061a5a37f147dc71a2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:23-23
+        subtree_epoch_contribution: cd3b1458aaf0bc1bb4fe5d8a9b60f83dc0e7c9bfc59eb79a7228b6ee373c69f2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:24-24
+        subtree_epoch_contribution: 0f074b906fdb8a713be9d8464406b16ab596ccfd04791e88436e76ffaa52fe32
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:24-25
+        subtree_epoch_contribution: 15be98d0a33bae3a01b78e387129119977d7415d335a21a89b200ac53dbb92cb
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:25-25
+        subtree_epoch_contribution: 48b8978cc0be1b0331df882d5e85a6f8ebe0fb6d7b982b69d066c45ac1bd3a68
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:26-26
+        subtree_epoch_contribution: a0a367c8e4069edb2919009bd571fd5a78124a45cd9d83be544746953f16e421
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:26-27
+        subtree_epoch_contribution: 30de5920c60d50b976827e1962ccedf7c147fbcd543245fcf93237877b00be05
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:26-30
+        subtree_epoch_contribution: caeda509b10ebf855be5b880dfb91d052a52a0a8fad7e613411cb035b2082c56
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:26-47
+        subtree_epoch_contribution: 42ff78e418e9ec1e70106eaf19a752d7cff7b4aff3fe28f157c51765929337c6
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:261-266
+        subtree_epoch_contribution: 3778307703e518b1832437087f17d2ef3c728ec18c3e53110b0a8ae1b3108c5b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:261-272
+        subtree_epoch_contribution: 529c4376a61490637d375b6a9e29f6ace444865ec4c652ec8fde50c4a0308a32
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:267-268
+        subtree_epoch_contribution: cb1232c53b5b40bc293af8ee49c1d79dcd286d70494a5442ed7c78338073ee33
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:267-269
+        subtree_epoch_contribution: 7de795ecd20137a975a6cdcb4000571e3df6e29fbbf5b09d2e52816b7443ef0f
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:267-271
+        subtree_epoch_contribution: 119d1c0209d12137379a38116adefde46bba4f25c835001d15c7d5c2033ae750
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:267-272
+        subtree_epoch_contribution: e53cd05539b74285642b7b5caf230b68b9e7c37e914860556b2ad6c4131feb8a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:269-269
+        subtree_epoch_contribution: 165c40172f0adcf96d34a822386ba64974902d8684acde5ed698f253bda74445
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:27-27
+        subtree_epoch_contribution: 72fee024857f9c22d6260f98c567f0765a8da388bb95a068cf9d11b6db7f099c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:270-270
+        subtree_epoch_contribution: 80f26594318cf7766250b01caf98bc08f73a015cfeb98feb0aa25b18126957eb
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:270-271
+        subtree_epoch_contribution: 567ec490206ed7c419ed4432529d22a4db6d8103d214d98f4a312cf7c8498ca2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:271-271
+        subtree_epoch_contribution: c0d26972e2a2829b056345d14eb4de7c8cf862830af08ac8758c4aba47899552
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:272-272
+        subtree_epoch_contribution: a30b6a0cf79da92c3a8b2bc6d75599571e23967cb5ce8f64173001b41d77d6f1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:273-276
+        subtree_epoch_contribution: 797ff477188f5b77ac25d1ec5175242024515b384134d127e8216663ea9459d1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:273-350
+        subtree_epoch_contribution: 7dc6f011a4475e4447a44507fde68997e963cf456d54f2c59128b91e8d7b6a5d
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:273-361
+        subtree_epoch_contribution: e3d3f8f60703d934f2cd099b7a9e510b7a13a8925a0f63d3f9eb5f0d7735a01b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:277-350
+        subtree_epoch_contribution: 4704df8c079b0bbe3329bda3efb1bbc619ea2c1050f9d1510fd1504339d3945a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:28-28
+        subtree_epoch_contribution: 628b4fab9e7310579a151e898c0fc24c0a45718a785650c082e31f69e3118305
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:28-30
+        subtree_epoch_contribution: 154e78bd65eeb1f98effbc5ae78f3114964e77b06e07ca7020a927ed78600581
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:29-30
+        subtree_epoch_contribution: b3add12d72e3808c17bec017e64c11880588c6c207ce0f14e2e5b00ffab5458a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:3-3
+        subtree_epoch_contribution: dea0bf3d0ab9621fca36ad681b2b31102a535a3640f3970639d3db0f7915a122
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:3-4
+        subtree_epoch_contribution: ad4faa293742999848c88dc0a3c4b7840b1bedaabfa09a7a8350b9053ddfa56a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:31-32
+        subtree_epoch_contribution: e64621c835490267773395e36e833f9bfbe6c1715e33c0af4bb455f5393e73e1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:31-33
+        subtree_epoch_contribution: c1a61269635bf1ab65907f64f7456a066c8998c16c5c9b4069d6e5a64cc305fa
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:31-47
+        subtree_epoch_contribution: 728516e3b89fa92fdc3a4fd5839f438747dbf7800035e3debc25aa7b79f6b072
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:33-33
+        subtree_epoch_contribution: 94c79e18bda54b012eed8968e107b59cb982ea4429d235d2388442ad06588a7e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:34-35
+        subtree_epoch_contribution: 29318268144ddd9a795f4b9d92b5f84a9e0b1dea75f9aae583a120a9965eacd9
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:34-47
+        subtree_epoch_contribution: 2ffcd63834dbe901d261bd30ccd0b844eead1bff2e4a7a358d1a30b88bfb28ef
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:351-352
+        subtree_epoch_contribution: de77dfb434b739ce4d6e01b15a8fe52fb370557ebe9083b739740dfb75712b90
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:351-361
+        subtree_epoch_contribution: 69747d158ec881f7ea7a3010658a7a0b646739ecb85186999800daa3baa4c1b7
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:353-361
+        subtree_epoch_contribution: 546fd680030e7e313d07a11c8b8bb6970f2fdb048863032e79be1c3571c65000
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:36-37
+        subtree_epoch_contribution: bb8527df5f6fba0ba1d3c6f1b6a4523700de518fa9fc4178af5f863593bd072e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:36-38
+        subtree_epoch_contribution: 55360fbb01104bd3f1eeafab67143d836446f8ad7e26ed3e428faf6b4abfeaa3
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:36-40
+        subtree_epoch_contribution: fbffb04836681a14139c0a0e7137f42ffc29ac4b16cb70d455f0029dd1fb3292
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:36-44
+        subtree_epoch_contribution: 85390143cee7df4c5c90095fa4b9bcdacf81b69c2f5ec160a921aad5a8f64cdf
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:36-47
+        subtree_epoch_contribution: 2b228cdbadf8dbbffef688154cbd60c9aa77f0cbce3c9c91b80664c495e61c0e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:362-365
+        subtree_epoch_contribution: 3b0ec8060a0ec417e0fd655611d92cbf1cca01cae2112ebdc42693acef1df743
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:362-369
+        subtree_epoch_contribution: 8339237897ce0d6001748f1201291500e1e747a53549665a8468581c6de9e144
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:362-414
+        subtree_epoch_contribution: eabcda8a4850ed8aad583f06834595ae14e68fa6702451380e02bd1291dcdef1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:366-369
+        subtree_epoch_contribution: 699d84e7772f2d3720576dc701570d4c36d67f818fda849b9279a7b8f4fdd244
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:370-414
+        subtree_epoch_contribution: b4fa7e923db9ee4e314f69b5ed4384358c8a01569fe0fd9d06302569ca9e356b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:38-38
+        subtree_epoch_contribution: 96895af04e017a1b450f0edf9abd8f8560eeba1c38a1301e8369faa05ee24ab5
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:39-39
+        subtree_epoch_contribution: 490f1eaf56728f7b7c9994ddcce49cbc8a5d0ee0fa41a89a35db54314616940c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:39-40
+        subtree_epoch_contribution: 5a86c0aa56037ab282e64c52434c221a67597f9418025de93269b319ee10119d
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:4-4
+        subtree_epoch_contribution: fb2f455f59824ee2fd453a504ae3996a615516f348649830c82a7b99fb894144
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:40-40
+        subtree_epoch_contribution: f6f594ca0b90288e7c9eafa65fbedf158796ae16f70db202fdd84da622d75a15
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:41-41
+        subtree_epoch_contribution: 6ae1e59d7b18df7c93bb1fe35c38220c49d26e6054819eef1dfb9360b17ae394
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:41-42
+        subtree_epoch_contribution: f4e044a3721e0a0ce564f1573191546c9b1a410b89bd150baa43c761c7f2fb1f
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:41-44
+        subtree_epoch_contribution: 6eac24841fb06e4ba8a353279ab3f5c6d666d807dfbbc17c25414ceeb57f4856
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:42-42
+        subtree_epoch_contribution: 62418dd16cd41bf8ede4a9d4caab658edf3b6fd43f2a0394198827c296141ff1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:43-43
+        subtree_epoch_contribution: 0133ba789e7834d046072bff1e826aed5b072dc3b22abbd6c172b6b96cb89461
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:43-44
+        subtree_epoch_contribution: db9d0f685cdd06fd820a32e193b17a9ef76a2d65bc8e8b5c7356faf7ffd45137
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:44-44
+        subtree_epoch_contribution: dcb293c9bf5cc528332a03023ba266878bf57efaeb0ec494f1753b9441b63c81
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:45-45
+        subtree_epoch_contribution: e2ea7788317349ed76b6eac7a3477ad15092e38dc13f271833c105c161b7697c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:45-46
+        subtree_epoch_contribution: c5e3ceda4e8ce47fdbcda07d2bbf670f6ff20e8eacb94c3cd6f2c568d5849758
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:45-47
+        subtree_epoch_contribution: a651976be8c6a9ec413b2bce23f0e8f1b24f95d74d67643fac77f00a67cbb5b8
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:46-46
+        subtree_epoch_contribution: d96fd98763c4012ac49f6c4d8a679a85bdb27a7c341f1dcd2f0e678a27e69a3e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:47-47
+        subtree_epoch_contribution: 6d056531020ca40a37ad03640e4a2b4b2e259d8d794b7567922bcedc37fc2e58
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-137
+        subtree_epoch_contribution: ce77f266a822785eb23ba6aeed3e253f646b580975979267a0a47a639b7f859e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-361
+        subtree_epoch_contribution: fd53113a68bd6cd8a3dfe0f3b9538239e6850afb28f9c546cb957ebaa297dfea
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-49
+        subtree_epoch_contribution: c46dcf33a057d04c840e931dfb58e348f13cae1c16fbaa38c193814411824bab
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-50
+        subtree_epoch_contribution: 1baaf00bc811a069e0336e2411b3c70162fdded3bc8f5000fedee3e5f80e29f1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-52
+        subtree_epoch_contribution: fc870c344f03ee9d78d32883f595ad14f6411a657da071e02b5951a2d75a6e64
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-55
+        subtree_epoch_contribution: 5c59d26f1500046cb664a4b5136084f4b209e3db5a57bd806f333bd4fac37fec
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-68
+        subtree_epoch_contribution: 8011b406085acc49b6a97b2cbc4448ba7f3685593017cc45b42dcac57f978b0c
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-74
+        subtree_epoch_contribution: c0d61f2701b514488e86fed79c5c3bb4df4937e8d739db8ea136576ebb5f3559
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:48-94
+        subtree_epoch_contribution: 0e67d95730c56380b16d5429b3a84d7a47f3b5679f60ab951ade77edf2caea7f
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:5-5
+        subtree_epoch_contribution: 09e326e745be2df36fab4e4a5290f8c6ba4cb66c358b4492173810d964ff0791
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:5-7
+        subtree_epoch_contribution: 975dc9fff24de0808f9ce1638f3af442c252f53bf599e9cd2a40e80eba36753d
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:5-9
+        subtree_epoch_contribution: a89b8ff770f550e68d7bf8cc3f6bace12922044f067a4d82d57b8764a490a677
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:50-50
+        subtree_epoch_contribution: 1343591b9d153d3216c5f2df55113350c8b3b803542dec52642ec41e52304fda
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:51-51
+        subtree_epoch_contribution: e314515269674ebb2fc34e76a7f2e05fbdac5c86def8359fb865299093bf2f39
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:51-52
+        subtree_epoch_contribution: 9d12d8a9f8168310d69bfd08d00fab9c1dc9600886c755254332200b89361ff2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:52-52
+        subtree_epoch_contribution: e04664fa709d278ed9ee0523fe8b473fa202442493a0b00cde1cb5760d998353
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:53-53
+        subtree_epoch_contribution: 7820fb250456666ce137b307687115b810f158000d272fc95bf99ce4586b224a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:53-54
+        subtree_epoch_contribution: 18c8c41936935fc171f781db284f5fdf2122258d3ea75a9a2e1e166386b3a6e8
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:53-55
+        subtree_epoch_contribution: 7694de1bf5f0883b842d8ada0a6a050c349e110a5dc5725d6c51ad00bb9829bc
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:54-54
+        subtree_epoch_contribution: 3d7405e57fb1ec7cc5614f56cbcf7acac5d03e200f205bcdc90e9fc48ad39d14
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:55-55
+        subtree_epoch_contribution: 544bc2af6bff8848bfaec26e3add1e741bbd104cd1011ba97f7dd25653da4f83
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:56-57
+        subtree_epoch_contribution: 18a04585c046337b1a4849d1b42d0d228cd5d43cfa8491800fbce4a16208fc09
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:56-58
+        subtree_epoch_contribution: b18709125c0ac2b98c4b16a9dfbe2d728aa8e36d4ce670b6e97115ebd1fe2a38
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:56-60
+        subtree_epoch_contribution: 1d0aa0a995fdc87cfdfd25349294cd833fcb31ffdb491ebc525bd1b18ebb0e95
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:56-68
+        subtree_epoch_contribution: bdd4eed4b9c2a8e8c57c0f1d441210f7362ac9bfe186ab12c499b5318e4d832b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:58-58
+        subtree_epoch_contribution: aab0000d90c8e6fa6830b4499b13001dbaaa1a9d92aadc870c9e60101d9354f3
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:59-59
+        subtree_epoch_contribution: ad827815793c2efddb6521ee3512eebc3a7e6b352242702ac39f116505cad33b
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:59-60
+        subtree_epoch_contribution: 8539c6e5cf18056eadabfd5dbf467598446e65caebbc5e6638269a639cbf55fd
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:6-7
+        subtree_epoch_contribution: 87cac8fdbf52482ce4f020bab56d0b78e8e929e9295ae8ceb142a2e874fd7c73
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:60-60
+        subtree_epoch_contribution: e2712941d7f9cae23878f89c417ee48046f6d8430590b52e3837926ec66b29d3
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:61-61
+        subtree_epoch_contribution: 2a543d3ebd7ae0fb6da1120095c1438ad2a4980738e12a1c5c4348cda7d371ff
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:61-62
+        subtree_epoch_contribution: 7a653b19bb9361c76155865fb8bc0801e68957264f284aa96167c28b5d13d9fd
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:61-68
+        subtree_epoch_contribution: 3da696f167d485b72e77786cccf8e7fdd390ffd19fd70239288b54aa4b0102db
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:62-62
+        subtree_epoch_contribution: c5cbfa938607d03935756979047fbfce3e4ec62ab4d8d2b51f563fa271385501
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:63-67
+        subtree_epoch_contribution: 1e5c46c641b247b4a11e4aab71da896312e1981e8990ac6d902809ef9735c36d
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:63-68
+        subtree_epoch_contribution: 3cdacf9def7801d103847e55a1ac290d0271f4de316547b52f579a8af1040140
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:68-68
+        subtree_epoch_contribution: ca5f9820202d07f327d683929a0f7c7f356bfcb490024bfb161736c0e4520c6a
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:69-72
+        subtree_epoch_contribution: f2b4c38f269a1bf6991f4bfe68f06b78d8b6bdae4478e8b5540b6c484b6d74b7
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:69-74
+        subtree_epoch_contribution: 7af9b601935af01c687931de615067eadfac1bc12718143311d6a935dd093a2e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:73-74
+        subtree_epoch_contribution: 139d7da0159d455cc0e37221b17f4c09232d05d35c260ca8029e23adcd6ea5bb
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:75-85
+        subtree_epoch_contribution: 5bda4bda68bdd68ecaf64eed3429a24e88d444928ee71ea3a3582b328ab2bb99
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:75-91
+        subtree_epoch_contribution: 77f9edbed60d26570b7a0e827692750d388341d4e79471e170e990f9a64a9168
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:75-94
+        subtree_epoch_contribution: 951f96c4bf7a55527b5ea327661ae6b04c1ca65bae5a8b03d8b5f447e10b03d2
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:8-8
+        subtree_epoch_contribution: e21b8ec3ddb6ae9315c350de90647c1985b229389ed7a83ead6b8a6277713e89
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:8-9
+        subtree_epoch_contribution: a2bfd608f7a8d164ad64efa21c6d2e81ee88e4653471040138158026f2084128
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:86-91
+        subtree_epoch_contribution: d83e4d6a4f7e8d00f660afb90ac1bf545c6397d248eef8acddcf2a7448c65a1e
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:9-9
+        subtree_epoch_contribution: 7592691e8b066b7d6b9d5a76c230d099060a8c26ccd17174ea296bb553c563f8
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:92-93
+        subtree_epoch_contribution: 68b4cc2fb0aecfc62c8997198055704a533d2d9ab77b9c481863b2df3ccb34f5
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:92-94
+        subtree_epoch_contribution: b3e79cdf4ea882e84ad0673e1686c2d870e89a353a2aa5e5b9380ea6d553a773
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:94-94
+        subtree_epoch_contribution: a1176598f4a78554121cb9ed9080856f43edc82ee25c2c993d638556c4f48439
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:95-115
+        subtree_epoch_contribution: 45e2e9713408d87b9eeedcd1836e18ad81ffa9fce97d7f4c93463523c6f18ac0
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:95-126
+        subtree_epoch_contribution: 84b6f2ddb2cf2846ea90664a6adb5ece9835481b4bd4b21a4efadd0050adc764
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:95-132
+        subtree_epoch_contribution: 58bf47972d11c67874d844a369f3cd15bd818bc56531c67886fd27b88c7121c1
+      - key: /Users/kangmin/Documents/onto-mcp/.claude/worktrees/review-ontological-anchoring/src/core-runtime/code-structure-observer.ts:95-137
+        subtree_epoch_contribution: ac46dac1c911de96b3166024cb7d8f184511e8f29a60ea6998390d0957eedd70
