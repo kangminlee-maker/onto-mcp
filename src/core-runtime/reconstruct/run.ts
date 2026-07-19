@@ -51,6 +51,7 @@ import type {
   ReconstructMaturationValueDischargeArtifact,
   ReconstructMaturationValueDischargeCensus,
   ReconstructSemanticMapCensus,
+  ReconstructSemanticMapCensusCodeUnit,
   ReconstructSemanticMapCensusColumn,
   ReconstructSemanticMapCensusObservation,
   ReconstructSemanticMapResumeValidationArtifact,
@@ -332,7 +333,9 @@ import {
   type SemanticBoundaryVerification,
   type SemanticBoundaryVerifyInput,
   type SemanticEpochPreImage,
+  type SemanticSeedBoundary,
   type SemanticSeedProjection,
+  type SemanticSeedRefutedDisclosure,
   type SemanticSynthesisInput,
   type SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
@@ -344,6 +347,31 @@ import {
   type ReduceTopologyTrace,
   type SemanticNodeKey,
 } from "./comprehension-reduce.js";
+// Step 6 (multi-artifact design 20260718 DD6/DD7/DD9): the code artifact's L2 realization — the
+// stage routes code-kind observations through these; the spreadsheet surfaces above are untouched.
+import {
+  accumulateCodeSemanticMap,
+  assertCodeSynthesisInputBounded,
+  assertCodeSynthesisOutputBounded,
+  buildCodeSynthesisInputForNode,
+  buildCodeSynthesisMeta,
+  projectCodeSemanticMapToSeed,
+  reconcileCodeBoundaries,
+  type CodeSemanticBoundaryVerifyInput,
+  type CodeSemanticSeedBoundary,
+  type CodeSemanticSeedProjection,
+  type CodeSemanticSeedRefutedDisclosure,
+  type CodeSemanticSynthesisInput,
+  type CodeSemanticSynthesisOutput,
+} from "./comprehension-semantic-map-code.js";
+import {
+  foldCodeStructureInventory,
+  codeReduceNodeKey,
+  type CodeReduceNode,
+  type CodeReduceRegion,
+} from "./comprehension-reduce-code.js";
+import type { CodeStructureInventory } from "../code-structure-observer.js";
+import { classifyFrontierCore } from "./comprehension-semantic-map-core.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
   llmTouchFingerprint,
@@ -465,22 +493,35 @@ export interface ReconstructDirectiveAuthor {
     input: ReconstructValueReadStageInput,
   ): Promise<ReconstructValueReadStageOutput>;
   /**
+   * kind 광고 (multi-artifact design 20260718 DD7, optional): the semantic-map artifact kinds this
+   * author's capability pair supports. ABSENT = ["spreadsheet"] — not a code default but the
+   * EXPLICIT reading of the pre-advertisement contract (what a non-advertising author actually
+   * supports), so legacy authors keep byte-identical behavior. Consulted only by the stage's kind
+   * routing (유효 kind = settings 옵트인 ∩ 이 광고); a non-advertised kind's input can never reach
+   * this author — the stage routing is the sole supplier.
+   */
+  readonly supportedSemanticMapKinds?: readonly TargetMaterialKind[];
+  /**
    * Layer-2 semantic-map stage (wiring design 20260702 §15.1): synthesize ONE reduce-tree node's
    * semantic judgment from bounded deterministic facts + child summaries. Non-authoritative /
-   * provisional; the module enforces the source-safe envelope (assertSynthesisInputBounded).
+   * provisional; the module enforces the source-safe envelope (assertSynthesisInputBounded /
+   * assertCodeSynthesisInputBounded). The parameter is a per-artifact union (DD7): the spreadsheet
+   * variant's shape is UNCHANGED (no discriminator added); the code variant carries
+   * target_material_kind:"code" and reaches only authors advertising the code kind.
    * Optional — an author without the PAIR leaves the stage skipped (default-off;
-   * resolveSemanticMapCapability owns the pair rule). No live caller until the W2 stage wiring.
+   * resolveSemanticMapCapability owns the pair rule).
    */
   synthesizeSemanticMapNode?(
-    input: SemanticSynthesisInput,
-  ): Promise<SemanticSynthesisOutput>;
+    input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
+  ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput>;
   /**
    * Independent adversarial re-check of ONE unanchored semantic boundary (design N3: ALL unanchored
    * are re-verified — the only check where structure is blind). A distinct prompt (and optionally a
    * distinct model) from synthesize in production. Optional — paired with synthesizeSemanticMapNode.
+   * Per-artifact union parameter (DD7) — same routing guarantee as synthesize.
    */
   verifySemanticMapBoundary?(
-    input: SemanticBoundaryVerifyInput,
+    input: SemanticBoundaryVerifyInput | CodeSemanticBoundaryVerifyInput,
   ): Promise<SemanticBoundaryVerification>;
   /**
    * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
@@ -502,7 +543,7 @@ export interface ReconstructDirectiveAuthor {
    * seed-authoring userPayload. Prompt/payload TEXT only — never the reuse key (the stage
    * fingerprint is folded separately). Set once by runReconstruct after the semantic_map stage.
    */
-  setSemanticMapProjection?(byObservation: ReadonlyMap<string, SemanticSeedProjection>): void;
+  setSemanticMapProjection?(byObservation: ReadonlyMap<string, SemanticMapAnyProjection>): void;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -588,6 +629,35 @@ export function resolveSemanticMapCapability(
     );
   }
   return hasSynthesize ? "present" : "absent";
+}
+
+/** The semantic-map artifact kinds the stage can route in Phase 1 (multi-artifact design DD7). */
+export const SEMANTIC_MAP_ROUTABLE_KINDS = ["spreadsheet", "code"] as const;
+export type SemanticMapArtifactKind = (typeof SEMANTIC_MAP_ROUTABLE_KINDS)[number];
+
+/**
+ * kind 광고 해석 (DD7): capability pair 부재 → [] (stage skip). 광고 부재 = ["spreadsheet"] —
+ * 기존 계약의 명시적 해석(광고 없는 구 author가 실제로 지원하는 집합; INV-CFG-1 비접촉).
+ * 미지의 kind 광고는 fail-loud 설정 오류 (조용한 라우팅 누락 방지).
+ */
+export function resolveSemanticMapKinds(
+  author: Pick<
+    ReconstructDirectiveAuthor,
+    "synthesizeSemanticMapNode" | "verifySemanticMapBoundary" | "supportedSemanticMapKinds"
+  >,
+): readonly SemanticMapArtifactKind[] {
+  if (resolveSemanticMapCapability(author) === "absent") return [];
+  const advertised = author.supportedSemanticMapKinds;
+  if (advertised === undefined) return ["spreadsheet"];
+  const kinds = [...new Set(advertised)];
+  for (const kind of kinds) {
+    if (!(SEMANTIC_MAP_ROUTABLE_KINDS as readonly string[]).includes(kind)) {
+      throw new Error(
+        `reconstruct: supportedSemanticMapKinds advertises unroutable kind '${kind}' — the semantic-map stage routes only [${SEMANTIC_MAP_ROUTABLE_KINDS.join(", ")}] (fail-loud configuration error; multi-artifact design DD7).`,
+      );
+    }
+  }
+  return kinds as SemanticMapArtifactKind[];
 }
 
 export type ReconstructSemanticAuthorRealization = "direct_call";
@@ -2094,6 +2164,36 @@ export const SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT =
 export const SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT =
   "You are an INDEPENDENT adversarial re-checker for ONE proposed semantic boundary in a spreadsheet column region. The boundary was proposed WITHOUT structural corroboration (no value-shape seam co-locates with it), so your default is to REFUTE it. Input fields: node_ref (the region), boundary (row, character_before, character_after, anchor_status, verification), summary (the region's semantic summary). Confirm ONLY if the boundary is genuinely supported by the summary and the before/after characterization is coherent, specific, and non-redundant; otherwise refute. Reply with STRICT JSON only: {\"verdict\": \"adversarial_confirmed\"} or {\"verdict\": \"adversarial_refuted\"} — the verdict value must be EXACTLY one of those two strings (no synonyms, no other casing) and no additional fields are allowed.";
 
+// ── code semantic-map prompts (step 6 · multi-artifact design DD6) ────────────────────────────────
+// Registered in CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT — NOT in the CG-1 catalog above: the
+// CG-1 sha folds into every SPREADSHEET fingerprint (reduce_prompt_sha256), so cataloging these
+// there would rotate spreadsheet reuse keys and break in-flight spreadsheet resumes (리뷰 ct-F2).
+// The code contract sha folds into the CODE observation fingerprint only (DD6 fingerprint 격리).
+
+/** DD6: the code synthesize prompt — identifier-only envelope (names + doc first line + signature
+ *  first line, O-5); declaration bodies are never provided, so grounding restricts to stated facts. */
+export const CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT =
+  "You are reading ONE code file region through its deterministic symbol structure. No source-code bodies are provided — only structural identity facts. Input fields: target_material_kind (\"code\"), node_ref (file, line_start, line_end), symbol_path (containing declaration labels, outermost first), signal_clusters (symbol-kind tokens present in the region), symbol_seams (lines where the dominant symbol kind changes, with prev_kind/new_kind), symbol_names (declaration identifiers covered by the region; symbol_names_total is the AUTHORITATIVE count when the list was bounded), doc_comment_first_line (the author's stated purpose — first line only), signature_line (the declaration's first source line), child_summaries (semantic summaries of child sub-regions; present only on merge nodes). Reply with STRICT JSON only, no prose outside it: {\"semantic_summary\": string, \"boundaries\": [{\"line\": integer, \"character_before\": string, \"character_after\": string}]}. semantic_summary: at most 600 characters — one plain-language reading of what this region appears to implement, grounded ONLY in the given identifiers, kind tokens, seams, doc/signature lines, and child summaries; never invent function bodies, algorithms, or behavior you were not shown. boundaries: at most 16 items — lines where you judge the PURPOSE of the code changes; character_before/character_after describe the character of the code before/after that line in structural terms, each at most 120 characters; propose ONLY boundaries you can ground in the input — an empty array is honest and acceptable. No additional fields.\n\n" +
+  "OUTPUT DISCIPLINE: Reply with ONLY the raw JSON object. Do NOT wrap it in markdown code fences or backticks, and do NOT write any text before or after the JSON.\n" +
+  "GROUNDING: Describe ONLY what the given identifiers, kind tokens, doc first lines, and signature lines state. Do not guess implementation details, runtime behavior, or unstated dependencies; if nothing beyond the structure is stated, say the region is the declarations it names.\n" +
+  "BOUNDARIES: A boundary's line should correspond to a symbol_seam (or a transition a child_summary explicitly reports). Do not invent split points at lines with no supporting seam.";
+
+/** DD6: the code adversarial verify prompt — refute-by-default lens for ONE unanchored boundary. */
+export const CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT =
+  "You are an INDEPENDENT adversarial re-checker for ONE proposed semantic boundary in a code file region. The boundary was proposed WITHOUT structural corroboration (no symbol-kind seam co-locates with it), so your default is to REFUTE it. Input fields: node_ref (the region), boundary (line, character_before, character_after, anchor_status, verification), summary (the region's semantic summary). Confirm ONLY if the boundary is genuinely supported by the summary and the before/after characterization is coherent, specific, and non-redundant; otherwise refute. Reply with STRICT JSON only: {\"verdict\": \"adversarial_confirmed\"} or {\"verdict\": \"adversarial_refuted\"} — the verdict value must be EXACTLY one of those two strings (no synonyms, no other casing) and no additional fields are allowed.";
+
+/** W4-note twin for CODE observations (DD9): rendered inline with a code observation's semantic-map
+ *  replace. The spreadsheet note above is byte-frozen (CG-1) — a shared reword would rotate every
+ *  spreadsheet reuse key, so the code surface gets its own note in the CODE contract. */
+export const CODE_SEMANTIC_MAP_PROMPT_NOTE =
+  "semantic_map is a NON-AUTHORITATIVE, provisional hierarchical reading of code file regions (accumulated bottom-up over deterministic symbol-structure trees). Each node carries a summary and boundary candidates; disposition structural_location_only means a symbol-kind seam co-locates (LOCATION corroborated, content NOT verified); adversarial_confirmed means an independent re-check agreed (still provisional). The *_total counts are AUTHORITATIVE — a shorter list was bounded for prompt size, never silently dropped. Treat as hints; the deterministic structure inventory remains the structural authority.";
+
+/** Seed SYSTEM-prompt append for runs whose semantic_map payload contains CODE entries — additive:
+ *  absent when no code map exists, so spreadsheet-only seed prompts stay byte-identical. */
+export const CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE =
+  "When userPayload.semantic_map contains code-file entries you MAY additionally consult them (they extend any exclusive input-field list above). " +
+  CODE_SEMANTIC_MAP_PROMPT_NOTE;
+
 // ── Real-LLM capability runtime bounds + dispatch machinery (design 20260703 §2/§4) ───────────────
 
 /** §10.F5: maxTokens is a provider HINT, not a runtime cap — these deterministic caps are the
@@ -2200,6 +2300,45 @@ function projectSemanticMapVerifyVerdict(raw: Record<string, unknown>): Semantic
   return verdict as SemanticBoundaryVerification;
 }
 
+/** §10.F2 declared-field projection, CODE variant (step 6 DD6): line-based boundary vocabulary,
+ *  same runtime caps and fail-closed discipline as the spreadsheet projection. */
+export function projectCodeSemanticMapSynthesisOutput(raw: Record<string, unknown>): CodeSemanticSynthesisOutput {
+  const summary = raw.semantic_summary;
+  if (typeof summary !== "string" || summary.trim().length === 0) {
+    throw new Error("code-semantic-map synthesize author: semantic_summary must be a non-empty string (fail-closed).");
+  }
+  if (summary.length > SEMANTIC_MAP_SUMMARY_CHAR_CAP) {
+    throw new Error(`code-semantic-map synthesize author: semantic_summary exceeds the ${SEMANTIC_MAP_SUMMARY_CHAR_CAP}-char runtime cap (§10.F5 fail-closed, got ${summary.length}).`);
+  }
+  const rawBoundaries = raw.boundaries;
+  if (!Array.isArray(rawBoundaries)) {
+    throw new Error("code-semantic-map synthesize author: boundaries must be an array (fail-closed).");
+  }
+  if (rawBoundaries.length > SEMANTIC_MAP_BOUNDARIES_PER_NODE_CAP) {
+    throw new Error(`code-semantic-map synthesize author: ${rawBoundaries.length} boundaries exceed the per-node cap ${SEMANTIC_MAP_BOUNDARIES_PER_NODE_CAP} (§10.F5 fail-closed).`);
+  }
+  const boundaries = rawBoundaries.map((entry, index) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}] must be an object (fail-closed).`);
+    }
+    const candidate = entry as Record<string, unknown>;
+    const line = candidate.line;
+    const before = candidate.character_before;
+    const after = candidate.character_after;
+    if (!Number.isSafeInteger(line)) {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}].line must be a safe integer (fail-closed).`);
+    }
+    if (typeof before !== "string" || typeof after !== "string") {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}] character fields must be strings (fail-closed).`);
+    }
+    if (before.length > SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP || after.length > SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP) {
+      throw new Error(`code-semantic-map synthesize author: boundaries[${index}] character field exceeds the ${SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP}-char cap (§10.F5 fail-closed).`);
+    }
+    return { line: line as number, character_before: before, character_after: after };
+  });
+  return { semantic_summary: summary, boundaries };
+}
+
 /** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
  *  it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION with it (X9). */
 export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
@@ -2209,11 +2348,16 @@ export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
  *  by a REQUIRED char budget with AUTHORITATIVE totals + an explicit truncation flag (onto-R2
  *  issue-012: never a silent drop). */
 export function renderSemanticMapProjection(
-  projection: SemanticSeedProjection,
+  projection: SemanticSeedProjection | CodeSemanticSeedProjection,
   charBudget: number,
   /** (B) inline renders carry the caveat note; seed payload renders omit it (hoisted ONCE into the
    *  seed system prompt — onto W4 issue-001/002/005 note-duplication). */
   includeNote: boolean,
+  /** Step 6 (DD9): which artifact's caveat NOTE to render when includeNote — row vocabulary is
+   *  derived from each node's node_ref shape (discriminated union), but an EMPTY projection has no
+   *  node to sniff, so the note kind is caller-declared. Default keeps every existing call
+   *  byte-identical. */
+  noteKind: SemanticMapArtifactKind = "spreadsheet",
 ): Record<string, unknown> {
   if (!Number.isSafeInteger(charBudget) || charBudget <= 0) {
     throw new Error(`semantic-map render: charBudget must be a positive safe integer, got ${charBudget} (issue-012 fail-loud).`);
@@ -2231,7 +2375,9 @@ export function renderSemanticMapProjection(
   const envelope: Record<string, unknown> = {
     authority: "non_authoritative",
     provisional: true,
-    ...(includeNote ? { note: SEMANTIC_MAP_PROMPT_NOTE } : {}),
+    ...(includeNote
+      ? { note: noteKind === "code" ? CODE_SEMANTIC_MAP_PROMPT_NOTE : SEMANTIC_MAP_PROMPT_NOTE }
+      : {}),
     nodes,
     nodes_total: projection.nodes_total,
     // W4 review W4-004 (design §4 honesty): the refuted DISCLOSURE rows are prompt-visible, not
@@ -2252,17 +2398,33 @@ export function renderSemanticMapProjection(
   let truncated = false;
   // Nodes admit FIRST (the map's primary content); disclosure rows take the remaining budget —
   // the reverse order would let max_disclosure-many rows starve the summaries the seed consumes.
+  // Step 6 (DD9): row vocabulary branches on the node_ref DISCRIMINATED union ("sheet" narrows to
+  // the spreadsheet region, else code) — a loose union rendered through one shape would emit
+  // "undefined#undefined:…" region labels and silently pollute the seed prompt (리뷰 ct-F3).
   for (const node of projection.nodes) {
-    nodes.push({
-      region: `${node.node_ref.sheet}#${node.node_ref.column_index}:${node.node_ref.row_start}-${node.node_ref.row_end}`,
-      summary: node.semantic_summary,
-      boundaries: node.boundaries.map((b) => ({
-        row: b.row,
-        before: b.character_before,
-        after: b.character_after,
-        disposition: b.disposition,
-      })),
-    });
+    nodes.push(
+      "sheet" in node.node_ref
+        ? {
+            region: `${node.node_ref.sheet}#${node.node_ref.column_index}:${node.node_ref.row_start}-${node.node_ref.row_end}`,
+            summary: node.semantic_summary,
+            boundaries: (node.boundaries as SemanticSeedBoundary[]).map((b) => ({
+              row: b.row,
+              before: b.character_before,
+              after: b.character_after,
+              disposition: b.disposition,
+            })),
+          }
+        : {
+            region: `${node.node_ref.file}:${node.node_ref.line_start}-${node.node_ref.line_end}`,
+            summary: node.semantic_summary,
+            boundaries: (node.boundaries as CodeSemanticSeedBoundary[]).map((b) => ({
+              line: b.line,
+              before: b.character_before,
+              after: b.character_after,
+              disposition: b.disposition,
+            })),
+          },
+    );
     if (measure() > charBudget) {
       nodes.pop();
       truncated = true;
@@ -2270,12 +2432,21 @@ export function renderSemanticMapProjection(
     }
   }
   for (const refuted of projection.refuted_disclosure) {
-    refutedRows.push({
-      region: `${refuted.node_ref.sheet}#${refuted.node_ref.column_index}:${refuted.node_ref.row_start}-${refuted.node_ref.row_end}`,
-      row: refuted.row,
-      before: refuted.character_before,
-      after: refuted.character_after,
-    });
+    refutedRows.push(
+      "sheet" in refuted.node_ref
+        ? {
+            region: `${refuted.node_ref.sheet}#${refuted.node_ref.column_index}:${refuted.node_ref.row_start}-${refuted.node_ref.row_end}`,
+            row: (refuted as SemanticSeedRefutedDisclosure).row,
+            before: refuted.character_before,
+            after: refuted.character_after,
+          }
+        : {
+            region: `${refuted.node_ref.file}:${refuted.node_ref.line_start}-${refuted.node_ref.line_end}`,
+            line: (refuted as CodeSemanticSeedRefutedDisclosure).line,
+            before: refuted.character_before,
+            after: refuted.character_after,
+          },
+    );
     if (measure() > charBudget) {
       refutedRows.pop();
       truncated = true;
@@ -2337,15 +2508,24 @@ export interface SemanticMapBridgeRecord {
   verifies: { input_json: string; verdict: SemanticBoundaryVerification; consumed?: boolean }[];
 }
 
-/** §3(b)/(c) sync closures over the pre-computed records. Exported so the drift detectors are
- *  falsifiable in tests WITHOUT production test-hooks: feed a tampered record → must throw. */
-export function buildSemanticMapBridgeCallbacks(preByKey: ReadonlyMap<string, SemanticMapBridgeRecord>): {
-  synthesize: (input: SemanticSynthesisInput) => SemanticSynthesisOutput;
-  verifyUnanchored: (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification;
+/** Generic §3(b)/(c) replay closures — one implementation, per-artifact node keying (step 6 DD9).
+ *  Message bytes are shared ("semantic-map bridge" names the subsystem, not the artifact). */
+function buildBridgeCallbacksWithKey<
+  I,
+  VI,
+  O,
+  Rec extends { input_json: string; output: O; verifies: { input_json: string; verdict: SemanticBoundaryVerification; consumed?: boolean }[] },
+>(
+  synthesizeKeyOf: (input: I) => string,
+  verifyKeyOf: (input: VI) => string,
+  preByKey: ReadonlyMap<string, Rec>,
+): {
+  synthesize: (input: I) => O;
+  verifyUnanchored: (input: VI) => SemanticBoundaryVerification;
 } {
   return {
     synthesize: (input) => {
-      const key = reduceNodeKey(input.node_ref);
+      const key = synthesizeKeyOf(input);
       const rec = preByKey.get(key);
       if (!rec) {
         throw new Error(`semantic-map bridge: no precomputed synthesis for ${key} (§3 fail-closed).`);
@@ -2358,7 +2538,7 @@ export function buildSemanticMapBridgeCallbacks(preByKey: ReadonlyMap<string, Se
       return structuredClone(rec.output);
     },
     verifyUnanchored: (input) => {
-      const key = reduceNodeKey(input.node_ref);
+      const key = verifyKeyOf(input);
       const rec = preByKey.get(key);
       const inputJson = stableJson(input);
       // MATCH-AND-CONSUME (ultracode audit G): two byte-identical unanchored boundaries on one node
@@ -2375,6 +2555,40 @@ export function buildSemanticMapBridgeCallbacks(preByKey: ReadonlyMap<string, Se
       return rec.verifies[idx]!.verdict;
     },
   };
+}
+
+/** §3(b)/(c) sync closures over the pre-computed records. Exported so the drift detectors are
+ *  falsifiable in tests WITHOUT production test-hooks: feed a tampered record → must throw. */
+export function buildSemanticMapBridgeCallbacks(preByKey: ReadonlyMap<string, SemanticMapBridgeRecord>): {
+  synthesize: (input: SemanticSynthesisInput) => SemanticSynthesisOutput;
+  verifyUnanchored: (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification;
+} {
+  return buildBridgeCallbacksWithKey(
+    (input: SemanticSynthesisInput) => reduceNodeKey(input.node_ref),
+    (input: SemanticBoundaryVerifyInput) => reduceNodeKey(input.node_ref),
+    preByKey,
+  );
+}
+
+/** Step 6 (DD9): the CODE bridge record/callbacks — same replay + drift-detector discipline with
+ *  code node keying and the line-vocabulary output type. */
+export interface CodeSemanticMapBridgeRecord {
+  input_json: string;
+  output: CodeSemanticSynthesisOutput;
+  verifies: { input_json: string; verdict: SemanticBoundaryVerification; consumed?: boolean }[];
+}
+
+export function buildCodeSemanticMapBridgeCallbacks(
+  preByKey: ReadonlyMap<string, CodeSemanticMapBridgeRecord>,
+): {
+  synthesize: (input: CodeSemanticSynthesisInput) => CodeSemanticSynthesisOutput;
+  verifyUnanchored: (input: CodeSemanticBoundaryVerifyInput) => SemanticBoundaryVerification;
+} {
+  return buildBridgeCallbacksWithKey(
+    (input: CodeSemanticSynthesisInput) => codeReduceNodeKey(input.node_ref),
+    (input: CodeSemanticBoundaryVerifyInput) => codeReduceNodeKey(input.node_ref),
+    preByKey,
+  );
 }
 
 /** Deterministic per-observation merge of per-column projections (LLM-0). Totals are the SUMS of the
@@ -2409,9 +2623,13 @@ class SemanticMapVerifyCapExceeded extends Error {
   }
 }
 
+/** Step 6 (DD9): the per-observation projection union — spreadsheet or code, discriminated by the
+ *  node_ref shape (and, on artifact rows, by the sidecar's target_material_kind). */
+export type SemanticMapAnyProjection = SemanticSeedProjection | CodeSemanticSeedProjection;
+
 export interface SemanticMapStageResult {
   /** Merged per-observation projection — ONLY observations that passed the X5 all-columns gate. */
-  projectionByObservation: Map<string, SemanticSeedProjection>;
+  projectionByObservation: Map<string, SemanticMapAnyProjection>;
   /** null ⇔ the stage was skipped (author lacks the capability pair; W3 manifest step = skipped). */
   census: ReconstructSemanticMapCensus | null;
   censusPath: string | null;
@@ -2428,7 +2646,7 @@ type SemanticMapPreImageBase = Omit<
   "layer1_ground_hash" | "child_contributions"
 >;
 
-type SpreadsheetObservation =
+type SemanticMapObservation =
   ReconstructSourceObservationsArtifact["observations"][number];
 
 function semanticMapCensusPath(sessionRoot: string): string {
@@ -2443,17 +2661,25 @@ function semanticMapResumeValidationPath(sessionRoot: string): string {
   return path.join(sessionRoot, "semantic-map-resume-validation.yaml");
 }
 
-function semanticMapSpreadsheetObservations(
+/** Step 6 (DD7): the stage's ELIGIBLE observation set — spreadsheet always; code only when the
+ *  settings opt-in AND the author kind 광고 both hold (유효 kind = settings ∩ 광고). With code off
+ *  this is byte-identical to the pre-extension spreadsheet-only selection (G-OFF). */
+function semanticMapEligibleObservations(
   sourceObservations: ReconstructSourceObservationsArtifact,
-): SpreadsheetObservation[] {
+  codeEligible: boolean,
+): SemanticMapObservation[] {
   return sourceObservations.observations
-    .filter((o) => o.target_material_kind === "spreadsheet")
+    .filter(
+      (o) =>
+        o.target_material_kind === "spreadsheet" ||
+        (codeEligible && o.target_material_kind === "code"),
+    )
     .slice()
     .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0));
 }
 
 function semanticMapObservationFingerprint(args: {
-  observation: SpreadsheetObservation;
+  observation: SemanticMapObservation;
   inventory: WorkbookStructuralInventory;
   preImageBase: SemanticMapPreImageBase;
   verifyModelIdentity: string;
@@ -2483,9 +2709,54 @@ function semanticMapObservationFingerprint(args: {
   return sha256Text(stableJson(fingerprintPreImage));
 }
 
+/** Step 6 (DD6): the CODE observation fingerprint — same skeleton as the spreadsheet fingerprint
+ *  with code inventory identity (content + extractor-logic sha) and the CODE prompt-contract sha
+ *  (inside the code preImageBase — 리뷰 ct-F2 격리). Reaches the seed reuse key through the
+ *  aggregate fingerprint alongside spreadsheet fingerprints. */
+function semanticMapCodeObservationFingerprint(args: {
+  observation: SemanticMapObservation;
+  inventory: CodeStructureInventory;
+  preImageBase: SemanticMapPreImageBase;
+  verifyModelIdentity: string;
+  config: SemanticMapStageConfig;
+}): string {
+  const fingerprintPreImage = {
+    target_material_kind: "code",
+    content_sha256: args.inventory.content_sha256,
+    extractor_logic_sha256: args.inventory.extractor_logic_sha256,
+    language: args.inventory.language,
+    inventory_schema_version: args.inventory.schema_version,
+    pre_image_base: args.preImageBase,
+    verify_model_identity: args.verifyModelIdentity,
+    stage_config: args.config,
+    projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
+    render_char_budget: SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  };
+  assertGatingKeyExcludesInEpochOutput("semanticMapCodeStageFingerprint", fingerprintPreImage);
+  return sha256Text(stableJson(fingerprintPreImage));
+}
+
+function semanticMapCodeStructural(observation: SemanticMapObservation): {
+  inventory: CodeStructureInventory | undefined;
+  unsupportedReason: string | undefined;
+} {
+  const structural = observation.structural_data as Record<string, unknown>;
+  const unsupported = structural.code_structure_unsupported as { reason?: unknown } | undefined;
+  return {
+    inventory: structural.code_structure_inventory as CodeStructureInventory | undefined,
+    unsupportedReason:
+      unsupported && typeof unsupported.reason === "string" ? unsupported.reason : unsupported ? "unsupported" : undefined,
+  };
+}
+
 function semanticMapSkipReasonForCurrentObservation(
-  observation: SpreadsheetObservation,
-): "no_workbook_inventory" | "no_value_tiles" | null {
+  observation: SemanticMapObservation,
+): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | null {
+  if (observation.target_material_kind === "code") {
+    const { inventory, unsupportedReason } = semanticMapCodeStructural(observation);
+    if (unsupportedReason !== undefined) return "code_extraction_unsupported";
+    return inventory ? null : "no_code_inventory";
+  }
   const inventory = observation.structural_data.workbook_inventory as
     | WorkbookStructuralInventory
     | undefined;
@@ -2536,12 +2807,16 @@ function isSemanticMapSidecar(value: unknown): value is ReconstructSemanticMapSi
   );
 }
 
-function projectionIsRenderable(projection: SemanticSeedProjection): boolean {
+function projectionIsRenderable(
+  projection: SemanticMapAnyProjection,
+  noteKind: SemanticMapArtifactKind = "spreadsheet",
+): boolean {
   try {
     renderSemanticMapProjection(
       projection,
       SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
       true,
+      noteKind,
     );
     return true;
   } catch (error) {
@@ -2569,7 +2844,7 @@ function buildSemanticMapResumeValidationArtifact(args: {
   dispatchBreakerEnabled: boolean;
   semanticMapCapabilityPresent: boolean;
   currentObservationIds: string[];
-  observationsById: Map<string, SpreadsheetObservation>;
+  observationsById: Map<string, SemanticMapObservation>;
   dispatchIncompleteRef: string | null;
   dispatchIncomplete: DispatchIncompleteArtifact | null;
   semanticMapCensusRef: string | null;
@@ -2577,6 +2852,9 @@ function buildSemanticMapResumeValidationArtifact(args: {
   semanticMapSidecarRef: string | null;
   semanticMapSidecar: ReconstructSemanticMapSidecar | null;
   preImageBase: SemanticMapPreImageBase;
+  /** Step 6 (DD6): the CODE ⓑ' base (code prompt-contract sha) — required to re-derive a retained
+   *  code row's fingerprint. Absent ⇔ code kind ineligible for this run. */
+  codePreImageBase?: SemanticMapPreImageBase;
   verifyModelIdentity: string;
   config: SemanticMapStageConfig;
   backupRefs?: Partial<ReconstructSemanticMapResumeValidationArtifact["backup_refs"]>;
@@ -2639,7 +2917,7 @@ function buildSemanticMapResumeValidationArtifact(args: {
     if (unknownItemIds.length > 0) {
       violations.push(resumeValidationViolation({
         code: "unknown_id",
-        message: `dispatch partition contains ids outside current spreadsheet observations: ${unknownItemIds.join(",")}`,
+        message: `dispatch partition contains ids outside current eligible observations: ${unknownItemIds.join(",")}`,
         subjectId: "dispatch-incomplete.yaml",
       }));
     }
@@ -2654,7 +2932,7 @@ function buildSemanticMapResumeValidationArtifact(args: {
       violations.push(resumeValidationViolation({
         code: "source_ref_mismatch",
         message:
-          "dispatch partition must exactly match the current sorted spreadsheet observation id set",
+          "dispatch partition must exactly match the current sorted eligible observation id set",
         subjectId: "dispatch-incomplete.yaml",
       }));
     }
@@ -2765,7 +3043,9 @@ function buildSemanticMapResumeValidationArtifact(args: {
       const currentSkipReason = semanticMapSkipReasonForCurrentObservation(observation);
       if (
         row.skip_reason !== "no_workbook_inventory" &&
-        row.skip_reason !== "no_value_tiles"
+        row.skip_reason !== "no_value_tiles" &&
+        row.skip_reason !== "no_code_inventory" &&
+        row.skip_reason !== "code_extraction_unsupported"
       ) {
         nonReusableRetainedIds.push(id);
         continue;
@@ -2777,21 +3057,35 @@ function buildSemanticMapResumeValidationArtifact(args: {
       retainedRowsByObservationId.set(id, row);
       continue;
     }
-    const inventory = observation.structural_data.workbook_inventory as
-      | WorkbookStructuralInventory
-      | undefined;
-    if (!inventory) {
-      fingerprintMismatchIds.push(id);
-      continue;
+    // Step 6 (DD7): re-derive the retained fingerprint per KIND — a code row without the code
+    // preImageBase (code no longer eligible) can never match and correctly falls to mismatch.
+    let currentFingerprint: string | null = null;
+    if (observation.target_material_kind === "code") {
+      const { inventory: codeInventory } = semanticMapCodeStructural(observation);
+      if (codeInventory && args.codePreImageBase) {
+        currentFingerprint = semanticMapCodeObservationFingerprint({
+          observation,
+          inventory: codeInventory,
+          preImageBase: args.codePreImageBase,
+          verifyModelIdentity: args.verifyModelIdentity,
+          config: args.config,
+        });
+      }
+    } else {
+      const inventory = observation.structural_data.workbook_inventory as
+        | WorkbookStructuralInventory
+        | undefined;
+      if (inventory) {
+        currentFingerprint = semanticMapObservationFingerprint({
+          observation,
+          inventory,
+          preImageBase: args.preImageBase,
+          verifyModelIdentity: args.verifyModelIdentity,
+          config: args.config,
+        });
+      }
     }
-    const currentFingerprint = semanticMapObservationFingerprint({
-      observation,
-      inventory,
-      preImageBase: args.preImageBase,
-      verifyModelIdentity: args.verifyModelIdentity,
-      config: args.config,
-    });
-    if (row.fingerprint !== currentFingerprint) {
+    if (currentFingerprint === null || row.fingerprint !== currentFingerprint) {
       fingerprintMismatchIds.push(id);
       continue;
     }
@@ -2822,7 +3116,7 @@ function buildSemanticMapResumeValidationArtifact(args: {
   if (unknownCensusIds.length > 0) {
     violations.push(resumeValidationViolation({
       code: "unknown_id",
-      message: `prior semantic-map census contains ids outside current spreadsheet observations: ${unknownCensusIds.join(",")}`,
+      message: `prior semantic-map census contains ids outside current eligible observations: ${unknownCensusIds.join(",")}`,
       subjectId: "semantic-map-census.yaml",
     }));
   }
@@ -2847,7 +3141,9 @@ function buildSemanticMapResumeValidationArtifact(args: {
       }));
     }
     sidecarRowsById.set(row.observation_id, row);
-    if (!projectionIsRenderable(row.projection)) projectionRenderable = false;
+    if (!projectionIsRenderable(row.projection, row.target_material_kind === "code" ? "code" : "spreadsheet")) {
+      projectionRenderable = false;
+    }
     if (
       !Array.isArray(row.node_epochs) ||
       row.node_epochs.some((entry) =>
@@ -2906,7 +3202,7 @@ function buildSemanticMapResumeValidationArtifact(args: {
   if (unknownSidecarIds.length > 0) {
     violations.push(resumeValidationViolation({
       code: "unknown_id",
-      message: `prior semantic-map sidecar contains ids outside current spreadsheet observations: ${unknownSidecarIds.join(",")}`,
+      message: `prior semantic-map sidecar contains ids outside current eligible observations: ${unknownSidecarIds.join(",")}`,
       subjectId: "semantic-map.yaml",
     }));
   }
@@ -3085,6 +3381,10 @@ export async function prepareSemanticMapResumeContext(args: {
   dispatchBreaker?: DispatchBreakerPolicy;
   semanticMapCapabilityPresent?: boolean;
   preImageBase: SemanticMapPreImageBase;
+  /** Step 6 (DD7): code kind eligibility (settings 옵트인 ∩ author 광고) — the resume partition must
+   *  match the STAGE's eligible set exactly, or recovery re-dispatch would mis-partition. */
+  codeEligible?: boolean;
+  codePreImageBase?: SemanticMapPreImageBase;
   verifyModelIdentity: string;
   config: SemanticMapStageConfig;
 }): Promise<SemanticMapRecoveryContext | null> {
@@ -3094,12 +3394,15 @@ export async function prepareSemanticMapResumeContext(args: {
   const validationPath = semanticMapResumeValidationPath(args.sessionRoot);
   const censusPath = semanticMapCensusPath(args.sessionRoot);
   const sidecarPath = semanticMapSidecarPath(args.sessionRoot);
-  const spreadsheetObservations = semanticMapSpreadsheetObservations(args.sourceObservations);
-  const currentObservationIds = spreadsheetObservations.map((observation) =>
+  const eligibleObservations = semanticMapEligibleObservations(
+    args.sourceObservations,
+    args.codeEligible === true,
+  );
+  const currentObservationIds = eligibleObservations.map((observation) =>
     observation.observation_id
   );
   const observationsById = new Map(
-    spreadsheetObservations.map((observation) => [
+    eligibleObservations.map((observation) => [
       observation.observation_id,
       observation,
     ]),
@@ -3172,6 +3475,7 @@ export async function prepareSemanticMapResumeContext(args: {
     semanticMapSidecarRef: sidecarRead.value !== null ? sidecarPath : null,
     semanticMapSidecar: sidecar,
     preImageBase: args.preImageBase,
+    ...(args.codePreImageBase !== undefined ? { codePreImageBase: args.codePreImageBase } : {}),
     verifyModelIdentity: args.verifyModelIdentity,
     config: args.config,
     backupRefs,
@@ -3283,13 +3587,37 @@ export async function runSemanticMapStage(args: {
   executionSource?: "primary" | "fallback";
   priorDispatchSpend?: { synthesize: number; verify: number };
   captureStructuredContributors?: boolean;
+  /** Step 6 (DD7): the settings opt-in half of code eligibility (reconstruct.execution.
+   *  semantic_map_code). 유효 kind = this ∩ the author's kind 광고 — absent/false keeps the stage
+   *  byte-identical to the spreadsheet-only pre-extension behavior (G-OFF). */
+  codeKindOptIn?: boolean;
+  /** Step 6 (DD6): the CODE ⓑ' base (code prompt-contract sha instead of CG-1). REQUIRED when the
+   *  code kind is eligible — a missing base is a fail-loud wiring error, never a silent fallback to
+   *  the spreadsheet base (which would collapse the ct-F2 fingerprint isolation). */
+  codePreImageBase?: Omit<SemanticEpochPreImage, "layer1_ground_hash" | "child_contributions">;
 }): Promise<SemanticMapStageResult> {
   if (resolveSemanticMapCapability(args.directiveAuthor) === "absent") {
     return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null, aggregateFingerprint: null };
   }
   assertSemanticMapStageConfig(args.config);
-  const rawSynthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
-  const rawVerifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(args.directiveAuthor);
+  const codeEligible =
+    args.codeKindOptIn === true &&
+    resolveSemanticMapKinds(args.directiveAuthor).includes("code");
+  const codePreImageBase = args.codePreImageBase;
+  if (codeEligible && codePreImageBase === undefined) {
+    throw new Error(
+      "semantic-map stage: code kind is eligible (settings opt-in ∩ author 광고) but codePreImageBase is missing — the code prompt-contract sha cannot fold into code fingerprints (fail-loud wiring error; step 6 DD6).",
+    );
+  }
+  // The author methods take the per-artifact union (DD7); this SPREADSHEET dispatch path narrows to
+  // the spreadsheet view — the stage routing is the sole supplier, so a code input can never flow
+  // through these bindings (code observations dispatch through their own typed bindings).
+  const rawSynthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(
+    args.directiveAuthor,
+  ) as (input: SemanticSynthesisInput) => Promise<SemanticSynthesisOutput>;
+  const rawVerifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(
+    args.directiveAuthor,
+  ) as (input: SemanticBoundaryVerifyInput) => Promise<SemanticBoundaryVerification>;
   const cfg = args.config;
   const priorDispatchSpend = args.priorDispatchSpend ?? {
     synthesize: 0,
@@ -3351,8 +3679,32 @@ export async function runSemanticMapStage(args: {
           () => rawVerifyBoundary(input),
         )
     : rawVerifyBoundary;
+  // Step 6 (DD7): the CODE dispatch bindings — the same author pair narrowed to the code view, with
+  // file:line breaker labels. Only reached for eligible code observations.
+  const rawCodeSynthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(
+    args.directiveAuthor,
+  ) as (input: CodeSemanticSynthesisInput) => Promise<CodeSemanticSynthesisOutput>;
+  const rawCodeVerifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(
+    args.directiveAuthor,
+  ) as (input: CodeSemanticBoundaryVerifyInput) => Promise<SemanticBoundaryVerification>;
+  const codeSynthesizeNode: typeof rawCodeSynthesizeNode = guardedDispatch
+    ? (input) =>
+        guardedDispatch(
+          "synthesize",
+          `synthesize:${input.node_ref.file}:${input.node_ref.line_start}-${input.node_ref.line_end}`,
+          () => rawCodeSynthesizeNode(input),
+        )
+    : rawCodeSynthesizeNode;
+  const codeVerifyBoundary: typeof rawCodeVerifyBoundary = guardedDispatch
+    ? (input) =>
+        guardedDispatch(
+          "verify",
+          `verify:${input.node_ref.file}:${input.boundary.line}`,
+          () => rawCodeVerifyBoundary(input),
+        )
+    : rawCodeVerifyBoundary;
 
-  const projectionByObservation = new Map<string, SemanticSeedProjection>();
+  const projectionByObservation = new Map<string, SemanticMapAnyProjection>();
   const census: ReconstructSemanticMapCensus = {
     schema_version: "1",
     observations_total: 0,
@@ -3424,11 +3776,16 @@ export async function runSemanticMapStage(args: {
     observationId: string,
     skipReason: NonNullable<ReconstructSemanticMapCensusObservation["skip_reason"]>,
     skipDetail?: string,
+    // 교차검증 xver-ct F1: skipped CODE rows carry the kind discriminator too — absent = spreadsheet
+    // (artifact-types 규약), so a code-only skip reason on a discriminator-less row would be an
+    // internally contradictory census row. Spreadsheet callers omit it (bytes unchanged).
+    targetMaterialKind?: "code",
   ): void => {
     census.observations_total += 1;
     census.observations_map_absent += 1;
     census.by_observation.push({
       observation_id: observationId,
+      ...(targetMaterialKind ? { target_material_kind: targetMaterialKind } : {}),
       map_present: false,
       skip_reason: skipReason,
       ...(skipDetail ? { skip_detail: skipDetail } : {}),
@@ -3443,16 +3800,280 @@ export async function runSemanticMapStage(args: {
     breakerState?.recordItemSkipped(observationId);
   };
 
+  // ── Step 6 (DD6/DD7/DD9): the CODE observation path — one FILE tree per observation, dispatched
+  // through the same §3 bridge discipline (single-source envelope builder + drift-detector replay),
+  // the same X7 caps, the same 설계 B breaker bookkeeping, and the same observation containment as
+  // the spreadsheet column path. A failed/capped unit dooms the observation to the flat path (X5).
+  const processCodeObservation = async (observation: SemanticMapObservation): Promise<void> => {
+    const { inventory, unsupportedReason } = semanticMapCodeStructural(observation);
+    if (unsupportedReason !== undefined) {
+      // 리뷰 gf-F5: "v1 limit" (no bundled grammar) stays deterministically distinct from failure.
+      recordSkippedObservation(observation.observation_id, "code_extraction_unsupported", unsupportedReason, "code");
+      return;
+    }
+    if (!inventory) {
+      recordSkippedObservation(observation.observation_id, "no_code_inventory", undefined, "code");
+      return;
+    }
+    census.observations_total += 1;
+    let breakerObservationFailure: {
+      failureClass: ReturnType<typeof classifySystemicDispatchFailure>;
+      message: string;
+    } | null = null;
+    observationDispatchSucceeded = false;
+    try {
+      const observationFingerprint = semanticMapCodeObservationFingerprint({
+        observation,
+        inventory,
+        preImageBase: codePreImageBase!,
+        verifyModelIdentity: args.verifyModelIdentity,
+        config: cfg,
+      });
+      perObservationFingerprints.push({
+        observation_id: observation.observation_id,
+        fingerprint: observationFingerprint,
+      });
+      const file = observation.source_ref;
+      const pushCodeObservationRow = (mapPresent: boolean, unitRow: ReconstructSemanticMapCensusCodeUnit): void => {
+        if (mapPresent) census.observations_map_present += 1;
+        else census.observations_map_absent += 1;
+        census.by_observation.push({
+          observation_id: observation.observation_id,
+          target_material_kind: "code",
+          map_present: mapPresent,
+          skip_reason: null,
+          fingerprint: observationFingerprint,
+          columns: [unitRow],
+        });
+        processedObservationIds.add(observation.observation_id);
+      };
+      // An empty file (0 spans) is the spreadsheet empty-column analog: deterministic, not a failure.
+      if (inventory.symbol_tiles.spans.length === 0) {
+        pushCodeObservationRow(false, emptyCodeUnitRow(file, "empty", null));
+        breakerState?.recordItemSkipped(observation.observation_id);
+        return;
+      }
+      const { trace, nodesByKey } = foldCodeStructureInventory(file, inventory, cfg.fanin);
+      const modes = classifyFrontierCore(trace, cfg.over_context_budget);
+      let observationNeed = 0;
+      for (const m of modes.values()) if (m !== "subsumed") observationNeed += 1;
+      const preflightCapped =
+        priorDispatchSpend.synthesize + census.synthesize_calls_total +
+          breakerRetryCalls.synthesize + observationNeed >
+        cfg.max_synthesize_calls;
+      let synthesizeCalls = 0;
+      let verifyCalls = 0;
+      let unitRow: ReconstructSemanticMapCensusCodeUnit;
+      let projection: CodeSemanticSeedProjection | null = null;
+      const nodeEpochs: { key: string; subtree_epoch_contribution: string }[] = [];
+      if (preflightCapped) {
+        unitRow = emptyCodeUnitRow(file, "capped", `synthesize preflight: observation needs ${observationNeed}, budget remaining ${cfg.max_synthesize_calls - priorDispatchSpend.synthesize - census.synthesize_calls_total - breakerRetryCalls.synthesize} (X7)`);
+      } else {
+        try {
+          // §3 bridge pre-compute — bottom-up, single-source envelope builder, full guards.
+          const meta = buildCodeSynthesisMeta(file, inventory);
+          const preByKey = new Map<string, CodeSemanticMapBridgeRecord>();
+          const summaryByKey = new Map<string, string>();
+          const order: string[] = [];
+          const seen = new Set<string>();
+          const walk = (k: string): void => {
+            if (seen.has(k)) return;
+            seen.add(k);
+            const tnode = trace.nodes.get(k);
+            if (!tnode) throw new Error(`semantic-map stage: trace node missing for ${k}.`);
+            for (const c of tnode.child_keys) walk(c);
+            order.push(k);
+          };
+          walk(trace.root_key);
+          for (const key of order) {
+            if (modes.get(key) === "subsumed") continue;
+            const input = buildCodeSynthesisInputForNode(meta, trace, nodesByKey, modes, key, summaryByKey);
+            assertCodeSynthesisInputBounded(input); // source-safe envelope on the EXACT transmitted input (§3).
+            const inputJson = stableJson(structuredClone(input));
+            synthesizeCalls += 1; // attempt-counted at dispatch (W2-X7-001).
+            const out = await codeSynthesizeNode(input);
+            assertCodeSynthesisOutputBounded(out);
+            summaryByKey.set(key, out.semantic_summary);
+            const record: CodeSemanticMapBridgeRecord = { input_json: inputJson, output: structuredClone(out), verifies: [] };
+            const reduceNode = nodesByKey.get(key);
+            if (!reduceNode) throw new Error(`semantic-map stage: reduce node missing for ${key}.`);
+            const { boundaries: classified } = reconcileCodeBoundaries(out.boundaries, reduceNode);
+            const nodeRef = input.node_ref;
+            for (const b of classified) {
+              if (b.anchor_status !== "unanchored") continue;
+              if (
+                priorDispatchSpend.verify + census.verify_calls_total +
+                  breakerRetryCalls.verify + verifyCalls + 1 >
+                cfg.max_verify_calls
+              ) {
+                throw new SemanticMapVerifyCapExceeded(key, cfg.max_verify_calls);
+              }
+              const verifyInput: CodeSemanticBoundaryVerifyInput = {
+                node_ref: { file: nodeRef.file, line_start: nodeRef.line_start, line_end: nodeRef.line_end },
+                boundary: { ...b },
+                summary: out.semantic_summary,
+              };
+              const verifyInputJson = stableJson(structuredClone(verifyInput));
+              verifyCalls += 1; // attempt-counted at dispatch (W2-X7-001).
+              const verdict = await codeVerifyBoundary(verifyInput);
+              if (!(ADVERSARIAL_RESULTS as readonly string[]).includes(verdict)) {
+                throw new Error(`semantic-map stage: author verify returned invalid verdict '${verdict}' at ${key} (fail-closed).`);
+              }
+              record.verifies.push({ input_json: verifyInputJson, verdict });
+            }
+            preByKey.set(key, record);
+          }
+
+          // The REAL module accumulate + projection (all fail-closed validators live in the core).
+          const callbacks = buildCodeSemanticMapBridgeCallbacks(preByKey);
+          const map = accumulateCodeSemanticMap(meta, trace, nodesByKey, {
+            synthesize: callbacks.synthesize,
+            verifyUnanchored: callbacks.verifyUnanchored,
+            preImageBase: codePreImageBase!,
+            overContextBudget: cfg.over_context_budget,
+            seedBound: false, // the projection is the sole refuted-exclusion layer (module input contract).
+          });
+          projection = projectCodeSemanticMapToSeed(map, { maxNodes: cfg.max_nodes, maxDisclosure: cfg.max_disclosure });
+
+          let anchored = 0;
+          let unanchored = 0;
+          let confirmed = 0;
+          let refuted = 0;
+          let producedNodes = 0;
+          for (const node of map.values()) {
+            if (node.reduce_read_attempt === "subsumed") continue;
+            producedNodes += 1;
+            for (const b of node.semantic_boundaries) {
+              if (b.anchor_status === "anchored") anchored += 1;
+              else {
+                unanchored += 1;
+                if (b.verification === "adversarial_confirmed") confirmed += 1;
+                else if (b.verification === "adversarial_refuted") refuted += 1;
+              }
+            }
+          }
+          let fAcc = 0;
+          let fFront = 0;
+          let fSub = 0;
+          for (const m of modes.values()) {
+            if (m === "accumulating") fAcc += 1;
+            else if (m === "frontier") fFront += 1;
+            else fSub += 1;
+          }
+          census.synthesize_calls_total += synthesizeCalls;
+          census.verify_calls_total += verifyCalls;
+          unitRow = {
+            file,
+            status: "produced",
+            reason: null,
+            produced_nodes: producedNodes,
+            frontier_accumulating: fAcc,
+            frontier_frontier: fFront,
+            frontier_subsumed: fSub,
+            anchored,
+            unanchored,
+            adversarial_confirmed: confirmed,
+            adversarial_refuted: refuted,
+            synthesize_calls: synthesizeCalls,
+            verify_calls: verifyCalls,
+          };
+          for (const [key, node] of map) {
+            nodeEpochs.push({ key, subtree_epoch_contribution: node.subtree_epoch_contribution });
+          }
+          nodeEpochs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+        } catch (error) {
+          if (isGracefulTerminalSignal(error)) throw error;
+          if (readReconstructLlmDispatchFailureError(error)) throw error;
+          // Unit-level stage-owned fallback (X5): spent calls still counted (honest cost census).
+          census.synthesize_calls_total += synthesizeCalls;
+          census.verify_calls_total += verifyCalls;
+          const capped = error instanceof SemanticMapVerifyCapExceeded;
+          unitRow = {
+            ...emptyCodeUnitRow(file, capped ? "capped" : "failed", (error as Error).message),
+            synthesize_calls: synthesizeCalls,
+            verify_calls: verifyCalls,
+          };
+          projection = null;
+          if (breakerState && !capped) {
+            const failureClass = readDispatchFailureClass(error);
+            const structuredEvidence = readStructuredDispatchFailureEvidence(error);
+            if (structuredEvidence?.failure_class === null) throw error;
+            if (structuredEvidence) {
+              breakerStructuredContributors.set(
+                observation.observation_id,
+                structuredClone(structuredEvidence),
+              );
+            }
+            if (breakerObservationFailure === null || failureClass !== null) {
+              breakerObservationFailure = {
+                failureClass,
+                message: (error as Error).message,
+              };
+            }
+          }
+        }
+      }
+      if (breakerState) {
+        if (breakerObservationFailure !== null) {
+          breakerTrip = breakerState.recordItemFailure({
+            item_id: observation.observation_id,
+            failure_class: breakerObservationFailure.failureClass,
+            failure_message: breakerObservationFailure.message,
+            attempt_count:
+              breakerObservationFailure.failureClass !== null
+                ? breakerState.policy.per_call_max_attempts
+                : 1,
+          });
+        } else if (observationDispatchSucceeded) {
+          breakerState.recordItemSuccess(observation.observation_id);
+          if (!breakerState.policy.concurrent) {
+            breakerStructuredContributors.clear();
+          }
+        } else {
+          breakerState.recordItemSkipped(observation.observation_id);
+        }
+      }
+      const mapPresent = projection !== null;
+      if (mapPresent) {
+        projectionByObservation.set(observation.observation_id, projection!);
+        sidecarObservations.push({
+          observation_id: observation.observation_id,
+          target_material_kind: "code",
+          projection: projection!,
+          node_epochs: nodeEpochs,
+        });
+      }
+      pushCodeObservationRow(mapPresent, unitRow);
+    } catch (error) {
+      if (isGracefulTerminalSignal(error)) throw error;
+      if (readReconstructLlmDispatchFailureError(error)) throw error;
+      if (readStructuredDispatchFailureEvidence(error)?.failure_class === null) {
+        throw error;
+      }
+      // Deterministic-phase containment (ultracode audit A/B mirror): observations_total was already
+      // counted; record the honest skip row directly.
+      census.observations_map_absent += 1;
+      census.by_observation.push({
+        observation_id: observation.observation_id,
+        target_material_kind: "code",
+        map_present: false,
+        skip_reason: "deterministic_phase_failed",
+        skip_detail: (error as Error).message,
+        fingerprint: null,
+        columns: [],
+      });
+      processedObservationIds.add(observation.observation_id);
+    }
+  };
+
   const seenObservationIds = new Set<string>();
   // onto-W3 issue-004(a): cap ALLOCATION consumes a shared budget in processing order — process in
   // CANONICAL observation_id order so WHICH observations get capped is artifact-order-independent
   // (defense in depth: the reuse match separately folds the observations artifact hash, but the
-  // stage itself should not be permutation-sensitive).
-  const spreadsheetObservations = args.sourceObservations.observations
-    .filter((o) => o.target_material_kind === "spreadsheet")
-    .slice()
-    .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0));
-  for (const observation of spreadsheetObservations) {
+  // stage itself should not be permutation-sensitive). Step 6 (DD7): the set is the ELIGIBLE
+  // observations — spreadsheet always, code under 유효 kind (settings ∩ 광고).
+  const eligibleObservations = semanticMapEligibleObservations(args.sourceObservations, codeEligible);
+  for (const observation of eligibleObservations) {
     // W3 review W3-005: aggregate order-independence and the projection map are keyed by
     // observation_id — a duplicate would make the sort unstable and the map lossy. Fail loud.
     if (seenObservationIds.has(observation.observation_id)) {
@@ -3466,6 +4087,13 @@ export async function runSemanticMapStage(args: {
       args.executionSource ?? "primary",
     );
     if (appendRetainedObservation(observation.observation_id)) {
+      continue;
+    }
+    // Step 6 (DD7): kind routing — a code observation runs its own file-tree path; the spreadsheet
+    // path below is byte-untouched. The breaker's batch-halt check mirrors the loop tail.
+    if (observation.target_material_kind === "code") {
+      await processCodeObservation(observation);
+      if (breakerTrip) break;
       continue;
     }
     const inventory = observation.structural_data.workbook_inventory as
@@ -3803,7 +4431,7 @@ export async function runSemanticMapStage(args: {
   }
 
   if (breakerTrip && args.recoveryContext) {
-    for (const observation of spreadsheetObservations) {
+    for (const observation of eligibleObservations) {
       if (processedObservationIds.has(observation.observation_id)) continue;
       appendRetainedObservation(observation.observation_id);
     }
@@ -3816,7 +4444,7 @@ export async function runSemanticMapStage(args: {
     // 정직성: backoff 재시도 호출 수를 census에 병기한다.
     census.breaker_retry_synthesize_calls = breakerRetryCalls.synthesize;
     census.breaker_retry_verify_calls = breakerRetryCalls.verify;
-    const plannedItemIds = spreadsheetObservations.map((o) => o.observation_id);
+    const plannedItemIds = eligibleObservations.map((o) => o.observation_id);
     const retainedCompletedItemIds =
       args.recoveryContext?.retainedCompletedItemIds ?? [];
     const retainedDeadLetter = args.recoveryContext?.retainedDeadLetter ?? [];
@@ -4033,6 +4661,29 @@ function annotateDispatchFallbackCensus(args: {
       args.census.verify_model_identity,
     args.runtime.fallback.verify.public_descriptor.descriptor_id,
   ]);
+}
+
+/** Step 6 (DD7): the code sibling of emptySemanticMapColumnRow — one FILE unit per code observation. */
+function emptyCodeUnitRow(
+  file: string,
+  status: ReconstructSemanticMapCensusCodeUnit["status"],
+  reason: string | null,
+): ReconstructSemanticMapCensusCodeUnit {
+  return {
+    file,
+    status,
+    reason,
+    produced_nodes: 0,
+    frontier_accumulating: 0,
+    frontier_frontier: 0,
+    frontier_subsumed: 0,
+    anchored: 0,
+    unanchored: 0,
+    adversarial_confirmed: 0,
+    adversarial_refuted: 0,
+    synthesize_calls: 0,
+    verify_calls: 0,
+  };
 }
 
 function emptySemanticMapColumnRow(
@@ -9145,7 +9796,7 @@ interface ObservationPromptPayloadOptions {
   /** W4 §4(B): map-present observations render the hierarchical semantic map INSTEAD of the flat
    *  labels (D-REL); not_examined_capped is always preserved (X4 — the two censuses are different
    *  universes). */
-  semanticMapByObservation?: ReadonlyMap<string, SemanticSeedProjection>;
+  semanticMapByObservation?: ReadonlyMap<string, SemanticMapAnyProjection>;
   /**
    * P1-C2-B′ §2.2 Step E: read-candidate columns the fan-out cap left UNREAD, per observation_id
    * (formatted "colN (name)"). Surfaced as an explicit "not examined (capped)" census so the
@@ -9365,7 +10016,12 @@ export function observationPromptPayload(
           // and the map cover different candidate universes, so suppressing it would reproduce the
           // over-trust it exists to prevent. Absent map → the pre-branch code below, byte-identical.
           payload.provisional_labels = {
-            ...renderSemanticMapProjection(semanticMap, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, true),
+            ...renderSemanticMapProjection(
+              semanticMap,
+              SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+              true,
+              observation.target_material_kind === "code" ? "code" : "spreadsheet",
+            ),
             ...(hasCapped
               ? {
                   not_examined_capped: cappedColumns.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
@@ -10565,6 +11221,38 @@ export function authoringPromptContractSha256(
   }));
 }
 
+// ── CODE authoring prompt contract (step 6 · multi-artifact design DD6) ───────────────────────────
+// A SEPARATE contract, same structure/edit-rotation discipline as CG-1 — deliberately NOT merged
+// into RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: authoringPromptContractSha256 folds into every
+// SPREADSHEET observation fingerprint (reduce_prompt_sha256), so registering code prompts there
+// would rotate spreadsheet reuse keys and fail in-flight spreadsheet resumes with
+// source_ref_mismatch (리뷰 ct-F2). This sha folds into the CODE observation fingerprint only;
+// code fingerprints reach the seed reuse key through the aggregate fingerprint, so rotation
+// coverage is complete (DD6). Concept split 근거: fingerprint 격리라는 런타임 동작 차이.
+
+export const CODE_AUTHORING_PROMPT_CONTRACT_VERSION =
+  "reconstruct_code_authoring_prompt_contract:v1";
+
+export const CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
+  code_semantic_map_synthesize: CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+  code_semantic_map_verify: CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
+  code_observation_semantic_map_note: CODE_SEMANTIC_MAP_PROMPT_NOTE,
+  code_ontology_seed_semantic_map_note: CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
+};
+
+/** sha256 of the code authoring prompt contract (DD6) — folded into the CODE observation
+ *  fingerprint (semanticMapCodeObservationFingerprint) so editing any code prompt/note rotates
+ *  code reuse keys tautologically while spreadsheet fingerprints stay untouched. Parameterized
+ *  only for the edit-sensitivity test (CG-1 pattern); the fold always calls it with no argument. */
+export function codeAuthoringPromptContractSha256(
+  contract: Record<string, string> = CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+): string {
+  return sha256Text(stableJson({
+    contract_version: CODE_AUTHORING_PROMPT_CONTRACT_VERSION,
+    templates: contract,
+  }));
+}
+
 export function createDirectCallReconstructDirectiveAuthor(args: {
   llmConfig?: Partial<LlmCallConfig>;
   /**
@@ -10712,7 +11400,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   let leafReadProvisionalLabels: ReadonlyMap<string, readonly string[]> | null = null;
   // W4 §4: the semantic-map stage's per-observation seed projections (set after the stage; prompt
   // text only — the reuse key folds the stage fingerprint, never this instance).
-  let semanticMapProjection: ReadonlyMap<string, SemanticSeedProjection> | null = null;
+  let semanticMapProjection: ReadonlyMap<string, SemanticMapAnyProjection> | null = null;
   let leafReadCappedColumns: ReadonlyMap<string, readonly string[]> | null = null;
   const projectObservationsForPrompt = (
     obs: ReconstructSourceObservationsArtifact,
@@ -10758,21 +11446,30 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     setLeafReadCappedColumns(capped: ReadonlyMap<string, readonly string[]>): void {
       leafReadCappedColumns = capped;
     },
-    setSemanticMapProjection(byObservation: ReadonlyMap<string, SemanticSeedProjection>): void {
+    setSemanticMapProjection(byObservation: ReadonlyMap<string, SemanticMapAnyProjection>): void {
       semanticMapProjection = byObservation;
     },
     // Real-LLM cut §2: the production capability PAIR, attached only under the explicit opt-in —
     // absent (default) keeps the stage skipped and the merged wiring cut's off-path untouched.
     ...(args.enableSemanticMapAuthoring === true
       ? {
-        async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
+        // Step 6 (DD7): the production pair advertises BOTH routable kinds — the settings opt-in
+        // (`semantic_map_code`, default off) remains the rollout guard, so advertising alone keeps
+        // spreadsheet-only byte-parity (유효 kind = settings ∩ 광고).
+        supportedSemanticMapKinds: SEMANTIC_MAP_ROUTABLE_KINDS,
+        async synthesizeSemanticMapNode(
+          input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
+        ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput> {
+          // DD6/DD7 discriminator: only the code variant carries target_material_kind — the
+          // spreadsheet envelope is byte-frozen (no discriminator added to the existing contract).
+          const isCode = "target_material_kind" in input && input.target_material_kind === "code";
           const capability = args.semanticMapDispatchCapabilities?.synthesize;
           const raw = await callSemanticMapJsonAuthorWithRetry({
             llmCall: capability ? sealedLlmCall(capability) : llmCall,
             llmConfig: semanticMapSynthesizeLlmConfig,
             telemetry,
-            artifactName: "semantic-map-synthesize",
-            systemPrompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+            artifactName: isCode ? "code-semantic-map-synthesize" : "semantic-map-synthesize",
+            systemPrompt: isCode ? CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT : SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
             userPayload: input,
             maxTokens: 900,
             ...(args.semanticMapDispatchCapabilities
@@ -10784,16 +11481,19 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 }
               : {}),
           });
-          return projectSemanticMapSynthesisOutput(raw);
+          return isCode ? projectCodeSemanticMapSynthesisOutput(raw) : projectSemanticMapSynthesisOutput(raw);
         },
-        async verifySemanticMapBoundary(input: SemanticBoundaryVerifyInput): Promise<SemanticBoundaryVerification> {
+        async verifySemanticMapBoundary(
+          input: SemanticBoundaryVerifyInput | CodeSemanticBoundaryVerifyInput,
+        ): Promise<SemanticBoundaryVerification> {
+          const isCode = "file" in input.node_ref;
           const capability = args.semanticMapDispatchCapabilities?.verify;
           const raw = await callSemanticMapJsonAuthorWithRetry({
             llmCall: capability ? sealedLlmCall(capability) : llmCall,
             llmConfig,
             telemetry,
-            artifactName: "semantic-map-verify",
-            systemPrompt: SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
+            artifactName: isCode ? "code-semantic-map-verify" : "semantic-map-verify",
+            systemPrompt: isCode ? CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT : SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
             userPayload: input,
             maxTokens: 300,
             ...(args.semanticMapDispatchCapabilities
@@ -11726,6 +12426,24 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         candidateInventory: input.candidateInventory,
         candidateDisposition: input.candidateDisposition,
       });
+      // Step 6 (DD9): per-kind seed-note append — the spreadsheet note iff a spreadsheet entry is
+      // in the payload (pre-extension byte-parity: any non-code entry keeps appending it), the code
+      // note additionally iff a code entry is (additive — spreadsheet-only prompts byte-identical).
+      const appendSemanticMapSeedNotes = (base: string): string => {
+        let hasSpreadsheet = false;
+        let hasCode = false;
+        for (const id of seedObservationIds) {
+          const projection = semanticMapProjection?.get(id);
+          if (!projection) continue;
+          const ref = projection.nodes[0]?.node_ref ?? projection.refuted_disclosure[0]?.node_ref;
+          if (ref && "file" in ref) hasCode = true;
+          else hasSpreadsheet = true;
+        }
+        let out = base;
+        if (hasSpreadsheet) out += "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE;
+        if (hasCode) out += "\n" + CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE;
+        return out;
+      };
       let raw: Record<string, unknown>;
       try {
         raw = await callJsonAuthor({
@@ -11740,9 +12458,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           // prompt never declares would be an unexplained input. The note is appended ONLY when the
           // payload actually carries semantic_map (map-absent prompts stay byte-identical); the note
           // text is a CG-1 catalog entry, so editing it rotates authoring_prompt_contract_sha256.
-          systemPrompt: (buildSemanticMapSeedRender(seedObservationIds).length > 0
-            ? (base: string): string => base + "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE
-            : (base: string): string => base)(ontologySeedSystemPrompt({
+          systemPrompt: appendSemanticMapSeedNotes(ontologySeedSystemPrompt({
             authorId,
             coverageAxisIds: coverageAxisIds(input.contractRegistry).join(", "),
             maturationHandoffPrompt:
@@ -11839,9 +12555,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             telemetry,
             artifactName: "OntologySeedMinimalKernel",
             maxTokens: 6500,
-            systemPrompt: (buildSemanticMapSeedRender(seedObservationIds).length > 0
-              ? (base: string): string => base + "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE
-              : (base: string): string => base)(ontologySeedMinimalKernelSystemPrompt({
+            systemPrompt: appendSemanticMapSeedNotes(ontologySeedMinimalKernelSystemPrompt({
               authorId,
               coverageAxisIds: coverageAxisIds(input.contractRegistry).join(", "),
               maturationHandoffPrompt:
@@ -15374,9 +16088,27 @@ export async function runReconstruct(
     over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
     over_context_gate_logic_sha256: semanticMapGateLogicSha256(),
   };
+  // Step 6 (DD6): the CODE ⓑ' base — identical skeleton with the CODE prompt-contract sha and its
+  // own schema-tool knob, so code prompt edits rotate ONLY code fingerprints (리뷰 ct-F2 격리).
+  const semanticMapCodePreImageBase: SemanticMapPreImageBase = {
+    reduce_reader_model_identity: directiveAuthor.semanticMapSynthesizeModelIdentity ??
+      directiveAuthor.reuseModelIdentity ?? "unspecified",
+    reduce_prompt_sha256: codeAuthoringPromptContractSha256(),
+    reduce_schema_tool_version: "semantic-map-code:v1",
+    comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
+    over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
+    over_context_gate_logic_sha256: semanticMapGateLogicSha256(),
+  };
   const semanticMapVerifyModelIdentity =
     directiveAuthor.reuseModelIdentity ?? "unspecified";
   const semanticMapCapability = resolveSemanticMapCapability(directiveAuthor);
+  // Step 6 (DD7): 유효 code kind = settings 옵트인(semantic_map_code → params.codeStructureObservation)
+  // ∩ author 광고 — the SAME predicate feeds the stage, the resume partition, and the fallback
+  // partition, so the three can never disagree about the eligible observation set.
+  const semanticMapCodeEligible =
+    params.codeStructureObservation === true &&
+    semanticMapCapability === "present" &&
+    resolveSemanticMapKinds(directiveAuthor).includes("code");
   const semanticMapRecoveryContext = await prepareSemanticMapResumeContext({
     sessionId,
     sessionRoot,
@@ -15388,6 +16120,8 @@ export async function runReconstruct(
       : {}),
     semanticMapCapabilityPresent: semanticMapCapability === "present",
     preImageBase: semanticMapPreImageBase,
+    codeEligible: semanticMapCodeEligible,
+    codePreImageBase: semanticMapCodePreImageBase,
     verifyModelIdentity: semanticMapVerifyModelIdentity,
     config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   });
@@ -15456,6 +16190,8 @@ export async function runReconstruct(
         ? { dispatchBreaker: params.dispatchBreaker }
         : {}),
       preImageBase: semanticMapPreImageBase,
+      codeKindOptIn: params.codeStructureObservation === true,
+      codePreImageBase: semanticMapCodePreImageBase,
       verifyModelIdentity: semanticMapVerifyModelIdentity,
       recoveryContext: semanticMapRecoveryContext,
       executionSource: "primary",
@@ -15569,7 +16305,7 @@ export async function runReconstruct(
     ) {
       throw new Error("dispatch fallback activation requires a valid tripped semantic-map partition.");
     }
-    const plannedIds = semanticMapSpreadsheetObservations(sourceObservations).map(
+    const plannedIds = semanticMapEligibleObservations(sourceObservations, semanticMapCodeEligible).map(
       (observation) => observation.observation_id,
     );
     const deadLetterIds = primaryPartition.dead_letter.map(
@@ -15609,6 +16345,9 @@ export async function runReconstruct(
         : {}),
       semanticMapCapabilityPresent: true,
       preImageBase: semanticMapPreImageBase,
+      // Retained rows were produced by the PRIMARY run — re-derive with the primary bases.
+      codeEligible: semanticMapCodeEligible,
+      codePreImageBase: semanticMapCodePreImageBase,
       verifyModelIdentity: semanticMapVerifyModelIdentity,
       config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
     });
@@ -15718,6 +16457,12 @@ export async function runReconstruct(
 
     const fallbackPreImageBase: SemanticMapPreImageBase = {
       ...semanticMapPreImageBase,
+      reduce_reader_model_identity:
+        fallbackRuntime.fallback.synthesize.public_descriptor.descriptor_id,
+    };
+    // Step 6 (DD6): the fallback CODE base — same identity substitution over the code base.
+    const fallbackCodePreImageBase: SemanticMapPreImageBase = {
+      ...semanticMapCodePreImageBase,
       reduce_reader_model_identity:
         fallbackRuntime.fallback.synthesize.public_descriptor.descriptor_id,
     };
@@ -15889,6 +16634,8 @@ export async function runReconstruct(
         config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
         dispatchBreaker: fallbackBreaker,
         preImageBase: fallbackPreImageBase,
+        codeKindOptIn: params.codeStructureObservation === true,
+        codePreImageBase: fallbackCodePreImageBase,
         verifyModelIdentity:
           fallbackRuntime.fallback.verify.public_descriptor.descriptor_id,
         recoveryContext: exactRecoveryContext,
