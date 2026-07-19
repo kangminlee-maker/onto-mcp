@@ -22,7 +22,7 @@ import {
   validateSourceObservationBoundary,
   type ReconstructSourceObservation,
 } from "./source-observations.js";
-import { observeCodeStructure } from "../code-structure-observer.js";
+import { codeStructureLanguageForExtension, observeCodeStructure } from "../code-structure-observer.js";
 import { buildDeterministicComprehensionArtifact } from "./comprehension-artifact.js";
 import {
   loadReconstructSourceProfiles,
@@ -275,7 +275,9 @@ const TEXT_READABLE_DOCUMENT_EXTENSIONS = new Set([".md", ".txt", ".adoc"]);
 // (.json/.yaml/.yml/.toml/.xml/.env/.cfg/.conf/.lock); those are deliberately NOT here and
 // default to the bounded structural sample (a quality + cost volume reduction — NOT a
 // secret-exposure closure, which is Track 2). Enumerated, no wildcard, so adding a language is
-// a deliberate edit; fail-safe is bounded for any code extension not listed.
+// a deliberate edit; fail-safe is bounded for any code extension neither listed here nor in the
+// structure-observer language map (DD6′ 단일화 — observer-supported extensions are whole-captured
+// via codeStructureLanguageForExtension in the predicate below).
 const CODE_WHOLE_CAPTURE_EXTENSIONS = new Set([
   ".c",
   ".cc",
@@ -333,8 +335,13 @@ export function isFullExcerptCaptureEligible(
   const ext = path.extname(lower);
   const base = path.basename(lower);
   if (kind === "code") {
+    // DD6′ 단일화: every observer-supported extension is whole-captured BY CONSTRUCTION (the
+    // observer's language map is consulted directly, so adding a grammar can never reopen the
+    // .mts/.cts/.cjs class of gap: a structure-observed file whose capture stayed at the bounded
+    // sample would fail the v2 excerpt admission guard and starve the semantic-map stage).
     return CODE_WHOLE_CAPTURE_EXTENSIONS.has(ext) ||
-      CODE_WHOLE_CAPTURE_BASENAMES.has(base);
+      CODE_WHOLE_CAPTURE_BASENAMES.has(base) ||
+      codeStructureLanguageForExtension(ext) !== null;
   }
   return kind === "document" && isTextReadableDocumentExtension(ext);
 }

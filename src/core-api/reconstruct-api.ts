@@ -1353,6 +1353,8 @@ export function createOntoReconstructCoreApi(
         const fallbackDirectiveAuthor =
           createDirectCallReconstructDirectiveAuthor({
             llmConfig: fallbackLlmConfig,
+            // DD10: the fallback author renders the same surfaces — same label root.
+            projectRoot,
             semanticMapSynthesizeLlmConfig: fallbackLlmConfig,
             enableSemanticMapAuthoring: true,
             semanticMapDispatchCapabilities: {
@@ -1440,6 +1442,8 @@ export function createOntoReconstructCoreApi(
       const directiveAuthor =
         createDirectCallReconstructDirectiveAuthor({
           llmConfig: semanticAuthorLlmConfig,
+          // DD10: render-label root for code semantic-map surfaces (라벨만 상대화 — artifact 절대경로 유지).
+          projectRoot,
           ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
           // Production opt-in + per-role synthesize override (design §5.5/§5.2)
           // from the single wiring seam. Opt-in absent/false = pair not

@@ -132,6 +132,11 @@ export interface SemanticCoordAdapter<
   boundaryPos(b: B): number;
   /** Message label for a boundary position — spreadsheet `row${row}`, code `line${line}`. */
   boundaryPosLabel(b: B): string;
+  /** DD10 (§10 v2.1): seed-projection ADMISSION total order — the projection's canonical node
+   *  order AND the maxNodes cut both walk it, so it decides WHICH regions survive a bounded
+   *  seed render. Spreadsheet = nodeKey lex (v1 byte order, golden-locked); code = widest span
+   *  first so the cut starves leaves, never file-level understanding (7b 기아 사이트). */
+  admissionCompare(a: R, b: R): number;
 }
 
 const cmpStr = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
@@ -840,8 +845,11 @@ export function projectSemanticMapToSeedCore<
   const nodesAll: SN[] = [];
   const refuted: RD[] = [];
   let failedOrUnread = 0;
-  // Deterministic CANONICAL order — by nodeKey(node_ref), NOT the caller's map key.
-  const nodes = [...map.values()].sort((a, b) => cmpStr(adapter.nodeKey(a.node_ref), adapter.nodeKey(b.node_ref)));
+  // Deterministic CANONICAL order — the adapter's ADMISSION order over node_ref (DD10), NOT the
+  // caller's map key. This order feeds the maxNodes slice below, so it decides which regions a
+  // bounded seed render ever sees (7b 기아: the v1 shared lex order cut 109→60 BEFORE render,
+  // dropping probe regions — the cut must consume the per-artifact admission order).
+  const nodes = [...map.values()].sort((a, b) => adapter.admissionCompare(a.node_ref, b.node_ref));
   for (const node of nodes) {
     // Honesty precondition (fail-closed): legal (anchor_status, verification) states only. seedBound=false
     // (the map still carries refuted boundaries; THIS projection is what excludes them from seed).

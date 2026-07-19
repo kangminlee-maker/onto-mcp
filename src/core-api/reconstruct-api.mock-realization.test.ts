@@ -24,7 +24,7 @@ import { WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "../core-runtime/reconstruct/
 import type { CodeSemanticSeedProjection } from "../core-runtime/reconstruct/comprehension-semantic-map-code.js";
 import {
   renderSemanticMapProjection,
-  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  semanticMapRenderCharBudget,
 } from "../core-runtime/reconstruct/run.js";
 
 const tmpRoots: string[] = [];
@@ -294,8 +294,12 @@ describe("reconstruct api mock E2E over a 2-file code fixture (§6-4)", () => {
       const renders = codeRows.map((row) =>
         renderSemanticMapProjection(
           normalizeProjection(row.projection as CodeSemanticSeedProjection),
-          SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+          semanticMapRenderCharBudget("code"), // DD10: the v2 CODE budget — the snapshot mirrors the production render surface.
           false,
+          "code",
+          // null labelRoot: the projection is already <projectRoot>-normalized above — the DD10
+          // relative-label path is asserted at the renderer unit level (semantic-map-stage.test).
+          null,
         ),
       );
       for (const render of renders) {

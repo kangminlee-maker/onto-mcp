@@ -164,6 +164,9 @@ const SPREADSHEET_SEMANTIC_ADAPTER: SemanticCoordAdapter<
   }),
   boundaryPos: (b) => b.row,
   boundaryPosLabel: (b) => `row${b.row}`,
+  // DD10: v1 byte-parity admission order — nodeKey lex, locked by the G-SS-c projection golden
+  // and the G-SS-f render golden (spreadsheet keys/bytes must not rotate — 리뷰 inv M1).
+  admissionCompare: (a, b) => cmpStr(reduceNodeKey(a), reduceNodeKey(b)),
 };
 
 // ── N1/N2 two-sided reconciliation ───────────────────────────────────────────

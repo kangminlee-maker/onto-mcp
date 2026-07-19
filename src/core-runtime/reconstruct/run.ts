@@ -357,6 +357,8 @@ import {
   buildCodeSynthesisMeta,
   projectCodeSemanticMapToSeed,
   reconcileCodeBoundaries,
+  CODE_SOURCE_LINES_CHAR_CAP,
+  CODE_SYMBOL_NAMES_DISPLAY_CAP,
   type CodeSemanticBoundaryVerifyInput,
   type CodeSemanticSeedBoundary,
   type CodeSemanticSeedProjection,
@@ -2109,7 +2111,10 @@ const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
 /** Manual version for the projection/render CONTRACT (design §5 X9 / W3 review W3-003): cap VALUES
  *  are folded via stage_config, but the projection RULES (projectSemanticMapToSeed + the observation
  *  merge) and — from W4 — the prompt RENDERER change what the seed actually sees without any config
- *  change. Bump on any projection/merge/renderer semantics edit. */
+ *  change. Bump on any projection/merge/renderer semantics edit that reaches the SPREADSHEET
+ *  surface. ⚠️ This knob folds into every spreadsheet fingerprint — CODE-only projection/render
+ *  semantics bump CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION instead (DD10 회전 격리, 리뷰
+ *  inv M1: a shared bump would rotate every spreadsheet reuse key as collateral). */
 const SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION = "projection-merge:1";
 
 /** First MEASURED defaults (real-LLM cut design 20260703 §3; previous 200/100 PRELIMINARY values
@@ -2170,12 +2175,15 @@ export const SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT =
 // there would rotate spreadsheet reuse keys and break in-flight spreadsheet resumes (리뷰 ct-F2).
 // The code contract sha folds into the CODE observation fingerprint only (DD6 fingerprint 격리).
 
-/** DD6: the code synthesize prompt — identifier-only envelope (names + doc first line + signature
- *  first line, O-5); declaration bodies are never provided, so grounding restricts to stated facts. */
+/** DD6′ (O-6): the code synthesize prompt — frontier envelopes now carry the region's SOURCE
+ *  (source_lines); merge envelopes stay body-free (child-summary recursion absorbs context). The
+ *  opening anchor sentence is PINNED ("You are reading ONE code file region" — the mock dispatcher
+ *  key and the spreadsheet-prompt disambiguator); the BOUNDARIES clause is PINNED verbatim (리뷰
+ *  ct m-3 — seam 제약 유지). Editing rotates the CODE contract sha tautologically. */
 export const CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT =
-  "You are reading ONE code file region through its deterministic symbol structure. No source-code bodies are provided — only structural identity facts. Input fields: target_material_kind (\"code\"), node_ref (file, line_start, line_end), symbol_path (containing declaration labels, outermost first), signal_clusters (symbol-kind tokens present in the region), symbol_seams (lines where the dominant symbol kind changes, with prev_kind/new_kind), symbol_names (declaration identifiers covered by the region; symbol_names_total is the AUTHORITATIVE count when the list was bounded), doc_comment_first_line (the author's stated purpose — first line only), signature_line (the declaration's first source line), child_summaries (semantic summaries of child sub-regions; present only on merge nodes). Reply with STRICT JSON only, no prose outside it: {\"semantic_summary\": string, \"boundaries\": [{\"line\": integer, \"character_before\": string, \"character_after\": string}]}. semantic_summary: at most 600 characters — one plain-language reading of what this region appears to implement, grounded ONLY in the given identifiers, kind tokens, seams, doc/signature lines, and child summaries; never invent function bodies, algorithms, or behavior you were not shown. boundaries: at most 16 items — lines where you judge the PURPOSE of the code changes; character_before/character_after describe the character of the code before/after that line in structural terms, each at most 120 characters; propose ONLY boundaries you can ground in the input — an empty array is honest and acceptable. No additional fields.\n\n" +
+  "You are reading ONE code file region through its deterministic symbol structure and, on frontier regions, its source text. Input fields: target_material_kind (\"code\"), node_ref (file, line_start, line_end), symbol_path (containing declaration labels, outermost first), signal_clusters (symbol-kind tokens present in the region), symbol_seams (lines where the dominant symbol kind changes, with prev_kind/new_kind), symbol_names (declaration identifiers covered by the region; symbol_names_total is the AUTHORITATIVE count when the list was bounded), doc_comment_first_line (the author's stated purpose — first line only), signature_line (the declaration's first source line), source_lines (present ONLY on frontier envelopes: text is the region's source, head-truncated when truncated is true; total_lines is the AUTHORITATIVE span line count), child_summaries (semantic summaries of child sub-regions; present only on merge nodes — merge nodes carry no source text). Reply with STRICT JSON only, no prose outside it: {\"semantic_summary\": string, \"boundaries\": [{\"line\": integer, \"character_before\": string, \"character_after\": string}]}. semantic_summary: at most 600 characters — one plain-language reading of what this region implements, grounded ONLY in the given source text, identifiers, kind tokens, seams, doc/signature lines, and child summaries; never invent behavior you were not shown. boundaries: at most 16 items — lines where you judge the PURPOSE of the code changes; character_before/character_after describe the character of the code before/after that line in structural terms, each at most 120 characters; propose ONLY boundaries you can ground in the input — an empty array is honest and acceptable. No additional fields.\n\n" +
   "OUTPUT DISCIPLINE: Reply with ONLY the raw JSON object. Do NOT wrap it in markdown code fences or backticks, and do NOT write any text before or after the JSON.\n" +
-  "GROUNDING: Describe ONLY what the given identifiers, kind tokens, doc first lines, and signature lines state. Do not guess implementation details, runtime behavior, or unstated dependencies; if nothing beyond the structure is stated, say the region is the declarations it names.\n" +
+  "GROUNDING: Ground every claim in what you were given. On frontier regions, read source_lines and describe what the code actually does; when truncated is true, describe only the visible head without extrapolating the cut tail. On merge regions, rely on the child summaries and the structural facts. Do not guess unstated dependencies, callers, or behavior outside the provided input.\n" +
   "BOUNDARIES: A boundary's line should correspond to a symbol_seam (or a transition a child_summary explicitly reports). Do not invent split points at lines with no supporting seam.";
 
 /** DD6: the code adversarial verify prompt — refute-by-default lens for ONE unanchored boundary. */
@@ -2339,9 +2347,52 @@ export function projectCodeSemanticMapSynthesisOutput(raw: Record<string, unknow
   return { semantic_summary: summary, boundaries };
 }
 
-/** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
- *  it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION with it (X9). */
+/** ⚠️ PRELIMINARY prompt-render budget (chars) for one SPREADSHEET observation's semantic-map
+ *  render. Changing it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_
+ *  VERSION with it (X9). CODE renders use the per-kind constant below (DD10 — never this one). */
 export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
+
+// ── DD10 (§10 v2.1) CODE-only projection/render knobs — 회전 격리 (리뷰 inv M1/gh M-1) ────────────
+// The three values below are 선핀 (재평정 게이트 1항: v2 렌더 생성·열람 전에 사전 등록 커밋에
+// 그대로 복사·핀); they fold by VALUE into semanticMapCodeObservationFingerprint ONLY, so tuning
+// them rotates code reuse keys (old code sidecars fail closed on fingerprint mismatch) while every
+// spreadsheet key stays byte-identical.
+
+/** DD10: CODE render budget — 40,000 chars ≈ 65 admitted nodes on the N=1 target (spreadsheet
+ *  4,000 불변; the v1 shared budget admitted 4/109 nodes on the live N=1 — 기아).
+ *  ⚠️ CORRECTED 2026-07-19 (§10 addendum 개정 v2.2): the pinned 12,000 realized the design's stated
+ *  "40~60 nodes" intent from a per-node cost estimate of ~81 chars (relative-label savings only),
+ *  but the no-spend ablation measured ~850 chars/node (region label + up to a 600-char summary +
+ *  boundaries + JSON indentation), so 12,000 admitted only 12 nodes — below the reevaluation
+ *  validity floor (admit ≥30). Empirical budget→admit curve (ablation): 24,000→30, 40,000→65,
+ *  64,000→109(no truncation). Owner decision 2026-07-19: 40,000 (design's 40~60-node intent,
+ *  faithfully realized). The value folds by VALUE into semanticMapCodeObservationFingerprint. */
+export const CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 40_000;
+
+/** DD10: CODE projection display cap (1a single-file headroom; spreadsheet stage-config 60 불변).
+ *  Applied at the projection call — the stage config's shared max_nodes never caps code. */
+export const CODE_SEMANTIC_MAP_MAX_NODES = 512;
+
+/** DD10 (리뷰 inv M1): CODE-only projection/render contract version — the shared X9 knob above is
+ *  spreadsheet-golden-locked, so code projection/render semantics edits bump THIS knob. */
+export const CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION = "code-projection-render:1";
+
+/** DD10 per-kind render budget selector — the single point where a render surface picks its
+ *  budget (every renderSemanticMapProjection caller routes through this, never the raw consts). */
+export function semanticMapRenderCharBudget(kind: SemanticMapArtifactKind): number {
+  return kind === "code"
+    ? CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET
+    : SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET;
+}
+
+/** DD10: render-surface file label — artifact 권위는 절대경로 유지, 라벨만 root-상대화
+ *  (실측 절대경로 ~81자/노드가 budget을 잠식한 7b 기아 요인 ②). Non-absolute fixture paths pass
+ *  through unchanged; a file outside root renders as `../…` (허용 — 리뷰 inv MN2 확인). */
+function semanticMapFileLabel(labelRoot: string | null, file: string): string {
+  // typeof guard (not !== null): tests are outside the tsc project, so an arity-loose JS caller
+  // can leak `undefined` here — that must degrade to v1 passthrough, never path.relative(undefined).
+  return typeof labelRoot === "string" && path.isAbsolute(file) ? path.relative(labelRoot, file) : file;
+}
 
 /** W4 §4 shared renderer — BOTH prompt surfaces ((A) seed payload field, (B) observation-prompt
  *  replace) derive from this one projection-to-prompt shape (single truth). Deterministic; bounded
@@ -2355,9 +2406,12 @@ export function renderSemanticMapProjection(
   includeNote: boolean,
   /** Step 6 (DD9): which artifact's caveat NOTE to render when includeNote — row vocabulary is
    *  derived from each node's node_ref shape (discriminated union), but an EMPTY projection has no
-   *  node to sniff, so the note kind is caller-declared. Default keeps every existing call
-   *  byte-identical. */
-  noteKind: SemanticMapArtifactKind = "spreadsheet",
+   *  node to sniff, so the note kind is caller-declared. */
+  noteKind: SemanticMapArtifactKind,
+  /** DD10 (리뷰 inv MN2): REQUIRED so the compiler forces every render surface — resume 검증
+   *  사이트 포함 — to decide its label root. null = v1 absolute-passthrough (spreadsheet-only
+   *  surfaces / legacy script callers without a project root). */
+  labelRoot: string | null,
 ): Record<string, unknown> {
   if (!Number.isSafeInteger(charBudget) || charBudget <= 0) {
     throw new Error(`semantic-map render: charBudget must be a positive safe integer, got ${charBudget} (issue-012 fail-loud).`);
@@ -2415,7 +2469,7 @@ export function renderSemanticMapProjection(
             })),
           }
         : {
-            region: `${node.node_ref.file}:${node.node_ref.line_start}-${node.node_ref.line_end}`,
+            region: `${semanticMapFileLabel(labelRoot, node.node_ref.file)}:${node.node_ref.line_start}-${node.node_ref.line_end}`,
             summary: node.semantic_summary,
             boundaries: (node.boundaries as CodeSemanticSeedBoundary[]).map((b) => ({
               line: b.line,
@@ -2441,7 +2495,7 @@ export function renderSemanticMapProjection(
             after: refuted.character_after,
           }
         : {
-            region: `${refuted.node_ref.file}:${refuted.node_ref.line_start}-${refuted.node_ref.line_end}`,
+            region: `${semanticMapFileLabel(labelRoot, refuted.node_ref.file)}:${refuted.node_ref.line_start}-${refuted.node_ref.line_end}`,
             line: (refuted as CodeSemanticSeedRefutedDisclosure).line,
             before: refuted.character_before,
             after: refuted.character_after,
@@ -2729,8 +2783,21 @@ function semanticMapCodeObservationFingerprint(args: {
     pre_image_base: args.preImageBase,
     verify_model_identity: args.verifyModelIdentity,
     stage_config: args.config,
-    projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
-    render_char_budget: SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+    // DD10 (리뷰 inv M1): CODE-only projection contract + per-kind VALUES fold HERE only — the
+    // shared X9 knob stays out so spreadsheet keys never rotate on code tuning, and v1 code
+    // sidecars fail closed on the mismatch (silent-stale 차단).
+    projection_contract_version: CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
+    render_char_budget: CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+    code_max_nodes: CODE_SEMANTIC_MAP_MAX_NODES,
+    // DD6′ envelope content-shaping caps (교차검증 inv M1): these bound what the LLM actually
+    // READS in a frontier envelope, so a cap change changes the summary the sidecar caches —
+    // the same "value shapes the prompt but not the key" class as render_char_budget above, and
+    // reduce_schema_tool_version is contractually the ENVELOPE-SHAPE lever (field set), not a
+    // value lever, so a cap-value edit would not bump it. Fold by VALUE. (CODE_ENVELOPE_LINE_
+    // FIELD_CAP=200 is omitted deliberately: it is a defensive seal dominated by the observer's
+    // 140-char doc/signature bound, so it never actually truncates and cannot shape the prompt.)
+    source_lines_char_cap: CODE_SOURCE_LINES_CHAR_CAP,
+    symbol_names_display_cap: CODE_SYMBOL_NAMES_DISPLAY_CAP,
   };
   assertGatingKeyExcludesInEpochOutput("semanticMapCodeStageFingerprint", fingerprintPreImage);
   return sha256Text(stableJson(fingerprintPreImage));
@@ -2749,13 +2816,38 @@ function semanticMapCodeStructural(observation: SemanticMapObservation): {
   };
 }
 
+/** DD6′ frontier-source admission guard — the ONE predicate the stage AND the resume partition
+ *  share (DD7 same-predicate discipline), so the two can never disagree about whether a code
+ *  observation's excerpt is sliceable. Returns the failure description, or null when admitted:
+ *  the excerpt must exist, be the EXACT text the inventory was extracted from (sha equality), and
+ *  be complete (untruncated) — a drifted or partial slice would silently attribute wrong source. */
+function semanticMapCodeSourceExcerptGuardFailure(
+  observation: SemanticMapObservation,
+  inventory: CodeStructureInventory,
+): string | null {
+  const structural = observation.structural_data as Record<string, unknown>;
+  if (typeof structural.content_excerpt !== "string") {
+    return "structural_data.content_excerpt is absent — code whole-capture did not run for this ref";
+  }
+  if (structural.content_sha256 !== inventory.content_sha256) {
+    return "structural_data.content_sha256 does not match the inventory's content_sha256 — the excerpt is not the extracted text";
+  }
+  if (structural.excerpt_truncated !== false) {
+    return "structural_data.excerpt_truncated is not false — the capture is incomplete";
+  }
+  return null;
+}
+
 function semanticMapSkipReasonForCurrentObservation(
   observation: SemanticMapObservation,
-): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | null {
+): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | "code_source_excerpt_unavailable" | null {
   if (observation.target_material_kind === "code") {
     const { inventory, unsupportedReason } = semanticMapCodeStructural(observation);
     if (unsupportedReason !== undefined) return "code_extraction_unsupported";
-    return inventory ? null : "no_code_inventory";
+    if (!inventory) return "no_code_inventory";
+    return semanticMapCodeSourceExcerptGuardFailure(observation, inventory) === null
+      ? null
+      : "code_source_excerpt_unavailable";
   }
   const inventory = observation.structural_data.workbook_inventory as
     | WorkbookStructuralInventory
@@ -2807,16 +2899,29 @@ function isSemanticMapSidecar(value: unknown): value is ReconstructSemanticMapSi
   );
 }
 
+/** Step 6 (DD9)/DD10 discriminator over a PROJECTION: code ⇔ a node/disclosure node_ref carries
+ *  `file` (the same sniff appendSemanticMapSeedNotes uses); an empty projection defaults to
+ *  spreadsheet (note-kind caller-declared 규약과 동일 — X5상 map_present projection은 비지 않음). */
+function semanticMapProjectionKind(projection: SemanticMapAnyProjection): SemanticMapArtifactKind {
+  const ref = projection.nodes[0]?.node_ref ?? projection.refuted_disclosure[0]?.node_ref;
+  return ref && "file" in ref ? "code" : "spreadsheet";
+}
+
 function projectionIsRenderable(
   projection: SemanticMapAnyProjection,
-  noteKind: SemanticMapArtifactKind = "spreadsheet",
+  noteKind: SemanticMapArtifactKind,
+  labelRoot: string | null,
 ): boolean {
   try {
+    // Per-kind budget (DD10) — the resume check must judge renderability against the SAME budget
+    // the live prompt surfaces will use, else a code projection sized for 12,000 would fail the
+    // 4,000 check and silently doom valid resumes (or vice versa).
     renderSemanticMapProjection(
       projection,
-      SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+      semanticMapRenderCharBudget(noteKind),
       true,
       noteKind,
+      labelRoot,
     );
     return true;
   } catch (error) {
@@ -2857,6 +2962,9 @@ function buildSemanticMapResumeValidationArtifact(args: {
   codePreImageBase?: SemanticMapPreImageBase;
   verifyModelIdentity: string;
   config: SemanticMapStageConfig;
+  /** DD10 (리뷰 inv MN2): render-label root for the renderability re-check — the SAME root the
+   *  live prompt surfaces use, so resume validation judges the projection the seed will see. */
+  labelRoot: string | null;
   backupRefs?: Partial<ReconstructSemanticMapResumeValidationArtifact["backup_refs"]>;
 }): {
   artifact: ReconstructSemanticMapResumeValidationArtifact;
@@ -3045,7 +3153,8 @@ function buildSemanticMapResumeValidationArtifact(args: {
         row.skip_reason !== "no_workbook_inventory" &&
         row.skip_reason !== "no_value_tiles" &&
         row.skip_reason !== "no_code_inventory" &&
-        row.skip_reason !== "code_extraction_unsupported"
+        row.skip_reason !== "code_extraction_unsupported" &&
+        row.skip_reason !== "code_source_excerpt_unavailable"
       ) {
         nonReusableRetainedIds.push(id);
         continue;
@@ -3141,7 +3250,7 @@ function buildSemanticMapResumeValidationArtifact(args: {
       }));
     }
     sidecarRowsById.set(row.observation_id, row);
-    if (!projectionIsRenderable(row.projection, row.target_material_kind === "code" ? "code" : "spreadsheet")) {
+    if (!projectionIsRenderable(row.projection, row.target_material_kind === "code" ? "code" : "spreadsheet", args.labelRoot)) {
       projectionRenderable = false;
     }
     if (
@@ -3387,6 +3496,9 @@ export async function prepareSemanticMapResumeContext(args: {
   codePreImageBase?: SemanticMapPreImageBase;
   verifyModelIdentity: string;
   config: SemanticMapStageConfig;
+  /** DD10 (리뷰 inv MN2): render-label root threaded to the renderability re-check (null = v1
+   *  absolute-passthrough — callers without a project root). */
+  labelRoot: string | null;
 }): Promise<SemanticMapRecoveryContext | null> {
   const dispatchPath = dispatchIncompleteArtifactPath(args.sessionRoot);
   if (!(await exists(dispatchPath))) return null;
@@ -3478,6 +3590,7 @@ export async function prepareSemanticMapResumeContext(args: {
     ...(args.codePreImageBase !== undefined ? { codePreImageBase: args.codePreImageBase } : {}),
     verifyModelIdentity: args.verifyModelIdentity,
     config: args.config,
+    labelRoot: args.labelRoot,
     backupRefs,
   });
   artifact.violations.push(...parseViolations);
@@ -3815,6 +3928,15 @@ export async function runSemanticMapStage(args: {
       recordSkippedObservation(observation.observation_id, "no_code_inventory", undefined, "code");
       return;
     }
+    // DD6′ source admission (리뷰 ct M-1, fail-closed): frontier envelopes slice the
+    // observation-time whole-capture excerpt — never a stage-time disk re-read (DD4 TOCTOU).
+    // Shared predicate with the resume partition (DD7 discipline).
+    const excerptGuardFailure = semanticMapCodeSourceExcerptGuardFailure(observation, inventory);
+    if (excerptGuardFailure !== null) {
+      recordSkippedObservation(observation.observation_id, "code_source_excerpt_unavailable", excerptGuardFailure, "code");
+      return;
+    }
+    const sourceExcerpt = (observation.structural_data as Record<string, unknown>).content_excerpt as string;
     census.observations_total += 1;
     let breakerObservationFailure: {
       failureClass: ReturnType<typeof classifySystemicDispatchFailure>;
@@ -3871,7 +3993,8 @@ export async function runSemanticMapStage(args: {
       } else {
         try {
           // §3 bridge pre-compute — bottom-up, single-source envelope builder, full guards.
-          const meta = buildCodeSynthesisMeta(file, inventory);
+          // sourceExcerpt is guard-admitted above (sha-matched, untruncated — DD6′).
+          const meta = buildCodeSynthesisMeta(file, inventory, sourceExcerpt);
           const preByKey = new Map<string, CodeSemanticMapBridgeRecord>();
           const summaryByKey = new Map<string, string>();
           const order: string[] = [];
@@ -3933,7 +4056,9 @@ export async function runSemanticMapStage(args: {
             overContextBudget: cfg.over_context_budget,
             seedBound: false, // the projection is the sole refuted-exclusion layer (module input contract).
           });
-          projection = projectCodeSemanticMapToSeed(map, { maxNodes: cfg.max_nodes, maxDisclosure: cfg.max_disclosure });
+          // DD10: the CODE display cap (512) replaces the shared stage-config 60 — the shared cap
+          // was the 109→60 starvation cut; the value folds into the code fingerprint above.
+          projection = projectCodeSemanticMapToSeed(map, { maxNodes: CODE_SEMANTIC_MAP_MAX_NODES, maxDisclosure: cfg.max_disclosure });
 
           let anchored = 0;
           let unanchored = 0;
@@ -9797,6 +9922,9 @@ interface ObservationPromptPayloadOptions {
    *  labels (D-REL); not_examined_capped is always preserved (X4 — the two censuses are different
    *  universes). */
   semanticMapByObservation?: ReadonlyMap<string, SemanticMapAnyProjection>;
+  /** DD10: render-label root paired with semanticMapByObservation (the author closure always
+   *  supplies it; absent/null = v1 absolute-passthrough). */
+  semanticMapLabelRoot?: string | null;
   /**
    * P1-C2-B′ §2.2 Step E: read-candidate columns the fan-out cap left UNREAD, per observation_id
    * (formatted "colN (name)"). Surfaced as an explicit "not examined (capped)" census so the
@@ -10018,9 +10146,13 @@ export function observationPromptPayload(
           payload.provisional_labels = {
             ...renderSemanticMapProjection(
               semanticMap,
-              SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+              // DD10 per-kind budget — code renders get the code budget, spreadsheet stays 4,000.
+              semanticMapRenderCharBudget(
+                observation.target_material_kind === "code" ? "code" : "spreadsheet",
+              ),
               true,
               observation.target_material_kind === "code" ? "code" : "spreadsheet",
+              options.semanticMapLabelRoot ?? null,
             ),
             ...(hasCapped
               ? {
@@ -11273,6 +11405,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    */
   enableSemanticMapAuthoring?: boolean;
   /**
+   * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
+   * (observation replace + seed payload) — absolute code node_ref.file paths label as
+   * path.relative(projectRoot, file); artifact truth stays absolute. Absent = v1 absolute
+   * passthrough (spreadsheet-only callers unchanged). The PRODUCTION wiring (reconstruct-api)
+   * always passes the run's resolved projectRoot.
+   */
+  projectRoot?: string;
+  /**
    * Reasoning-effort override for the semantic-map SYNTHESIZE author only (replay A/B
    * 2026-07-03: gpt-5.5 low ≈ medium at the same-config retest noise floor; verify stays on
    * the base llmConfig — outside the validated scope). Absent = base config (byte-parity).
@@ -11412,7 +11552,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         ? { provisionalLabelsByObservation: leafReadProvisionalLabels }
         : {}),
       ...(leafReadCappedColumns ? { cappedColumnsByObservation: leafReadCappedColumns } : {}),
-      ...(semanticMapProjection ? { semanticMapByObservation: semanticMapProjection } : {}),
+      ...(semanticMapProjection
+        ? {
+            semanticMapByObservation: semanticMapProjection,
+            semanticMapLabelRoot: args.projectRoot ?? null,
+          }
+        : {}),
     });
 
   return {
@@ -12417,10 +12562,22 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         semanticMapProjection
           ? ids
               .filter((id) => semanticMapProjection!.has(id))
-              .map((id) => ({
-                observation_id: id,
-                ...renderSemanticMapProjection(semanticMapProjection!.get(id)!, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, false),
-              }))
+              .map((id) => {
+                const projection = semanticMapProjection!.get(id)!;
+                // DD10: per-kind budget + label root — kind via the node_ref sniff (the same
+                // discriminator appendSemanticMapSeedNotes uses below).
+                const kind = semanticMapProjectionKind(projection);
+                return {
+                  observation_id: id,
+                  ...renderSemanticMapProjection(
+                    projection,
+                    semanticMapRenderCharBudget(kind),
+                    false,
+                    kind,
+                    args.projectRoot ?? null,
+                  ),
+                };
+              })
           : [];
       const seedObservationIds = ontologySeedObservationIds({
         candidateInventory: input.candidateInventory,
@@ -16094,7 +16251,9 @@ export async function runReconstruct(
     reduce_reader_model_identity: directiveAuthor.semanticMapSynthesizeModelIdentity ??
       directiveAuthor.reuseModelIdentity ?? "unspecified",
     reduce_prompt_sha256: codeAuthoringPromptContractSha256(),
-    reduce_schema_tool_version: "semantic-map-code:v1",
+    // DD6′ 봉투 SHAPE 레버 (리뷰 ct m-1): prompt edits rotate via the contract sha above; an
+    // ENVELOPE-shape change (v2 = frontier source_lines) bumps this knob — code preImage 한정.
+    reduce_schema_tool_version: "semantic-map-code:v2",
     comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
     over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
     over_context_gate_logic_sha256: semanticMapGateLogicSha256(),
@@ -16124,6 +16283,7 @@ export async function runReconstruct(
     codePreImageBase: semanticMapCodePreImageBase,
     verifyModelIdentity: semanticMapVerifyModelIdentity,
     config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+    labelRoot: projectRoot,
   });
   const semanticMapResumeValidationRef =
     await exists(semanticMapResumeValidationPath(sessionRoot))
@@ -16350,6 +16510,7 @@ export async function runReconstruct(
       codePreImageBase: semanticMapCodePreImageBase,
       verifyModelIdentity: semanticMapVerifyModelIdentity,
       config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+      labelRoot: projectRoot,
     });
     if (
       !exactRecoveryContext ||

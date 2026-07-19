@@ -111,6 +111,13 @@ export const CODE_SEMANTIC_ADAPTER: SemanticCoordAdapter<
   }),
   boundaryPos: (b) => b.line,
   boundaryPosLabel: (b) => `line${b.line}`,
+  // DD10 (§10 v2.1 — 리뷰 gh M-2 선핀 총순서, 잔여 자유도 0): ① span 크기 내림차순
+  // ② line_start 오름차순 ③ nodeKey lex. 루트/대영역이 먼저 admit되므로 maxNodes 컷이
+  // 파일-수준 이해가 아니라 leaf를 굶긴다 (7b 기아 진단 ①의 해소 지점).
+  admissionCompare: (a, b) =>
+    (b.line_end - b.line_start) - (a.line_end - a.line_start) ||
+    a.line_start - b.line_start ||
+    cmpStr(codeReduceNodeKey(a), codeReduceNodeKey(b)),
 };
 
 // ── N1/N2 reconcile (code-typed façade) ──────────────────────────────────────
@@ -122,13 +129,24 @@ export function reconcileCodeBoundaries(
   return reconcileBoundariesCore(CODE_SEMANTIC_ADAPTER, raw, reduceNode.boundaries);
 }
 
-// ── DD6 envelope — identifier-only source-safety + 명시적 출력 경계 ────────────────────────────────
+// ── DD6′ envelope v2 — frontier 본문 포함 (O-6) + 명시적 출력 경계 ─────────────────────────────────
 
-/** Bounded, SOURCE-SAFE synthesis input for ONE code node (DD6): identifiers (symbol names/paths),
- *  the author's stated purpose (doc-comment FIRST line) and the declaration's FIRST source line are
- *  authoring-identity-level facts (leaf-reader "header label = column IDENTITY" precedent, O-5);
- *  declaration BODIES are never emitted. `target_material_kind` is the discriminator — the
- *  spreadsheet variant stays discriminator-free (기존 계약 바이트 불변, DD7). */
+/** Frontier source payload (DD6′): the observation-time whole-capture excerpt sliced to the node's
+ *  span. `text` is head-truncated at CODE_SOURCE_LINES_CHAR_CAP with an explicit flag;
+ *  `total_lines` is the AUTHORITATIVE span line count (truncation is never silent — ct m-2). */
+export interface CodeSourceLines {
+  text: string;
+  truncated: boolean;
+  total_lines: number;
+}
+
+/** Bounded synthesis input for ONE code node (DD6′ · owner 결정 O-6): identifiers, kind seams and
+ *  the O-5 identity lines as before, PLUS — on FRONTIER envelopes only (`child_summaries === []`)
+ *  — the span's source text (`source_lines`). Merge envelopes stay body-free: child-summary
+ *  recursion absorbs the context explosion (본문은 frontier에서만 읽는다). Security boundary is
+ *  the seat MODEL selection + repo opt-in, not this envelope (O-6 — DD6 source-safety 전제 폐기).
+ *  `target_material_kind` is the discriminator — the spreadsheet variant stays discriminator-free
+ *  (기존 계약 바이트 불변, DD7). */
 export interface CodeSemanticSynthesisInput {
   target_material_kind: "code";
   node_ref: CodeReduceRegion;
@@ -144,6 +162,9 @@ export interface CodeSemanticSynthesisInput {
   symbol_names_total: number;
   doc_comment_first_line: string | null;
   signature_line: string | null;
+  /** DD6′: non-null ⇔ frontier envelope (biconditional with `child_summaries === []` — the
+   *  bounded-input guard seals it). */
+  source_lines: CodeSourceLines | null;
   child_summaries: { key: CodeSemanticNodeKey; summary: string }[];
 }
 
@@ -169,6 +190,12 @@ export const CODE_SYMBOL_NAMES_DISPLAY_CAP = 32;
  *  ellipsis; this guard seals the envelope against an unbounded producer). */
 export const CODE_ENVELOPE_LINE_FIELD_CAP = 200;
 
+/** DD6′ per-envelope source cap (리뷰 ct m-2): X7 bounds CALL COUNT only — this cap is the sole
+ *  input-size guard. 12,000 chars = 4× the largest live-measured leaf (2,963); head-truncation
+ *  with the explicit flag + authoritative total_lines defends against a minified single-span
+ *  file without ever silently dropping. 선핀 값 (재평정 게이트 1항). */
+export const CODE_SOURCE_LINES_CHAR_CAP = 12_000;
+
 const CODE_SYNTHESIS_INPUT_KEYS = [
   "target_material_kind",
   "node_ref",
@@ -179,8 +206,10 @@ const CODE_SYNTHESIS_INPUT_KEYS = [
   "symbol_names_total",
   "doc_comment_first_line",
   "signature_line",
+  "source_lines",
   "child_summaries",
 ] as const;
+const CODE_SOURCE_LINES_KEYS = ["text", "truncated", "total_lines"] as const;
 const CODE_REGION_KEYS = ["file", "line_start", "line_end"] as const;
 const CODE_SEAM_KEYS = ["line", "prev_kind", "new_kind"] as const;
 const CODE_CHILD_SUMMARY_KEYS = ["key", "summary"] as const;
@@ -189,13 +218,13 @@ const CODE_RAW_BOUNDARY_KEYS = ["line", "character_before", "character_after"] a
 
 function assertExactKeys(label: string, obj: unknown, keys: readonly string[]): void {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-    throw new Error(`comprehension-semantic-map-code: ${label} must be a plain object (DD6 source-safe envelope).`);
+    throw new Error(`comprehension-semantic-map-code: ${label} must be a plain object (DD6′ bounded envelope).`);
   }
   const own = Object.keys(obj as Record<string, unknown>);
   const want = new Set(keys);
   for (const k of own) {
     if (!want.has(k)) {
-      throw new Error(`comprehension-semantic-map-code: ${label} has unexpected field '${k}' — only ${keys.join(", ")} allowed (DD6 source-safe envelope; an extra field could smuggle declaration-body source into synthesis).`);
+      throw new Error(`comprehension-semantic-map-code: ${label} has unexpected field '${k}' — only ${keys.join(", ")} allowed (DD6′ bounded envelope; an undeclared field would reach the LLM outside the pinned contract shape).`);
     }
   }
   for (const k of keys) {
@@ -212,10 +241,11 @@ function assertBoundedLineField(label: string, v: unknown): void {
   }
 }
 
-/** SOURCE-SAFETY guard (DD6) — the exact own-key twin of assertSynthesisInputBounded: the code
- *  envelope carries ONLY identifiers, kind tokens, seams, the two O-5 bounded identity lines, and
- *  child summary prose. An extra field, an unbounded doc/signature line, or a non-string name
- *  fails closed — declaration-body source cannot pass. */
+/** Bounded-envelope guard (DD6′) — the exact own-key twin of assertSynthesisInputBounded: the code
+ *  envelope carries identifiers, kind tokens, seams, the two O-5 bounded identity lines, child
+ *  summary prose, and — on FRONTIER envelopes only — the capped span source (O-6). An extra field,
+ *  an unbounded field, or a source payload on a MERGE envelope (or a frontier without one) fails
+ *  closed: the frontier⇔source biconditional is what keeps merge recursion context-bounded. */
 export function assertCodeSynthesisInputBounded(input: CodeSemanticSynthesisInput): void {
   assertExactKeys("synthesis input", input, CODE_SYNTHESIS_INPUT_KEYS);
   if (input.target_material_kind !== "code") {
@@ -261,7 +291,29 @@ export function assertCodeSynthesisInputBounded(input: CodeSemanticSynthesisInpu
   for (const c of input.child_summaries) {
     assertExactKeys("synthesis child summary", c, CODE_CHILD_SUMMARY_KEYS);
     if (typeof c.key !== "string" || typeof c.summary !== "string") {
-      throw new Error("comprehension-semantic-map-code: synthesis child summary must be {key:string, summary:string} (DD6 source-safe envelope).");
+      throw new Error("comprehension-semantic-map-code: synthesis child summary must be {key:string, summary:string} (DD6′ bounded envelope).");
+    }
+  }
+  // DD6′ frontier ⇔ source biconditional + bounds. Frontier = child_summaries === [] (builder
+  // contract); a merge envelope carrying source would reopen the context explosion the recursion
+  // absorbs, and a source-less frontier would silently regress to the v1 identifier-only regime.
+  const isFrontierEnvelope = input.child_summaries.length === 0;
+  if (isFrontierEnvelope !== (input.source_lines !== null)) {
+    throw new Error(
+      `comprehension-semantic-map-code: synthesis source_lines must be present on FRONTIER envelopes and null on merge envelopes — got ${input.source_lines === null ? "null on a frontier" : "source on a merge"} envelope (DD6′ fail-closed).`,
+    );
+  }
+  if (input.source_lines !== null) {
+    assertExactKeys("synthesis source_lines", input.source_lines, CODE_SOURCE_LINES_KEYS);
+    const s = input.source_lines;
+    if (typeof s.text !== "string" || s.text.length > CODE_SOURCE_LINES_CHAR_CAP) {
+      throw new Error(`comprehension-semantic-map-code: synthesis source_lines.text must be a string ≤ ${CODE_SOURCE_LINES_CHAR_CAP} chars (DD6′ per-envelope source cap, 리뷰 ct m-2).`);
+    }
+    if (typeof s.truncated !== "boolean") {
+      throw new Error("comprehension-semantic-map-code: synthesis source_lines.truncated must be a boolean (DD6′ — truncation is never silent).");
+    }
+    if (!Number.isSafeInteger(s.total_lines) || s.total_lines < 1) {
+      throw new Error("comprehension-semantic-map-code: synthesis source_lines.total_lines must be a safe integer ≥ 1 (DD6′ authoritative span line count).");
     }
   }
 }
@@ -308,6 +360,10 @@ export interface CodeSynthesisMeta {
   containerBySpanKey: Map<string, CodeSpanMeta>;
   /** leaf spanKey → its container spanKey (depth-2 v1). */
   containerOfLeaf: Map<string, string>;
+  /** DD6′: the observation-time whole-capture excerpt split into lines (1-based access via
+   *  index-1) — the frontier envelopes' source authority. Observation-frozen (리뷰 ct M-1:
+   *  never a stage-time disk re-read), guarded upstream by the sha/truncation admission check. */
+  sourceLines: string[];
 }
 
 function spanKeyOf(lineStart: number, lineEnd: number): string {
@@ -319,7 +375,14 @@ function labelOf(meta: CodeSpanMeta): string {
   return name ? `${meta.kind} ${name}` : meta.kind;
 }
 
-export function buildCodeSynthesisMeta(file: string, inventory: CodeStructureInventory): CodeSynthesisMeta {
+export function buildCodeSynthesisMeta(
+  file: string,
+  inventory: CodeStructureInventory,
+  /** DD6′: the observation-time whole-capture `structural_data.content_excerpt` — REQUIRED so no
+   *  caller can silently regress to a source-less (v1) envelope; the stage admits an observation
+   *  only after the sha/untruncated guard, so the text always matches the inventory. */
+  sourceText: string,
+): CodeSynthesisMeta {
   const leafBySpanKey = new Map<string, CodeSpanMeta>();
   for (const span of inventory.symbol_tiles.spans) {
     leafBySpanKey.set(spanKeyOf(span.line_start, span.line_end), {
@@ -353,7 +416,9 @@ export function buildCodeSynthesisMeta(file: string, inventory: CodeStructureInv
     });
     for (const childKey of row.child_keys) containerOfLeaf.set(childKey, row.key);
   }
-  return { file, leafBySpanKey, containerBySpanKey, containerOfLeaf };
+  // The SAME line convention as the observer/textStats (split on \r?\n) so span line numbers index
+  // the exact lines the inventory was extracted from.
+  return { file, leafBySpanKey, containerBySpanKey, containerOfLeaf, sourceLines: sourceText.split(/\r?\n/) };
 }
 
 function canonicalSymbolSeams(
@@ -432,6 +497,35 @@ export function buildCodeSynthesisInputForNode(
   const identity = exactContainer ?? exactLeaf ?? null;
   const isFrontier = mode === "frontier";
   const consumedChildKeys = tnode.child_keys.filter((k) => modes.get(k) !== "subsumed");
+  const childSummaries = isFrontier
+    ? []
+    : consumedChildKeys.map((k) => {
+        const summary = childSummaryByKey.get(k);
+        if (summary === undefined) {
+          throw new Error(`comprehension-semantic-map-code: missing consumed-child summary for ${k} (synthesis input — children must be produced bottom-up first).`);
+        }
+        return { key: k, summary };
+      });
+  // DD6′ (O-6): the ENVELOPE-level frontier criterion is `child_summaries === []` (설계 핀) — a
+  // node reading no child prose reads its own span source instead. Merge envelopes stay
+  // body-free (recursion absorbs the context). Slice the observation-frozen excerpt, head-capped
+  // with an explicit flag + authoritative span line count (ct m-2 — never a silent drop).
+  let sourceLines: CodeSourceLines | null = null;
+  if (childSummaries.length === 0) {
+    const spanLines = meta.sourceLines.slice(r.line_start - 1, r.line_end);
+    if (spanLines.length !== r.line_end - r.line_start + 1) {
+      throw new Error(
+        `comprehension-semantic-map-code: span ${r.line_start}-${r.line_end} exceeds the captured source (${meta.sourceLines.length} lines) — the excerpt admission guard must reject this observation upstream (DD6′ fail-closed).`,
+      );
+    }
+    const full = spanLines.join("\n");
+    const truncated = full.length > CODE_SOURCE_LINES_CHAR_CAP;
+    sourceLines = {
+      text: truncated ? full.slice(0, CODE_SOURCE_LINES_CHAR_CAP) : full,
+      truncated,
+      total_lines: spanLines.length,
+    };
+  }
   return {
     target_material_kind: "code",
     node_ref: { file: r.file, line_start: r.line_start, line_end: r.line_end },
@@ -442,15 +536,8 @@ export function buildCodeSynthesisInputForNode(
     symbol_names_total: sortedNames.length,
     doc_comment_first_line: identity?.docFirstLine ?? null,
     signature_line: identity?.signatureLine ?? null,
-    child_summaries: isFrontier
-      ? []
-      : consumedChildKeys.map((k) => {
-          const summary = childSummaryByKey.get(k);
-          if (summary === undefined) {
-            throw new Error(`comprehension-semantic-map-code: missing consumed-child summary for ${k} (synthesis input — children must be produced bottom-up first).`);
-          }
-          return { key: k, summary };
-        }),
+    source_lines: sourceLines,
+    child_summaries: childSummaries,
   };
 }
 

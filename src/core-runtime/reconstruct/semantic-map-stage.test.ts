@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,8 +8,13 @@ import {
   authoringPromptContractSha256,
   buildSemanticMapBridgeCallbacks,
   CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+  CODE_SEMANTIC_MAP_MAX_NODES,
+  CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
+  CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
   codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  semanticMapRenderCharBudget,
   deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
   observationPromptPayload,
@@ -39,6 +45,7 @@ import type {
 import type { ColumnValueTiles } from "../spreadsheet-structure-observer.js";
 import { observeCodeStructure, type CodeStructureInventory } from "../code-structure-observer.js";
 import type {
+  CodeSemanticSeedProjection,
   CodeSemanticSynthesisInput,
   CodeSemanticSynthesisOutput,
 } from "./comprehension-semantic-map-code.js";
@@ -834,7 +841,7 @@ function projectionWithRefuted(nodes: number, refuted: number): SemanticSeedProj
 
 describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget contract)", () => {
   it("renders bounded nodes with AUTHORITATIVE totals and no truncation under a generous budget", () => {
-    const r = renderSemanticMapProjection(seedProjection(3), 10_000, true) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(3), 10_000, true, "spreadsheet", null) as Record<string, unknown>;
     expect(r.authority).toBe("non_authoritative");
     expect((r.nodes as unknown[]).length).toBe(3);
     expect(r.nodes_total).toBe(3);
@@ -845,13 +852,13 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
   });
 
   it("includeNote=false (seed surface): no inline note — the caveat is hoisted ONCE into the seed system prompt", () => {
-    const r = renderSemanticMapProjection(seedProjection(2), 10_000, false) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(2), 10_000, false, "spreadsheet", null) as Record<string, unknown>;
     expect("note" in r).toBe(false);
     expect((r.nodes as unknown[]).length).toBe(2);
   });
 
   it("budget truncation is a deterministic TAIL drop with an explicit flag — totals stay authoritative", () => {
-    const r = renderSemanticMapProjection(seedProjection(5), 1_000, false) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(5), 1_000, false, "spreadsheet", null) as Record<string, unknown>;
     expect((r.nodes as unknown[]).length).toBeGreaterThanOrEqual(1);
     expect((r.nodes as unknown[]).length).toBeLessThan(5);
     expect(r.nodes_total).toBe(5); // never a silent drop
@@ -862,21 +869,21 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
 
   it("EXACT budget contract (codex W4-002 ≡ onto issue-001/002/004/005): the WHOLE returned envelope's actual prompt serialization never exceeds the budget", () => {
     for (const budget of [500, 900, 1_500, 4_000]) {
-      const r = renderSemanticMapProjection(projectionWithRefuted(8, 5), budget, false);
+      const r = renderSemanticMapProjection(projectionWithRefuted(8, 5), budget, false, "spreadsheet", null);
       expect(JSON.stringify(r, null, 2).length).toBeLessThanOrEqual(budget);
     }
-    const withNote = renderSemanticMapProjection(projectionWithRefuted(8, 5), 1_500, true);
+    const withNote = renderSemanticMapProjection(projectionWithRefuted(8, 5), 1_500, true, "spreadsheet", null);
     expect(JSON.stringify(withNote, null, 2).length).toBeLessThanOrEqual(1_500);
   });
 
   it("W4-004: refuted disclosure ROWS are prompt-visible (design §4 honesty), nodes admit FIRST", () => {
     const p = projectionWithRefuted(2, 3);
-    const full = renderSemanticMapProjection(p, 100_000, false) as Record<string, unknown>;
+    const full = renderSemanticMapProjection(p, 100_000, false, "spreadsheet", null) as Record<string, unknown>;
     expect((full.refuted_disclosure as unknown[]).length).toBe(3);
     expect((full.refuted_disclosure as { row: number }[])[0]?.row).toBe(3);
     // one char under the full render: the deterministic drop is the LAST refuted row, never a node
     const fullLen = JSON.stringify(full, null, 2).length;
-    const r = renderSemanticMapProjection(p, fullLen - 1, false) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(p, fullLen - 1, false, "spreadsheet", null) as Record<string, unknown>;
     expect((r.nodes as unknown[]).length).toBe(2); // nodes-first priority intact
     expect((r.refuted_disclosure as unknown[]).length).toBe(2);
     expect(r.refuted_disclosure_total).toBe(3); // total stays authoritative
@@ -884,9 +891,9 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
   });
 
   it("fail-loud budget (issue-012 NC): NaN/zero budget throws; a budget too small for the empty envelope throws instead of silently overshooting", () => {
-    expect(() => renderSemanticMapProjection(seedProjection(1), Number.NaN, true)).toThrow(/charBudget/);
-    expect(() => renderSemanticMapProjection(seedProjection(1), 0, true)).toThrow(/charBudget/);
-    expect(() => renderSemanticMapProjection(seedProjection(1), 300, true)).toThrow(/cannot fit/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), Number.NaN, true, "spreadsheet", null)).toThrow(/charBudget/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), 0, true, "spreadsheet", null)).toThrow(/charBudget/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), 300, true, "spreadsheet", null)).toThrow(/cannot fit/);
   });
 
   it("CG-1: BOTH notes are catalog-backed; the seed note COMPOSES the shared caveat (editing either rotates the sha)", () => {
@@ -894,6 +901,86 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.observation_semantic_map_note).toBe(SEMANTIC_MAP_PROMPT_NOTE);
     expect(SEMANTIC_MAP_SEED_PROMPT_NOTE.endsWith(SEMANTIC_MAP_PROMPT_NOTE)).toBe(true);
     expect(SEMANTIC_MAP_SEED_PROMPT_NOTE).toContain("userPayload.semantic_map");
+  });
+});
+
+// ── DD10 (§10 v2.1) — per-kind knobs + render label root ──────────────────────────────────────────
+
+function codeSeedProjectionWithFiles(files: string[]): CodeSemanticSeedProjection {
+  return {
+    authority: "non_authoritative",
+    provisional: true,
+    nodes: files.map((file, i) => ({
+      node_ref: { file, line_start: i * 10 + 1, line_end: i * 10 + 9 },
+      semantic_summary: `summary-${i}`,
+      boundaries: [],
+    })),
+    nodes_total: files.length,
+    refuted_disclosure: files.slice(0, 1).map((file) => ({
+      node_ref: { file, line_start: 1, line_end: 9 },
+      line: 4,
+      character_before: "x",
+      character_after: "y",
+    })),
+    refuted_disclosure_total: Math.min(files.length, 1),
+    unanchored_unverified_total: 0,
+  };
+}
+
+describe("DD10 (§10 v2.1): per-kind render knobs + code label root", () => {
+  it("선핀 값 회귀 잠금 (재평정 게이트 1항): the pre-registered v2 numbers are EXACTLY these — a drift here invalidates the pre-registration copy-pin", () => {
+    // budget CORRECTED 12,000→40,000 (§10 v2.2, owner 2026-07-19): the ablation measured ~850
+    // chars/node so 12,000 admitted only 12 (<30 유효성 floor); 40,000 admits ~65 (설계 40~60 의도).
+    expect(CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET).toBe(40_000);
+    expect(CODE_SEMANTIC_MAP_MAX_NODES).toBe(512);
+    expect(CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION).toBe("code-projection-render:1");
+    // spreadsheet 불변 쌍 (리뷰 inv M1 — collateral rotation 차단의 반대편 고정점).
+    expect(SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET).toBe(4_000);
+    expect(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG.max_nodes).toBe(60);
+    // the single selector every render surface routes through.
+    expect(semanticMapRenderCharBudget("code")).toBe(CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET);
+    expect(semanticMapRenderCharBudget("spreadsheet")).toBe(SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET);
+  });
+
+  it("labelRoot relativizes ABSOLUTE code file labels on nodes AND refuted rows (라벨만 — node_ref 입력 불변), `../` outside root, passthrough for relative fixtures", () => {
+    const abs = codeSeedProjectionWithFiles(["/repo/src/a.ts", "/elsewhere/b.ts"]);
+    const r = renderSemanticMapProjection(abs, 100_000, false, "code", "/repo") as {
+      nodes: { region: string }[];
+      refuted_disclosure: { region: string }[];
+    };
+    expect(r.nodes.map((n) => n.region)).toEqual(["src/a.ts:1-9", "../elsewhere/b.ts:11-19"]);
+    expect(r.refuted_disclosure[0]!.region).toBe("src/a.ts:1-9");
+    expect(abs.nodes[0]!.node_ref.file).toBe("/repo/src/a.ts"); // artifact 권위 절대경로 유지.
+
+    const nullRoot = renderSemanticMapProjection(abs, 100_000, false, "code", null) as {
+      nodes: { region: string }[];
+    };
+    expect(nullRoot.nodes[0]!.region).toBe("/repo/src/a.ts:1-9"); // v1 passthrough — labelRoot 없는 표면.
+
+    const rel = codeSeedProjectionWithFiles(["src/fixture.ts"]);
+    const relRendered = renderSemanticMapProjection(rel, 100_000, false, "code", "/repo") as {
+      nodes: { region: string }[];
+    };
+    expect(relRendered.nodes[0]!.region).toBe("src/fixture.ts:1-9"); // non-absolute fixture path untouched.
+  });
+
+  it("DD6′ prompt pins: mock-키 서두 앵커 유지·identifier-only 문구 제거·source_lines 서술·BOUNDARIES seam 절 축어 불변 (리뷰 ct m-3)", () => {
+    const prompt = CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.code_semantic_map_synthesize!;
+    expect(prompt.startsWith("You are reading ONE code file region")).toBe(true); // mock dispatcher key + spreadsheet 구분자 — 무회전.
+    expect(prompt).not.toContain("No source-code bodies"); // O-6: the source-safety framing is repealed.
+    expect(prompt).toContain("source_lines");
+    expect(prompt).toContain(
+      "BOUNDARIES: A boundary's line should correspond to a symbol_seam (or a transition a child_summary explicitly reports). Do not invent split points at lines with no supporting seam.",
+    );
+  });
+
+  it("relative labels reclaim real budget: a budget that starves absolute-labeled nodes admits MORE nodes under labelRoot (기아 해소의 실측 가능 신호)", () => {
+    const files = Array.from({ length: 12 }, (_, i) => `/very/long/absolute/project/root/path/src/deeply/nested/module-${i}.ts`);
+    const projection = codeSeedProjectionWithFiles(files);
+    const budget = 2_000;
+    const absolute = renderSemanticMapProjection(projection, budget, false, "code", null) as { nodes: unknown[] };
+    const relative = renderSemanticMapProjection(projection, budget, false, "code", "/very/long/absolute/project/root/path") as { nodes: unknown[] };
+    expect(relative.nodes.length).toBeGreaterThan(absolute.nodes.length);
   });
 });
 
@@ -1878,7 +1965,15 @@ function mixedObservationsArtifact(args: {
       observation_id: "obs-code",
       target_material_kind: "code",
       source_ref: CODE_FILE,
-      structural_data: args.code.structural,
+      structural_data: {
+        // DD6′ 소스 admission 3전제 (실 materialize shape): whole-capture excerpt = 관찰 텍스트
+        // 그대로, sha = 그 텍스트의 sha(관찰자 inventory와 일치), 무절단. 개별 테스트는 뒤의
+        // spread로 오버라이드해 가드 실패 분기를 구동한다.
+        content_excerpt: CODE_FIXTURE,
+        content_sha256: createHash("sha256").update(CODE_FIXTURE).digest("hex"),
+        excerpt_truncated: false,
+        ...args.code.structural,
+      },
     });
   }
   return { observations } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
@@ -1972,7 +2067,7 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
     expect(firstRef.file).toBe(CODE_FILE);
 
     // DD9 render: code rows carry file:line vocabulary + the CODE note.
-    const rendered = renderSemanticMapProjection(codeProjection!, 4000, true, "code") as {
+    const rendered = renderSemanticMapProjection(codeProjection!, 4000, true, "code", null) as {
       note?: string;
       nodes: { region: string; boundaries: Record<string, unknown>[] }[];
     };
@@ -1991,6 +2086,81 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
     expect("target_material_kind" in sidecar.observations.find((o) => o.observation_id === "obs-sheet")!).toBe(false);
     expect(result.aggregateFingerprint).not.toBeNull();
     await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("DD6′: the EXACT transmitted frontier envelopes carry the guarded span source (본문 실재), merge envelopes stay body-free", async () => {
+    const inventory = await codeInventory();
+    const { author } = mockCodeAuthor();
+    const captured: CodeSemanticSynthesisInput[] = [];
+    const capturingAuthor = {
+      ...author,
+      async synthesizeSemanticMapNode(input: CodeSemanticSynthesisInput | SemanticSynthesisInput) {
+        if ("file" in input.node_ref) captured.push(structuredClone(input as CodeSemanticSynthesisInput));
+        return (author.synthesizeSemanticMapNode as (i: unknown) => unknown)(input);
+      },
+    } as unknown as ReconstructDirectiveAuthor;
+    const sessionRoot = await tempRoot();
+    const result = await runSemanticMapStage({
+      sourceObservations: mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } }),
+      directiveAuthor: capturingAuthor,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    expect(result.census?.by_observation.find((r) => r.observation_id === "obs-code")?.map_present).toBe(true);
+
+    const frontierInputs = captured.filter((i) => i.child_summaries.length === 0);
+    const mergeInputs = captured.filter((i) => i.child_summaries.length > 0);
+    expect(frontierInputs.length).toBeGreaterThan(0); // cardinality — a source claim over 0 envelopes is vacuous.
+    expect(mergeInputs.length).toBeGreaterThan(0);
+    const fixtureLines = CODE_FIXTURE.split("\n");
+    for (const input of frontierInputs) {
+      expect(input.source_lines).not.toBeNull();
+      expect(input.source_lines!.text).toBe(
+        fixtureLines.slice(input.node_ref.line_start - 1, input.node_ref.line_end).join("\n"),
+      );
+      expect(input.source_lines!.truncated).toBe(false);
+    }
+    expect(frontierInputs.some((i) => i.source_lines!.text.includes("this.count += 1;"))).toBe(true); // a real BODY line reached an envelope (O-6).
+    for (const input of mergeInputs) expect(input.source_lines).toBeNull();
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it("DD6′ 소스 admission 가드: sha 불일치·절단·부재 각각 → 결정론 skip census(code_source_excerpt_unavailable, 사유 기록)·code dispatch 0", async () => {
+    const inventory = await codeInventory();
+    const cases: { override: Record<string, unknown>; detail: RegExp }[] = [
+      { override: { content_sha256: "0".repeat(64) }, detail: /content_sha256/ },
+      { override: { excerpt_truncated: true }, detail: /excerpt_truncated/ },
+      { override: { content_excerpt: undefined }, detail: /content_excerpt is absent/ },
+    ];
+    for (const { override, detail } of cases) {
+      const { author, counters } = mockCodeAuthor();
+      const sessionRoot = await tempRoot();
+      const result = await runSemanticMapStage({
+        sourceObservations: mixedObservationsArtifact({
+          code: { structural: { code_structure_inventory: inventory, ...override } },
+        }),
+        directiveAuthor: author,
+        sessionRoot,
+        config: CONFIG,
+        preImageBase: PRE_IMAGE_BASE,
+        codeKindOptIn: true,
+        codePreImageBase: CODE_PRE_IMAGE_BASE,
+        verifyModelIdentity: "mock/none",
+      });
+      const codeRow = result.census!.by_observation.find((r) => r.observation_id === "obs-code");
+      expect(codeRow?.map_present).toBe(false);
+      expect(codeRow?.skip_reason).toBe("code_source_excerpt_unavailable");
+      expect(codeRow?.skip_detail).toMatch(detail);
+      expect(codeRow?.target_material_kind).toBe("code");
+      expect(counters.codeSynthesize).toBe(0); // the guard is pre-dispatch — no source ever leaves.
+      // Containment: the sibling spreadsheet observation still produces (관찰 단위 격리).
+      expect(result.census!.by_observation.find((r) => r.observation_id === "obs-sheet")?.map_present).toBe(true);
+      await fs.rm(sessionRoot, { recursive: true, force: true });
+    }
   });
 
   it("G-OFF (i): settings opt-in absent → code observation invisible; outputs byte-identical to a code-less run; 0 code dispatches", async () => {
@@ -2077,7 +2247,14 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
           observation_id: "obs-empty-file",
           target_material_kind: "code",
           source_ref: "src/example/empty.ts",
-          structural_data: { code_structure_inventory: emptyObserved.inventory },
+          structural_data: {
+            code_structure_inventory: emptyObserved.inventory,
+            // DD6′ admission triple (real materialize shape for an empty file) — the empty-file
+            // row must reach the EVALUATED "empty" branch, not the excerpt-guard skip.
+            content_excerpt: "",
+            content_sha256: createHash("sha256").update("").digest("hex"),
+            excerpt_truncated: false,
+          },
         },
       ],
     } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];

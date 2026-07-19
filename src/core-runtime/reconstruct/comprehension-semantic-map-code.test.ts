@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { observeCodeStructure } from "../code-structure-observer.js";
 import {
+  codeReduceNodeKey,
   foldCodeStructureInventory,
   type CodeReduceNode,
 } from "./comprehension-reduce-code.js";
 import {
+  CODE_SOURCE_LINES_CHAR_CAP,
   CODE_SYMBOL_NAMES_DISPLAY_CAP,
   accumulateCodeSemanticMap,
   assertCodeSynthesisInputBounded,
@@ -62,7 +64,9 @@ async function buildFixtureTree() {
   if (observed.status !== "ok") throw new Error(`fixture must observe ok, got ${observed.status}`);
   const inventory = observed.inventory;
   const { root, trace, nodesByKey } = foldCodeStructureInventory(FILE, inventory, 2);
-  return { inventory, root, trace, nodesByKey, meta: buildCodeSynthesisMeta(FILE, inventory) };
+  // DD6′: the fixture text doubles as the observation-time whole-capture excerpt (sha-coherent
+  // by construction — the observer extracted from the same text).
+  return { inventory, root, trace, nodesByKey, meta: buildCodeSynthesisMeta(FILE, inventory, FIXTURE) };
 }
 
 describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-L2 module half)", () => {
@@ -137,6 +141,48 @@ describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-
     }
   });
 
+  it("DD10 admission order (리뷰 gh M-2 선핀 총순서): span-desc → line_start-asc → nodeKey lex; the maxNodes cut keeps the WIDEST regions, and the order provably differs from the v1 lex cut", async () => {
+    const { trace, nodesByKey, meta } = await buildFixtureTree();
+    const map = accumulateCodeSemanticMap(meta, trace, nodesByKey, {
+      synthesize: (input) => ({
+        semantic_summary: `s ${input.node_ref.line_start}-${input.node_ref.line_end}`,
+        boundaries: [],
+      }),
+      verifyUnanchored: () => "adversarial_refuted",
+      preImageBase: PRE_IMAGE_BASE,
+      overContextBudget: 2,
+      seedBound: false,
+    });
+
+    const projection = projectCodeSemanticMapToSeed(map);
+    expect(projection.nodes.length).toBeGreaterThan(2); // cardinality — an order claim over ≤2 nodes is near-vacuous.
+    const spans = projection.nodes.map((n) => n.node_ref);
+    // ① the file-level ROOT (widest span) admits FIRST — the starvation fix's essence.
+    const widest = Math.max(...spans.map((s) => s.line_end - s.line_start));
+    expect(spans[0]!.line_end - spans[0]!.line_start).toBe(widest);
+    // ①②③ pinned total order holds pairwise across the whole projection.
+    for (let i = 1; i < spans.length; i += 1) {
+      const a = spans[i - 1]!;
+      const b = spans[i]!;
+      const cmp =
+        (b.line_end - b.line_start) - (a.line_end - a.line_start) ||
+        a.line_start - b.line_start ||
+        (codeReduceNodeKey(a) < codeReduceNodeKey(b) ? -1 : 1);
+      expect(cmp).toBeLessThan(0);
+    }
+    // Negative control: the v1 lex order over the SAME refs is a DIFFERENT sequence — if this ever
+    // collapses to equal, the fixture can no longer falsify an admissionCompare regression.
+    const lexOrder = [...spans].sort((a, b) => (codeReduceNodeKey(a) < codeReduceNodeKey(b) ? -1 : 1));
+    expect(lexOrder.map((s) => codeReduceNodeKey(s))).not.toEqual(spans.map((s) => codeReduceNodeKey(s)));
+
+    // The maxNodes cut consumes the admission order: survivors are exactly the head of the full
+    // order (root/large regions), never the lex head — with authoritative totals intact.
+    const capped = projectCodeSemanticMapToSeed(map, { maxNodes: 2 });
+    expect(capped.nodes.map((n) => codeReduceNodeKey(n.node_ref)))
+      .toEqual(spans.slice(0, 2).map((s) => codeReduceNodeKey(s)));
+    expect(capped.nodes_total).toBe(projection.nodes_total);
+  });
+
   it("builds container-aware envelopes: symbol_path labels, sorted bounded symbol_names with authoritative total, O-5 doc/signature identity lines", async () => {
     const { trace, nodesByKey, meta } = await buildFixtureTree();
     const modes = classifyFrontierCore(trace, 0); // everything with children accumulates → all non-leaves take input.
@@ -177,6 +223,34 @@ describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-
     expect(rootInput.symbol_names).toContain("add");
     expect(rootInput.symbol_names.length).toBeLessThanOrEqual(CODE_SYMBOL_NAMES_DISPLAY_CAP);
     expect(rootInput.child_summaries.length).toBeGreaterThan(0); // accumulating root consumes children.
+
+    // DD6′: childless envelopes carry the EXACT span slice of the fixture text; merge envelopes
+    // stay body-free (본문은 frontier에서만).
+    expect(rootInput.source_lines).toBeNull();
+    expect(addLeaf!.source_lines).not.toBeNull();
+    const fixtureLines = FIXTURE.split("\n");
+    const addRef = addLeaf!.node_ref;
+    expect(addLeaf!.source_lines!.text).toBe(fixtureLines.slice(addRef.line_start - 1, addRef.line_end).join("\n"));
+    expect(addLeaf!.source_lines!.text).toContain("return x + y;"); // the BODY is present (O-6 — v1 never shipped it).
+    expect(addLeaf!.source_lines!.truncated).toBe(false);
+    expect(addLeaf!.source_lines!.total_lines).toBe(addRef.line_end - addRef.line_start + 1);
+  });
+
+  it("DD6′ per-envelope source cap: an over-cap span head-truncates at 12,000 chars with the explicit flag and an authoritative total_lines", async () => {
+    const { trace, nodesByKey, meta } = await buildFixtureTree();
+    const modes = classifyFrontierCore(trace, 10_000); // root = frontier — the whole file is one envelope.
+    const rootRef = trace.nodes.get(trace.root_key)!.node_ref;
+    const spanLineCount = rootRef.line_end - rootRef.line_start + 1;
+    // Same line COUNT as the real capture (the slice-integrity guard must pass); one giant line
+    // pushes the joined span far over the cap.
+    const giantLines = meta.sourceLines.map((line, i) => (i === 0 ? "x".repeat(CODE_SOURCE_LINES_CHAR_CAP + 3_000) : line));
+    const giantMeta = { ...meta, sourceLines: giantLines };
+    const input = buildCodeSynthesisInputForNode(giantMeta, trace, nodesByKey, modes, trace.root_key, new Map());
+    assertCodeSynthesisInputBounded(input); // the capped envelope passes its own guard.
+    expect(input.source_lines).not.toBeNull();
+    expect(input.source_lines!.truncated).toBe(true);
+    expect(input.source_lines!.text.length).toBe(CODE_SOURCE_LINES_CHAR_CAP);
+    expect(input.source_lines!.total_lines).toBe(spanLineCount);
   });
 
   it("fails closed on envelope violations: extra field, wrong discriminator, unbounded identity line, malformed output boundary", async () => {
@@ -197,6 +271,43 @@ describe("comprehension-semantic-map-code (design 20260718 DD6/DD9 — step 6 G-
     expect(() =>
       assertCodeSynthesisInputBounded({ ...input, symbol_names_total: input.symbol_names.length - 1 }),
     ).toThrow(/symbol_names_total/);
+
+    // DD6′ frontier ⇔ source biconditional + source bounds (fail-closed both directions).
+    expect(input.child_summaries.length).toBe(0); // this IS a frontier envelope — non-vacuous below.
+    expect(() => assertCodeSynthesisInputBounded({ ...input, source_lines: null })).toThrow(
+      /null on a frontier/,
+    );
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: null,
+        child_summaries: [{ key: "1-1", summary: "s" }],
+      }),
+    ).not.toThrow(); // a merge envelope is body-free by contract.
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        child_summaries: [{ key: "1-1", summary: "s" }],
+      }),
+    ).toThrow(/source on a merge/);
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: { ...input.source_lines!, extra: 1 } as never,
+      }),
+    ).toThrow(/unexpected field 'extra'/);
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: { ...input.source_lines!, text: "x".repeat(CODE_SOURCE_LINES_CHAR_CAP + 1) },
+      }),
+    ).toThrow(/source cap/);
+    expect(() =>
+      assertCodeSynthesisInputBounded({
+        ...input,
+        source_lines: { ...input.source_lines!, total_lines: 0 },
+      }),
+    ).toThrow(/total_lines/);
 
     expect(() =>
       assertCodeSynthesisOutputBounded({
