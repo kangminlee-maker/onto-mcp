@@ -470,3 +470,51 @@ severity floor medium+, 실코드 앵커 필수. **15건 접수 → 전건 실�
 DD1 region 리터럴 바이트 동일 건전, G2 스캐너 비접촉, 관찰 semantic-key 스캔 비충돌,
 observation_id/delta 안정, G8 비접촉, census additive 가능(단 partition 문구·skip union·resume
 분류기 확장 필요 — DD7 반영), mock boundary 적합.
+
+## 10. G-SEM live N=1 FAIL 후 재설계 (addendum 2026-07-19 · owner 결정 O-6)
+
+**결과 핀**: 7b live N=1 (`code-structure-observer.ts`) — 스택 기계 동작 완벽(synthesize 109 =
+결정론 프로브 정확 일치·verify 2·map_present 1/1)이나 **G-SEM 블라인드 0/5 FAIL** →
+프로토콜대로 재설계 스톱. disclosure = `benchmark/20260719-semantic-map-gsem-n1/`
+(사전 등록·judge 원문·양 arm·진단 포함). 진단 2층위: ①렌더 기아(seed-가시 렌더가 109노드 중
+4 admit — region 절대경로의 budget 잠식 + lex-키 admission 순서), ②의미 상한(identifier-only
+봉투가 outline 재서술 요약을 유도 + O-5 보강 대조군이 헤더 주석 전문 노출).
+
+**O-6 결정 (owner 2026-07-19, 원문 지시)**: "소스코드 유출을 막으려고 LLM에게 함수 본문을
+안 보여주고 이름·주석 첫 줄·시그니처만 주는 방식은 **폐기**. 소스코드 보안이 필요하다면
+보안에 맞는 **모델을 사용**하는 게 맞다." — §1 G-SEM의 "봉투 확장 재제안 금지"는 작업자
+재제안을 금지한 것이며, 본 결정은 owner 권한의 설계 개정으로 이를 대체한다(DD6의
+source-safety 전제 폐기). 보안 경계는 봉투가 아니라 **seat 모델 선택**(기존
+`actors.semantic_map_synthesize` 메커니즘 + repo별 옵트인)이 소유한다.
+
+**보안 결과 명시 (O-6 수반 사실)**: v2부터 대상 코드 파일의 **leaf 영역 소스 본문이 설정된
+seat 모델로 전송**된다(현 repo 설정 기준 gpt-5.6-luna@low / gpt-5.6-sol@medium, OAuth 경로).
+옵트인(`semantic_map_code`)은 repo 단위이므로 repo마다 소유자가 전송 여부·모델을 결정한다.
+봉투가 세션 아티팩트/로그에 기록되는 표면은 구현 시 점검하고 disclosure 시 스캔한다.
+
+### DD6′ — 봉투 v2 (leaf 본문 포함)
+
+- **leaf 봉투**(child_summaries 없음)에 `source_lines`(영역 실제 소스) 추가 — 결정론
+  head-절단 캡(문자) + 명시 절단 플래그 + authoritative 총 줄수(침묵 드롭 금지, 기존 honesty
+  패턴). **merge 봉투 불변**: 자식 요약 재귀가 그대로 컨텍스트 폭발을 흡수한다(재귀 맵의
+  요점 유지 — 본문은 leaf에서만 읽는다).
+- verify 봉투는 v1 유지(최소 변경). 프롬프트 계약 회전은 code 전용 fingerprint 한정
+  (ct-F2 격리 그대로 — spreadsheet 무접촉). 프롬프트 서두 앵커("You are reading ONE code
+  file region")는 유지해 mock dispatcher 키 불변.
+- 봉투 exact-key 가드·bounded assert에 신규 키 반영. X7 캡·비용: leaf 입력 토큰 증가
+  (관찰 단위 preflight 기존 메커니즘이 상한).
+
+### DD10 — 렌더 v2 (진단 ① 해소, G-SEM 재평정의 전제)
+
+- **region 라벨 상대경로화**: 렌더 표면 한정(artifact 권위는 절대경로 유지) —
+  projectRoot-상대 직렬화로 노드당 ~100자 회수.
+- **admission 순서**: lex-키 → **계층 우선**(루트/큰 span 우선, line_start 오름차순 동률
+  규칙) — per-adapter comparator로 spreadsheet 순서 **바이트 불변**(G-SS-e가 잠근다).
+- budget 값 재조정은 상대경로+순서 실측 후 별도 결정(X9 회전 의식).
+
+### 재평정 게이트
+
+- 동일 프로토콜 신규 사전 등록(같은 대상·같은 5문 — treatment에 학습 채널 없음, 대조군
+  불변이므로 재사용 타당; 새 등록 문서로 커밋) → live 재실행(owner spend) → 블라인드 재평정.
+  **PASS 기준 불변**(처치군 우위 ≥3문). 실패 시 재차 스톱 — 그때는 의미 상한이 봉투로도
+  해소되지 않았다는 확정 증거가 된다.
