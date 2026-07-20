@@ -585,3 +585,35 @@ source-safety 전제 폐기). 보안 경계는 봉투가 아니라 **seat 모델
 5. **FAIL 시 주장 범위 (리뷰 gh m-2)**: 유효성 전제 충족 상태의 FAIL은 "저자-주석-풍부
    파일 regime(N=1)에서 본문 봉투로도 대조군 미상회" — 보편적 의미 상한의 확정 증거가
    아니라 스톱 유지·확장 판단의 입력이다.
+
+### 경계 확정 — live 실험1·2 종결 판정 (addendum v2.3, 2026-07-20)
+
+> 이 항이 코드 트랙 live 검증 사이클의 **종결 기록**이다. 상세 프로토콜·judge 원문은
+> disclosure 2건(`benchmark/20260720-semantic-map-dd6-live/`,
+> `benchmark/20260720-semantic-map-midfile-live/`), 후속 설계는
+> `20260720-semantic-map-phase1b-set-tier-design.md`(v3)가 SSOT.
+
+**판정.**
+- **실험1 (fit regime, DD6′/DD10 v2 본시험)**: G-SEM **FAIL 1/5** — 단 v1 0/5 전패 대비
+  answerable 포괄 상회·지는 문항 0(DD6′+DD10 실질 개선), B2(원시 소스) 8문 전승.
+  유효성 전제 충족(admit 51·커버리지 100%) 상태의 FAIL이므로 §10 재평정 게이트 5항의
+  주장 범위 그대로: fit 파일에서 본문 봉투로도 원시 소스 미상회.
+- **실험2 (초과 regime 8,556줄, 중첩 3-조건 ①head-200K ②+bounded 인벤토리 ③+맵)**:
+  **C1 PASS 5/5**(③≫①) · **C2 FAIL 1/5**(③ vs ② — 맵의 한계 기여 = 신뢰도·역할확증
+  1건, 신규 지점 사실 0, judge 명문). run.ts 7h 풀런 근거 소멸.
+
+**경계 (전 regime 일관 상).** 본문 사실 = 원시 소스, 구조 사실 = 결정론 인벤토리,
+LLM 맵 요약 = 신뢰도 층위만. 즉 **fit = 원시 소스 / 초과 = bounded 결정론 인벤토리
+(40K pretty projection)**가 각 regime의 가치 원천이다.
+
+**처분.**
+1. `semantic_map_code` **미승격**(default OFF 유지) — LLM 맵 코드 경로는 옵트인 잔존.
+2. **인벤토리 독립화 배선 착지 (PR #236, main `64cc434`)**: 신규 execution scalar
+   `code_structure_inventory`(default OFF) + 이 repo settings ON. 캡처 술어 = 신규 키
+   OR `semantic_map_code`(맵 옵트인은 캡처 함의), 신규 run param `semanticMapCode`가
+   DD7 스테이지 게이트 전담. 양 키 부재 = byte-identical. 이것이 실험2 C1의 제품화다.
+3. **OD-7 = deterministic 우선**: 재귀 LLM 코드 이해 추가투자 중단(owner 2026-07-20) —
+   1b는 deterministic 모드 스코프(FD1~FD8·FD11~FD14, FD9/FD10/G11 보류)로 착수.
+4. 잔여 관찰: fit 파일(observer 414줄)의 인벤토리도 pretty 47.5K > 40K 예산이라
+   **hierarchy 강등이 fit regime에도 적용됨** — 경계 해석 시 fit의 인벤토리는 spans
+   중심 축소 투영임을 전제할 것.
