@@ -17208,7 +17208,10 @@ export async function runReconstruct(
       try {
         const stat = await fs.stat(resolved);
         scanRootSet.add(stat.isDirectory() ? resolved : path.dirname(resolved));
-      } catch {
+      } catch (error) {
+        // INV-SCHEMA-1 (G11): never swallow a terminal signal, even in a best-effort fs catch.
+        if (isGracefulTerminalSignal(error)) throw error;
+        if (readReconstructLlmDispatchFailureError(error)) throw error;
         // Unresolvable ref — skip; the scan is best-effort augmentation, never a hard dependency.
       }
     }
