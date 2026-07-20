@@ -479,6 +479,10 @@ describe("assembleReconstructRecord", () => {
         leaf_read_census: await writeYaml(path.join(sessionRoot, "leaf-read-census.yaml"), { schema_version: "1" }),
         semantic_map_census: await writeYaml(path.join(sessionRoot, "semantic-map-census.yaml"), { schema_version: "1" }),
         semantic_map_sidecar: await writeYaml(path.join(sessionRoot, "semantic-map.yaml"), { schema_version: "1" }),
+        // Same W3-001 class (env-context-profile cross-verify BLOCKER): the profile ref must survive
+        // normalizeRefs into the persisted record, else the disclosure-only artifact is unreferenced.
+        environment_context_profile: await writeYaml(path.join(sessionRoot, "environment-context-profile.yaml"), { schema_version: "1" }),
+        maturation_value_discharge: await writeYaml(path.join(sessionRoot, "maturation-value-discharge.yaml"), { schema_version: "1" }),
       },
     });
 
@@ -488,6 +492,8 @@ describe("assembleReconstructRecord", () => {
     expect(written.artifact_refs.leaf_read_census).toBe(path.join(sessionRoot, "leaf-read-census.yaml"));
     expect(written.artifact_refs.semantic_map_census).toBe(path.join(sessionRoot, "semantic-map-census.yaml"));
     expect(written.artifact_refs.semantic_map_sidecar).toBe(path.join(sessionRoot, "semantic-map.yaml"));
+    expect(written.artifact_refs.environment_context_profile).toBe(path.join(sessionRoot, "environment-context-profile.yaml"));
+    expect(written.artifact_refs.maturation_value_discharge).toBe(path.join(sessionRoot, "maturation-value-discharge.yaml"));
     expect(record.record_stage).toBe("ontology_seed_validated");
     expect(record.target_material_kind).toBe("spreadsheet");
     expect(record.support_status).toBe("partial");

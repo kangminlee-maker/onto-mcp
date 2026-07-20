@@ -1171,6 +1171,10 @@ export function createOntoReconstructCoreApi(
       // FD1 (Phase 1b): resolve the three code opt-ins ONCE — the shared resolver enforces the
       // set-tier ∧ capture precondition fail-loud before any session work.
       const runOptIns = resolveCodeObservationOptIns(settings);
+      // Environment context profile opt-in (design 20260720 §0): independent of the code opt-ins —
+      // it derives from the existing observation census, so it needs no capture precondition.
+      const environmentContextProfile =
+        settings.reconstruct?.execution?.environment_context_profile === true;
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1623,6 +1627,7 @@ export function createOntoReconstructCoreApi(
             ...(runOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
             ...(runOptIns.semanticMapCode ? { semanticMapCode: true } : {}),
             ...(runOptIns.codeSetTier ? { codeSetTier: true } : {}),
+            ...(environmentContextProfile ? { environmentContextProfile: true } : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
                   dispatchFallback:

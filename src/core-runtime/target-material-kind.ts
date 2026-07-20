@@ -22,6 +22,12 @@ export function isTargetMaterialKind(value: string): value is TargetMaterialKind
   return TARGET_MATERIAL_KINDS.includes(value as TargetMaterialKind);
 }
 
+/** Bounded directory-walk limits for target material detection. Single-sourced so downstream
+ *  consumers of the resulting file census (e.g. the environment context profile's honest
+ *  census-capped disclosure) read the same cap the walk enforced. */
+export const TARGET_MATERIAL_WALK_MAX_ENTRIES = 200;
+export const TARGET_MATERIAL_WALK_MAX_DEPTH = 3;
+
 export type TargetMaterialSupportStatus =
   | "supported"
   | "partial"
@@ -204,8 +210,8 @@ async function classifyRef(ref: string): Promise<TargetMaterialRefDetection> {
     if (stat.isDirectory()) {
       const childDetections = await collectDirectoryMaterialDetections({
         root: resolved,
-        maxEntries: 200,
-        maxDepth: 3,
+        maxEntries: TARGET_MATERIAL_WALK_MAX_ENTRIES,
+        maxDepth: TARGET_MATERIAL_WALK_MAX_DEPTH,
       });
       const aggregated = aggregateTargetMaterialDetections(childDetections);
       return {
@@ -320,8 +326,8 @@ export async function detectTargetMaterialRefs(
       if (stat.isDirectory()) {
         const childDetections = await collectDirectoryMaterialDetections({
           root: resolved,
-          maxEntries: 200,
-          maxDepth: 3,
+          maxEntries: TARGET_MATERIAL_WALK_MAX_ENTRIES,
+          maxDepth: TARGET_MATERIAL_WALK_MAX_DEPTH,
         });
         detections.push(...childDetections);
         if (childDetections.length === 0) {
