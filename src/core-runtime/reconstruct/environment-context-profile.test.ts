@@ -3,6 +3,7 @@ import {
   assembleEnvironmentContextProfile,
   deepestCommonDirectory,
   ENVIRONMENT_CONTEXT_PROFILE_RULESET_VERSION,
+  KNOWN_SIGNAL_BASENAMES,
   type EnvironmentCensusFile,
   type EnvironmentContextProfileInput,
   type EnvironmentObservedFile,
@@ -38,6 +39,7 @@ function input(args: Partial<EnvironmentContextProfileInput> & {
     observations: args.observations ?? [],
     census_walk_bounds: args.census_walk_bounds ?? { max_entries_per_directory_ref: 200, max_depth: 3 },
     imports_available: args.imports_available ?? false,
+    signal_scan: args.signal_scan ?? { truncated: false, max_depth: 8, max_dirents: 20000 },
   };
 }
 
@@ -222,6 +224,16 @@ describe("coverage bounds disclosure", () => {
     // No unreliable per-run "capped" boolean survives (it could neither see the depth cut nor tell a
     // large tree apart) — the honest signal is the structural bound set.
     expect((result.coverage as Record<string, unknown>).census_capped).toBeUndefined();
+    // The known-signal scan status is disclosed (augments the bounded census).
+    expect(result.coverage.signal_scan).toEqual({ truncated: false, max_depth: 8, max_dirents: 20000 });
+  });
+
+  it("propagates scan truncation into coverage (honest gap when the scan hit its cap)", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      signal_scan: { truncated: true, max_depth: 8, max_dirents: 20000 },
+    }));
+    expect(result.coverage.signal_scan.truncated).toBe(true);
   });
 });
 
@@ -322,7 +334,7 @@ describe("fingerprint", () => {
     // observations) rotates this value and fails the test — the falsifiable guard the hollow prior
     // test lacked. Update deliberately (with a ruleset_version bump) when the fold intentionally changes.
     const fp = assembleEnvironmentContextProfile(input({ census: census(["package.json"]) })).fingerprint;
-    expect(fp).toBe("fb06dd0373b26df7599ddb101e4fec5025e141e49833d75b2063d6e218bd08cf");
+    expect(fp).toBe("bfd464044a636b7e9d175496d16ec5d32ab9144abe932f538ca4caddeb05cc28");
     expect(ENVIRONMENT_CONTEXT_PROFILE_RULESET_VERSION).toBe("envprofile:v1");
   });
 
@@ -374,6 +386,40 @@ describe("closed-vocabulary barrier — no domain meaning leaks into the output"
     const allNames = result.detections.map((d) => d.canonical_name).join(" ");
     expect(allNames).not.toContain("payroll");
     expect(allNames).not.toContain("corp");
+  });
+});
+
+// ── CI path-signal rule + known-signal allowlist ────────────────────────────────────────────────
+describe("path-signal rules — GitHub Actions CI from .github/workflows", () => {
+  it("detects github_actions from a workflow path (scoped root), emitting only a closed token", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census([".github/workflows/ci.yml"], [".github/workflows/release.yaml"], ["package.json"]),
+    }));
+    const ci = find(result, "infrastructure", "github_actions", "root");
+    expect(ci).toBeDefined();
+    expect(ci!.methods).toEqual(["path_signal"]);
+    // Only the closed token — never the path.
+    expect(ci!.signal_refs).toEqual(["ci:github_actions"]);
+    for (const ref of ci!.signal_refs) expect(ref).not.toContain(".github");
+  });
+
+  it("does NOT fire on a yml that is not under .github/workflows", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["config/random.yml"], ["docs/.github/notes.yml"]),
+    }));
+    expect(result.detections.filter((d) => d.canonical_name === "github_actions")).toEqual([]);
+  });
+});
+
+describe("KNOWN_SIGNAL_BASENAMES allowlist", () => {
+  it("covers every basename-rule key and package-root manifest (single source for the scan)", () => {
+    expect(KNOWN_SIGNAL_BASENAMES.has("package.json")).toBe(true);
+    expect(KNOWN_SIGNAL_BASENAMES.has("dockerfile")).toBe(true);
+    expect(KNOWN_SIGNAL_BASENAMES.has("next.config.js")).toBe(true);
+    expect(KNOWN_SIGNAL_BASENAMES.has("cargo.toml")).toBe(true);
+    expect(KNOWN_SIGNAL_BASENAMES.has("go.mod")).toBe(true);
+    // all lowercased (the scan lowercases basenames before membership check)
+    for (const b of KNOWN_SIGNAL_BASENAMES) expect(b).toBe(b.toLowerCase());
   });
 });
 
