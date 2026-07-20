@@ -43,7 +43,10 @@ export type EnvironmentSignalMethod =
   | "manifest_basename"
   | "config_basename"
   | "extension_distribution"
-  | "import_specifier";
+  | "import_specifier"
+  // A signal identified by a file's PATH shape rather than its bare basename (e.g. a CI workflow
+  // under `.github/workflows/`). The rel_path is used only for matching — never emitted.
+  | "path_signal";
 
 export interface EnvironmentContextDetection {
   detection_id: string;
@@ -85,6 +88,9 @@ export interface EnvironmentContextProfileCoverage {
     dotdirs_excluded: true;
     vendored_dirs_excluded: true;
   };
+  /** The profile-specific known-signal scan that augments the bounded census (finds manifests the
+   *  general walk buried + `.github/workflows` CI). `truncated` = the scan hit its dirent cap. */
+  signal_scan: { truncated: boolean; max_depth: number; max_dirents: number };
   /** Whether the import inventory was captured (set-tier opt-in) — false ⇒ import-based framework
    *  detection was unavailable this run (basename/extension only). */
   imports_available: boolean;
@@ -136,6 +142,9 @@ export interface EnvironmentContextProfileInput {
   observations: EnvironmentObservedFile[];
   census_walk_bounds: EnvironmentCensusWalkBounds;
   imports_available: boolean;
+  /** The profile-specific known-signal scan that augments the bounded census (environment-signal-
+   *  scan.ts). `truncated` = the scan hit its dirent cap, so some subtree was unscanned. */
+  signal_scan: { truncated: boolean; max_depth: number; max_dirents: number };
 }
 
 // ── rule catalog (data table — a new signal is a new row; every emitted value is closed) ───────
@@ -278,6 +287,46 @@ const IMPORT_RULES: Array<{ prefix: string; emit: CatalogEmit[] }> = [
   ] },
 ];
 
+/** Path-shape rules — signals identified by WHERE a file sits, not its bare basename (e.g. a CI
+ *  workflow under `.github/workflows/`, which the basename table can't express). `test` reads the
+ *  target-relative path; `signal_token` is the closed structural token emitted to signal_refs (the
+ *  path itself is NEVER emitted — boundary). CI is repo-wide, so these always scope to "root". */
+interface PathSignalRule {
+  rule_id: string;
+  /** RegExp (not a closure) so the fingerprint can fold `pattern.source`/`.flags` — stable literal
+   *  strings, unlike a transpiler-dependent `Function.toString()`. */
+  pattern: RegExp;
+  emit: CatalogEmit;
+  signal_token: string;
+}
+const PATH_SIGNAL_RULES: readonly PathSignalRule[] = [
+  {
+    rule_id: "github_actions_workflow",
+    pattern: /(^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i,
+    emit: { category: "infrastructure", canonical_name: "github_actions", strength: "strong" },
+    signal_token: "ci:github_actions",
+  },
+];
+
+/** The closed allowlist of KNOWN environment-signal basenames — the union of the basename rule
+ *  table and the package-root manifests. Exported so the profile-specific known-signal SCAN
+ *  (environment-signal-scan.ts) collects exactly the files these rules can act on, single-sourced
+ *  from this module (a new catalog row automatically extends what the scan looks for). Lowercased. */
+export const KNOWN_SIGNAL_BASENAMES: ReadonlySet<string> = new Set<string>([
+  ...Object.keys(BASENAME_RULES),
+  ...PACKAGE_ROOT_BASENAMES,
+]);
+
+/** Path-shape patterns the profile can act on (from PATH_SIGNAL_RULES) — the known-signal scan
+ *  collects files matching these too, so a path-detected signal (CI workflows) is found even
+ *  when its basename isn't in the basename allowlist. Single-sourced from the rule table. */
+export const KNOWN_SIGNAL_PATH_PATTERNS: readonly RegExp[] = PATH_SIGNAL_RULES.map((r) => r.pattern);
+
+/** Dot-directories the known-signal scan is allowed to ENTER (all other dotdirs are skipped). Only
+ *  `.github` carries an environment signal (CI workflows); everything else under a dot-directory is
+ *  noise/vendored for profiling purposes. */
+export const KNOWN_SIGNAL_DOTDIRS: ReadonlySet<string> = new Set<string>([".github"]);
+
 // ── module-local util twins (repo idiom: comprehension-set-tier.ts) ───────────────────────────
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) {
@@ -306,6 +355,15 @@ function catalogDigest(): string {
     package_root_basenames: [...PACKAGE_ROOT_BASENAMES].sort(),
     extension_language: EXTENSION_LANGUAGE,
     import_rules: IMPORT_RULES,
+    // Fold the regex SOURCE/flags (stable literal strings) — never Function.toString() (transpiler-
+    // dependent, non-deterministic across environments).
+    path_signal_rules: PATH_SIGNAL_RULES.map((r) => ({
+      rule_id: r.rule_id,
+      pattern_source: r.pattern.source,
+      pattern_flags: r.pattern.flags,
+      emit: r.emit,
+      signal_token: r.signal_token,
+    })),
   }));
 }
 
@@ -458,7 +516,7 @@ export function assembleEnvironmentContextProfile(
     scope_id: string,
     contribution: Contribution,
   ): void => {
-    const key = `${category} ${canonical_name} ${scope_id}`;
+    const key = `${category} ${canonical_name} ${scope_id}`;
     let bucket = buckets.get(key);
     if (bucket === undefined) {
       bucket = { category, canonical_name, scope_id, contributions: [], conflict_groups: new Set() };
@@ -484,6 +542,22 @@ export function assembleEnvironmentContextProfile(
         correlation_group: emit.correlation_group,
         conflict_group: emit.conflict_group,
         signal_ref: `${method === "config_basename" ? "config" : "manifest"}:${base}`,
+      });
+    }
+  }
+
+  // Path-shape signals (CI etc.) — matched on the rel_path, scoped to "root" (repo-wide). The path
+  // is used only for matching; only the closed signal_token is emitted (never the path).
+  for (const file of input.census) {
+    if (!file.exists) continue;
+    for (const rule of PATH_SIGNAL_RULES) {
+      if (!rule.pattern.test(file.rel_path)) continue;
+      addContribution(rule.emit.category, rule.emit.canonical_name, "root", {
+        strength: rule.emit.strength,
+        method: "path_signal",
+        correlation_group: rule.emit.correlation_group,
+        conflict_group: rule.emit.conflict_group,
+        signal_ref: rule.signal_token,
       });
     }
   }
@@ -531,7 +605,7 @@ export function assembleEnvironmentContextProfile(
           if (!isMatch) continue;
           for (const emit of rule.emit) {
             // Dedup identical (canonical_name) import matches within one observation's scope.
-            const dedupKey = `${emit.category} ${emit.canonical_name} ${p}`;
+            const dedupKey = `${emit.category} ${emit.canonical_name} ${p}`;
             if (matchedForObs.has(dedupKey)) continue;
             matchedForObs.add(dedupKey);
             addContribution(emit.category, emit.canonical_name, scope, {
@@ -604,6 +678,11 @@ export function assembleEnvironmentContextProfile(
     },
     imports_available: input.imports_available,
     scope_count: scopeCount,
+    signal_scan: {
+      truncated: input.signal_scan.truncated,
+      max_depth: input.signal_scan.max_depth,
+      max_dirents: input.signal_scan.max_dirents,
+    },
   };
 
   // Fingerprint (M5): fold ruleset identity + the RULE CATALOG DIGEST (so a catalog edit rotates the
@@ -618,6 +697,7 @@ export function assembleEnvironmentContextProfile(
     catalog_digest: catalogDigest(),
     census_walk_bounds: input.census_walk_bounds,
     imports_available: input.imports_available,
+    signal_scan: input.signal_scan,
     census: input.census
       .map((f) => ({ rel_path: f.rel_path, exists: f.exists }))
       .sort((a, b) => (a.rel_path < b.rel_path ? -1 : a.rel_path > b.rel_path ? 1 : 0)),

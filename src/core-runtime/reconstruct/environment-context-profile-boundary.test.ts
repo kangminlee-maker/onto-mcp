@@ -165,6 +165,26 @@ describe("projectEnvironmentContextProfileInput — real artifact shapes", () =>
     expect(input.imports_available).toBe(true);
   });
 
+  it("merges scanned known-signals into the census (deduped) and flows truncation to coverage", () => {
+    const input = projectEnvironmentContextProfileInput({
+      targetMaterialProfile: targetProfile([{ ref: "/repo/src/app.ts" }]), // census buried the manifests
+      sourceObservations: sourceObs([]),
+      scannedSignals: {
+        refs: ["/repo/package.json", "/repo/tsconfig.json", "/repo/src/app.ts"], // last one dups per_ref
+        truncated: true,
+        maxDepth: 8,
+        maxDirents: 20000,
+      },
+    });
+    const paths = input.census.map((c) => c.rel_path).sort();
+    expect(paths).toEqual(["package.json", "src/app.ts", "tsconfig.json"]); // app.ts not doubled
+    expect(input.signal_scan.truncated).toBe(true);
+    // and the merged census now yields the manifest detections the bare census missed
+    const profile = assembleEnvironmentContextProfile(input);
+    expect(profile.detections.find((d) => d.canonical_name === "typescript")).toBeDefined();
+    expect(profile.coverage.signal_scan.truncated).toBe(true);
+  });
+
   it("end-to-end: projects a real Next.js target's absolute refs into a Next.js detection", () => {
     const profile = assembleEnvironmentContextProfile(
       projectEnvironmentContextProfileInput({

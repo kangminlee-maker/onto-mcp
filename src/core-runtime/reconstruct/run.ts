@@ -392,6 +392,7 @@ import {
   type EnvironmentContextProfileInput,
   type EnvironmentObservedFile,
 } from "./environment-context-profile.js";
+import { scanEnvironmentSignalFiles } from "./environment-signal-scan.js";
 import { classifyFrontierCore } from "./comprehension-semantic-map-core.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
@@ -2265,23 +2266,35 @@ export function assertSeedUserPayloadBoundary<T extends Record<string, unknown>>
 export function projectEnvironmentContextProfileInput(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
+  /** Absolute paths found by the known-signal scan (environment-signal-scan.ts) — merged into the
+   *  census (deduped with per_ref) so manifests the bounded target walk buried are still detected.
+   *  `truncated` flows to coverage. Empty/false when the scan did not run (e.g. unit tests). */
+  scannedSignals?: { refs: readonly string[]; truncated: boolean; maxDepth: number; maxDirents: number };
 }): EnvironmentContextProfileInput {
   const censusRefs = args.targetMaterialProfile.detection.per_ref;
+  const scannedRefs = args.scannedSignals?.refs ?? [];
   const commonRoot = deepestCommonDirectory(
-    censusRefs.map((r) => r.ref).concat(
-      args.sourceObservations.observations.map((o) => o.source_ref),
-    ),
+    censusRefs.map((r) => r.ref)
+      .concat(scannedRefs)
+      .concat(args.sourceObservations.observations.map((o) => o.source_ref)),
   );
   const relativize = (absPath: string): string => {
     const rel = path.relative(commonRoot, absPath);
     // path.relative can emit "" (the root itself) or ".."-escapes for refs outside commonRoot; the
     // basename fallback keeps a signal (never dropped) and never carries an escape into the output.
-    return rel === "" || rel.startsWith("..") ? path.basename(absPath) : rel;
+    // Normalize separators to "/" so path-shape rules (which use "/") match on Windows too.
+    const chosen = rel === "" || rel.startsWith("..") ? path.basename(absPath) : rel;
+    return chosen.replace(/\\/g, "/");
   };
-  const census: EnvironmentCensusFile[] = censusRefs.map((r) => ({
-    rel_path: relativize(r.ref),
-    exists: r.exists,
-  }));
+  // Census = per_ref ∪ scanned known-signals, deduped by resolved absolute path (a scanned manifest
+  // the bounded walk also happened to reach must not double-count).
+  const censusByAbs = new Map<string, EnvironmentCensusFile>();
+  for (const r of censusRefs) censusByAbs.set(path.resolve(r.ref), { rel_path: relativize(r.ref), exists: r.exists });
+  for (const ref of scannedRefs) {
+    const abs = path.resolve(ref);
+    if (!censusByAbs.has(abs)) censusByAbs.set(abs, { rel_path: relativize(ref), exists: true });
+  }
+  const census: EnvironmentCensusFile[] = [...censusByAbs.values()];
   // imports_available is derived from the OBSERVED DATA (whether any inventory actually carries the
   // captured imports field — present even when empty), NOT from a caller flag: this stays correct
   // for a direct runReconstruct caller that passes codeSetTier without the capture opt-in (the
@@ -2315,6 +2328,11 @@ export function projectEnvironmentContextProfileInput(args: {
       max_depth: TARGET_MATERIAL_WALK_MAX_DEPTH,
     },
     imports_available: importsAvailable,
+    signal_scan: {
+      truncated: args.scannedSignals?.truncated ?? false,
+      max_depth: args.scannedSignals?.maxDepth ?? 0,
+      max_dirents: args.scannedSignals?.maxDirents ?? 0,
+    },
   };
 }
 
@@ -17180,10 +17198,36 @@ export async function runReconstruct(
   // userPayload (M2 capability boundary — enforced structurally, not by a prompt rule). OFF ⇒ no
   // artifact, no scan, no read, byte-identical.
   if (params.environmentContextProfile === true) {
+    // Known-signal scan (Stage 0.5): the bounded target census (200/depth-3, dotdir-excluded) can
+    // bury root manifests under a large non-manifest directory (live-verified on this repo). Scan
+    // the target directories for known-signal files (allowlist-driven, BFS shallow-first, path-safe)
+    // and merge them into the census. Scan roots = the target refs resolved to directories.
+    const scanRootSet = new Set<string>();
+    for (const ref of targetMaterialProfile.target_refs) {
+      const resolved = path.resolve(ref);
+      try {
+        const stat = await fs.stat(resolved);
+        scanRootSet.add(stat.isDirectory() ? resolved : path.dirname(resolved));
+      } catch {
+        // Unresolvable ref — skip; the scan is best-effort augmentation, never a hard dependency.
+      }
+    }
+    // Drop any scan root that is a DESCENDANT of another (nested target refs) so its subtree is not
+    // walked twice — double-charging the shared dirent budget would hasten truncation.
+    const sortedRoots = [...scanRootSet].sort();
+    const scanRoots = sortedRoots.filter((r) =>
+      !sortedRoots.some((other) => other !== r && (r === other || r.startsWith(other + path.sep))));
+    const scan = await scanEnvironmentSignalFiles({ scanRoots });
     const profile = assembleEnvironmentContextProfile(
       projectEnvironmentContextProfileInput({
         targetMaterialProfile,
         sourceObservations,
+        scannedSignals: {
+          refs: scan.signals,
+          truncated: scan.truncated,
+          maxDepth: scan.max_depth,
+          maxDirents: scan.max_dirents,
+        },
       }),
     );
     const profilePath = path.join(
