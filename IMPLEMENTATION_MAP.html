@@ -43,13 +43,13 @@
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
   <div class="card focus"><h3>현재 목표</h3>
-    <p><b>semantic-map multi-artifact v2 (O-6 재설계)</b> — 7b live N=1 G-SEM FAIL 0/5(disclosure <code>benchmark/20260719-semantic-map-gsem-n1/</code>) 후 <b>owner O-6</b>: identifier-only 봉투 폐기(보안=모델 선택). 설계 §10 <b>v2.1</b> 확정(3-렌즈 리뷰 MATERIAL 5 반영 — 기아 사이트=projection 코어, code 전용 회전 fold, source_lines=excerpt 슬라이스+sha핀, G-SS-f 렌더 골든, 유효성 전제+선핀). 다음 실작업 = <b>DD6′/DD10 구현→mock→무-spend ablation→live v2</b> (착수 패킷 <code>handoff/20260719-semantic-map-v2-impl-start-here.md</code>). <code>semantic_map_code</code> OFF·1b 보류 유지.</p></div>
+    <p><b>semantic-map 코드 트랙: live 검증 종결 → 결정론-우선 전환 + Phase 1b(deterministic 모드)</b> — 실험1(fit): G-SEM <b>FAIL 1/5</b>(v1 0/5 대비 개선·원시 소스 8문 전승), 실험2(초과 314K, 중첩 3-조건): <b>C1 5/5 PASS·C2 1/5 FAIL</b> — 가치 원천 = <b>bounded 결정론 인벤토리</b>(40K pretty 실측 계약), LLM 맵의 신규 사실 기여 0. 경계 방향: fit=원시 소스 / 초과=인벤토리 / <code>semantic_map_code</code> 미승격. owner 전략: 결정론 3단 줌(롤업·뼈대·원문 슬라이스)+환경 컨텍스트 1차 의미 부여+개념 매핑 — 코드 재귀LLM 추가 투자 중단. 1b 최종 설계 v3 = <b>병렬 설계 표준 1회차</b>(fable+sol 격리 2벌→상호 교차리뷰→FD1~14). 착수 패킷 <code>handoff/20260720-semantic-map-1b-deterministic-start-here.md</code>.</p></div>
   <div class="card"><h3>Phase</h3>
-    <p>semantic-map 코드 확장: 골든/프로브(<span class="ok">#225</span>)·L1 코어+관찰 옵트인(<span class="ok">#227/#228</span>)·L2 코어+kind 라우팅/봉투/DD9(<span class="ok">#230</span>)·E2E mock+G-SEM 대조군 스크립트(<span class="ok">step 7a 브랜치</span>) · 선행 착지: cert v3 A 전체·breaker-observation 5종 ON(#203)·per-call llmOverride·MCP self-description·review ontological-anchoring 양 플래그 ON(#222).</p></div>
+    <p>semantic-map 코드 확장: 골든/프로브(<span class="ok">#225</span>)·L1/L2 코어+라우팅(<span class="ok">#228/#230</span>)·E2E mock(<span class="ok">#231</span>)·v2 DD6′/DD10+ablation(<span class="ok">#233</span>)·<b>pre-live 인벤토리 봉인+실험1/2+1b 설계 v3(<span class="warn">PR #235 오픈</span>)</b> · 선행 착지: cert v3·breaker-observation ON(#203)·per-call llmOverride·MCP self-description·ontological-anchoring ON(#222).</p></div>
   <div class="card"><h3>Health</h3>
-    <p><span class="ok">vitest 200 files / 3,274 passed</span>(+1 todo) · <span class="ok">G-SS 골든 바이트 동일</span> · <span class="ok">reduce-proof·import-boundary·tsc green</span> · guards green(G1~G7).</p></div>
+    <p><span class="ok">vitest 202 files / 3,301 passed</span>(+1 todo) · <span class="ok">G-SS 골든 바이트 동일</span> · <span class="ok">reduce-proof·code-reduce·import-boundary·final-output-parity(9)·tsc green</span> · guards green(G1~G7).</p></div>
   <div class="card"><h3>다음 결정 (owner)</h3>
-    <p>①<b>PR #232 머지</b>(docs-only: FAIL disclosure + §10 v2.1 — 구현의 규범이라 base 선행 필요) ②구현·mock·ablation 완료 후 <b>live v2 재실행 spend</b>(v1 실측 36분·synthesize 109회 + 파일 1벌 입력 증가; ablation이 무-spend 인과 판독을 먼저 제공) ③v2 G-SEM 결과에 따라 <code>semantic_map_code</code> 승격·step 8(1b) 재개 판단.</p></div>
+    <p>①<b>PR #235 머지</b>(pre-live 봉인+실험 disclosure+1b 설계 v3) ②인벤토리 독립화 배선(맵 옵트인에서 분리 — 신규 키 vs 기본 ON, 실험2 C1 5/5 근거) ③1b deterministic 모드 구현 착수(OD-7 재확인 1줄) ④환경 컨텍스트 프로파일 설계(병렬 설계 표준) ⑤문서 트랙(docx/pdf) 설계 재개 시점.</p></div>
   <div class="card"><h3>주요 리스크</h3>
     <p><span class="warn">승격 관찰 waived</span>: #203이 관찰 게이트 <b>0/3</b>에서 owner-directed로 켬 — 실 halt/rate-limit 행동은 형식상 미관측. <span class="warn">§4-4 natural incident 미관측</span>: injected/deterministic 429까지가 달성 가능 증거 경계(자연 incident 제조 불가). <span class="warn">core recall 하한</span>: grounding·final_result·artifact recall 3종은 실 완주 run 무발화 → 하한이 합성 테스트로만 성립(v3 비목표, A-4로도 불변).</p></div>
 </div>

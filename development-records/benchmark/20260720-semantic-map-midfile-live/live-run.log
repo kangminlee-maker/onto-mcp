@@ -1,0 +1,970 @@
+[exp2-live 2026-07-20T01:34:40.749Z] target sha ok (d9253eebca3318ec), opt-in ok — starting live reconstruct (expected ~2.3h+)
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=783 output_tokens~=69
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=764 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=870 output_tokens~=98
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=762 output_tokens~=26
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=761 output_tokens~=27
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=831 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=903 output_tokens~=102
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1010 output_tokens~=28
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=950 output_tokens~=35
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=842 output_tokens~=45
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=835 output_tokens~=73
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=787 output_tokens~=41
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=893 output_tokens~=75
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=899 output_tokens~=51
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=917 output_tokens~=82
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=820 output_tokens~=39
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=804 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=861 output_tokens~=52
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=921 output_tokens~=71
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=797 output_tokens~=25
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=877 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=876 output_tokens~=55
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=808 output_tokens~=28
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=802 output_tokens~=38
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=847 output_tokens~=36
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=795 output_tokens~=41
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=881 output_tokens~=35
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=857 output_tokens~=59
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=876 output_tokens~=50
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=885 output_tokens~=64
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=924 output_tokens~=103
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=795 output_tokens~=30
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=788 output_tokens~=33
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=844 output_tokens~=33
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=780 output_tokens~=29
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=899 output_tokens~=71
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=881 output_tokens~=78
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=892 output_tokens~=57
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=789 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=814 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=796 output_tokens~=88
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=967 output_tokens~=103
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=965 output_tokens~=164
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=816 output_tokens~=73
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=780 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=927 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=832 output_tokens~=41
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=898 output_tokens~=53
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=969 output_tokens~=58
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=763 output_tokens~=29
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=970 output_tokens~=94
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=821 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=789 output_tokens~=47
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=948 output_tokens~=74
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=790 output_tokens~=48
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=787 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=912 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=969 output_tokens~=62
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=782 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=788 output_tokens~=39
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=894 output_tokens~=33
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=803 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=927 output_tokens~=34
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1020 output_tokens~=75
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=338 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1122 output_tokens~=91
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1265 output_tokens~=112
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=809 output_tokens~=90
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=779 output_tokens~=31
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=916 output_tokens~=63
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=776 output_tokens~=44
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=802 output_tokens~=62
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=914 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=962 output_tokens~=67
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=331 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=818 output_tokens~=77
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=781 output_tokens~=32
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=914 output_tokens~=80
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=781 output_tokens~=34
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=799 output_tokens~=53
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=905 output_tokens~=55
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=967 output_tokens~=63
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=801 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=782 output_tokens~=28
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=883 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=810 output_tokens~=45
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=763 output_tokens~=23
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=911 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=944 output_tokens~=80
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=343 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1037 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=355 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1129 output_tokens~=105
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=815 output_tokens~=88
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=776 output_tokens~=36
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=915 output_tokens~=93
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=779 output_tokens~=36
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=787 output_tokens~=38
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=888 output_tokens~=56
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=967 output_tokens~=128
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=780 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=789 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=894 output_tokens~=56
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=806 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=816 output_tokens~=88
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=951 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=992 output_tokens~=117
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1099 output_tokens~=105
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=911 output_tokens~=82
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=927 output_tokens~=102
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1001 output_tokens~=116
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=761 output_tokens~=20
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=985 output_tokens~=156
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1217 output_tokens~=109
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=802 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1235 output_tokens~=95
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1494 output_tokens~=144
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1745 output_tokens~=101
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1714 output_tokens~=236
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=872 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=963 output_tokens~=53
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=913 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1319 output_tokens~=71
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=931 output_tokens~=74
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=961 output_tokens~=103
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=989 output_tokens~=59
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=989 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=863 output_tokens~=45
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=896 output_tokens~=38
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1206 output_tokens~=57
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=883 output_tokens~=63
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=927 output_tokens~=67
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=943 output_tokens~=74
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=338 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1030 output_tokens~=116
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=355 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1746 output_tokens~=103
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1780 output_tokens~=135
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=903 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=874 output_tokens~=59
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=966 output_tokens~=82
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=863 output_tokens~=106
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=35
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=818 output_tokens~=74
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=791 output_tokens~=36
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex call FAILED: model="gpt-5.6-luna" reason=timeout timeout_ms=600000
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=921 output_tokens~=94
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=788 output_tokens~=45
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=763 output_tokens~=23
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=906 output_tokens~=53
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=986 output_tokens~=110
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=330 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=990 output_tokens~=108
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1058 output_tokens~=120
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1128 output_tokens~=154
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1009 output_tokens~=145
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=820 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=780 output_tokens~=54
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=944 output_tokens~=115
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=779 output_tokens~=37
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=764 output_tokens~=35
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=905 output_tokens~=87
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1009 output_tokens~=160
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=377 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=818 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=844 output_tokens~=60
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=980 output_tokens~=183
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1126 output_tokens~=124
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1223 output_tokens~=255
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=810 output_tokens~=24
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=828 output_tokens~=58
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=847 output_tokens~=69
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=985 output_tokens~=118
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=995 output_tokens~=80
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=829 output_tokens~=63
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=842 output_tokens~=113
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=973 output_tokens~=106
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=856 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=918 output_tokens~=123
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1026 output_tokens~=102
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1092 output_tokens~=85
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=764 output_tokens~=27
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1118 output_tokens~=100
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=838 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1153 output_tokens~=80
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1301 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1626 output_tokens~=223
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1849 output_tokens~=182
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=835 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=888 output_tokens~=68
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=967 output_tokens~=79
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=766 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1001 output_tokens~=74
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=840 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1014 output_tokens~=94
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=991 output_tokens~=74
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1086 output_tokens~=82
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=891 output_tokens~=91
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1139 output_tokens~=85
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=987 output_tokens~=145
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=408 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1130 output_tokens~=162
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=906 output_tokens~=34
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=921 output_tokens~=54
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=904 output_tokens~=47
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1084 output_tokens~=90
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=868 output_tokens~=70
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=977 output_tokens~=48
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=944 output_tokens~=52
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1172 output_tokens~=114
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=377 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1995 output_tokens~=208
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1254 output_tokens~=87
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=962 output_tokens~=75
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=983 output_tokens~=76
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1436 output_tokens~=97
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=829 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=957 output_tokens~=47
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=977 output_tokens~=48
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=951 output_tokens~=72
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1196 output_tokens~=63
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=948 output_tokens~=61
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1208 output_tokens~=110
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1094 output_tokens~=66
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=998 output_tokens~=48
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=958 output_tokens~=93
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=356 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1025 output_tokens~=54
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=804 output_tokens~=35
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=827 output_tokens~=101
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=802 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=969 output_tokens~=142
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=827 output_tokens~=91
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=801 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=940 output_tokens~=100
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=802 output_tokens~=72
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=987 output_tokens~=122
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1094 output_tokens~=85
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1091 output_tokens~=88
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=990 output_tokens~=79
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1651 output_tokens~=112
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1012 output_tokens~=122
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1221 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1324 output_tokens~=102
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1890 output_tokens~=279
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=450 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=447 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=441 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1059 output_tokens~=150
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=413 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1493 output_tokens~=101
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=971 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1004 output_tokens~=122
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1074 output_tokens~=132
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1320 output_tokens~=148
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1380 output_tokens~=160
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2216 output_tokens~=65
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2884 output_tokens~=177
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=784 output_tokens~=56
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1059 output_tokens~=137
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=988 output_tokens~=187
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1430 output_tokens~=123
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1125 output_tokens~=135
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1068 output_tokens~=187
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1108 output_tokens~=173
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=935 output_tokens~=74
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=970 output_tokens~=86
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=981 output_tokens~=138
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1021 output_tokens~=140
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=995 output_tokens~=78
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1019 output_tokens~=107
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1108 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1265 output_tokens~=171
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=905 output_tokens~=100
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=987 output_tokens~=84
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=986 output_tokens~=149
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1324 output_tokens~=102
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=941 output_tokens~=124
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1016 output_tokens~=116
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1113 output_tokens~=128
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=951 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=819 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=828 output_tokens~=64
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=950 output_tokens~=114
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=762 output_tokens~=23
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=996 output_tokens~=165
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1022 output_tokens~=96
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1046 output_tokens~=175
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1106 output_tokens~=146
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1152 output_tokens~=140
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1125 output_tokens~=149
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1052 output_tokens~=237
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1254 output_tokens~=128
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1413 output_tokens~=103
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1829 output_tokens~=159
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=996 output_tokens~=155
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1352 output_tokens~=150
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1073 output_tokens~=195
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=970 output_tokens~=134
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1018 output_tokens~=155
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1079 output_tokens~=241
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1214 output_tokens~=163
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1294 output_tokens~=87
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1482 output_tokens~=102
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1030 output_tokens~=125
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1660 output_tokens~=86
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1309 output_tokens~=105
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1009 output_tokens~=127
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=391 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1045 output_tokens~=122
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1331 output_tokens~=118
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2087 output_tokens~=146
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=777 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=953 output_tokens~=160
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1979 output_tokens~=105
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1176 output_tokens~=149
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1038 output_tokens~=170
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1104 output_tokens~=148
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1958 output_tokens~=105
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1004 output_tokens~=90
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1012 output_tokens~=118
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1208 output_tokens~=94
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1083 output_tokens~=122
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1034 output_tokens~=88
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1056 output_tokens~=123
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1176 output_tokens~=173
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1497 output_tokens~=108
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=371 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2353 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1219 output_tokens~=70
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1937 output_tokens~=98
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=990 output_tokens~=159
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=423 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1158 output_tokens~=85
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=922 output_tokens~=69
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=968 output_tokens~=83
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1039 output_tokens~=69
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1106 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=899 output_tokens~=76
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=978 output_tokens~=82
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1834 output_tokens~=102
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1517 output_tokens~=156
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1044 output_tokens~=167
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1066 output_tokens~=177
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1123 output_tokens~=120
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1050 output_tokens~=99
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1824 output_tokens~=106
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1039 output_tokens~=100
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2429 output_tokens~=117
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=2529 output_tokens~=50
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=989 output_tokens~=56
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1025 output_tokens~=52
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1711 output_tokens~=55
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=3642 output_tokens~=87
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=947 output_tokens~=75
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=875 output_tokens~=52
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=827 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=788 output_tokens~=40
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=960 output_tokens~=112
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=801 output_tokens~=81
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1006 output_tokens~=127
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1033 output_tokens~=135
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1891 output_tokens~=177
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1193 output_tokens~=145
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1222 output_tokens~=86
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1259 output_tokens~=155
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1472 output_tokens~=110
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1746 output_tokens~=184
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=787 output_tokens~=50
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1026 output_tokens~=203
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=54
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=786 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=888 output_tokens~=92
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1059 output_tokens~=248
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=44
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=788 output_tokens~=41
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=821 output_tokens~=91
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=38
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=939 output_tokens~=89
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=791 output_tokens~=49
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=798 output_tokens~=43
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=912 output_tokens~=59
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=980 output_tokens~=106
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=764 output_tokens~=28
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1027 output_tokens~=68
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1030 output_tokens~=132
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1044 output_tokens~=128
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1463 output_tokens~=162
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1507 output_tokens~=174
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1106 output_tokens~=216
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1201 output_tokens~=112
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1305 output_tokens~=90
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1143 output_tokens~=143
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1439 output_tokens~=159
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1084 output_tokens~=180
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1418 output_tokens~=81
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=42
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=940 output_tokens~=119
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1144 output_tokens~=226
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=44
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex call FAILED: model="gpt-5.6-luna" reason=timeout timeout_ms=600000
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=785 output_tokens~=57
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=885 output_tokens~=51
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=844 output_tokens~=41
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1171 output_tokens~=159
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=990 output_tokens~=112
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=956 output_tokens~=113
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1163 output_tokens~=141
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1499 output_tokens~=185
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1964 output_tokens~=225
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=3080 output_tokens~=120
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=384 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=4797 output_tokens~=100
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=978 output_tokens~=133
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1097 output_tokens~=129
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1057 output_tokens~=151
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=986 output_tokens~=46
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=3850 output_tokens~=72
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=938 output_tokens~=99
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=363 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1049 output_tokens~=179
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=3876 output_tokens~=139
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=818 output_tokens~=69
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=804 output_tokens~=82
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=957 output_tokens~=77
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1071 output_tokens~=141
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1137 output_tokens~=93
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1104 output_tokens~=122
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1573 output_tokens~=117
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1470 output_tokens~=129
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1065 output_tokens~=75
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1106 output_tokens~=138
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1287 output_tokens~=254
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=3855 output_tokens~=144
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1168 output_tokens~=95
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1059 output_tokens~=117
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=888 output_tokens~=121
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1037 output_tokens~=182
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=1405 output_tokens~=250
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=371 output_tokens~=9
+[model-call] codex call: model="gpt-5.6-luna" effort="low" service_tier="(unset)" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-luna input_tokens~=5036 output_tokens~=137
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=27079 output_tokens~=155
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=77635 output_tokens~=1505
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=76735 output_tokens~=1095
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=76832 output_tokens~=1424
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=76865 output_tokens~=1193
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=76750 output_tokens~=1008
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=76786 output_tokens~=1128
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=76901 output_tokens~=990
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=76809 output_tokens~=657
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=77605 output_tokens~=897
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=13157 output_tokens~=2113
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3481 output_tokens~=69
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=83046 output_tokens~=3108
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=4495 output_tokens~=299
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=84182 output_tokens~=3237
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=83184 output_tokens~=2800
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=34475 output_tokens~=30334
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=33291 output_tokens~=4613
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=8587 output_tokens~=877
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=40114 output_tokens~=4496
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=42505 output_tokens~=4188
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=5333 output_tokens~=264
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3375 output_tokens~=193
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3937 output_tokens~=172
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3334 output_tokens~=166
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3730 output_tokens~=145
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3600 output_tokens~=158
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3200 output_tokens~=150
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=3935 output_tokens~=211
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=6163 output_tokens~=601
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=2639 output_tokens~=562
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=2723 output_tokens~=209
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=20674 output_tokens~=9733
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=13277 output_tokens~=310
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=39201 output_tokens~=538
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=14207 output_tokens~=950
+[model-call] codex call: model="gpt-5.6-sol" effort="medium" service_tier="fast" timeout_ms=600000
+[model-call] codex success: model_id=gpt-5.6-sol input_tokens~=2262 output_tokens~=507
+/Users/kangmin/Documents/onto-mcp/src/core-runtime/reconstruct/run.ts:1489
+  throw new Error(
+        ^
+
+Error: maturation-convergence-ledger validation failed at /Users/kangmin/Documents/onto-mcp/.onto/reconstruct/20260720-dd6-live-exp2/maturation-convergence-ledger-validation.yaml: 1. missing_required_coverage (expansion-contract-integrity-guarantees-001): every ontology expansion row must appear in exactly one convergence closure row; 2. missing_required_coverage (expansion-continuation-and-preservation-001): every ontology expansion row must appear in exactly one convergence closure row
+    at assertRuntimeValidationValid (/Users/kangmin/Documents/onto-mcp/src/core-runtime/reconstruct/run.ts:1489:9)
+    at runReconstruct (/Users/kangmin/Documents/onto-mcp/src/core-runtime/reconstruct/run.ts:19178:3)
+    at async Object.runReconstruct (/Users/kangmin/Documents/onto-mcp/src/core-api/reconstruct-api.ts:1556:24)
+    at async <anonymous> (/Users/kangmin/Documents/onto-mcp/development-records/benchmark/20260720-semantic-map-midfile-live/run-live.mts:40:18)
+
+Node.js v26.0.0

@@ -3343,6 +3343,12 @@ final_output_append_sections:
     emit_owner: conditional_markdown
     provenance_binding_required: false
     activation: workbook_inventory_projection_truncation_nonempty
+  - section_id: code-inventory-projection-truncation
+    heading: Code Inventory Projection Truncation
+    prompt_policy_id: null
+    emit_owner: conditional_markdown
+    provenance_binding_required: false
+    activation: code_inventory_projection_truncation_nonempty
   - section_id: unresolved-revision-proposals
     heading: Unresolved Revision Proposals
     prompt_policy_id: null

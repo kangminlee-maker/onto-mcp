@@ -13,6 +13,7 @@ import {
   type FinalOutputSectionsParityInputs,
 } from "../../../scripts/check-final-output-sections-parity.js";
 import {
+  appendFinalOutputCodeInventoryProjectionTruncationSection,
   appendFinalOutputDocumentProjectionTruncationSection,
   appendFinalOutputUnresolvedRevisionSection,
   appendFinalOutputWorkbookInventoryProjectionTruncationSection,
@@ -268,6 +269,9 @@ describe("final-output conditional emitters: each emits its OWN module heading +
   const wbOut = appendFinalOutputWorkbookInventoryProjectionTruncationSection("# Result\n", [
     { observation_id: "obs-2", source_ref: "data/book.xlsx", sections: [{ section: "sheets", kept: 5, total: 14 }] },
   ]);
+  const codeOut = appendFinalOutputCodeInventoryProjectionTruncationSection("# Result\n", [
+    { observation_id: "obs-4", source_ref: "src/run.ts", sections: [{ section: "symbol_tiles.spans", kept: 120, total: 1269 }] },
+  ]);
   const revOut = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
     proposals: [{ proposal_id: "p1", target_type: "seed", target_id: "seed-1", action: "reject", rationale: "r", expected_effect: "e" }],
   } as never);
@@ -280,12 +284,15 @@ describe("final-output conditional emitters: each emits its OWN module heading +
   it("workbook-inventory emitter emits its own module heading", () => {
     expect(wbOut).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.workbookInventoryProjectionTruncation}`);
   });
+  it("code-inventory emitter emits its own module heading", () => {
+    expect(codeOut).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.codeInventoryProjectionTruncation}`);
+  });
   it("unresolved-revision emitter emits its own module heading", () => {
     expect(revOut).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.unresolvedRevisionProposals}`);
   });
 
-  it("emits exactly the 3 conditional module headings when all 3 paths are activated (set equality)", () => {
-    const out = docOut + wbOut + revOut;
+  it("emits exactly the 4 conditional module headings when all 4 paths are activated (set equality)", () => {
+    const out = docOut + wbOut + codeOut + revOut;
     const emittedHeadings = new Set([...out.matchAll(/^## (.+)$/gm)].map((m) => m[1]!));
     const expectedConditional = new Set(
       FINAL_OUTPUT_SECTIONS.filter((s) => s.emit_owner === "conditional_markdown").map((s) => s.heading),

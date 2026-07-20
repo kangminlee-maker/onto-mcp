@@ -1,0 +1,10 @@
+{
+  "admitted_nodes": 51,
+  "nodes_total": 419,
+  "render_truncated": true,
+  "file_lines": 8556,
+  "covered_lines": 8556,
+  "coverage": 1,
+  "validity_admit_ge_30": true,
+  "validity_coverage_ge_080": true
+}

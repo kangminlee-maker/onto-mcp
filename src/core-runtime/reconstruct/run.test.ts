@@ -47,6 +47,7 @@ import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
+  recomputeCodeInventoryProjectionTruncations,
   recomputeWorkbookInventoryProjectionTruncations,
   sourceObservationsReuseSha256,
   assessmentEvidenceObservationIds,
@@ -7049,6 +7050,151 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
     expect(sourceObservationsReuseSha256(widened as any)).not.toBe(
       sourceObservationsReuseSha256(base as any),
     );
+  });
+});
+
+// Spec basis (INV-TEST-1): handoff 20260719-semantic-map-v2-live §2 pre-live flag — the code
+// twin of the workbook_inventory bounded prompt projection above. The unprojected inventory
+// (reconstruct/run.ts measured 407,822 chars) must never reach a seed-authoring prompt; the
+// persisted artifact keeps the full inventory and the P6 recompute keeps the bound honest.
+describe("observationPromptPayload — code_structure_inventory bounded prompt projection", () => {
+  const codeSpan = (i: number) => ({
+    line_start: i * 10 + 1,
+    line_end: i * 10 + 10,
+    kind: "function_decl",
+    symbol_names: [`symbolWithARealisticallyLongName${i}`],
+    depth: 1,
+    doc_first_line: `Documentation first line for symbol ${i} — realistic length padding.`,
+    signature_line: `export function symbolWithARealisticallyLongName${i}(input: Input): Output {`,
+  });
+  const codeArtifact = (spanCount: number) => ({
+    schema_version: "1" as const,
+    session_id: "session-1",
+    created_at: "2026-07-20T00:00:00.000Z",
+    observations: [
+      {
+        observation_id: "obs-code",
+        target_material_kind: "code",
+        adapter_id: "code-structure-observer",
+        source_ref: "/src/big.ts",
+        location: "file",
+        summary: "Fixture code file.",
+        structural_data: {
+          basename: "big.ts",
+          extension: ".ts",
+          path_kind: "file",
+          size_bytes: 1234,
+          content_sha256: "cafebabe",
+          code_structure_inventory: {
+            schema_version: "1",
+            language: "typescript",
+            line_count: spanCount * 10,
+            content_sha256: "cafebabe",
+            extractor_logic_sha256: "feedface",
+            symbol_tiles: {
+              spans: Array.from({ length: spanCount }, (_, i) => codeSpan(i)),
+              hierarchy: Array.from({ length: spanCount }, (_, i) => ({
+                key: `${i * 10 + 1}-${i * 10 + 10}`,
+                kind: "function_decl",
+                symbol_name: `symbolWithARealisticallyLongName${i}`,
+                child_keys: [],
+              })),
+              root_key: "1-100",
+            },
+          },
+        },
+      },
+    ],
+    skipped_refs: [],
+    validation_results: [],
+  });
+
+  it("caps an oversized code inventory and attaches an honest truncation manifest", () => {
+    const artifact = codeArtifact(300);
+    // The budget contract is the PRETTY length — callJsonAuthor serializes the payload with
+    // JSON.stringify(payload, null, 2) (교차검증 gh HIGH; render-budget precedent).
+    const full = JSON.stringify(
+      artifact.observations[0]!.structural_data.code_structure_inventory,
+      null,
+      2,
+    ).length;
+    expect(full).toBeGreaterThan(40_000); // subject genuinely over budget — no vacuous pass
+    const payload = observationPromptPayload(artifact as any) as Array<{
+      structural_data: Record<string, any>;
+    }>;
+    const sd = payload[0]!.structural_data;
+    expect(sd.code_structure_inventory_projection_truncated).toBe(true);
+    expect(JSON.stringify(sd.code_structure_inventory, null, 2).length).toBeLessThanOrEqual(
+      40_000,
+    );
+    // Hierarchy is dropped first; spans survive as a bounded prefix in document order.
+    expect(sd.code_structure_inventory.symbol_tiles.hierarchy).toEqual([]);
+    const keptSpans = sd.code_structure_inventory.symbol_tiles.spans;
+    expect(keptSpans.length).toBeGreaterThan(0);
+    expect(keptSpans.length).toBeLessThan(300);
+    expect(sd.code_structure_inventory_projection_sections).toContainEqual({
+      section: "symbol_tiles.hierarchy",
+      kept: 0,
+      total: 300,
+    });
+    expect(sd.code_structure_inventory_projection_sections).toContainEqual({
+      section: "symbol_tiles.spans",
+      kept: keptSpans.length,
+      total: 300,
+    });
+    // Identity/provenance scalars are never trimmed.
+    expect(sd.code_structure_inventory.content_sha256).toBe("cafebabe");
+    // The PERSISTED artifact keeps the full inventory (prompt-only cap).
+    expect(
+      (artifact.observations[0]!.structural_data.code_structure_inventory as any).symbol_tiles
+        .hierarchy,
+    ).toHaveLength(300);
+  });
+
+  it("leaves a small code inventory uncapped with no manifest", () => {
+    const payload = observationPromptPayload(codeArtifact(3) as any) as Array<{
+      structural_data: Record<string, any>;
+    }>;
+    const sd = payload[0]!.structural_data;
+    expect(sd.code_structure_inventory.symbol_tiles.spans).toHaveLength(3);
+    expect(sd.code_structure_inventory.symbol_tiles.hierarchy).toHaveLength(3);
+    expect(sd.code_structure_inventory_projection_truncated).toBeUndefined();
+    expect(sd.code_structure_inventory_projection_sections).toBeUndefined();
+  });
+
+  it("recompute records a bounded code inventory with its section manifest (P6 twin)", () => {
+    const artifact = codeArtifact(300);
+    const truncations = recomputeCodeInventoryProjectionTruncations(
+      artifact.observations as any,
+    );
+    expect(truncations).toHaveLength(1);
+    expect(truncations[0]!.observation_id).toBe("obs-code");
+    expect(truncations[0]!.source_ref).toBe("/src/big.ts");
+    expect(
+      truncations[0]!.sections.some((s) => s.section === "symbol_tiles.hierarchy"),
+    ).toBe(true);
+  });
+
+  it("recompute records nothing when no code inventory was bounded", () => {
+    expect(
+      recomputeCodeInventoryProjectionTruncations(codeArtifact(3).observations as any),
+    ).toEqual([]);
+  });
+
+  it("recompute ignores observations without a code_structure_inventory", () => {
+    expect(
+      recomputeCodeInventoryProjectionTruncations([
+        {
+          observation_id: "obs-doc",
+          target_material_kind: "document",
+          adapter_id: "minimal-document-structure-observer",
+          source_ref: "/data/spec.md",
+          location: "file",
+          summary: "doc",
+          structural_data: { content_excerpt: "x".repeat(100000) },
+        },
+      ] as any),
+    ).toEqual([]);
   });
 });
 

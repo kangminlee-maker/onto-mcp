@@ -1,0 +1,19 @@
+{
+  "durationS": 2142,
+  "sessionRoot": ".onto/reconstruct/20260720-dd6-live-exp1",
+  "status": "completed",
+  "keys": [
+    "sessionId",
+    "sessionRoot",
+    "status",
+    "finalOutputPath",
+    "finalOutputText",
+    "reconstructRecordPath",
+    "reconstructRunManifestPath",
+    "artifactRefs",
+    "reconstructRecord",
+    "reconstructRunManifest",
+    "metrics",
+    "stopDecision"
+  ]
+}

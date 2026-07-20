@@ -1,0 +1,961 @@
+{
+  "authority": "non_authoritative",
+  "provisional": true,
+  "nodes": [
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-414",
+      "summary": "코드 구조 관찰기의 타입과 실행 로직을 정의한다. Tree-sitter 언어를 로드·캐시하고 AST에서 심볼 종류, 이름, 문서 첫 줄, 시그니처와 범위 메타데이터를 추출한 뒤 겹치지 않는 심볼 영역과 계층 구조를 조립한다. 파일 확장자별 언어 조회 및 단일 파일 관찰을 제공하며, 지원되지 않는 확장자와 파싱 실패를 처리하고 콘텐츠·추출기 로직 해시를 포함한 버전화된 결과를 반환한다.",
+      "boundaries": [
+        {
+          "line": 34,
+          "before": "파일 관찰에 필요한 상수와 설정 값",
+          "after": "구조 관찰 결과를 표현하는 타입 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 69,
+          "before": "구조 관찰 관련 타입 정의",
+          "after": "Tree-sitter 언어 로딩·파싱 실행 로직",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 138,
+          "before": "관찰 실행에 사용되는 상수와 보조 선언",
+          "after": "AST에서 구조 정보를 추출하는 함수",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 163,
+          "before": "추출 트리 준비를 위한 선언",
+          "after": "심볼 영역과 계층 구조를 조립하는 실행 함수",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 222,
+          "before": "추출된 트리의 중간 구조 정의",
+          "after": "관찰 결과의 심볼 인벤토리 생성",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 273,
+          "before": "관찰 결과 인벤토리의 필드 정의",
+          "after": "단일 파일 관찰 및 결과 반환 로직",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 366,
+          "before": "파일 관찰 실행 로직",
+          "after": "파일 확장자 기반 언어 조회 보조 기능",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 370,
+          "before": "언어 조회 관련 설명",
+          "after": "확장자를 코드 구조 언어로 매핑하는 함수",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-361",
+      "summary": "코드 구조 관찰기의 기반 타입과 실행 로직을 정의한다. Tree-sitter 언어를 로드·캐시하고 AST에서 심볼 종류, 이름, 문서 첫 줄, 시그니처와 범위 메타데이터를 추출한다. 구문 항목을 겹치지 않는 심볼 영역으로 분할한 뒤 계층 구조와 파일 루트 식별자를 조립하고, 추출기 소스의 SHA-256 다이제스트를 포함한 관찰 결과를 반환한다.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "외부 모듈 import로 관찰기 실행에 필요한 파서와 런타임 기능을 준비한다.",
+          "after": "관찰 결과의 결정론성·주석·줄 소유권·선언 구조를 설명하는 계약 주석으로 전환된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 29,
+          "before": "관찰기의 설명과 구조적 계약을 주석으로 정리한다.",
+          "after": "스키마 버전과 문서·시그니처 길이 제한을 상수로 고정한다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "관찰기 동작을 제어하는 상수 선언이 이어진다.",
+          "after": "언어와 심볼 범위 메타데이터를 표현하는 타입 선언으로 전환된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 69,
+          "before": "언어·심볼 범위 관련 타입을 선언한다.",
+          "after": "파서 설정과 AST 추출에 사용하는 타입·상수 정의로 전환된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 138,
+          "before": "언어 로딩과 AST 처리에 필요한 설정·도우미를 정의한다.",
+          "after": "트리에서 심볼 정보를 추출하는 함수 구현을 시작한다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 163,
+          "before": "추출 보조 값과 함수 선언이 이어진다.",
+          "after": "구문 항목을 심볼 영역으로 분할하는 함수 구현으로 전환된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 222,
+          "before": "파서 결과를 영역별로 다루는 구조가 정의된다.",
+          "after": "범위와 메타데이터를 계층 결과로 조립하는 함수 구현을 시작한다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 273,
+          "before": "계층 노드의 선언 구조와 속성을 처리한다.",
+          "after": "최종 추출 결과와 로직 다이제스트를 구성하는 함수 구현으로 전환된다.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-361",
+      "summary": "코드 구조 관찰 결과를 표현하는 타입과 파서 설정·초기화 구조를 정의하고, Tree-sitter 언어 로딩·캐시와 문자열 제한, AST 노드의 종류·이름·문서 설명·시그니처 추출을 구현합니다. 구문 항목을 겹치지 않는 심볼 영역으로 분할하고 범위·메타데이터 계층을 조립해 파일 루트와 식별자를 포함한 추출 결과 및 추출기 로직의 SHA-256 다이제스트를 반환합니다.",
+      "boundaries": [
+        {
+          "line": 138,
+          "before": "타입·파서 설정과 지원 언어 구성을 정의하는 선언 및 상수 영역",
+          "after": "언어 로딩, AST 메타데이터 추출, 심볼 영역 조립을 수행하는 함수 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 209,
+          "before": "언어·파서 및 추출기 관련 함수 구현",
+          "after": "리프 데이터와 심볼 영역의 범위·메타데이터 구조 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 219,
+          "before": "리프 초안과 추출 결과 조립을 위한 타입 선언",
+          "after": "AST 노드를 순회해 구조 관찰 결과를 생성하는 함수 구현",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-361",
+      "summary": "코드 구조 관찰을 위해 파서 언어 로딩·캐시와 문자열 제한을 정의하고, AST 노드에서 종류·이름·문서 설명·시그니처를 추출하는 헬퍼와 리프 데이터 형태를 구성합니다. 이어 구문 항목을 겹치지 않는 심볼 영역으로 분할해 범위·메타데이터 계층을 조립하고, 파일 루트와 식별자를 포함한 추출 결과 및 추출기 로직의 SHA-256 다이제스트를 반환합니다.",
+      "boundaries": [
+        {
+          "line": 219,
+          "before": "AST 노드 메타데이터 추출 헬퍼와 리프 초안 구조를 정의하는 구간",
+          "after": "구문 항목을 심볼 영역으로 분할하고 계층 결과를 조립하는 추출 로직",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 222,
+          "before": "주석으로 구분된 추출 로직 진입 전환",
+          "after": "항목 분할·계층 조립을 수행하는 함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 353,
+          "before": "추출 결과 조립을 마무리하는 함수 본문",
+          "after": "추출기 구성과 로직 다이제스트를 제공하는 후속 함수",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:219-361",
+      "summary": "구문 항목을 줄 단위의 겹치지 않는 심볼 영역으로 분할하고, 각 영역의 종류·노드·범위·이름·문서·시그니처 메타데이터를 계층 구조로 조립합니다. 파일 루트와 식별자를 포함한 추출 결과를 반환하며, 추출기 구성과 로직의 SHA-256 다이제스트도 제공합니다.",
+      "boundaries": [
+        {
+          "line": 273,
+          "before": "추출된 계층과 영역을 담는 타입 정의",
+          "after": "구문 노드에서 심볼 영역과 계층을 생성하는 함수 구현",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 351,
+          "before": "계층 추출 로직의 함수 구현",
+          "after": "추출기 다이제스트를 설명하는 주석 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 353,
+          "before": "추출기 다이제스트 설명",
+          "after": "SHA-256 다이제스트를 계산하는 함수",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-137",
+      "summary": "코드 구조 관찰 결과를 표현하는 타입과 파서 설정·초기화 구조를 정의합니다. 계층 노드와 파일 인벤토리, 성공·미지원 결과 모델을 포함하고 TypeScript·JavaScript·Python의 Tree-sitter 문법 경로, 구문 종류의 심볼 분류, 언어 매핑, 컨테이너 종류, 파서 상태와 지원 언어 캐시를 구성합니다.",
+      "boundaries": [
+        {
+          "line": 56,
+          "before": "관찰 결과를 표현하는 인터페이스 정의가 이어짐",
+          "after": "관찰 결과의 후속 타입 정의가 시작됨",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 69,
+          "before": "관찰 결과 타입 정의가 마무리됨",
+          "after": "언어별 Tree-sitter 문법 경로 상수 정의로 전환됨",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 75,
+          "before": "문법 패키지 경로 상수 정의가 끝남",
+          "after": "구문 종류와 심볼 분류를 위한 설정 상수 정의가 시작됨",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 95,
+          "before": "설정 상수 정의가 마무리됨",
+          "after": "언어 매핑과 파서 초기화 상태 정의가 시작됨",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:273-361",
+      "summary": "Implements code-structure extraction: it converts parsed syntax nodes into symbol spans and a hierarchy, partitions eligible containers while preserving fused or single-line regions, adds a file root, and returns the resulting structure. It also provides a SHA-256 digest of extractor logic, helpers, constants, and configuration.",
+      "boundaries": [
+        {
+          "line": 351,
+          "before": "Function declarations implement structural extraction and hierarchy construction.",
+          "after": "A comment block introduces source-digest computation for the extractor.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 353,
+          "before": "The digest section's comment describes the extractor fingerprint purpose.",
+          "after": "A function declaration computes and returns the extractor's SHA-256 digest.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-218",
+      "summary": "코드 구조 관찰에 필요한 파서 언어 로딩·캐시와 문자열 제한 상수를 정의하고, 구문 노드의 종류·이름·문서 설명·시그니처를 추출하는 헬퍼 및 리프 초안 데이터 형태를 구성한다. LeafDraft는 리프의 행 범위, 종류, 식별자, 문서 주석, 선택적 시그니처와 AST 노드를 표현한다.",
+      "boundaries": [
+        {
+          "line": 159,
+          "before": "파서 언어 해석·로드와 관련 상수 및 초기화 로직",
+          "after": "구문 노드와 문서 정보를 추출하는 관찰 헬퍼 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 209,
+          "before": "구문 노드 종류·이름·문서 설명을 판별하는 함수들",
+          "after": "리프 초안의 구조와 보유 필드를 선언하는 인터페이스",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:273-350",
+      "summary": "Defines spanKey for line-range identifiers and extractTree for converting parsed syntax nodes into symbol spans and a hierarchy. It partitions top-level items, records leaf metadata, splits eligible containers into header, member, and footer regions, preserves single-line or fused containers as one leaf, then adds a file root and returns the spans, hierarchy, and root key.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:163-218",
+      "summary": "코드 구조 관찰을 위한 헬퍼와 리프 초안 데이터 형태를 구성한다. 앞부분은 구문 노드의 종류와 이름을 판별하고, 문서 설명의 첫 의미 있는 줄을 추출한다. 이어지는 LeafDraft 인터페이스는 리프의 행 범위, 종류, 식별자, 문서 주석, 선택적 시그니처와 AST 노드를 담는다.",
+      "boundaries": [
+        {
+          "line": 209,
+          "before": "구문 노드의 문서 설명 첫 줄을 추출하는 함수 선언 영역",
+          "after": "리프 초안의 데이터 구조를 시작하는 인터페이스 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 211,
+          "before": "리프 초안 인터페이스의 헤더",
+          "after": "리프 데이터의 시작·종료 행과 종류를 정의하는 속성 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 218,
+          "before": "리프 초안 인터페이스의 마지막 속성",
+          "after": "리프 초안 데이터 구조 선언의 종료 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:219-272",
+      "summary": "이 영역은 구문 항목을 줄 단위의 빈틈없고 겹치지 않는 leaf 영역으로 분할하며, 각 영역에 종류·내부 노드·줄 범위·심볼 이름과 문서·시그니처 메타데이터를 연결하고 마지막 영역을 끝까지 확장한다. 이어서 body에서 명명된 자식 노드를 추출하는 함수와 추출된 계층·루트 식별자·심볼 범위를 담는 ExtractedTree 인터페이스를 정의한다.",
+      "boundaries": [
+        {
+          "line": 222,
+          "before": "문서 주석 블록",
+          "after": "형제 구문 항목을 줄 소유 leaf 영역으로 분할하는 함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 267,
+          "before": "함수 본문",
+          "after": "추출된 트리 구조를 표현하는 인터페이스 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 269,
+          "before": "인터페이스 헤더",
+          "after": "ExtractedTree의 계층·식별자·범위 필드",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:362-414",
+      "summary": "Provides a file-extension language lookup helper and a single-file code-structure observation function. Observation handles unsupported extensions and parse failures, and otherwise builds a versioned symbol inventory containing spans, hierarchy, line count, and content/logic hashes before releasing parser resources.",
+      "boundaries": [
+        {
+          "line": 370,
+          "before": "A small extension-normalization helper precedes the main observation routine.",
+          "after": "The region enters the single-file observation implementation and its parsing/result-handling flow.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-47",
+      "summary": "코드 구조 관찰에 필요한 기반을 정의한다. Node.js 기능과 web-tree-sitter의 Parser·Language·SyntaxNode을 가져오며, 결정론적 관찰·주석·줄 소유권·형제 요소·선언 구조·헤더/푸터 처리를 설명한다. 이어 스키마 버전과 문서·시그니처 줄 길이 제한을 고정하고, 언어 및 심볼 범위 메타데이터 타입을 선언한다.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "파일 상단의 import 선언으로 외부 관찰·파싱 의존성을 구성한다.",
+          "after": "코드 구조 관찰자의 목적과 결정론적 처리 규칙을 설명하는 주석 블록으로 전환된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 29,
+          "before": "관찰 규칙을 설명하는 주석과 계약 서술이 이어진다.",
+          "after": "스키마 관련 고정값 선언이 시작된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 33,
+          "before": "첫 번째 상수 선언이 끝난다.",
+          "after": "다음 고정값 선언으로 전환된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "스키마·제한값을 나타내는 상수 선언이 끝난다.",
+          "after": "언어 식별을 위한 타입 별칭 선언이 시작된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "언어 타입 별칭 선언이 끝난다.",
+          "after": "심볼 범위 메타데이터 타입의 선언 헤더가 시작된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 38,
+          "before": "심볼 범위 타입의 선언 헤더가 이어진다.",
+          "after": "소스 범위와 심볼 속성을 표현하는 멤버 프로퍼티들이 시작된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 47,
+          "before": "심볼 범위 메타데이터의 멤버 프로퍼티 정의가 이어진다.",
+          "after": "타입 선언을 닫는 푸터로 전환된다.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-94",
+      "summary": "코드 구조 관찰 결과를 표현하는 인터페이스·결과 타입과, TypeScript·JavaScript·Python 파일 확장자별 Tree-sitter 문법 패키지 경로 상수를 정의합니다. 관찰 모델은 계층 노드, 파일 인벤토리, 성공 또는 미지원 결과를 포함하며, 이어지는 언어 중립 kind 매핑과 extractor 로직 해시 관련 구조로 이어집니다.",
+      "boundaries": [
+        {
+          "line": 50,
+          "before": "선언 헤더에서 인터페이스 본문으로 진입",
+          "after": "계층 노드의 멤버 속성 정의 시작",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 56,
+          "before": "첫 인터페이스 선언 종료",
+          "after": "파일 구조 인벤토리 선언 시작",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 69,
+          "before": "두 번째 인터페이스 선언 종료",
+          "after": "성공·미지원 결과를 표현하는 타입 별칭 시작",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 73,
+          "before": "결과 타입 별칭 정의 종료",
+          "after": "언어별 문법 패키지 상수 설명 주석 시작",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 75,
+          "before": "언어별 매핑 설명 주석",
+          "after": "확장자·Tree-sitter 패키지 경로 상수 정의 시작",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:370-414",
+      "summary": "Observes one code file by selecting a grammar from its extension, returning an unsupported result when no grammar exists or parsing fails, and otherwise extracting symbol spans and hierarchy into a versioned inventory with line count and content/logic hashes. Explicitly deletes the syntax tree and parser after processing.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:95-137",
+      "summary": "Defines code-observation configuration and parser setup state. The region includes normalized syntax-to-symbol classification tables, language mappings for TypeScript, JavaScript, and Python, container-kind definitions, and module-level parser initialization and supported-language cache structures.",
+      "boundaries": [
+        {
+          "line": 133,
+          "before": "Structural classification tables and language/container mappings are complete.",
+          "after": "Parser setup begins with a helper for one-time WASM initialization and grammar caching.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:219-260",
+      "summary": "partitionItems builds gapless, non-overlapping line-owned leaf regions from sibling syntax items. It maps each item’s kind and inner node, derives line spans and symbol names, coalesces same-line or overlapping siblings into the previous leaf, attaches documentation and signature metadata to new leaves, and extends the final leaf to ownEnd.",
+      "boundaries": [
+        {
+          "line": 222,
+          "before": "A documentation comment describes the partitioning purpose.",
+          "after": "The partitionItems function begins and implements the described partitioning logic.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:95-132",
+      "summary": "Defines structural classification tables for code observation: TypeScript and Python syntax names map to normalized symbol categories, language selection reuses those mappings for TypeScript, JavaScript, and Python, and a set identifies declaration kinds treated as containers.",
+      "boundaries": [
+        {
+          "line": 127,
+          "before": "Language-specific syntax-to-kind mappings are defined directly.",
+          "after": "A language dispatch table reuses those mappings, followed by container-kind configuration.",
+          "disposition": "adversarial_confirmed"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:186-218",
+      "summary": "이 영역은 코드 구조 관찰을 위한 두 부분을 포함합니다. 앞부분은 구문 노드에 연결된 문서 설명의 첫 의미 있는 줄을 추출하며, 인접 주석과 Python 문자열 리터럴을 고려합니다. 뒷부분의 LeafDraft 인터페이스는 리프 요소의 시작·종료 행, 종류, 식별자 목록, 문서 주석 첫 줄, 선택적 시그니처와 AST 노드를 담는 데이터 형태를 정의합니다.",
+      "boundaries": [
+        {
+          "line": 209,
+          "before": "문서 설명의 첫 줄을 추출하는 함수 선언 영역",
+          "after": "리프 구조 요소의 데이터 형태를 정의하는 선언 헤더 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 211,
+          "before": "LeafDraft 인터페이스 선언의 헤더",
+          "after": "리프 요소의 개별 속성 정의 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:95-126",
+      "summary": "Defines two TypeScript-to-structural-kind lookup tables. TS_KIND maps TypeScript syntax node names to normalized categories such as imports, declarations, members, comments, and other expressions; PY_KIND maps Python syntax node names to corresponding normalized categories.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:18-47",
+      "summary": "Defines code-structure observation metadata and schema types. It documents enrichment and deterministic inventory contracts, fixes schema version \"1\" and a documentation/signature line-length limit, and declares language and symbol-span types covering source ranges, symbol kinds and names, nesting depth, and optional metadata.",
+      "boundaries": [
+        {
+          "line": 29,
+          "before": "Contract comments describing per-leaf enrichment, ownership, documentation, and deterministic inventory behavior.",
+          "after": "A constant declaration begins the observation metadata configuration.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "Observation metadata constants and their documentation.",
+          "after": "A language type alias is declared.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "The supported language type alias.",
+          "after": "The CodeSymbolSpan declaration begins.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-74",
+      "summary": "코드 구조 관찰 결과를 표현하는 두 인터페이스와 결과 타입을 정의합니다. CodeHierarchyNode는 계층 노드의 범위·종류·식별자·자식 키를 담고, CodeStructureInventory는 스키마·언어·줄 수·콘텐츠 및 추출기 해시와 심볼 타일·계층 정보를 담습니다. CodeStructureObservationResult는 성공 시 인벤토리, 미지원 시 이유 문자열을 포함하는 결과의 합집합입니다.",
+      "boundaries": [
+        {
+          "line": 56,
+          "before": "계층 노드의 범위·종류·식별자와 자식 키를 정의하는 인터페이스",
+          "after": "구조 인벤토리의 메타데이터와 심볼·계층 정보를 정의하는 인터페이스",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 69,
+          "before": "구조 인벤토리 계약을 구성하는 필드 선언",
+          "after": "성공 또는 미지원 결과를 표현하는 합집합 타입 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 73,
+          "before": "결과 타입 선언의 종료",
+          "after": "언어 레지스트리 섹션을 시작하는 주석 블록",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-162",
+      "summary": "요청된 코드 언어의 WASM 문법 경로를 해석하고, 파서 언어를 비동기 로드·캐시하는 기능과 문자열 길이 제한에 사용하는 상수를 포함한다. 파서 초기화는 공유되고, 로드된 문법 바이트는 SHA-256으로 해시된다.",
+      "boundaries": [
+        {
+          "line": 159,
+          "before": "비동기 파서 언어 로드·캐시 기능의 종료",
+          "after": "문자열 길이 제한 기능에 대한 주석 시작",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 161,
+          "before": "문자열 길이 제한 기능의 설명",
+          "after": "제한 길이를 나타내는 상수 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:163-185",
+      "summary": "Defines two helper functions for syntax-node classification and naming. mapKind repeatedly unwraps export_stmt or decorated nodes to a mapped inner node, ignoring comment blocks when selecting children, and returns a fallback kind when unwrapping cannot continue. symbolNameOf reads the node’s optional name field and returns its text or null.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:186-208",
+      "summary": "Extracts the first meaningful documentation line associated with a syntax node. It prefers an adjacent preceding comment, stripping comment markers and whitespace, and bounds the result. For Python, it also checks the first body expression for a string literal and returns its first non-empty cleaned line; otherwise it returns null.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:26-47",
+      "summary": "Defines code-structure observation metadata and schema types: it documents inputs used for reuse-key calculation, fixes the schema version at \"1\", sets a documentation/signature line-length limit, and declares a language type plus CodeSymbolSpan fields for source ranges, symbol kinds and names, nesting depth, and optional metadata.",
+      "boundaries": [
+        {
+          "line": 29,
+          "before": "A comment block documents reuse-key input sources.",
+          "after": "A constant declaration fixes the code-structure schema version.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "A constant declaration defines a line-length limit.",
+          "after": "A type alias declares the supported code-structure language.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "The language type alias ends.",
+          "after": "An interface declaration begins the code symbol span schema.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 38,
+          "before": "The interface header introduces the symbol-span structure.",
+          "after": "Member properties begin defining its observed source metadata.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-68",
+      "summary": "코드 구조 관찰 결과를 표현하는 두 인터페이스를 정의합니다. CodeHierarchyNode는 계층 노드의 범위·종류·식별자와 자식 키를 담고, CodeStructureInventory는 스키마·언어·줄 수·콘텐츠 및 추출기 해시와 심볼 타일·계층 정보를 담는 계약입니다.",
+      "boundaries": [
+        {
+          "line": 56,
+          "before": "계층 구조의 개별 노드와 자식 참조를 표현하는 인터페이스",
+          "after": "전체 코드 구조 인벤토리의 메타데이터와 심볼 타일을 표현하는 인터페이스",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:138-158",
+      "summary": "Resolves the WASM grammar path for a requested code language and asynchronously loads and caches the corresponding parser language. Initialization is shared through parserInit; the loaded grammar bytes are hashed with SHA-256, and the cached loading promise is returned for reuse.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:75-94",
+      "summary": "TypeScript·JavaScript·Python의 파일 확장자와 각 Tree-sitter WebAssembly 문법 패키지 경로를 정의한 뒤, 이어지는 주석에서 언어별 Tree-sitter 노드 유형을 공통 kind 토큰으로 매핑하는 언어 중립 테이블과 extractor 로직 해시 포함을 설명한다.",
+      "boundaries": [
+        {
+          "line": 92,
+          "before": "지원 언어별 확장자와 Tree-sitter 문법 패키지 경로를 정의하는 상수 선언",
+          "after": "노드 유형을 공통 kind 토큰으로 매핑하는 언어 중립 테이블에 대한 설명 주석",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-17",
+      "summary": "코드 구조 관찰자 구현의 시작부로, Node.js 내장 기능과 web-tree-sitter의 Parser·Language·SyntaxNode을 가져온다. 이어서 CODE 소스를 결정론적으로 관찰하고, 주석·줄 소유권·형제 요소·선언 구조·헤더/푸터 처리 규칙을 설명하는 목적 주석이 시작된다.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "Node.js와 tree-sitter 관련 의존성을 불러오는 import 구간",
+          "after": "코드 구조 관찰자의 목적과 결정론적 관찰 규칙을 설명하는 주석 구간",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:31-47",
+      "summary": "Defines a documentation/signature line-length limit, then declares the language type and the CodeSymbolSpan interface used to represent observed code symbols with source range, kind, names, nesting depth, and optional documentation/signature metadata.",
+      "boundaries": [
+        {
+          "line": 33,
+          "before": "A comment describing a capture limit",
+          "after": "A constant declaration setting the limit to 140 characters",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 34,
+          "before": "A constant declaration",
+          "after": "A language type alias",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 36,
+          "before": "A type alias",
+          "after": "The CodeSymbolSpan interface declaration",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 38,
+          "before": "The interface header",
+          "after": "The first symbol-span property",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 40,
+          "before": "A symbol-span property",
+          "after": "A documentation comment introducing the next property",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 42,
+          "before": "A symbol-span property",
+          "after": "A documentation comment introducing another property",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 47,
+          "before": "The final interface property",
+          "after": "The interface declaration footer",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:75-91",
+      "summary": "Defines file-extension mappings for TypeScript, JavaScript, and Python, plus the corresponding Tree-sitter WebAssembly grammar package paths for each supported language.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:34-47",
+      "summary": "코드 구조 관찰에 사용하는 언어 타입과 심볼 범위 인터페이스를 정의한다. 심볼 범위는 시작·종료 줄, kind, 선언 이름 목록, 중첩 깊이, 문서 주석 첫 줄, 시그니처 첫 줄을 보관하며 문서 주석과 시그니처는 null일 수 있다.",
+      "boundaries": [
+        {
+          "line": 36,
+          "before": "언어 값을 제한하는 타입 별칭",
+          "after": "코드 심볼 범위를 설명하는 인터페이스 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 38,
+          "before": "인터페이스 선언부",
+          "after": "심볼 범위의 줄 위치 속성들",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 47,
+          "before": "심볼 범위 인터페이스의 마지막 속성",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:56-68",
+      "summary": "CodeStructureInventory 인터페이스는 코드 구조 인벤토리의 계약을 정의합니다. 스키마 버전, 언어, 전체 줄 수, 관찰 콘텐츠와 추출기 로직의 해시, 그룹화된 심볼 타일과 계층·루트 정보를 표현합니다.",
+      "boundaries": [
+        {
+          "line": 58,
+          "before": "인터페이스 선언 헤더",
+          "after": "스키마 버전·언어·줄 수를 나타내는 기본 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 68,
+          "before": "인터페이스 멤버 속성 선언",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:36-47",
+      "summary": "CodeSymbolSpan 인터페이스는 코드 심볼의 범위를 나타내며 시작·종료 줄, kind 토큰, 포함된 선언 이름, 중첩 깊이, 문서 주석 첫 줄과 시그니처 첫 줄을 보관한다. 문서 주석과 시그니처는 문자열 또는 null일 수 있다.",
+      "boundaries": [
+        {
+          "line": 38,
+          "before": "인터페이스 선언 헤더",
+          "after": "심볼 범위와 구조 정보를 담는 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 40,
+          "before": "심볼 범위 속성 선언",
+          "after": "문서 주석 첫 줄을 나타내는 속성군",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 41,
+          "before": "문서 주석 관련 주석",
+          "after": "문자열 또는 null 값을 담는 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 42,
+          "before": "문자열 또는 null 속성 선언",
+          "after": "시그니처 관련 주석과 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 43,
+          "before": "시그니처 관련 주석",
+          "after": "시그니처 첫 줄을 담는 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 47,
+          "before": "인터페이스 속성 선언",
+          "after": "선언을 닫는 푸터",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:261-272",
+      "summary": "코드 구조 관찰을 위한 두 요소를 포함한다. 하나는 구문 컨테이너의 body에서 명명된 자식 노드를 추출하고 body가 없으면 빈 배열을 반환하는 함수이며, 다른 하나는 추출된 계층 노드 목록, 루트 식별자, 코드 심볼 범위를 담는 ExtractedTree 인터페이스다.",
+      "boundaries": [
+        {
+          "line": 267,
+          "before": "구문 컨테이너의 body 자식 노드를 추출하는 함수 선언",
+          "after": "추출된 코드 구조를 표현하는 ExtractedTree 인터페이스 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:351-361",
+      "summary": "Defines extractorSourceDigest(), returning a SHA-256 hexadecimal digest derived from the string representations of partitionItems, extractTree, mapKind, and docFirstLineOf, plus serialized extractor constants and configuration.",
+      "boundaries": [
+        {
+          "line": 353,
+          "before": "A comment describing the extractor logic digest and its tautological rotation.",
+          "after": "The function declaration begins the digest computation.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:209-218",
+      "summary": "LeafDraft 인터페이스는 코드 구조의 리프 요소를 표현하는 데이터 형태로, 시작·종료 행, 요소 종류, 문자열 식별자 목록, 문서 주석 첫 줄, 선택적 선언 시그니처와 구문 트리 노드를 담습니다.",
+      "boundaries": [
+        {
+          "line": 211,
+          "before": "인터페이스 선언 헤더",
+          "after": "리프 요소 데이터 필드 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 218,
+          "before": "인터페이스 멤버 필드",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:1-9",
+      "summary": "코드 구조 관찰자에 필요한 Node.js 내장 기능과 web-tree-sitter의 Parser, Language, SyntaxNode을 가져오는 파일 시작부입니다. 이어서 CODE 소스를 위치별로 결정론적으로 관찰하고 spreadsheet 구조 관찰자에 대응하는 설계 목적을 설명하는 주석이 시작됩니다.",
+      "boundaries": [
+        {
+          "line": 6,
+          "before": "Node.js 및 tree-sitter 기능을 가져오는 import 선언 영역",
+          "after": "코드 구조 관찰자의 설계 목적을 설명하는 주석 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:36-44",
+      "summary": "CodeSymbolSpan 인터페이스는 코드 심볼의 범위를 표현하며, 시작·종료 줄, 언어 중립적 kind 토큰, 포함된 선언 이름과 중첩 깊이를 담는다.",
+      "boundaries": [
+        {
+          "line": 38,
+          "before": "인터페이스 선언 헤더",
+          "after": "첫 번째 숫자형 멤버 속성",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 41,
+          "before": "kind 멤버를 설명하는 문서 주석",
+          "after": "kind 문자열 멤버 속성",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 43,
+          "before": "선행 멤버 속성",
+          "after": "symbol_names 관련 멤버 속성",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:209-217",
+      "summary": "LeafDraft 인터페이스는 코드 구조의 리프 요소를 표현하는 데이터 형태입니다. 시작·종료 행, 요소 종류, 문자열 식별자 목록, 문서 주석 첫 줄, 선택적 선언 시그니처와 구문 트리 노드를 담습니다.",
+      "boundaries": [
+        {
+          "line": 211,
+          "before": "인터페이스 선언 헤더가 리프 초안의 구조를 시작함",
+          "after": "행 범위와 요소 종류를 나타내는 속성 정의로 전환됨",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:10-17",
+      "summary": "이 영역은 tree-sitter WASM과 TypeScript/JavaScript·Python 문법을 사용하는 LLM-free 코드 구조 관찰기의 목적과 규칙을 설명한다. 파일에서 비중첩 줄 소유권 구획을 생성하며, 주석·빈 줄·같은 줄의 형제 요소 연결 규칙과 파일→최상위 선언→컨테이너 멤버의 깊이 2 구조, 선언 헤더·푸터 및 단일 줄 컨테이너 처리 방식을 정의한다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:18-25",
+      "summary": "Comments document the structure observer’s contract: per-leaf O-5 enrichment records ownership, date, documentation and source-line metadata, while the observer reports authoring-identity facts without declaration bodies and produces deterministic inventories for identical input bytes, including extractor_logic_sha256 partitioning.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-55",
+      "summary": "CodeHierarchyNode 인터페이스는 계층 구조 노드를 표현하며, 노드 범위 식별자(key), 노드 종류(kind), 노드 식별자(symbol_name), 자식 노드 키 목록(child_keys)을 포함합니다.",
+      "boundaries": [
+        {
+          "line": 50,
+          "before": "인터페이스 선언 헤더",
+          "after": "노드 범위와 종류를 나타내는 멤버 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 55,
+          "before": "인터페이스 멤버 정의",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:61-68",
+      "summary": "CodeStructureInventory declares string hashes for the observed content and extractor logic, plus symbol_tiles containing grouped symbol spans, hierarchy nodes, and a root key.",
+      "boundaries": [
+        {
+          "line": 68,
+          "before": "The interface is still declaring a structured member property for symbol_tiles.",
+          "after": "The interface declaration ends after the symbol_tiles member.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:362-369",
+      "summary": "Exports a helper that normalizes a file extension to lowercase, looks it up in the language map, and returns the corresponding code-structure language or null when unsupported. The following comment introduces the purpose and unsupported-extension behavior of single-file structure observation.",
+      "boundaries": [
+        {
+          "line": 366,
+          "before": "A small extension-to-language lookup helper concludes.",
+          "after": "Documentation begins describing single-file structure observation and explicit unsupported results.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:63-68",
+      "summary": "Defines the symbol_tiles member of CodeStructureInventory, grouping symbol spans, hierarchy nodes, and a root key.",
+      "boundaries": [
+        {
+          "line": 68,
+          "before": "The interface is completing its symbol_tiles property declaration.",
+          "after": "The CodeStructureInventory interface declaration ends.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:69-74",
+      "summary": "Defines the CodeStructureObservationResult type as either a successful result containing a CodeStructureInventory or an unsupported result containing a reason string. The following comment begins a language registry section.",
+      "boundaries": [
+        {
+          "line": 73,
+          "before": "A discriminated union type describing successful or unsupported code-structure observation results.",
+          "after": "A section comment introducing the language registry and its extension point.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:127-132",
+      "summary": "Defines a language-to-symbol-kind lookup table that reuses TypeScript mappings for TypeScript and JavaScript and uses Python mappings for Python. Also defines the set of declaration kinds treated as containers: classes, interfaces, enums, and namespaces.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:261-266",
+      "summary": "Returns the named child nodes of a syntax container’s body field, or an empty array when no body exists.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:267-272",
+      "summary": "ExtractedTree 인터페이스는 추출된 코드 구조를 표현하며, 계층 노드 목록(hierarchy), 루트 식별자(rootKey), 코드 심볼 범위 목록(spans)을 담는다.",
+      "boundaries": [
+        {
+          "line": 269,
+          "before": "인터페이스 선언 헤더",
+          "after": "인터페이스 멤버 속성 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 272,
+          "before": "인터페이스 멤버 속성 영역",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    }
+  ],
+  "nodes_total": 109,
+  "refuted_disclosure": [
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:56-68",
+      "line": 61,
+      "before": "기본 메타데이터 속성 선언",
+      "after": "콘텐츠·추출기 해시와 심볼 타일 구조를 나타내는 속성 선언"
+    },
+    {
+      "region": "src/core-runtime/code-structure-observer.ts:48-55",
+      "line": 53,
+      "before": "노드 범위·종류 멤버 정의",
+      "after": "노드 식별자와 자식 키 목록 멤버 정의"
+    }
+  ],
+  "refuted_disclosure_total": 2,
+  "unanchored_unverified_total": 2,
+  "render_truncated": true
+}

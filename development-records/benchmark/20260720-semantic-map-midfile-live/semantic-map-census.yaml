@@ -1,0 +1,33 @@
+schema_version: "1"
+observations_total: 1
+observations_map_present: 1
+observations_map_absent: 0
+synthesize_calls_total: 419
+verify_calls_total: 21
+max_synthesize_calls: 2400
+max_verify_calls: 1000
+author_id: direct-call-reconstruct-directive-author
+synthesize_model_identity: synth:codex/gpt-5.6-luna@adapter=codex_cli@synthesize_effort=low
+verify_model_identity: codex/gpt-5.6-sol
+by_observation:
+  - observation_id: obs_f155be219df81152
+    target_material_kind: code
+    map_present: true
+    skip_reason: null
+    fingerprint: d42624ee8d8a9ffee30bb8a9bbccd6a707cc93aece4a1c40e665aa12923bb16e
+    columns:
+      - file: /Users/kangmin/Documents/onto-mcp/src/core-runtime/cli/run-review-prompt-execution.ts
+        status: produced
+        reason: null
+        produced_nodes: 419
+        frontier_accumulating: 209
+        frontier_frontier: 210
+        frontier_subsumed: 382
+        anchored: 358
+        unanchored: 21
+        adversarial_confirmed: 12
+        adversarial_refuted: 9
+        synthesize_calls: 419
+        verify_calls: 21
+breaker_retry_synthesize_calls: 0
+breaker_retry_verify_calls: 0
