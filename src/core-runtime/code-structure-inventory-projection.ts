@@ -8,10 +8,10 @@ import type {
 // (pre-live flag, handoff 20260719-semantic-map-v2-live §2; the code twin of
 // spreadsheet-structure-observer's projectInventoryForPrompt).
 //
-// Lives OUTSIDE code-structure-observer.ts deliberately: that file is the frozen G-SEM
-// experiment subject (content sha pinned `8f055465…` — 설계 §10 재평정 게이트 1 "수정 금지"),
-// and the projection is a prompt-side concern, not an observation concern — it never touches
-// the persisted inventory or any reuse key.
+// Lives OUTSIDE code-structure-observer.ts deliberately: the projection is a prompt-side
+// concern, not an observation concern — it never touches the persisted inventory or any reuse
+// key. (Historical note: the observer was the frozen G-SEM experiment subject until the live
+// cycle closed 2026-07-20; the module split outlived the freeze on its own merits.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Char budget for the prompt-facing projection of ONE code inventory (per-kind constant class,
@@ -32,8 +32,11 @@ export interface CodeInventoryPromptProjectionResult {
 /**
  * Bounded, deterministic prompt projection of a code inventory (SIZE axis). Pure and total:
  * never mutates the input, never throws; a within-budget inventory passes through unchanged.
- * Over budget: `hierarchy` is dropped first (nesting stays recoverable from each span's `depth`
- * + line range), then spans are admitted as a PREFIX of the admission order — span size
+ * Over budget the demotion order is hierarchy → imports → spans (Phase 1b FD4): `hierarchy`
+ * is dropped first (nesting stays recoverable from each span's `depth` + line range), then the
+ * opt-in `imports` list (the set-tier assembler folds from the PERSISTED inventory, never this
+ * projection, so dropping it here loses prompt hints only), then spans are admitted as a
+ * PREFIX of the admission order — span size
  * descending, then line_start ascending (globally unique under the strict line-ownership
  * partition), then original index (total by construction). This mirrors the DD10 admission
  * ORDER; the DD10 comparator itself is a different site (comprehension-semantic-map-code.ts
@@ -61,8 +64,28 @@ export function projectCodeInventoryForPrompt(
   const record = (section: string, kept: number, total: number): void => {
     if (kept < total) sections.push({ section, kept, total });
   };
-  const { spans, hierarchy, root_key } = inventory.symbol_tiles;
+  const { spans, hierarchy, root_key, imports } = inventory.symbol_tiles;
   record("symbol_tiles.hierarchy", 0, hierarchy.length);
+  // FD4 demotion step 2: after hierarchy, try keeping the opt-in imports list; drop it only
+  // if the hierarchy-free candidate still exceeds the budget. Set assembly reads the PERSISTED
+  // inventory, so this loses prompt hints only.
+  const hierarchyFree = (keepImports: boolean): CodeStructureInventory => ({
+    ...inventory,
+    symbol_tiles: {
+      spans,
+      hierarchy: [],
+      root_key,
+      ...(keepImports && imports ? { imports } : {}),
+    },
+  });
+  const keepImports = imports !== undefined && pretty(hierarchyFree(true)) <= charBudget;
+  if (imports !== undefined && !keepImports) {
+    record("symbol_tiles.imports", 0, imports.length);
+  }
+  if (pretty(hierarchyFree(keepImports)) <= charBudget) {
+    record("symbol_tiles.spans", spans.length, spans.length);
+    return { inventory: hierarchyFree(keepImports), truncated: true, sections };
+  }
   const ranked = spans
     .map((span, index) => ({ span, index }))
     .sort((a, b) =>
@@ -80,6 +103,7 @@ export function projectCodeInventoryForPrompt(
       spans: spans.filter((_, index) => admitted.has(index)),
       hierarchy: [],
       root_key,
+      ...(keepImports && imports ? { imports } : {}),
     },
   });
   for (const { index } of ranked) {
