@@ -494,6 +494,12 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // opt-in implies capture); the map stage itself stays gated by semantic_map_code alone.
   // Absent = off — both keys absent keeps every path byte-identical.
   "code_structure_inventory",
+  // Phase 1b set-tier opt-in (design 20260720 FD1, deterministic 모드 — owner 2026-07-20):
+  // multi-file code set assembly (topology + import relations + deterministic overview).
+  // Deterministic 전제 = code_structure_inventory ∧ this key; set=true ∧ capture=false is a
+  // fail-loud structural error (requires_code_structure_inventory), never implicit activation.
+  // Absent = off — no set-tier artifact, no observer import capture, byte-identical.
+  "semantic_map_code_set_tier",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

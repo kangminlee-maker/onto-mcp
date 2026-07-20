@@ -377,6 +377,12 @@ import {
   type CodeInventoryPromptProjectionResult,
 } from "../code-structure-inventory-projection.js";
 import type { CodeStructureInventory } from "../code-structure-observer.js";
+import {
+  assembleCodeSetTier,
+  CODE_SET_TIER_SEED_PROMPT_NOTE,
+  type CodeSetTierExcludedRef,
+  type CodeSetTierMemberInput,
+} from "./comprehension-set-tier.js";
 import { classifyFrontierCore } from "./comprehension-semantic-map-core.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
@@ -550,6 +556,11 @@ export interface ReconstructDirectiveAuthor {
    * fingerprint is folded separately). Set once by runReconstruct after the semantic_map stage.
    */
   setSemanticMapProjection?(byObservation: ReadonlyMap<string, SemanticMapAnyProjection>): void;
+  /** Phase 1b (deterministic set tier): provide the bounded set overview render so the seed
+   *  userPayload carries the dedicated `code_set_tier` field. Payload TEXT only — the reuse key
+   *  folds the set fingerprint separately (FD13). Set once by runReconstruct when the set-tier
+   *  assembly completes; never called when the opt-in is off or the set is not complete. */
+  setCodeSetTierOverview?(overview: unknown): void;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -1064,6 +1075,11 @@ export interface RunReconstructParams {
    *  so an inventory-only run (codeStructureObservation without this) keeps the stage
    *  spreadsheet-only. */
   semanticMapCode?: boolean;
+  /** Phase 1b set-tier opt-in (FD1, deterministic 모드): set from
+   *  reconstruct.execution.semantic_map_code_set_tier. Requires codeStructureObservation
+   *  (enforced fail-loud at the api settings projection). Gates observer import capture and
+   *  the post-loop deterministic set assembly. Absent = off. */
+  codeSetTier?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -1141,6 +1157,11 @@ interface AuthoredArtifactReuseMatch {
   // Rotates the seed key when anything that shapes the map changes (F2 topology / X7 caps / X9
   // projection caps / F4 verify model). null when the stage skipped or saw nothing evaluatable.
   semantic_map_aggregate_fingerprint_sha256: string | null;
+  /** Phase 1b FD13: the deterministic set-tier fingerprint VALUE (null = opt-in off OR set not
+   *  complete/not_applicable) — a completed-set seed can never be reused across changed set
+   *  inputs, and a set-failure seed (no overview injected) keys as null like OFF. Adding this
+   *  field rotates every reuse key once at upgrade (leaf-read precedent — safe direction). */
+  code_set_tier_aggregate_fingerprint_sha256: string | null;
 }
 
 interface AuthoredArtifactReuseProvenance {
@@ -1734,6 +1755,7 @@ function authoredArtifactReuseMatch(args: {
   confirmationProvider: ReconstructConfirmationProvider;
   leafReadAggregateFingerprint?: string | null;
   semanticMapAggregateFingerprint?: string | null;
+  codeSetTierAggregateFingerprint?: string | null;
 }): AuthoredArtifactReuseMatch {
   const match: AuthoredArtifactReuseMatch = {
     session_id: args.sessionId,
@@ -1831,6 +1853,8 @@ function authoredArtifactReuseMatch(args: {
     // every reuse key ONCE at upgrade (F3 — documented, over-rotate is the safe direction).
     semantic_map_aggregate_fingerprint_sha256:
       args.semanticMapAggregateFingerprint ?? null,
+    code_set_tier_aggregate_fingerprint_sha256:
+      args.codeSetTierAggregateFingerprint ?? null,
   };
   // P1-C2-A (R3): the seed gating key must never carry in-epoch LLM output — only the fingerprint
   // VALUE folded above. Fail closed if a future edit serializes a comprehension-artifact instance
@@ -11609,6 +11633,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // W4 §4: the semantic-map stage's per-observation seed projections (set after the stage; prompt
   // text only — the reuse key folds the stage fingerprint, never this instance).
   let semanticMapProjection: ReadonlyMap<string, SemanticMapAnyProjection> | null = null;
+  // Phase 1b deterministic set tier: the bounded overview render for the seed payload (set by
+  // runReconstruct via setCodeSetTierOverview when the set assembly completes; prompt text only).
+  let codeSetTierOverview: unknown = null;
   let leafReadCappedColumns: ReadonlyMap<string, readonly string[]> | null = null;
   const projectObservationsForPrompt = (
     obs: ReconstructSourceObservationsArtifact,
@@ -11661,6 +11688,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
     setSemanticMapProjection(byObservation: ReadonlyMap<string, SemanticMapAnyProjection>): void {
       semanticMapProjection = byObservation;
+    },
+    setCodeSetTierOverview(overview: unknown): void {
+      codeSetTierOverview = overview;
     },
     // Real-LLM cut §2: the production capability PAIR, attached only under the explicit opt-in —
     // absent (default) keeps the stage skipped and the merged wiring cut's off-path untouched.
@@ -12667,6 +12697,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         let out = base;
         if (hasSpreadsheet) out += "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE;
         if (hasCode) out += "\n" + CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE;
+        // Phase 1b (W4 R2-02 discipline): declare the code_set_tier payload field iff present.
+        if (codeSetTierOverview !== null) out += "\n" + CODE_SET_TIER_SEED_PROMPT_NOTE;
         return out;
       };
       let raw: Record<string, unknown>;
@@ -12719,6 +12751,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ...(buildSemanticMapSeedRender(seedObservationIds).length > 0
             ? { semantic_map: buildSemanticMapSeedRender(seedObservationIds) }
             : {}),
+          // Phase 1b: the deterministic set overview (FD11) — present only when the set-tier
+          // assembly completed; absent keeps the payload byte-identical (G1).
+          ...(codeSetTierOverview !== null ? { code_set_tier: codeSetTierOverview } : {}),
           seed_authoring_readiness_ref: input.seedAuthoringReadinessRef,
           seed_authoring_readiness_validation_ref:
             input.seedAuthoringReadinessValidationRef,
@@ -14931,6 +14966,7 @@ async function observeAcceptedFrontierRefs(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsPath: string;
   codeStructureObservation?: boolean;
+  codeSetTierObservation?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
   const observedSourceRefs = new Set(
     args.sourceObservations.observations.map((observation) =>
@@ -14977,7 +15013,9 @@ async function observeAcceptedFrontierRefs(args: {
       observationBatchId:
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
-    }, args.codeStructureObservation === true ? { codeStructureObservation: true } : undefined);
+    }, args.codeStructureObservation === true
+      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}) }
+      : undefined);
     // A null observation (vanished ref) and an unsupported workbook format
     // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
     // un-observable by the current runtime. Site 2 graceful terminal (design site2 §9): this is a
@@ -15034,6 +15072,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsPath: string;
   codeStructureObservation?: boolean;
+  codeSetTierObservation?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
   const observedSourceRefs = new Set(
     args.sourceObservations.observations.map((observation) =>
@@ -15089,7 +15128,9 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       observationBatchId:
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
-    }, args.codeStructureObservation === true ? { codeStructureObservation: true } : undefined);
+    }, args.codeStructureObservation === true
+      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}) }
+      : undefined);
     // Unsupported workbook formats are un-observable like a vanished ref — no
     // evidence to admit (mirrors the materialize-loop demotion and F1).
     if (!observation || spreadsheetUnsupportedReason(observation)) {
@@ -16125,6 +16166,7 @@ export async function runReconstruct(
     profilesRoot: path.resolve(params.profilesRoot),
     filesystemAllowedRoots,
     ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+    ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
   });
   const targetMaterialProfile =
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
@@ -16942,6 +16984,43 @@ export async function runReconstruct(
   // ALWAYS set — including an empty map (W4 review W4-005): a reused author instance would
   // otherwise leak the PREVIOUS run's projections into a map-absent run (parity violation).
   directiveAuthor.setSemanticMapProjection?.(semanticMapStage.projectionByObservation);
+  // Phase 1b (FD1~FD14, deterministic realization): multi-file code set assembly — pure
+  // deterministic fold over the PERSISTED observations (never the stage's LLM output), gated
+  // strictly on the set-tier opt-in. OFF ⇒ no artifact, no module entry (G1).
+  let codeSetTierAggregateFingerprint: string | null = null;
+  if (params.codeSetTier === true) {
+    const setTierMembers: CodeSetTierMemberInput[] = [];
+    const setTierExcluded: CodeSetTierExcludedRef[] = [];
+    for (const observation of sourceObservations.observations) {
+      if (observation.target_material_kind !== "code") continue;
+      const structural = observation.structural_data as Record<string, unknown>;
+      const inventory = structural.code_structure_inventory;
+      if (inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)) {
+        setTierMembers.push({
+          observation_id: observation.observation_id,
+          source_ref: observation.source_ref,
+          inventory: inventory as CodeStructureInventory,
+        });
+      } else {
+        // Census reason vocabulary reuse (step 6 gf-F5): v1-grammar limit vs missing capture.
+        setTierExcluded.push({
+          observation_id: observation.observation_id,
+          reason: structural.code_structure_unsupported !== undefined
+            ? "code_extraction_unsupported"
+            : "no_code_inventory",
+        });
+      }
+    }
+    const setTier = assembleCodeSetTier({ members: setTierMembers, excluded: setTierExcluded });
+    await writeYamlDocument(
+      path.join(sessionRoot, "comprehension", "code-set-tier.yaml"),
+      { session_id: sessionId, ...setTier },
+    );
+    codeSetTierAggregateFingerprint = setTier.set_tier_aggregate_fingerprint;
+    if (setTier.status === "complete" && setTier.overview_render !== null) {
+      directiveAuthor.setCodeSetTierOverview?.(setTier.overview_render);
+    }
+  }
   const semanticMapCensusRef = semanticMapStage.censusPath;
   const semanticMapSidecarRef = semanticMapStage.sidecarPath;
   const dispatchIncompleteRef = await exists(dispatchIncompleteArtifactPath(sessionRoot))
@@ -16972,6 +17051,7 @@ export async function runReconstruct(
       confirmationProvider,
       leafReadAggregateFingerprint,
       semanticMapAggregateFingerprint,
+      codeSetTierAggregateFingerprint,
     });
   };
   refreshAuthoredArtifactReuseMatch();
@@ -17301,6 +17381,7 @@ export async function runReconstruct(
       sourceObservations,
       sourceObservationsPath: preparationRefs.source_observations,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+      ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
     });
     // Reached this line ⇒ the round observed successfully; drop the context so it cannot be read
     // stale by a later graceful terminal that forgets to set its own.
@@ -18820,6 +18901,7 @@ export async function runReconstruct(
       sourceObservations,
       sourceObservationsPath: preparationRefs.source_observations,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+      ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
     });
     sourceObservationDeltaPath = path.join(
       maturationRoundRoot,

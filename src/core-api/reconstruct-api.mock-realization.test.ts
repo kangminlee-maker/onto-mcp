@@ -414,6 +414,226 @@ describe("reconstruct api mock E2E over a 2-file code fixture (§6-4)", () => {
         path.join(sessionRoot, "comprehension", "semantic-map.yaml"),
       );
       expect(sidecar.observations).toHaveLength(0);
+
+      // Phase 1b G1: without the set-tier opt-in no set artifact may exist (file-absent parity).
+      await expect(
+        fs.access(path.join(sessionRoot, "comprehension", "code-set-tier.yaml")),
+      ).rejects.toThrow();
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  // ─── Phase 1b (deterministic set tier): settings → api → assembly → artifact → reuse key ───
+  // Two files with ONE resolvable NodeNext import (alpha → ./beta-tools.js). The map stage stays
+  // code-dormant (no semantic_map_code); every set fact below is deterministic artifact truth.
+  const SET_TIER_FIXTURE_FILES: Record<string, string> = {
+    "src/alpha-service.ts": [
+      'import { totalBetaWeight } from "./beta-tools.js";',
+      'import { missing } from "./not-in-set.js";',
+      "",
+      "/** Alpha total: sums the fixture weights. */",
+      "export function alphaTotal(): number {",
+      "  return totalBetaWeight({ a: 1, b: 2 }) + (missing ? 1 : 0);",
+      "}",
+      "",
+    ].join("\n"),
+    "src/beta-tools.ts": [
+      "/** Beta weight table keyed by beta name. */",
+      "export type BetaWeights = Record<string, number>;",
+      "",
+      "/** Sum all beta weights. */",
+      "export function totalBetaWeight(weights: BetaWeights): number {",
+      "  return Object.values(weights).reduce((sum, weight) => sum + weight, 0);",
+      "}",
+      "",
+    ].join("\n"),
+  };
+
+  it("assembles the deterministic set tier end-to-end: artifact complete, import resolved, reuse key folds the set fingerprint", async () => {
+    const projectRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "onto-reconstruct-mock-set-tier-"),
+    );
+    tmpRoots.push(projectRoot);
+    for (const [relPath, content] of Object.entries(SET_TIER_FIXTURE_FILES)) {
+      const filePath = path.join(projectRoot, relPath);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, content, "utf8");
+    }
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      JSON.stringify(
+        {
+          schema_version: "settings.json/v3",
+          reconstruct: {
+            execution: {
+              semantic_map_authoring: true,
+              code_structure_inventory: true,
+              semantic_map_code_set_tier: true,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    const previousEnv = {
+      ONTO_LLM_MOCK: process.env.ONTO_LLM_MOCK,
+      ONTO_RUNTIME_WATCHER: process.env.ONTO_RUNTIME_WATCHER,
+      HOME: process.env.HOME,
+    };
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(isolatedHome, { recursive: true });
+    process.env.ONTO_LLM_MOCK = "1";
+    process.env.ONTO_RUNTIME_WATCHER = "0";
+    process.env.HOME = isolatedHome;
+    try {
+      const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+      const result = await api.runReconstruct({
+        projectRoot,
+        targetRefs: Object.keys(SET_TIER_FIXTURE_FILES),
+        sessionRoot: ".onto/reconstruct/mock-e2e-set-tier",
+        intent:
+          "Reconstruct a bounded operational seed for the alpha/beta fixture modules and their dependency structure.",
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+      });
+      expect(result.status).toBe("completed");
+      const sessionRoot = path.dirname(
+        result.artifactRefs.source_observation_lineage_index!,
+      );
+
+      // Capture threading (api → observer): both observations carry the opt-in import list.
+      const observationsArtifact =
+        await readYamlFile<ReconstructSourceObservationsArtifact>(
+          path.join(sessionRoot, "source-observations.yaml"),
+        );
+      const codeObservations = observationsArtifact.observations.filter(
+        (observation) => observation.target_material_kind === "code",
+      );
+      expect(codeObservations).toHaveLength(2);
+      for (const observation of codeObservations) {
+        const inventory = observation.structural_data.code_structure_inventory as {
+          symbol_tiles: { imports?: unknown[] };
+          import_census?: { imports_recorded: number };
+        };
+        expect(Array.isArray(inventory.symbol_tiles.imports)).toBe(true);
+        expect(inventory.import_census).toBeDefined();
+      }
+
+      // Set artifact truth (FD7 adapted — dedicated comprehension/code-set-tier.yaml).
+      const setTier = await readYamlFile<{
+        status: string;
+        realization: string;
+        set_tier_aggregate_fingerprint: string | null;
+        member_observation_ids: string[];
+        excluded_refs: unknown[];
+        relations: Array<{ from: string; to_specifier: string; resolved_in_set: string | null }>;
+        relation_census: { total: number; resolved: number };
+        overview_render: {
+          member_count: number;
+          directories: Array<{ set_path: string; files: Array<{ path: string }> }>;
+          relations: { total: number; exposed: number };
+        } | null;
+      }>(path.join(sessionRoot, "comprehension", "code-set-tier.yaml"));
+      expect(setTier.status).toBe("complete");
+      expect(setTier.realization).toBe("deterministic");
+      expect(setTier.member_observation_ids).toHaveLength(2);
+      expect(setTier.excluded_refs).toHaveLength(0);
+      const resolved = setTier.relations.filter((r) => r.resolved_in_set !== null);
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0]!).toMatchObject({
+        from: "alpha-service.ts",
+        to_specifier: "./beta-tools.js",
+        resolved_in_set: "beta-tools.ts",
+      });
+      expect(setTier.relation_census).toMatchObject({ total: 2, resolved: 1 });
+      expect(setTier.set_tier_aggregate_fingerprint).toMatch(/^[0-9a-f]{64}$/);
+      expect(setTier.overview_render).not.toBeNull();
+      expect(setTier.overview_render!.member_count).toBe(2);
+      // No machine-absolute paths in the render (prompt-portability class, step-7a M-1).
+      expect(JSON.stringify(setTier.overview_render)).not.toContain(projectRoot);
+
+      // FD13 enforcement on the live path: the authored seed's reuse key folds the SAME value.
+      const reuseProvenance = await readYamlFile<{
+        reuse_match?: { code_set_tier_aggregate_fingerprint_sha256?: string | null };
+      }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+      expect(reuseProvenance.reuse_match?.code_set_tier_aggregate_fingerprint_sha256).toBe(
+        setTier.set_tier_aggregate_fingerprint,
+      );
+
+      // The deterministic set tier never wakes the LLM code stage (경계 결정 유지).
+      const census = await readYamlFile<ReconstructSemanticMapCensus>(
+        path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"),
+      );
+      expect(
+        census.by_observation.filter((row) => row.target_material_kind === "code"),
+      ).toHaveLength(0);
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  // FD1: the set tier never activates capture implicitly — set=true ∧ capture=false is a
+  // fail-loud structural error BEFORE any session work.
+  it("rejects semantic_map_code_set_tier without code_structure_inventory (requires_code_structure_inventory)", async () => {
+    const projectRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "onto-reconstruct-mock-set-tier-gate-"),
+    );
+    tmpRoots.push(projectRoot);
+    for (const [relPath, content] of Object.entries(SET_TIER_FIXTURE_FILES)) {
+      const filePath = path.join(projectRoot, relPath);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, content, "utf8");
+    }
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      JSON.stringify(
+        {
+          schema_version: "settings.json/v3",
+          reconstruct: {
+            execution: {
+              semantic_map_authoring: true,
+              semantic_map_code_set_tier: true,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    const previousEnv = {
+      ONTO_LLM_MOCK: process.env.ONTO_LLM_MOCK,
+      ONTO_RUNTIME_WATCHER: process.env.ONTO_RUNTIME_WATCHER,
+      HOME: process.env.HOME,
+    };
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(isolatedHome, { recursive: true });
+    process.env.ONTO_LLM_MOCK = "1";
+    process.env.ONTO_RUNTIME_WATCHER = "0";
+    process.env.HOME = isolatedHome;
+    try {
+      const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+      await expect(
+        api.runReconstruct({
+          projectRoot,
+          targetRefs: Object.keys(SET_TIER_FIXTURE_FILES),
+          sessionRoot: ".onto/reconstruct/mock-e2e-set-tier-gate",
+          intent: "Must fail loud before any session work.",
+          semanticAuthorRealization: "direct_call",
+          confirmationProviderRealization: "direct_call",
+        }),
+      ).rejects.toThrow(/requires_code_structure_inventory/);
     } finally {
       for (const [key, value] of Object.entries(previousEnv)) {
         if (value === undefined) delete process.env[key];
