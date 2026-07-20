@@ -113,3 +113,77 @@ describe("projectCodeInventoryForPrompt — bounded prompt projection (size axis
     expect(r.sections).toContainEqual({ section: "symbol_tiles.spans", kept: 1, total: 3 });
   });
 });
+
+// ─── Phase 1b FD4: demotion order hierarchy → imports → spans ───
+describe("projectCodeInventoryForPrompt — imports demotion step (FD4)", () => {
+  const span = (line_start: number, line_end: number): CodeSymbolSpan => ({
+    line_start,
+    line_end,
+    kind: "function_decl",
+    symbol_names: [`sym${line_start}`],
+    depth: 1,
+    doc_first_line: null,
+    signature_line: `export function sym${line_start}(): void {`,
+  });
+  const inventoryWithImports = (spanCount: number, importCount: number) => ({
+    schema_version: "1" as const,
+    language: "typescript" as const,
+    line_count: spanCount * 10,
+    content_sha256: "c0de",
+    extractor_logic_sha256: "10g1c",
+    symbol_tiles: {
+      spans: Array.from({ length: spanCount }, (_, i) => span(i * 10 + 1, i * 10 + 10)),
+      hierarchy: [{ key: "h", kind: "file", symbol_name: null, child_keys: [] }],
+      root_key: `1-${spanCount * 10}`,
+      imports: Array.from({ length: importCount }, (_, i) => ({
+        to_specifier: `./module-${i}.js`,
+        resolved_in_set: null,
+      })),
+    },
+  });
+
+  it("keeps imports when dropping hierarchy alone fits the budget", () => {
+    const inventory = inventoryWithImports(4, 3);
+    const budget = JSON.stringify(
+      { ...inventory, symbol_tiles: { ...inventory.symbol_tiles, hierarchy: [] } },
+      null,
+      2,
+    ).length;
+    const projected = projectCodeInventoryForPrompt(inventory as never, budget);
+    expect(projected.truncated).toBe(true);
+    expect(projected.inventory.symbol_tiles.imports).toHaveLength(3);
+    expect(projected.sections.map((s) => s.section)).toEqual(["symbol_tiles.hierarchy"]);
+  });
+
+  it("drops imports BEFORE spans and records the section (demotion order)", () => {
+    const inventory = inventoryWithImports(4, 40);
+    // Budget below the hierarchy-free-with-imports size but above spans-only size.
+    const withImports = JSON.stringify(
+      { ...inventory, symbol_tiles: { ...inventory.symbol_tiles, hierarchy: [] } },
+      null,
+      2,
+    ).length;
+    const spansOnly = JSON.stringify(
+      { ...inventory, symbol_tiles: { spans: inventory.symbol_tiles.spans, hierarchy: [], root_key: inventory.symbol_tiles.root_key } },
+      null,
+      2,
+    ).length;
+    const budget = Math.floor((withImports + spansOnly) / 2);
+    expect(spansOnly).toBeLessThan(budget); // fixture validity — spans survive whole
+    const projected = projectCodeInventoryForPrompt(inventory as never, budget);
+    expect(projected.truncated).toBe(true);
+    expect(projected.inventory.symbol_tiles).not.toHaveProperty("imports");
+    expect(projected.inventory.symbol_tiles.spans).toHaveLength(4); // spans intact
+    const sections = Object.fromEntries(projected.sections.map((s) => [s.section, s]));
+    expect(sections["symbol_tiles.imports"]).toEqual({ section: "symbol_tiles.imports", kept: 0, total: 40 });
+  });
+
+  it("no-imports inventory over budget behaves exactly as before (regression pin)", () => {
+    const inventory = inventoryWithImports(50, 0);
+    const bare = { ...inventory, symbol_tiles: { spans: inventory.symbol_tiles.spans, hierarchy: inventory.symbol_tiles.hierarchy, root_key: inventory.symbol_tiles.root_key } };
+    const projected = projectCodeInventoryForPrompt(bare as never, 2_000);
+    expect(projected.truncated).toBe(true);
+    expect(projected.inventory.symbol_tiles.spans.length).toBeLessThan(50);
+    expect(projected.inventory.symbol_tiles.spans.length).toBeGreaterThan(0);
+  });
+});

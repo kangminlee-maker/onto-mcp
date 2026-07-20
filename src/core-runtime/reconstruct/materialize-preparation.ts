@@ -47,6 +47,9 @@ export interface MaterializeReconstructPreparationArtifactsParams {
    *  FILE observations additionally carry the deterministic structure inventory. Set from
    *  reconstruct.execution.code_structure_inventory OR semantic_map_code. Absent = off. */
   codeStructureObservation?: boolean;
+  /** Phase 1b FD4 (set-tier opt-in, requires codeStructureObservation): code FILE observations
+   *  additionally carry import specifiers + honesty census in the inventory. Absent = off. */
+  codeSetTierObservation?: boolean;
 }
 
 const CONCRETE_TARGET_MATERIAL_KINDS = new Set<TargetMaterialKind>([
@@ -456,7 +459,7 @@ export async function buildReconstructSourceObservation(
   // additionally carries the deterministic per-position structure inventory
   // (or an explicit unsupported reason) in structural_data. Absent/false ⇒
   // byte-identical to the pre-extension generic observation (G-OFF).
-  options?: { isRuntimeTargetSource?: boolean; codeStructureObservation?: boolean },
+  options?: { isRuntimeTargetSource?: boolean; codeStructureObservation?: boolean; codeSetTierObservation?: boolean },
 ): Promise<ReconstructSourceObservation | null> {
   if (!detection.exists || !isConcreteTargetMaterialKind(detection.kind)) {
     return null;
@@ -509,7 +512,11 @@ export async function buildReconstructSourceObservation(
       text = null; // TOCTOU vanish — the generic observation still stands; no inventory.
     }
     if (text !== null) {
-      const structure = await observeCodeStructure({ ref: detection.ref, text });
+      const structure = await observeCodeStructure({
+        ref: detection.ref,
+        text,
+        ...(options?.codeSetTierObservation === true ? { captureImports: true } : {}),
+      });
       codeStructural =
         structure.status === "ok"
           ? { code_structure_inventory: structure.inventory }
@@ -823,6 +830,7 @@ export async function materializeReconstructPreparationArtifacts(
     const observation = await buildReconstructSourceObservation(refDetection, undefined, {
       isRuntimeTargetSource: true,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+      ...(params.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
     });
     if (observation) {
       const unsupportedReason = spreadsheetUnsupportedReason(observation);

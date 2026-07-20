@@ -573,6 +573,42 @@ async function directoryExists(directoryPath: string): Promise<boolean> {
   }
 }
 
+/** The three code-observation opt-ins as one projection (경계 결정 2026-07-20 + Phase 1b FD1).
+ *  - capture (codeStructureObservation) = code_structure_inventory OR semantic_map_code —
+ *    the LLM map folds from the captured inventory, so the map opt-in implies capture.
+ *  - semanticMapCode = the LLM map stage gate (DD7), never capture.
+ *  - codeSetTier = semantic_map_code_set_tier; REQUIRES capture (fail-loud
+ *    `requires_code_structure_inventory` — never implicit activation, FD1). */
+function resolveCodeObservationOptIns(settings: {
+  reconstruct?: {
+    execution?: {
+      code_structure_inventory?: boolean;
+      semantic_map_code?: boolean;
+      semantic_map_code_set_tier?: boolean;
+    };
+  };
+}): {
+  codeStructureObservation: boolean;
+  semanticMapCode: boolean;
+  codeSetTier: boolean;
+} {
+  const execution = settings.reconstruct?.execution;
+  const codeStructureObservation =
+    execution?.code_structure_inventory === true ||
+    execution?.semantic_map_code === true;
+  const codeSetTier = execution?.semantic_map_code_set_tier === true;
+  if (codeSetTier && !codeStructureObservation) {
+    throw new Error(
+      "requires_code_structure_inventory: reconstruct.execution.semantic_map_code_set_tier=true needs the code structure inventory captured — set reconstruct.execution.code_structure_inventory=true (or semantic_map_code=true). The set tier never activates capture implicitly (Phase 1b FD1).",
+    );
+  }
+  return {
+    codeStructureObservation,
+    semanticMapCode: execution?.semantic_map_code === true,
+    codeSetTier,
+  };
+}
+
 function resolveFromBase(basePath: string, maybeRelativePath: string): string {
   return path.isAbsolute(maybeRelativePath)
     ? path.resolve(maybeRelativePath)
@@ -1038,15 +1074,12 @@ export function createOntoReconstructCoreApi(
       );
       // Inventory capture opt-in (design 20260718 DD4 + 경계 결정 2026-07-20): pure settings
       // projection — the supported-model gate stays a live-execution-boundary concern
-      // (INV-MODEL-1 unchanged). Capture = code_structure_inventory OR semantic_map_code (the
-      // map stage folds from the captured inventory, so the map opt-in implies capture).
+      // (INV-MODEL-1 unchanged).
       const prepareSettings = await resolveSettingsChain(
         ontoHome ?? projectRoot,
         projectRoot,
       );
-      const codeStructureObservation =
-        prepareSettings.reconstruct?.execution?.code_structure_inventory === true ||
-        prepareSettings.reconstruct?.execution?.semantic_map_code === true;
+      const prepareOptIns = resolveCodeObservationOptIns(prepareSettings);
       const preparationRefs = await materializeReconstructPreparationArtifacts({
         sessionRoot,
         targetRefs,
@@ -1054,7 +1087,8 @@ export function createOntoReconstructCoreApi(
         filesystemAllowedRoots:
           request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
           [projectRoot],
-        ...(codeStructureObservation ? { codeStructureObservation: true } : {}),
+        ...(prepareOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
+        ...(prepareOptIns.codeSetTier ? { codeSetTierObservation: true } : {}),
       });
       const targetMaterialProfileValidationPath = path.join(
         sessionRoot,
@@ -1134,6 +1168,9 @@ export function createOntoReconstructCoreApi(
       // provider, reintroducing the "believe X, run Y" failure the override
       // contract forbids. Reject at the handler, before any dispatch.
       const settings = applyReconstructLlmOverride(baseSettings, llmOverride);
+      // FD1 (Phase 1b): resolve the three code opt-ins ONCE — the shared resolver enforces the
+      // set-tier ∧ capture precondition fail-loud before any session work.
+      const runOptIns = resolveCodeObservationOptIns(settings);
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1580,16 +1617,12 @@ export function createOntoReconstructCoreApi(
             // 설계 B: settings가 유일 권위(INV-CFG-1) — 기본 OFF, 완성값은
             // settings chain이 채운다.
             dispatchBreaker: dispatchBreakerSettings,
-            // Capture (codeStructureObservation) and the LLM map stage (semanticMapCode) are
-            // gated separately (경계 결정 2026-07-20): inventory-only runs capture without the
-            // stage; the map opt-in implies capture because the stage folds from the inventory.
-            ...(settings.reconstruct?.execution?.code_structure_inventory === true ||
-            settings.reconstruct?.execution?.semantic_map_code === true
-              ? { codeStructureObservation: true }
-              : {}),
-            ...(settings.reconstruct?.execution?.semantic_map_code === true
-              ? { semanticMapCode: true }
-              : {}),
+            // Capture (codeStructureObservation), the LLM map stage (semanticMapCode), and the
+            // deterministic set tier (codeSetTier) are gated separately (경계 결정 2026-07-20 +
+            // Phase 1b FD1); the shared resolver enforces the set∧capture precondition fail-loud.
+            ...(runOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
+            ...(runOptIns.semanticMapCode ? { semanticMapCode: true } : {}),
+            ...(runOptIns.codeSetTier ? { codeSetTier: true } : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
                   dispatchFallback:

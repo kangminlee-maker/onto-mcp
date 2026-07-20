@@ -54,6 +54,32 @@ export interface CodeHierarchyNode {
   child_keys: string[];
 }
 
+/** One observed import occurrence (Phase 1b FD4 — set-tier opt-in only). `from` is the
+ *  observation itself (a set-relative path is definable only at set assembly), so the record
+ *  carries the specifier alone; `resolved_in_set` is null at observation time by contract —
+ *  the set assembler never mutates these records, it derives SetImportRelation rows anew.
+ *  An over-bound specifier is preserved UNRESOLVABLE (sol→fable M-10): bounded text + original
+ *  length + stable hash, never a silently truncated-then-resolved path. */
+export interface ObservedCodeImport {
+  to_specifier: string;
+  resolved_in_set: null;
+  specifier_truncated?: true;
+  original_length?: number;
+  original_sha256?: string;
+}
+
+/** Extraction-honesty census (FD4): every import-shaped AST node the extractor SAW is accounted
+ *  for — recorded, deduplicated, or omitted with a reason. Never conflate "none seen" with
+ *  "extraction failed". Invariant: import_nodes_seen occurrences partition into
+ *  imports_recorded + duplicates_observed + omitted (per-specifier-occurrence accounting). */
+export interface CodeImportInventoryCensus {
+  import_nodes_seen: number;
+  imports_recorded: number;
+  duplicates_observed: number;
+  omitted: number;
+  omission_reasons: Record<string, number>;
+}
+
 export interface CodeStructureInventory {
   schema_version: typeof CODE_STRUCTURE_SCHEMA_VERSION;
   language: CodeStructureLanguage;
@@ -64,7 +90,12 @@ export interface CodeStructureInventory {
     spans: CodeSymbolSpan[];
     hierarchy: CodeHierarchyNode[];
     root_key: string;
+    /** Present only under the set-tier opt-in (captureImports) — absent keeps the inventory
+     *  byte-identical to the pre-1b shape (G1). */
+    imports?: ObservedCodeImport[];
   };
+  /** Present iff symbol_tiles.imports is present (one opt-in, one shape). */
+  import_census?: CodeImportInventoryCensus;
 }
 
 export type CodeStructureObservationResult =
@@ -349,6 +380,114 @@ function extractTree(language: CodeStructureLanguage, root: SyntaxNode, lineCoun
   return { spans, hierarchy, rootKey };
 }
 
+// ── import extraction (Phase 1b FD4 — deterministic, AST-field-based, never signature_line) ────
+/** Strip one layer of matched string quotes from a TS/JS module source literal. */
+function unquote(text: string): string {
+  const first = text[0];
+  const last = text[text.length - 1];
+  if (text.length >= 2 && (first === '"' || first === "'" || first === "`") && last === first) {
+    return text.slice(1, -1);
+  }
+  return text;
+}
+
+function importRecordOf(rawSpecifier: string): ObservedCodeImport {
+  if (rawSpecifier.length <= CODE_STRUCTURE_LINE_BOUND) {
+    return { to_specifier: rawSpecifier, resolved_in_set: null };
+  }
+  return {
+    to_specifier: `${rawSpecifier.slice(0, CODE_STRUCTURE_LINE_BOUND)}…`,
+    resolved_in_set: null,
+    specifier_truncated: true,
+    original_length: rawSpecifier.length,
+    original_sha256: createHash("sha256").update(rawSpecifier).digest("hex"),
+  };
+}
+
+/** Walk the whole tree and extract import specifiers from AST FIELDS (DD05: signature_line
+ *  re-parsing is contractually banned). One record per specifier occurrence; a multi-name
+ *  Python `import a, b` yields one record per name. Document order; first occurrence wins,
+ *  later identical specifiers count as duplicates. */
+function extractImports(
+  language: CodeStructureLanguage,
+  root: SyntaxNode,
+): { imports: ObservedCodeImport[]; census: CodeImportInventoryCensus } {
+  const imports: ObservedCodeImport[] = [];
+  const seen = new Set<string>();
+  const census: CodeImportInventoryCensus = {
+    import_nodes_seen: 0,
+    imports_recorded: 0,
+    duplicates_observed: 0,
+    omitted: 0,
+    omission_reasons: {},
+  };
+  const omit = (reason: string): void => {
+    census.omitted += 1;
+    census.omission_reasons[reason] = (census.omission_reasons[reason] ?? 0) + 1;
+  };
+  const admit = (rawSpecifier: string): void => {
+    const record = importRecordOf(rawSpecifier);
+    const identity = record.specifier_truncated
+      ? `t:${record.original_sha256}`
+      : `s:${record.to_specifier}`;
+    if (seen.has(identity)) {
+      census.duplicates_observed += 1;
+      return;
+    }
+    seen.add(identity);
+    imports.push(record);
+    census.imports_recorded += 1;
+  };
+  const visit = (node: SyntaxNode): void => {
+    if (language === "python") {
+      if (node.type === "import_from_statement") {
+        census.import_nodes_seen += 1;
+        const moduleName = node.childForFieldName?.("module_name");
+        if (moduleName) admit(moduleName.text);
+        else omit("no_module_name_field");
+      } else if (node.type === "future_import_statement") {
+        // `from __future__ import X` — the grammar has no module_name field here; the module is
+        // the fixed __future__ (the imported names are feature flags, not module specifiers).
+        census.import_nodes_seen += 1;
+        admit("__future__");
+      } else if (node.type === "import_statement") {
+        const names = node.namedChildren.filter(
+          (c): c is SyntaxNode => c !== null && (c.type === "dotted_name" || c.type === "aliased_import"),
+        );
+        if (names.length === 0) {
+          census.import_nodes_seen += 1;
+          omit("no_import_name");
+        }
+        for (const name of names) {
+          census.import_nodes_seen += 1;
+          const target = name.type === "aliased_import" ? name.childForFieldName?.("name") : name;
+          if (target) admit(target.text);
+          else omit("no_import_name");
+        }
+      }
+    } else {
+      if (node.type === "import_statement") {
+        census.import_nodes_seen += 1;
+        const source = node.childForFieldName?.("source");
+        if (source) admit(unquote(source.text));
+        else omit("no_source_field");
+      } else if (node.type === "export_statement") {
+        // Re-export (`export … from "x"`) is an import occurrence ONLY when a source exists.
+        const source = node.childForFieldName?.("source");
+        if (source) {
+          census.import_nodes_seen += 1;
+          admit(unquote(source.text));
+        }
+      }
+    }
+    for (const child of node.namedChildren) {
+      if (child) visit(child);
+    }
+  };
+  visit(root);
+  return { imports, census };
+}
+
 // ── extractor logic digest (tautological rotation — DD5) ───────────────────────────────────────
 function extractorSourceDigest(): string {
   return createHash("sha256")
@@ -356,6 +495,12 @@ function extractorSourceDigest(): string {
     .update(extractTree.toString())
     .update(mapKind.toString())
     .update(docFirstLineOf.toString())
+    // Phase 1b FD4: the import extractor is part of the observation logic — folding it here
+    // rotates extractor_logic_sha256 once (the intended one-time rotation; G-SEM freeze lifted
+    // 2026-07-20 after live-cycle closure).
+    .update(extractImports.toString())
+    .update(importRecordOf.toString())
+    .update(unquote.toString())
     .update(JSON.stringify({ TS_KIND, PY_KIND, CONTAINER_KINDS: [...CONTAINER_KINDS].sort(), LANGUAGE_BY_EXTENSION, bound: CODE_STRUCTURE_LINE_BOUND }))
     .digest("hex");
 }
@@ -370,6 +515,9 @@ export function codeStructureLanguageForExtension(ext: string): CodeStructureLan
 export async function observeCodeStructure(args: {
   ref: string;
   text: string;
+  /** Phase 1b FD4 (set-tier opt-in only): also extract import specifiers + honesty census.
+   *  Absent/false keeps the inventory byte-identical to the pre-1b shape. */
+  captureImports?: boolean;
 }): Promise<CodeStructureObservationResult> {
   const ext = path.extname(args.ref);
   const language = codeStructureLanguageForExtension(ext);
@@ -390,6 +538,9 @@ export async function observeCodeStructure(args: {
     try {
       const lineCount = args.text.length === 0 ? 0 : args.text.split(/\r?\n/).length;
       const { spans, hierarchy, rootKey } = extractTree(language, tree.rootNode, lineCount);
+      const imported = args.captureImports === true
+        ? extractImports(language, tree.rootNode)
+        : null;
       return {
         status: "ok",
         inventory: {
@@ -401,7 +552,13 @@ export async function observeCodeStructure(args: {
             .update(extractorSourceDigest())
             .update(`|grammar:${language}:${wasmSha256}`)
             .digest("hex"),
-          symbol_tiles: { spans, hierarchy, root_key: rootKey },
+          symbol_tiles: {
+            spans,
+            hierarchy,
+            root_key: rootKey,
+            ...(imported ? { imports: imported.imports } : {}),
+          },
+          ...(imported ? { import_census: imported.census } : {}),
         },
       };
     } finally {

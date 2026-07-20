@@ -105,3 +105,98 @@ describe("code-structure-observer", () => {
     expect(codeStructureLanguageForExtension(".ts")).toBe("typescript");
   });
 });
+
+// ─── Phase 1b FD4: opt-in import extraction (design 20260720 v3; impl plan 단계 C) ───
+describe("code-structure-observer import capture (FD4, set-tier opt-in)", () => {
+  const observe = (ref: string, text: string, captureImports?: boolean) =>
+    observeCodeStructure(captureImports === undefined ? { ref, text } : { ref, text, captureImports });
+
+  it("opt-in OFF keeps the inventory byte-identical (no imports/import_census keys)", async () => {
+    const text = 'import { a } from "./alpha.js";\nexport const x = a;\n';
+    const off = await observe("g1.ts", text);
+    const offDefault = await observe("g1.ts", text, false);
+    if (off.status !== "ok" || offDefault.status !== "ok") throw new Error("expected ok");
+    expect(JSON.stringify(off.inventory)).toBe(JSON.stringify(offDefault.inventory));
+    expect(off.inventory.symbol_tiles).not.toHaveProperty("imports");
+    expect(off.inventory).not.toHaveProperty("import_census");
+  });
+
+  it("extracts TS import + re-export specifiers from AST fields, deduplicates, and accounts honestly", async () => {
+    const text = [
+      'import { a } from "./alpha.js";',
+      'import type { B } from "../beta.js";',
+      'import { a as a2 } from "./alpha.js";', // duplicate specifier
+      'export { c } from "./gamma.js";',       // re-export = import occurrence
+      'export const local = 1;',               // export WITHOUT source — not an import
+      'import "bare-package";',
+    ].join("\n") + "\n";
+    const result = await observe("imports.ts", text, true);
+    if (result.status !== "ok") throw new Error("expected ok");
+    const imports = result.inventory.symbol_tiles.imports!;
+    const census = result.inventory.import_census!;
+    expect(imports.map((r) => r.to_specifier)).toEqual([
+      "./alpha.js",
+      "../beta.js",
+      "./gamma.js",
+      "bare-package",
+    ]);
+    for (const record of imports) expect(record.resolved_in_set).toBeNull();
+    expect(census.import_nodes_seen).toBe(5);
+    expect(census.imports_recorded).toBe(4);
+    expect(census.duplicates_observed).toBe(1);
+    expect(census.omitted).toBe(0);
+    // Honesty invariant: every seen occurrence is recorded, a duplicate, or omitted.
+    expect(census.import_nodes_seen).toBe(
+      census.imports_recorded + census.duplicates_observed + census.omitted,
+    );
+  });
+
+  it("extracts Python import forms (from-relative, dotted, multi-name, future)", async () => {
+    const text = [
+      "from .utils import helper",
+      "from ..pkg.mod import thing",
+      "import os, sys",
+      "import numpy as np",
+      "from __future__ import annotations",
+      "",
+      "X = 1",
+    ].join("\n");
+    const result = await observe("imports.py", text, true);
+    if (result.status !== "ok") throw new Error("expected ok");
+    const imports = result.inventory.symbol_tiles.imports!;
+    expect(imports.map((r) => r.to_specifier)).toEqual([
+      ".utils",
+      "..pkg.mod",
+      "os",
+      "sys",
+      "numpy",
+      "__future__",
+    ]);
+    const census = result.inventory.import_census!;
+    expect(census.import_nodes_seen).toBe(
+      census.imports_recorded + census.duplicates_observed + census.omitted,
+    );
+  });
+
+  it("preserves an over-bound specifier as truncated-unresolvable (M-10), never silently cut", async () => {
+    const longSpecifier = "./" + "x".repeat(CODE_STRUCTURE_LINE_BOUND + 20);
+    const text = `import { a } from "${longSpecifier}";\n`;
+    const result = await observe("long.ts", text, true);
+    if (result.status !== "ok") throw new Error("expected ok");
+    const record = result.inventory.symbol_tiles.imports![0]!;
+    expect(record.specifier_truncated).toBe(true);
+    expect(record.original_length).toBe(longSpecifier.length);
+    expect(record.original_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(record.to_specifier.length).toBeLessThanOrEqual(CODE_STRUCTURE_LINE_BOUND + 1);
+  });
+
+  it("capture rotates extractor_logic_sha256 identically ON and OFF (one logic identity)", async () => {
+    const text = 'import { a } from "./alpha.js";\nexport const x = a;\n';
+    const on = await observe("rot.ts", text, true);
+    const off = await observe("rot.ts", text);
+    if (on.status !== "ok" || off.status !== "ok") throw new Error("expected ok");
+    // The digest folds SOURCE logic, not the runtime option — ON/OFF observations of the same
+    // bytes share one extractor identity (the set fingerprint separates capture presence).
+    expect(on.inventory.extractor_logic_sha256).toBe(off.inventory.extractor_logic_sha256);
+  });
+});
