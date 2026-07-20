@@ -1054,9 +1054,16 @@ export interface RunReconstructParams {
   dispatchBreaker?: DispatchBreakerPolicy;
   dispatchFallback?: DispatchFallbackSettings;
   dispatchFallbackRuntime?: ReconstructDispatchFallbackRuntime;
-  /** reconstruct.execution.semantic_map_code opt-in (multi-artifact design 20260718 DD4/DD7):
-   *  code FILE observations carry the deterministic structure inventory. Absent = off. */
+  /** Inventory CAPTURE opt-in (design 20260718 DD4 + 경계 결정 2026-07-20): code FILE
+   *  observations carry the deterministic structure inventory. Set from
+   *  reconstruct.execution.code_structure_inventory OR semantic_map_code (the map stage folds
+   *  from the captured inventory, so the map opt-in implies capture). Absent = off. */
   codeStructureObservation?: boolean;
+  /** Semantic-map code STAGE opt-in (DD7): set from reconstruct.execution.semantic_map_code
+   *  only. Gates code-kind eligibility of the LLM map stage — never capture. Absent = off,
+   *  so an inventory-only run (codeStructureObservation without this) keeps the stage
+   *  spreadsheet-only. */
+  semanticMapCode?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -16356,11 +16363,13 @@ export async function runReconstruct(
   const semanticMapVerifyModelIdentity =
     directiveAuthor.reuseModelIdentity ?? "unspecified";
   const semanticMapCapability = resolveSemanticMapCapability(directiveAuthor);
-  // Step 6 (DD7): 유효 code kind = settings 옵트인(semantic_map_code → params.codeStructureObservation)
+  // Step 6 (DD7): 유효 code kind = settings 옵트인(semantic_map_code → params.semanticMapCode)
   // ∩ author 광고 — the SAME predicate feeds the stage, the resume partition, and the fallback
-  // partition, so the three can never disagree about the eligible observation set.
+  // partition, so the three can never disagree about the eligible observation set. NOTE this is
+  // the STAGE gate, distinct from capture (params.codeStructureObservation): an inventory-only
+  // run captures structure but never routes code into the LLM map stage (경계 결정 2026-07-20).
   const semanticMapCodeEligible =
-    params.codeStructureObservation === true &&
+    params.semanticMapCode === true &&
     semanticMapCapability === "present" &&
     resolveSemanticMapKinds(directiveAuthor).includes("code");
   const semanticMapRecoveryContext = await prepareSemanticMapResumeContext({
@@ -16445,7 +16454,7 @@ export async function runReconstruct(
         ? { dispatchBreaker: params.dispatchBreaker }
         : {}),
       preImageBase: semanticMapPreImageBase,
-      codeKindOptIn: params.codeStructureObservation === true,
+      codeKindOptIn: params.semanticMapCode === true,
       codePreImageBase: semanticMapCodePreImageBase,
       verifyModelIdentity: semanticMapVerifyModelIdentity,
       recoveryContext: semanticMapRecoveryContext,
@@ -16890,7 +16899,7 @@ export async function runReconstruct(
         config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
         dispatchBreaker: fallbackBreaker,
         preImageBase: fallbackPreImageBase,
-        codeKindOptIn: params.codeStructureObservation === true,
+        codeKindOptIn: params.semanticMapCode === true,
         codePreImageBase: fallbackCodePreImageBase,
         verifyModelIdentity:
           fallbackRuntime.fallback.verify.public_descriptor.descriptor_id,

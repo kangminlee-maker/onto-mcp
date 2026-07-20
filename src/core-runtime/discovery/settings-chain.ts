@@ -488,6 +488,12 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // Multi-artifact code path opt-in (design 20260718 DD7 / owner O-1): absent = off — the code
   // structure observer + semantic-map code routing stay dormant, spreadsheet path byte-identical.
   "semantic_map_code",
+  // Deterministic code inventory opt-in (실험2 경계 결정, owner 2026-07-20): capture the code
+  // structure inventory WITHOUT the LLM semantic-map code stage. Capture runs when EITHER this
+  // key or semantic_map_code is true (the map folds from the captured inventory, so the map
+  // opt-in implies capture); the map stage itself stays gated by semantic_map_code alone.
+  // Absent = off — both keys absent keeps every path byte-identical.
+  "code_structure_inventory",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

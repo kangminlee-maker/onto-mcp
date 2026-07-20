@@ -43,8 +43,9 @@ export interface MaterializeReconstructPreparationArtifactsParams {
   targetRefs: string[];
   profilesRoot: string;
   filesystemAllowedRoots?: string[];
-  /** reconstruct.execution.semantic_map_code opt-in (design 20260718 DD4/DD7): when true, code
-   *  FILE observations additionally carry the deterministic structure inventory. Absent = off. */
+  /** Inventory capture opt-in (design 20260718 DD4 + 경계 결정 2026-07-20): when true, code
+   *  FILE observations additionally carry the deterministic structure inventory. Set from
+   *  reconstruct.execution.code_structure_inventory OR semantic_map_code. Absent = off. */
   codeStructureObservation?: boolean;
 }
 
@@ -451,7 +452,7 @@ export async function buildReconstructSourceObservation(
   // material_claim/public_output tiers by provenance without leaking to
   // non-target sources.
   // codeStructureObservation (multi-artifact design 20260718 DD4, opt-in
-  // reconstruct.execution.semantic_map_code): when true, a code-kind FILE ref
+  // reconstruct.execution.code_structure_inventory OR semantic_map_code): when true, a code-kind FILE ref
   // additionally carries the deterministic per-position structure inventory
   // (or an explicit unsupported reason) in structural_data. Absent/false ⇒
   // byte-identical to the pre-extension generic observation (G-OFF).
