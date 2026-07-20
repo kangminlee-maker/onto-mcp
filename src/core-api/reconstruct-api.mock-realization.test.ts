@@ -19,6 +19,7 @@ import type {
   ReconstructSemanticMapCensus,
   ReconstructSemanticMapSidecar,
   ReconstructSourceObservationLineageCensus,
+  ReconstructSourceObservationsArtifact,
 } from "../core-runtime/reconstruct/artifact-types.js";
 import { WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "../core-runtime/reconstruct/artifact-types.js";
 import type { CodeSemanticSeedProjection } from "../core-runtime/reconstruct/comprehension-semantic-map-code.js";
@@ -319,6 +320,100 @@ describe("reconstruct api mock E2E over a 2-file code fixture (§6-4)", () => {
         }
       }
       expect(renders).toMatchSnapshot();
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  // 경계 결정 2026-07-20 (인벤토리 독립화): `code_structure_inventory` alone captures the
+  // deterministic inventory WITHOUT routing code into the LLM map stage. Decoupling falsifier:
+  // under the old single-flag wiring the capture opt-in also made code observations
+  // stage-eligible, so any census/sidecar code row appearing here fails the test.
+  it("captures the inventory without the map stage under code_structure_inventory alone", async () => {
+    const projectRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "onto-reconstruct-mock-code-inventory-only-"),
+    );
+    tmpRoots.push(projectRoot);
+    for (const [relPath, content] of Object.entries(CODE_FIXTURE_FILES)) {
+      const filePath = path.join(projectRoot, relPath);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, content, "utf8");
+    }
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      JSON.stringify(
+        {
+          schema_version: "settings.json/v3",
+          reconstruct: {
+            // semantic_map_code ABSENT — the stage gate must stay off while capture runs.
+            execution: {
+              semantic_map_authoring: true,
+              code_structure_inventory: true,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    const previousEnv = {
+      ONTO_LLM_MOCK: process.env.ONTO_LLM_MOCK,
+      ONTO_RUNTIME_WATCHER: process.env.ONTO_RUNTIME_WATCHER,
+      HOME: process.env.HOME,
+    };
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(isolatedHome, { recursive: true });
+    process.env.ONTO_LLM_MOCK = "1";
+    process.env.ONTO_RUNTIME_WATCHER = "0";
+    process.env.HOME = isolatedHome;
+    try {
+      const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+      const result = await api.runReconstruct({
+        projectRoot,
+        targetRefs: Object.keys(CODE_FIXTURE_FILES),
+        sessionRoot: ".onto/reconstruct/mock-e2e-code-inventory-only",
+        intent:
+          "Reconstruct a bounded operational seed for the alpha/beta fixture modules: which declarations exist and what purpose each module serves.",
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+      });
+      expect(result.status).toBe("completed");
+      const sessionRoot = path.dirname(
+        result.artifactRefs.source_observation_lineage_index!,
+      );
+
+      // Capture proof (artifact truth): BOTH code observations carry the deterministic
+      // inventory. Cardinality first — an empty subject set would pass the loop vacuously.
+      const observationsArtifact =
+        await readYamlFile<ReconstructSourceObservationsArtifact>(
+          path.join(sessionRoot, "source-observations.yaml"),
+        );
+      const codeObservations = observationsArtifact.observations.filter(
+        (observation) => observation.target_material_kind === "code",
+      );
+      expect(codeObservations).toHaveLength(2);
+      for (const observation of codeObservations) {
+        const inventory = observation.structural_data.code_structure_inventory;
+        expect(inventory).not.toBeNull();
+        expect(typeof inventory).toBe("object");
+      }
+
+      // Stage dormancy: the census partitions ELIGIBLE observations only, and without
+      // semantic_map_code no observation of this code-only target is eligible — any row here
+      // means the capture opt-in leaked into the stage gate.
+      const census = await readYamlFile<ReconstructSemanticMapCensus>(
+        path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"),
+      );
+      expect(census.by_observation).toHaveLength(0);
+      const sidecar = await readYamlFile<ReconstructSemanticMapSidecar>(
+        path.join(sessionRoot, "comprehension", "semantic-map.yaml"),
+      );
+      expect(sidecar.observations).toHaveLength(0);
     } finally {
       for (const [key, value] of Object.entries(previousEnv)) {
         if (value === undefined) delete process.env[key];

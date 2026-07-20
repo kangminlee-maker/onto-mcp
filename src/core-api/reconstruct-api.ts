@@ -1036,13 +1036,16 @@ export function createOntoReconstructCoreApi(
       const targetRefs = request.targetRefs.map((targetRef) =>
         resolveFromBase(projectRoot, targetRef)
       );
-      // semantic_map_code opt-in (design 20260718 DD4/DD7): pure settings projection — the
-      // supported-model gate stays a live-execution-boundary concern (INV-MODEL-1 unchanged).
+      // Inventory capture opt-in (design 20260718 DD4 + 경계 결정 2026-07-20): pure settings
+      // projection — the supported-model gate stays a live-execution-boundary concern
+      // (INV-MODEL-1 unchanged). Capture = code_structure_inventory OR semantic_map_code (the
+      // map stage folds from the captured inventory, so the map opt-in implies capture).
       const prepareSettings = await resolveSettingsChain(
         ontoHome ?? projectRoot,
         projectRoot,
       );
       const codeStructureObservation =
+        prepareSettings.reconstruct?.execution?.code_structure_inventory === true ||
         prepareSettings.reconstruct?.execution?.semantic_map_code === true;
       const preparationRefs = await materializeReconstructPreparationArtifacts({
         sessionRoot,
@@ -1577,8 +1580,15 @@ export function createOntoReconstructCoreApi(
             // 설계 B: settings가 유일 권위(INV-CFG-1) — 기본 OFF, 완성값은
             // settings chain이 채운다.
             dispatchBreaker: dispatchBreakerSettings,
-            ...(settings.reconstruct?.execution?.semantic_map_code === true
+            // Capture (codeStructureObservation) and the LLM map stage (semanticMapCode) are
+            // gated separately (경계 결정 2026-07-20): inventory-only runs capture without the
+            // stage; the map opt-in implies capture because the stage folds from the inventory.
+            ...(settings.reconstruct?.execution?.code_structure_inventory === true ||
+            settings.reconstruct?.execution?.semantic_map_code === true
               ? { codeStructureObservation: true }
+              : {}),
+            ...(settings.reconstruct?.execution?.semantic_map_code === true
+              ? { semanticMapCode: true }
               : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
