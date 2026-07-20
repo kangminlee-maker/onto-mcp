@@ -16987,6 +16987,16 @@ export async function runReconstruct(
   // Phase 1b (FD1~FD14, deterministic realization): multi-file code set assembly — pure
   // deterministic fold over the PERSISTED observations (never the stage's LLM output), gated
   // strictly on the set-tier opt-in. OFF ⇒ no artifact, no module entry (G1).
+  // SCOPE (xver Finding 1 → owner-confirmed 2026-07-20, option A): the set covers the SAME
+  // observation set the semantic-map stage just ran over — the initial target observation
+  // frontier. Deliberate PARITY with the map: both fold HERE, before the exploration/maturation
+  // frontier re-observations (~17376/~18896) reassign sourceObservations, so the seed prompt
+  // carries a map AND a set of the SAME files (mismatched scopes in one prompt are an
+  // LLM-misattribution class, not a convenience issue). A code ref a later round discovers is
+  // captured-with-imports for the SEED projection but is not in the set, exactly as it is not in
+  // the map. Multi-file code TARGETS (the Phase 1b use case = an explicit file list) are all in
+  // this initial set. The "understand a whole codebase" case is served by directory→initial-set
+  // expansion (backlog, impl-plan §adaptation 8), NOT by relocating this fold post-exploration.
   let codeSetTierAggregateFingerprint: string | null = null;
   if (params.codeSetTier === true) {
     const setTierMembers: CodeSetTierMemberInput[] = [];

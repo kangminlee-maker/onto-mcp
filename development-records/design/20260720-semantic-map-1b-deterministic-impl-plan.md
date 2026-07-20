@@ -55,7 +55,33 @@
    "observation 배열 synthetic payload 금지" 준수). status=complete일 때만 주입.
 7. **캡 수치(OD-4 보수 초기값, 전부 set fingerprint fold — 실측 후 조정)**:
    MEMBERS 256 · NODES 128 · DIRECT_CHILDREN 64 · IMPORT_RECORDS 2,048 ·
-   RELATIONS_TOTAL 1,024 · RELATIONS_PER_NODE_RENDER 32 · OVERVIEW_CHAR_BUDGET 20,000.
+   RELATIONS_TOTAL 1,024 · RELATIONS_RENDER_CAP 128 · OVERVIEW_CHAR_BUDGET 20,000 ·
+   FILE_SYMBOLS_RENDER_CAP 8.
+8. **set 조립 스코프 = semantic-map 스테이지와 동일한 관찰 집합** (교차검증 Finding 1 →
+   **owner 확정 2026-07-20: 옵션 A 맵 parity 유지**). 조립은 맵 스테이지 직후(run.ts:16991)에
+   돌아 초기 타깃 관찰 프론티어를 커버하며, exploration/maturation 재관찰(~17376/~18896)이
+   `sourceObservations`를 재할당하기 전이다.
+   - **근거 (실코드 확인)**: comprehension 3스테이지(leaf-read·semantic-map·set-tier) 모두
+     exploration 이전에 초기 집합에서 돈다. 맵과 set이 **같은 스코프**여야 seed 프롬프트가
+     동일 N개 파일의 맵+set을 실어 스코프 불일치(LLM 오귀속 클래스)를 피한다 — parity는
+     편의가 아니라 프롬프트 정합성 속성.
+   - **기각한 옵션 B (set만 exploration 뒤로)**: seed 한 프롬프트에 N개 맵 + N+M개 set이
+     공존해 parity가 깨진다. 깨끗한 B는 맵도 함께 이동해야 하는데 이는 established
+     comprehension-stage 배치를 바꾸는 큰 변경 = 1b 범위 밖, blast radius 큼. 또한 exploration
+     발견은 gap-driven·비결정적·비망라적이라 "코드베이스 구조 이해"의 열등한 경로.
+   - **후속 백로그 (별도 결정)**: "코드베이스 전체 구조 이해"가 요건이 되면 상위 레버는
+     **디렉터리/glob targetRef를 초기 관찰 집합으로 파일별 확장**하는 것 — 현재 디렉터리
+     ref는 인벤토리 없는 단일 관찰이라 set 제외됨(materialize-preparation.ts:503 `stat.isFile()`
+     게이트). 확장이 들어오면 맵·set 둘 다 초기 집합에서 커버 → parity 유지하며 코드베이스
+     케이스 성립. set 조립 위치 이동보다 이 경로가 정합적이다.
+
+## 교차검증 (구현 후, 3-렌즈 독립)
+
+MATERIAL 0. Finding 1(scope, minor) = 위 적응 8로 명시 봉인(동작 변경 없음, owner parity
+확정). nit 2건 무action: overview char budget best-effort(projection 모듈과 동일 disclosed
+approximation 클래스, status는 structural 캡만 결정), 절단 specifier 동일-prefix dedupe
+(양쪽 unresolved-truncated·결정론·무해). off-path byte-parity·fail-closed·wiring 완전성·
+계약 격리(CG-1/CODE dict 무접촉) 전 렌즈 clean.
 
 ## 게이트 매핑 (스코프 내)
 
