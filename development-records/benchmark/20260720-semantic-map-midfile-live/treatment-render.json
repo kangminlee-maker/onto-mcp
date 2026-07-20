@@ -1,0 +1,863 @@
+{
+  "authority": "non_authoritative",
+  "provisional": true,
+  "nodes": [
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1-8556",
+      "summary": "이 모듈은 리뷰 프롬프트 실행 CLI의 전 과정을 담당한다. 실행 계약과 결과·취소·타임아웃·실패·진행 상태·실행기 설정을 정의하고, 렌즈 실행부터 재제출·오류 라우팅·숙의·issue artifact·problem framing·synthesis·continuation·재시도·검증·artifact 기록·CLI 종료까지 오케스트레이션한다.",
+      "boundaries": [
+        {
+          "line": 4981,
+          "before": "렌즈 실행 및 리뷰 실행 상태·오류·재시작 처리를 중심으로 한 실행 오케스트레이션",
+          "after": "렌즈 결과 병합, issue artifact·숙의·problem framing·synthesis 및 continuation 후속 처리",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 8546,
+          "before": "synthesis와 continuation을 포함한 리뷰 프롬프트 실행 함수·CLI 진입 처리",
+          "after": "모듈의 실행 코드가 끝나고 비심볼성 또는 종료 영역으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1-4980",
+      "summary": "리뷰 프롬프트 실행 CLI 모듈로, 실행 계약·결과·취소·타임아웃·실패·진행 상태와 실행기 설정을 정의하고 관련 검증·artifact 처리를 제공한다. 이후 영역에서는 재제출·오류 라우팅·salvage·상태 정규화·manifest 검증·재시작·재시도와 issue-stance, deliberation, synthesis 실행 및 continuation/frontier 병합을 오케스트레이션한다.",
+      "boundaries": [
+        {
+          "line": 1604,
+          "before": "실행 계약·타입·검증·보조 함수 중심의 리뷰 프롬프트 실행 기반",
+          "after": "실패 라우팅·재제출·상태 병합과 deliberation/synthesis 오케스트레이션",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4981-8556",
+      "summary": "이 영역은 리뷰 프롬프트 실행의 후속 처리와 synthesis map-reduce 디스패치를 구현한다. 렌즈 결과를 병합하고 issue artifact·숙의·problem framing·synthesis 경로를 선택하며, 동시성·재시도·실패·검증·중단과 각종 실행 메타데이터 집계를 처리한다. 이어 artifact와 prompt packet을 검증·준비하고 continuation 단위를 실행하며, synthesis 결과와 실패를 기록하고 CLI 진입점과 종료 동작을 제공한다.",
+      "boundaries": [
+        {
+          "line": 4998,
+          "before": "후속 실행 함수 선언이 이어지는 구조",
+          "after": "frontier 경로를 나타내는 타입 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 5004,
+          "before": "타입 선언으로 실행 구조를 정의하는 구간",
+          "after": "설명 주석 블록으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 5011,
+          "before": "설명 주석으로 다음 처리 목적을 소개하는 구간",
+          "after": "후속 리뷰 프롬프트 실행 함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6299,
+          "before": "리뷰 후속 처리 함수 구현이 이어지는 구간",
+          "after": "선언 헤더가 시작되는 구조",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6304,
+          "before": "구조체 멤버 선언을 마무리하는 구간",
+          "after": "새 함수 구현으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 8546,
+          "before": "프롬프트 실행·synthesis 및 CLI 함수 구현",
+          "after": "기타 후속 코드로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1604-4980",
+      "summary": "리뷰 프롬프트 실행 런타임의 넓은 오케스트레이션 영역으로, 실패·재제출·오류 라우팅과 salvage 검증, 실행 결과·상태·degradation·artifact 메타데이터 정규화, context/consumer 행렬과 manifest 검증, 재시작·재시도·타임아웃을 처리한다. 또한 issue-stance·deliberation·synthesis 단위를 실행·검증하고 성공·실패·unavailable 결과를 continuation 및 frontier ledger에 병합한다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:6517-8556",
+      "summary": "Implements review prompt execution and synthesis map-reduce dispatch by loading and validating artifacts, preparing work items and prompt packets, selecting runnable or preserved continuation units, executing with bounded concurrency and fallback handling, validating responses, recording failures or synthesis outputs, and exposing strict CLI entry points. The final region defines the asynchronous CLI launcher, release notice, direct invocation handling, and error exit behavior.",
+      "boundaries": [
+        {
+          "line": 8546,
+          "before": "The main review-execution and CLI delegation logic is complete.",
+          "after": "The file switches to the asynchronous CLI launcher and direct-invocation exit handling.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:6517-8540",
+      "summary": "Implements review prompt execution, including synthesis map-reduce dispatch. It loads and validates artifacts, builds synthesis work items and prompt packets, selects runnable or preserved continuation units, executes with bounded concurrency and fallback handling, validates responses, records failures or writes synthesis outputs, and exposes strict-argument CLI entry points that delegate execution and print the JSON result.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2995-4980",
+      "summary": "리뷰 프롬프트 실행 런타임의 두 하위 영역을 묶는 구조적 영역이다. 전반부는 실행 결과·저하 상태·artifact 및 semantic-quality 증거, digest·context/consumer 행렬·manifest·packet 참조, pre-dispatch 검증, 재시작·실패 기록, 재시도·타임아웃·보완 제출과 중첩 배치 실행을 지원한다. 후반부는 issue-stance·deliberation·synthesis 응답을 실행·검증하고, 성공 결과를 continuation unit으로, 실패 결과를 unit execution result로 frontier ledger에 병합하며 unavailable 대체 결과와 base result 보존을 처리한다.",
+      "boundaries": [
+        {
+          "line": 3471,
+          "before": "리뷰 실행 지원 함수들이 실행 결과와 재시도·중첩 배치 처리까지 다루는 흐름",
+          "after": "상수 선언을 거쳐 이후 함수 기반 실행 보조 로직으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4339,
+          "before": "실행·manifest·재시도·중첩 단계 처리를 포함하는 함수 구현",
+          "after": "다음 실행 단위 영역을 설명하는 주석 블록으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4353,
+          "before": "issue-stance·deliberation·synthesis 실행 지원 함수들",
+          "after": "공통 실행 컨텍스트를 표현하는 선언 헤더와 멤버 속성으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4372,
+          "before": "공통 컨텍스트 선언과 주석 기반 경계",
+          "after": "응답 단위 실행·검증을 수행하는 함수 구현으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:6517-8495",
+      "summary": "The visible region implements the synthesis map-reduce dispatch path: it loads and validates review artifacts, creates synthesis work items and prompt packets, selects runnable versus preserved continuation units, executes synthesis units with bounded concurrency and nested-stage fallback, validates responses, records failures or writes the synthesis ledger and markdown projection, and returns aggregate execution outcomes. The source is truncated before the full failure-handling tail and does not show executeReviewPromptExecution.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1-1603",
+      "summary": "리뷰 프롬프트 실행 CLI 모듈입니다. 실행·취소·타임아웃·출력 계약·실패·진행 상태를 표현하는 타입과 계약을 정의하고, 실행 결과와 메타데이터를 다루는 보조 함수 및 렌즈 완료 장벽 계산·저장, 실행기별 LLM 설정, frontmatter·렌즈·구조화 artifact·출력 검증, 렌즈 집합과 합성 상태 처리를 제공합니다.",
+      "boundaries": [
+        {
+          "line": 193,
+          "before": "암호화·프로세스·파일·설정·아티팩트·LLM 등 외부 의존성을 가져오는 import 영역",
+          "after": "실행 결과와 오류, 취소, 정책을 표현하는 타입 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 288,
+          "before": "실행 관련 타입과 계약을 모아 정의하는 선언 영역",
+          "after": "오류 정규화와 렌즈 실행 완료 장벽 계산·저장을 수행하는 함수 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 490,
+          "before": "기본 실행 보조 함수와 결과 처리 로직",
+          "after": "실행기 설정, 런타임 정책, 출력·frontmatter·artifact 검증 보조 로직",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1160,
+          "before": "렌즈·합성 상태 검증을 수행하는 함수 영역",
+          "after": "후속 실행 결과와 상태를 구성하는 상수·선언 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4981-6516",
+      "summary": "렌즈 실행 후 리뷰를 계속하기 위한 frontier 및 후속 디스패치 흐름을 정의한다. 실행 결과를 scaffold와 ledger에 병합하고 issue artifact, deliberation, problem framing, synthesis 경로를 선택하며, issue-stance 응답의 동시성·재시도·실패·검증·중단 처리를 수행한다. 이어서 숙의와 synthesis 결과 구조를 구성하고 YAML 작업 항목을 검증하며, executor·호출·토큰·반복·artifact·semantic quality·citation audit 메타데이터를 집계하고 중복을 제거한다.",
+      "boundaries": [
+        {
+          "line": 4998,
+          "before": "렌즈 후속 실행을 수행하는 함수 선언",
+          "after": "frontier 경로를 표현하는 타입 별칭 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 5004,
+          "before": "frontier 관련 타입 정의",
+          "after": "후속 실행 목적을 설명하는 주석 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 5011,
+          "before": "설명 주석 블록",
+          "after": "후속 frontier 경로 선택 또는 실행 함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6299,
+          "before": "숙의·synthesis 결과 처리 함수 본문",
+          "after": "결과 메타데이터 집계를 위한 선언 헤더",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6301,
+          "before": "집계 함수 선언 헤더",
+          "after": "집계 대상 메타데이터 멤버 속성",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6303,
+          "before": "집계 대상 메타데이터 멤버 속성",
+          "after": "멤버 정의를 닫는 선언 footer",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6304,
+          "before": "메타데이터 구조 선언 종료",
+          "after": "다음 실행 결과 처리 함수 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2995-4473",
+      "summary": "리뷰 프롬프트 실행을 지원하는 함수들과 실행 흐름을 구현한다. 실행 결과·저하 상태·artifact-generation 및 semantic-quality 증거를 정규화하고, digest·consumer/context 행렬·JSON·manifest·packet 참조를 결정적으로 처리한다. pre-dispatch 검증, context manifest와 생성 패킷 참조 관리, 실행 결과 평탄화와 manifest 기록, 재시작·실패 기록, 프로필별 재시도·타임아웃·보완 제출, 중첩 단계와 배치 시도 처리를 포함한다.",
+      "boundaries": [
+        {
+          "line": 3473,
+          "before": "지원 함수·검증 및 산출물 보조 로직",
+          "after": "컨텍스트 manifest·패킷 참조와 실행 디스패치·결과 처리 로직",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1604-2994",
+      "summary": "리뷰 프롬프트 실행의 실패 처리·재제출·오류 라우팅과 frozen salvage 검증을 지원하고, 이어서 deliberation·synthesis 단위 식별, 실행 결과 및 메타데이터 정규화·기록, 인용 감사, 전체 상태·실패 하위 결과·degradation 경로 계산을 오케스트레이션한다.",
+      "boundaries": [
+        {
+          "line": 2023,
+          "before": "실패·재제출·오류와 frozen violation을 처리하는 보조 로직",
+          "after": "deliberation·synthesis 실행 단위와 결과 정규화·상태 계산을 담당하는 실행 보조 로직",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:490-1603",
+      "summary": "리뷰 프롬프트 실행을 지원하는 타입과 보조 함수들을 모은 영역입니다. 실행기 설정과 런타임 정책을 계산하고, 취소·타임아웃·출력 계약·이슈 아티팩트·controlled-deliberation 오류를 표현·변환합니다. 또한 실행기별 LLM·단위 설정, frontmatter·렌즈 메타데이터·구조화 artifact·출력 크기와 비어 있지 않은 결과를 검증하며 렌즈 집합과 합성 상태를 처리합니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:3473-4473",
+      "summary": "리뷰 실행에서 컨텍스트 매니페스트와 생성 프롬프트 패킷 참조를 관리하고, 실행 단위 결과를 평탄화해 상태·시간·실행기·증거·세션·provenance가 포함된 매니페스트를 기록합니다. 또한 재시작·실패 기록과 단일 디스패치의 프로필별 재시도·타임아웃·보완 제출, 중첩 단계 실행 및 배치 시도 결과 처리를 지원합니다.",
+      "boundaries": [
+        {
+          "line": 4339,
+          "before": "함수 선언들이 실행·재시도 및 중첩 단계 처리를 구성함",
+          "after": "주석 블록이 다음 실행 처리 구간의 구조를 전환함",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4345,
+          "before": "주석으로 설명된 실행 처리 구간",
+          "after": "새 함수 선언이 중첩 단계 실행 처리를 시작함",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4353,
+          "before": "중첩 단계 실행 함수 선언",
+          "after": "선언 헤더가 배치 시도 결과 구조를 도입함",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4372,
+          "before": "배치 시도 구조 설명과 멤버 정의",
+          "after": "새 함수 선언이 이후 실행 로직을 시작함",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2023-2994",
+      "summary": "이 영역은 review 실행을 지원하는 보조 함수와 실행 오케스트레이션을 구현한다. 앞부분은 deliberation·synthesis 단위 식별, 실패·unsupported reference 처리, frozen violation 및 실행 메타데이터 파싱을 담당한다. 뒷부분은 리뷰 단위를 실행하고 결과·인용 감사·아티팩트를 정규화·기록하며, 전체 상태와 실패 하위 결과, deliberation·synthesis 완료 여부 및 degradation 경로를 계산한다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:5741-6516",
+      "summary": "이 영역은 통제된 렌즈 숙의와 synthesis 실행 결과 처리를 구성한다. 이슈별 숙의 및 synthesis 결과 구조를 정의하고, YAML artifact에서 작업 항목을 찾아 검증 실패를 구조화된 실패로 기록한다. 이어서 실행 결과의 executor 메타데이터를 토큰·호출·반복·host/model·artifact 생성·semantic-quality·native-admission·tool-boundary·citation-audit 기준으로 집계하고 중복 값을 제거한다.",
+      "boundaries": [
+        {
+          "line": 6299,
+          "before": "통제된 렌즈 숙의와 synthesis 결과·검증 실패를 처리하는 함수 영역",
+          "after": "실행 결과에서 executor 메타데이터를 집계하는 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6304,
+          "before": "executor 메타데이터 집계 관련 타입 또는 구조 선언",
+          "after": "실행 결과들의 메타데이터를 결합하는 함수 구현",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:835-1603",
+      "summary": "리뷰 프롬프트 실행을 지원하는 CLI 보조 함수들을 구현합니다. 실행기별 LLM·단위 설정을 구성하거나 제거하고, Markdown·YAML frontmatter·렌즈 메타데이터·구조화 artifact·출력 크기와 비어 있지 않은 결과를 검증합니다. 렌즈 집합의 중복·일치·누락·실패를 확인하며, 취소 요청과 오류 종류를 처리하고 합성 상태·사유·참여 메타데이터를 표현합니다.",
+      "boundaries": [
+        {
+          "line": 1160,
+          "before": "렌즈 실행 설정, 파일·Markdown·도메인 제약 검증을 제공하는 CLI 보조 함수들",
+          "after": "합성 상태와 참여 메타데이터를 정의하고 렌즈 결과·출력 계약 검증을 수행하는 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1171,
+          "before": "합성 및 렌즈 결과 처리에 필요한 상수·구조 정의",
+          "after": "합성 상태·사유와 참여 frontmatter 필드 구조를 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1183,
+          "before": "합성·참여 메타데이터 구조 선언",
+          "after": "렌즈 집합, frontmatter, Markdown, 취소·오류 및 출력 계약 검증 함수들",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4981-5740",
+      "summary": "렌즈 실행 이후 리뷰를 계속하기 위한 frontier 구조와 후속 디스패치 흐름을 정의한다. 실행 결과를 scaffold에 병합해 frontier ledger를 초기화하고, issue artifact·deliberation·problem framing·synthesis 경로를 선택한다. 또한 issue artifact 진행 상태와 출력 경로를 설정하고, finding·relation·issue ledger를 바탕으로 렌즈별 issue-stance 응답을 디스패치하며 동시성, 재시도, breaker, 결과 복원·집계, 실패·검증 분류와 중단 아티팩트 기록을 처리한다.",
+      "boundaries": [
+        {
+          "line": 4998,
+          "before": "렌즈 실행 결과를 frontier ledger로 초기화하는 함수 선언",
+          "after": "후속 frontier 경로를 표현하는 타입 별칭 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 5004,
+          "before": "후속 frontier 경로 타입 정의",
+          "after": "issue artifact 및 후속 단계 진행을 설명하는 주석 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 5011,
+          "before": "후속 단계의 목적·구조를 설명하는 주석",
+          "after": "issue artifact 디스패치와 진행 상태 처리를 구현하는 함수 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:5039-5740",
+      "summary": "리뷰 이슈 아티팩트의 진행 상태와 출력 경로를 정한 뒤, 렌즈별 issue-stance 응답 디스패치를 수행하는 영역이다. finding·relation·issue ledger를 입력으로 프롬프트 패킷을 구성하고, continuation 대상과 보존 결과를 구분하며, 동시성 워커·재시도·breaker·결과 복원·집계·실패 및 검증 분류·중단 아티팩트 기록을 다룬다.",
+      "boundaries": [
+        {
+          "line": 5067,
+          "before": "아티팩트 진행 상태와 식별자별 출력 경로를 결정하는 순수한 경로·메타데이터 처리",
+          "after": "렌즈별 issue-stance 실행을 위한 입력 투영, 프롬프트 구성, 디스패치와 결과 관리",
+          "disposition": "adversarial_confirmed"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:5067-5740",
+      "summary": "이 영역은 렌즈별 issue-stance 응답을 준비하고 실행하는 비동기 디스패치 함수로 보인다. finding·relation·issue ledger를 읽어 입력 투영과 프롬프트 패킷을 만들고, continuation에서 실행 대상과 보존 결과를 구분한다. nested 최초 시도, 동시성 워커, 재시도·breaker 상태, 보존 결과 복원, 결과 집계와 실패·검증 분류 및 중단 아티팩트 기록을 처리한다. 제공된 소스는 후반부가 잘려 있다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:5741-6346",
+      "summary": "이 영역은 이슈 범위의 통제된 렌즈 숙의를 조정하는 함수와 synthesis 결과·이슈별 결과를 담는 인터페이스를 포함한다. 또한 YAML artifact 참조로 synthesis 작업 항목을 찾고, 검증 실패를 구조화된 실행 실패로 변환해 출력 파일을 제거하고 실행 로그에 기록하는 비동기 실패 처리 헬퍼를 정의한다.",
+      "boundaries": [
+        {
+          "line": 6299,
+          "before": "통제된 렌즈 숙의 조정과 synthesis 결과 구조를 다루는 함수·타입 영역",
+          "after": "synthesis 작업 항목 식별 및 검증 실패 변환을 담당하는 헬퍼 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6304,
+          "before": "YAML artifact 참조와 구조화된 실패 결과를 위한 선언부",
+          "after": "synthesis 작업 항목 조회 및 비동기 실패 처리 함수 선언",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:5741-6303",
+      "summary": "이 영역은 이슈 범위의 통제된 렌즈 숙의를 조정하는 함수와, 전체 outcome 및 이슈별 issueOutcomes를 함께 담는 SynthesisMapReduceResult 인터페이스를 포함한다. 함수는 실행 모드·숙의 산출물·작업 항목·프롬프트·continuation 결과·worker 응답·검증·실패 및 unavailable fallback을 처리하며, 보이는 범위는 teamlead resolution 준비 중 끝난다.",
+      "boundaries": [
+        {
+          "line": 6299,
+          "before": "통제된 렌즈 숙의를 조정하는 함수 선언부",
+          "after": "SynthesisMapReduceResult 인터페이스 선언부",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6301,
+          "before": "인터페이스 헤더",
+          "after": "outcome와 issueOutcomes 멤버 속성 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 6303,
+          "before": "인터페이스 멤버 속성",
+          "after": "인터페이스 선언 종료",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:5741-6298",
+      "summary": "The function orchestrates controlled, issue-scoped lens deliberation. It verifies the execution mode, loads deliberation artifacts, builds work items and dispatches, prepares prompt packets, optionally preserves continuation results, runs nested or concurrent deliberation workers with retries, validates response artifacts, records output-contract failures, and creates unavailable-response fallbacks. The visible source ends while preparing the teamlead resolution stage, so its completion behavior is not shown.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2450-2994",
+      "summary": "구성된 리뷰 실행을 시작하고 결과를 기록·검증·파싱한 뒤 ReviewUnitExecutionResult로 정규화합니다. 하위 실행 결과와 인용 감사 정보를 처리하고 렌즈·이슈 아티팩트·숙의·선택적 종합 결과를 평탄화하며, 이후 보존된 결과를 인덱싱·변환하고 전체 실행 상태, 실패 하위 결과, 숙의·종합 완료 여부, degradation 경로와 실패 기록을 계산합니다.",
+      "boundaries": [
+        {
+          "line": 2622,
+          "before": "리뷰 실행 결과를 시작·처리·정규화하는 함수 구현",
+          "after": "실행 결과 처리 보조 로직에 대한 설명 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 2626,
+          "before": "실행 결과 처리 보조 로직에 대한 설명 블록",
+          "after": "이전 결과 보존, 상태 계산, 실패 기록을 담당하는 함수 구현",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 2770,
+          "before": "이전 결과와 실패 상태를 계산하는 함수 구현",
+          "after": "후속 결과 처리 보조 로직에 대한 설명 블록",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 2779,
+          "before": "후속 결과 처리 보조 로직에 대한 설명 블록",
+          "after": "보존 결과 변환·상태·degradation 기록을 담당하는 함수 구현",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:3946-4473",
+      "summary": "리뷰 실행의 재시작·실패 기록과 단일 디스패치의 프로필별 재시도·타임아웃·보완 제출을 지원한다. 이어서 중첩 단계 실행을 위해 executor 프로필을 구분하고, 배치 시도 결과 구조와 첫 실행기를 정의하여 디스패치 준비, 웨이브·타임아웃 제어, 진행 기록, 결과 매핑 및 완료 정보를 처리한다.",
+      "boundaries": [
+        {
+          "line": 4345,
+          "before": "단일 디스패치 재시도·실패 기록과 실행 산출물 처리를 담당하는 함수 영역",
+          "after": "중첩 단계 실행을 위한 프로필 브랜딩, 배치 결과 구조, 첫 시도 실행 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4474-4980",
+      "summary": "이 영역은 리뷰 실행 단위의 공통 컨텍스트를 바탕으로 issue-stance, deliberation, synthesis 응답을 실행·검증하고, 중첩 실행 및 flat-dispatch 재시도와 unavailable 대체 결과를 처리한다. 성공 결과는 continuation unit으로, 실패 결과는 unit execution result로 frontier ledger에 병합하며 base result를 선택적으로 보존한다.",
+      "boundaries": [
+        {
+          "line": 4572,
+          "before": "중첩 실행·fallback·재시도 및 공통 실행 컨텍스트와 issue-stance 처리를 다루는 함수들",
+          "after": "참여자 불가 시 unavailable 응답 artifact를 작성·검증하는 대체 경로",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4739,
+          "before": "issue-stance 및 unavailable 응답 처리",
+          "after": "deliberation·synthesis 응답 실행과 unavailable 결과 보존",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4923,
+          "before": "deliberation·synthesis 응답 단위 실행 및 실패 처리",
+          "after": "실행 결과를 continuation unit 또는 unit execution result로 frontier ledger에 병합",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1-489",
+      "summary": "리뷰 프롬프트 실행 CLI 모듈로, 리뷰 실행에 필요한 암호화·프로세스·파일·설정·아티팩트·실패·렌즈·LLM 관련 의존성을 가져온다. 이어서 실행 구성, dispatch 결과, 성공·실패·진행 상태, 메타데이터와 출력 경로를 나타내는 타입 및 계약을 정의하고, 오류·참조 문자열 정규화와 렌즈 실행 완료 장벽의 계산·저장을 위한 보조 함수를 제공한다.",
+      "boundaries": [
+        {
+          "line": 193,
+          "before": "외부 모듈 의존성을 import하는 영역",
+          "after": "실행 결과와 실패·메타데이터를 표현하는 타입 선언 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 288,
+          "before": "실행 구성과 결과 계약을 구성하는 선언 영역",
+          "after": "오류 정규화와 완료 장벽 계산·저장을 수행하는 함수 영역",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 487,
+          "before": "리뷰 실행 보조 함수의 구현 영역",
+          "after": "후속 주석 블록 영역",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2995-3472",
+      "summary": "리뷰 프롬프트 실행을 위한 지원 함수들을 묶은 영역이다. 실행 결과와 저하 상태, artifact-generation·semantic-quality 증거를 정규화하고 관련 산출물과 구조화된 실패를 기록한다. 또한 파일 digest, lens consumer와 context source 행렬을 계산하며, JSON·manifest·packet 참조를 결정적으로 처리하고 pre-dispatch 전에 packet 존재·consumer binding·허용 consumer·파일 hash·context 참조 적격성을 검증한다.",
+      "boundaries": [
+        {
+          "line": 3471,
+          "before": "리뷰 context manifest와 packet 참조를 검증하는 함수 선언들이 이어지는 구간",
+          "after": "생성된 packet 참조를 등록하기 위한 queue map 상수 선언으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:3473-3945",
+      "summary": "리뷰 실행의 컨텍스트 매니페스트와 생성된 프롬프트 패킷 참조를 관리하고, 실행 단위 결과를 평탄화해 상태·시간·실행기·증거·세션 및 provenance 정보가 포함된 리뷰 실행 매니페스트를 기록합니다. 패킷 참조는 실행·등록 조건과 매니페스트 유효성을 확인하며, 새 실행 시 비정적 참조를 정리합니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1160-1603",
+      "summary": "이 영역은 리뷰 실행과 합성 단계의 계약 검증 보조 기능을 구현합니다. 합성 상태·사유 및 참여 메타데이터를 정의하고, 렌즈 집합의 중복·일치·누락·실패 여부, YAML frontmatter와 Markdown 구조, 렌즈 sidecar·구조화 artifact·출력 크기·비어 있지 않은 실행 결과를 검증합니다. 취소 요청을 읽고 오류를 실행 단위 실패 종류로 분류하며 timeout과 출력 계약 오류는 보존합니다.",
+      "boundaries": [
+        {
+          "line": 1171,
+          "before": "합성 참여 상태와 사유를 나타내는 상수·타입 정의",
+          "after": "합성 참여 frontmatter의 필드 구조 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1176,
+          "before": "한 합성 참여 메타데이터 구조의 종료",
+          "after": "렌즈 집합과 출력 계약을 검증하는 함수 구현 시작",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1183,
+          "before": "합성 참여 메타데이터 타입 정의의 종료",
+          "after": "취소·출력·렌즈 참여 검증 및 오류 분류 헬퍼 구현",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2023-2449",
+      "summary": "이 영역은 review 실행 중 deliberation·synthesis 단위의 식별자와 실패를 처리하는 보조 함수들을 제공한다. 지원되지 않는 evidence reference를 감지해 재제출 오류 사양을 적용하고, frozen violation을 읽으며, synthesis issue ID를 추출한다. 또한 citation audit, executor run, native admission, tool-boundary skip 메타데이터를 제한적으로 파싱해 유효한 값만 반환하고, host runtime 여부를 판별한다.",
+      "boundaries": [
+        {
+          "line": 2145,
+          "before": "deliberation 단위 식별·재제출 오류와 frozen 위반을 다루는 함수들",
+          "after": "synthesis 재제출 오류 및 실행 메타데이터 파싱 보조 함수들",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1604-2022",
+      "summary": "리뷰 프롬프트 실행의 실패 처리와 재제출 경로를 지원한다. 첫 부분은 실패 분류, 재시도·resubmission correction 적격성, 타임아웃과 dispatch breaker 해석·기록·영속화를 다룬다. 이어 breaker 종료와 불완전 artifact, issue-stance 재제출 및 frozen salvage의 unsupported reference 오류를 표현하고, 단위별 오류 명세·라우팅·재시도 검사·조건부 매니페스트 해시 갱신을 연결한다.",
+      "boundaries": [
+        {
+          "line": 1791,
+          "before": "dispatch breaker와 실패 결과를 기록·영속화하는 함수군",
+          "after": "재제출 오류 적용과 라우팅을 위한 고정 설정·함수군",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1914,
+          "before": "재제출 관련 함수 구현과 오류 처리",
+          "after": "ResubmitUnitRouting 구조와 멤버 속성 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1925,
+          "before": "ResubmitUnitRouting 구조 정의",
+          "after": "재제출 오류 명세와 적격성·해시 갱신 함수 구현",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:3946-4344",
+      "summary": "이 영역은 리뷰 실행 재시작과 실패 기록을 지원하고, 단일 디스패치 실행에 프로필별 재시도·타임아웃·오류 명세 재제출을 적용한다. 성공 시 실행 메타데이터와 산출물 크기를 반환하며, 조건에 따라 frozen salvage 입력으로 보완 제출을 시도하고 실패 정보를 기록한다.",
+      "boundaries": [
+        {
+          "line": 4339,
+          "before": "단일 디스패치 재시도·salvage 처리를 구현하는 함수 영역",
+          "after": "이후 영역의 주석 블록으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:490-834",
+      "summary": "리뷰 프롬프트 실행에 필요한 실행기 설정과 런타임 정책을 계산하고, 취소·타임아웃·출력 계약·이슈 아티팩트·controlled-deliberation 관련 오류를 타입과 변환 결과로 표현합니다. 오류에서 실행 결과, 배치 결과, 중단 사유와 렌즈 정보를 보존하며, 실행 프로필과 환경 설정에 따라 재시도·지연·타임아웃·동시성·출력 한도를 결정합니다.",
+      "boundaries": [
+        {
+          "line": 532,
+          "before": "실행기 설정과 정책을 계산하는 함수들",
+          "after": "실행 취소 요청 아티팩트 타입 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 543,
+          "before": "취소 요청 아티팩트의 필드 정의",
+          "after": "리뷰 실행 결과 초안 타입 정의",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 553,
+          "before": "실행 결과 초안의 구조 정의",
+          "after": "오류에서 실패 실행 결과를 변환하는 함수",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 584,
+          "before": "실행 오류 변환 및 보존 로직",
+          "after": "리뷰 유닛 타임아웃 오류 타입과 판별 함수",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 626,
+          "before": "타임아웃·출력 계약·이슈 오류 처리",
+          "after": "controlled-deliberation 디스패치 오류와 결과 변환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 649,
+          "before": "controlled-deliberation 오류·중단 정보 추출",
+          "after": "실행 프로필 기반 지연·재시도·제한 계산",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2450-2778",
+      "summary": "이 영역은 구성된 리뷰 실행기를 시작하고 실행 결과를 기록·검증·파싱한 뒤, 보존된 실행 결과를 ReviewUnitExecutionResult로 정규화한다. 하위 실행 결과를 재귀적으로 처리하고 인용 감사 정보를 반영하며, 렌즈·이슈 아티팩트·숙의·선택적 종합 루트의 결과를 평탄화하되 salvaged-submit 부모에서 중단하고 아티팩트가 없으면 결과를 반환하지 않는다.",
+      "boundaries": [
+        {
+          "line": 2622,
+          "before": "실행기 호출·출력 스트림·타임아웃·종료·출력 검증을 처리하는 함수 구현",
+          "after": "실행 결과를 단위 결과로 투영하고 마커 손실을 방지하는 보조 로직으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 2626,
+          "before": "보존된 실행 결과 투영에 대한 설명 주석",
+          "after": "보존 결과 정규화와 하위 결과 재귀 처리를 정의하는 함수 구현",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 2770,
+          "before": "리뷰 단위 결과를 수집·평탄화하는 함수 구현",
+          "after": "후속 주석 블록으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:162-489",
+      "summary": "리뷰 프롬프트 실행 모듈의 타입·결과 계약과 보조 함수들을 정의합니다. 실행 구성과 dispatch 결과, 성공·실패·진행 상태, 실행 메타데이터 및 출력 경로를 구조화하고, 오류·참조 문자열을 정규화하며 렌즈 실행 완료 장벽을 계산·저장합니다.",
+      "boundaries": [
+        {
+          "line": 193,
+          "before": "파일의 import 선언들이 실행 모듈에 필요한 외부 구조를 구성한다.",
+          "after": "실행 구성과 결과 계약을 표현하는 선언이 시작된다.",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 288,
+          "before": "실행 결과·실패·메타데이터 타입 선언이 이어진다.",
+          "after": "리뷰 프롬프트 실행을 지원하는 함수 구현이 시작된다.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:835-1159",
+      "summary": "리뷰 프롬프트 실행을 지원하는 CLI 보조 함수 영역입니다. Codex·inline HTTP 실행기의 LLM 및 단위 실행 옵션을 구성하거나 제거하고, 지원되지 않는 설정을 거부합니다. 파일 크기와 Markdown 구조를 다루며, 필수 헤딩·섹션·목록·도메인 제약 및 맥락 가정이 출력 계약에 맞는지 검증합니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:3626-3945",
+      "summary": "리뷰 실행 전 컨텍스트 매니페스트와 관련 입력의 유효성을 확인하고, 각 리뷰 단위의 실행 결과를 상태·시간·실행기·증거 정보와 함께 매니페스트 항목으로 구성합니다. 중첩된 단위 결과를 재귀적으로 평탄화한 뒤 세션·실행 계약·재개·재시도·아티팩트·중단·합성 provenance를 포함한 리뷰 실행 매니페스트 YAML을 기록합니다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2145-2449",
+      "summary": "재제출 가능한 synthesis 오류를 감지·기록하고, frozen synthesis 실패 입력과 executor stdout에서 제한된 실행 메타데이터를 읽어 검증하는 보조 함수들을 구현한다. 입력의 구조와 필드 형식을 확인하며, 잘못되거나 비어 있는 값은 null 또는 undefined로 처리하고 인식·검증된 메타데이터만 선택적으로 반환한다.",
+      "boundaries": [
+        {
+          "line": 2206,
+          "before": "synthesis 오류 처리와 입력·메타데이터 검증을 수행하는 함수 선언 영역",
+          "after": "이후 보조 함수들의 목적을 설명하는 주석 블록으로 전환",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 2208,
+          "before": "보조 함수 목적을 설명하는 주석 블록",
+          "after": "호스트 런타임 인식 및 구조화된 review 메타데이터 파싱 함수 선언 영역으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1303-1603",
+      "summary": "Provides review execution helpers for cancellation, output validation, synthesis participation, and error classification. It validates expected/received/missing or failed lens sets, Markdown frontmatter and structure, lens sidecars, structured artifacts, profile- and dispatch-derived size limits, and non-empty executor output. It also reads cancellation requests and preserves timeout and output-contract failure classifications while mapping other errors to review-unit failure kinds.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4047-4344",
+      "summary": "실행 디스패치를 시도하고, 프로필별 재시도·타임아웃·오류 명세 재제출을 적용한다. 성공하면 실행 메타데이터와 산출물 크기를 반환하며, 예산 소진 후 조건이 충족되면 frozen salvage 입력으로 submit salvage를 시도한다. salvage도 실패하면 오류를 기록하고 실패 결과를 반환한다.",
+      "boundaries": [
+        {
+          "line": 4339,
+          "before": "단일 디스패치의 재시도·salvage·실패 기록을 처리하는 함수 구현",
+          "after": "nested batch 경로를 식별하기 위한 downstream용 브랜드 설명 주석",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4474-4738",
+      "summary": "이 영역은 중첩 실행의 첫 시도와 flat-dispatch fallback·재시도 처리를 결합하는 경로와, 리뷰 실행 단위의 공통 컨텍스트 계약을 정의한다. 또한 issue-stance 단위를 dispatch·검증하고 실패를 기록하는 경로와, 참여자 불가 시 unavailable 응답 artifact를 작성·검증하는 대체 경로를 제공한다.",
+      "boundaries": [
+        {
+          "line": 4572,
+          "before": "중첩 배치의 첫 시도·fallback·재시도 실행 로직",
+          "after": "실행 컨텍스트 계약과 issue-stance/unavailable 응답 경로",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:3226-3472",
+      "summary": "Provides review-execution helpers for deterministic JSON support, structured manifest-validation failures, packet-reference mapping, manifest-path resolution, and pre-dispatch validation. It reads the review context manifest and verifies packet existence, consumer bindings, admitted consumers, file hashes, and context-reference eligibility, while declaring a queue map for generated packet-reference registration.",
+      "boundaries": [
+        {
+          "line": 3471,
+          "before": "Functions validate manifest and prompt packet references against dispatch-time eligibility and integrity rules.",
+          "after": "A constant map is declared to queue registration data for generated packet references.",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4739-4980",
+      "summary": "리뷰 실행 중 deliberation·synthesis 응답 단위를 처리하고, 실패 시 unavailable 결과와 실패 메타데이터를 보존한다. 또한 성공한 실행 결과는 검증된 continuation unit으로, 실패 결과는 unit execution result로 frontier ledger에 병합하며 선택적 base result를 유지한다.",
+      "boundaries": [
+        {
+          "line": 4780,
+          "before": "deliberation 응답 단위 실행 및 실패 보완 로직",
+          "after": "synthesis 응답 단위 실행 로직",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4852,
+          "before": "synthesis 응답 실행과 실패 메타데이터 보존",
+          "after": "frontier ledger 병합 헬퍼",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 4923,
+          "before": "응답 실행 함수들의 종료",
+          "after": "mergeOutcomeIntoFrontierLedger 관련 주석 및 병합 로직",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1791-2022",
+      "summary": "리뷰 프롬프트 실행 과정에서 디스패치 브레이커 종료 사유와 불완전 artifact를 표현·영속화하고, 옵트인된 issue-stance 재제출 및 frozen salvage 입력의 unsupported evidence-reference 오류를 분류한다. 이어 재제출 라우팅 계약과 고정 테이블을 정의해 단위 형식별 실패 분류, 오류 명세 적용, 재시도 적격성 검사, 조건부 매니페스트 패킷 해시 갱신을 연결한다.",
+      "boundaries": [
+        {
+          "line": 1901,
+          "before": "실행 중단·불완전 artifact·재제출 오류를 분류하고 영속화하는 보조 함수들의 묶음",
+          "after": "재제출 실행의 라우팅 계약과 형식별 오류·재시도 처리를 정의하는 선언부",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2995-3225",
+      "summary": "이 영역은 리뷰 프롬프트 실행의 산출물과 실패를 관리하는 함수들을 구현한다. 실행 결과의 저하 상태, artifact-generation 및 semantic-quality 증거를 정규화하고 execution-result 산출물을 기록하며, malformed output 실패를 구조화한다. 또한 파일 SHA-256 digest, lens consumer 식별자, consumer별 context source 행렬을 계산한다.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:2779-2994",
+      "summary": "This region provides review execution result-processing helpers: it indexes and converts prior unit results into preserved execution outcomes, derives overall execution status, recursively counts failed child outcomes while excluding recovered audit-only children, validates completed deliberation and synthesis, resolves degradation-summary paths, and converts failed units into degradation failure records with preserved metadata and attempt counts.",
+      "boundaries": []
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:633-834",
+      "summary": "controlled-deliberation 디스패치 오류를 표현하고 오류에서 실행·실패 결과와 중단 렌즈 정보를 추출합니다. 중단 artifact 필드와 비동기 지연을 구성하며, dispatch unit을 canonical execution-settings 식별자와 선택적 실행 프로필에 매핑합니다. 또한 실행 프로필·결과·환경 설정으로 재시도, 지연, 타임아웃, 동시 렌즈 수, 출력 한도를 계산하고 CLI 옵션 및 inline HTTP/LLM override를 정리합니다.",
+      "boundaries": [
+        {
+          "line": 746,
+          "before": "오류 처리, 중단 artifact 구성, 지연, 실행 설정 식별·조회 헬퍼",
+          "after": "실행 프로필과 결과를 이용한 dispatch 재시도·제한값 계산 및 CLI override 정리",
+          "disposition": "adversarial_confirmed"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1303-1501",
+      "summary": "Provides review execution validation and cancellation helpers. It classifies synthesize participation from received lenses, validates synthesis frontmatter against expected, received, and missing or failed lens sets, enforces markdown structure and metadata by execution unit kind, and reads a cancellation request artifact when present.",
+      "boundaries": [
+        {
+          "line": 1367,
+          "before": "Synthesize participation truth and frontmatter consistency validation.",
+          "after": "Markdown output contract validation by execution unit kind, plus cancellation artifact reading.",
+          "disposition": "adversarial_confirmed"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:292-489",
+      "summary": "리뷰 프롬프트 실행을 지원하는 보조 함수 영역이다. 실행 결과의 성공·실패와 진행 상황을 기록하고, 경계 상태·파일시스템 범위·리뷰 단위 컨텍스트를 렌더링한다. 렌즈 및 artifact의 출력 경로와 형식을 결정하며, 허용된 읽기 참조와 문자열을 정규화·중복 제거하고 필수 문자열을 검증한다. 마지막으로 렌즈 실행 완료 장벽을 계산·저장한다.",
+      "boundaries": [
+        {
+          "line": 487,
+          "before": "렌즈 실행 완료 장벽을 계산·저장하는 함수 선언 영역",
+          "after": "후속 주석 블록으로 전환",
+          "disposition": "structural_location_only"
+        }
+      ]
+    },
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:1604-1790",
+      "summary": "리뷰 실행 단위의 실패 처리 정책을 구현한다. 실패를 executor 오류·출력 계약 위반·일시적 또는 시스템적 실패로 분류하고, 재시도 한도와 설정에 따라 일반 재시도나 resubmission correction 가능 여부를 판단한다. 재시도별 타임아웃과 선택적 dispatch breaker를 해석하며, nested batch 결과를 breaker에 기록하고 실패 시 관련 분류·메시지·시도 정보를 남긴다.",
+      "boundaries": [
+        {
+          "line": 1622,
+          "before": "실패 분류·재시도 정책을 위한 상수 정의",
+          "after": "실패 메시지와 실행 결과를 해석하는 함수 선언",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1704,
+          "before": "실패 분류·재시도 정책 함수군",
+          "after": "타임아웃과 dispatch breaker 정책을 다루는 함수군",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1738,
+          "before": "재시도 타임아웃 및 breaker 설정 해석",
+          "after": "실행 결과를 시스템적 실패 종류로 분류",
+          "disposition": "structural_location_only"
+        },
+        {
+          "line": 1769,
+          "before": "시스템적 실패 분류 함수",
+          "after": "nested batch 결과를 breaker에 기록하는 함수",
+          "disposition": "structural_location_only"
+        }
+      ]
+    }
+  ],
+  "nodes_total": 419,
+  "refuted_disclosure": [
+    {
+      "region": "src/core-runtime/cli/run-review-prompt-execution.ts:4981-8556",
+      "line": 6517,
+      "before": "렌즈 후속 처리와 artifact·숙의 흐름",
+      "after": "리뷰 프롬프트 실행 및 synthesis map-reduce 디스패치 흐름"
+    }
+  ],
+  "refuted_disclosure_total": 9,
+  "unanchored_unverified_total": 9,
+  "render_truncated": true
+}
