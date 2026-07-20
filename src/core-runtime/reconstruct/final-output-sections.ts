@@ -29,6 +29,7 @@ export const FINAL_OUTPUT_SECTION_IDS = {
   runtimeProvenanceBindings: "runtime-provenance-bindings",
   sourceProjectionTruncation: "source-projection-truncation",
   workbookInventoryProjectionTruncation: "workbook-inventory-projection-truncation",
+  codeInventoryProjectionTruncation: "code-inventory-projection-truncation",
   unresolvedRevisionProposals: "unresolved-revision-proposals",
 } as const;
 
@@ -41,6 +42,7 @@ export const FINAL_OUTPUT_SECTION_HEADINGS = {
   runtimeProvenanceBindings: "Runtime Provenance Bindings",
   sourceProjectionTruncation: "Source Projection Truncation",
   workbookInventoryProjectionTruncation: "Workbook Inventory Projection Truncation",
+  codeInventoryProjectionTruncation: "Code Inventory Projection Truncation",
   unresolvedRevisionProposals: "Unresolved Revision Proposals",
 } as const;
 
@@ -68,7 +70,7 @@ export interface FinalOutputSectionDescriptor {
  * Canonical ordered descriptors. The 5 bound rows are in the PROVENANCE-BINDINGS order
  * (artifact before claim) — this is the order finalOutputProvenanceSectionBindings emits and
  * the order persisted into the validation artifact, so it is load-bearing and must be
- * preserved. The 3 conditional rows follow in emit order.
+ * preserved. The 4 conditional rows follow in emit order.
  */
 export const FINAL_OUTPUT_SECTIONS: readonly FinalOutputSectionDescriptor[] = [
   { section_id: ID.seedAnswerability, heading: H.seedAnswerability, prompt_policy_id: "seed_answerability", emit_owner: "always_section", provenance_binding_required: true, activation: "always" },
@@ -78,6 +80,7 @@ export const FINAL_OUTPUT_SECTIONS: readonly FinalOutputSectionDescriptor[] = [
   { section_id: ID.runtimeProvenanceBindings, heading: H.runtimeProvenanceBindings, prompt_policy_id: "provenance_bindings", emit_owner: "always_section", provenance_binding_required: true, activation: "always" },
   { section_id: ID.sourceProjectionTruncation, heading: H.sourceProjectionTruncation, prompt_policy_id: null, emit_owner: "conditional_markdown", provenance_binding_required: false, activation: "document_projection_truncation_nonempty" },
   { section_id: ID.workbookInventoryProjectionTruncation, heading: H.workbookInventoryProjectionTruncation, prompt_policy_id: null, emit_owner: "conditional_markdown", provenance_binding_required: false, activation: "workbook_inventory_projection_truncation_nonempty" },
+  { section_id: ID.codeInventoryProjectionTruncation, heading: H.codeInventoryProjectionTruncation, prompt_policy_id: null, emit_owner: "conditional_markdown", provenance_binding_required: false, activation: "code_inventory_projection_truncation_nonempty" },
   { section_id: ID.unresolvedRevisionProposals, heading: H.unresolvedRevisionProposals, prompt_policy_id: null, emit_owner: "conditional_markdown", provenance_binding_required: false, activation: "disclosed_revision_proposals_nonempty" },
 ];
 

@@ -372,6 +372,10 @@ import {
   type CodeReduceNode,
   type CodeReduceRegion,
 } from "./comprehension-reduce-code.js";
+import {
+  projectCodeInventoryForPrompt,
+  type CodeInventoryPromptProjectionResult,
+} from "../code-structure-inventory-projection.js";
 import type { CodeStructureInventory } from "../code-structure-observer.js";
 import { classifyFrontierCore } from "./comprehension-semantic-map-core.js";
 import {
@@ -9881,6 +9885,47 @@ export function recomputeWorkbookInventoryProjectionTruncations(
   return truncations;
 }
 
+/** P6 code twin: durable record that the seed-stage PROMPT saw a bounded code inventory. */
+export interface CodeInventoryProjectionTruncation {
+  observation_id: string;
+  source_ref: string;
+  sections: CodeInventoryPromptProjectionResult["sections"];
+}
+
+/**
+ * Code twin of recomputeWorkbookInventoryProjectionTruncations: the code inventory prompt
+ * projection is applied UNCONDITIONALLY (compactStructuralDataForPrompt) and is a pure
+ * function of the inventory (projectCodeInventoryForPrompt), so the bounded observations are
+ * fully recoverable from the persisted observations — no per-call-site sink, nothing to miss
+ * on any path or on resume. The selector MIRRORS the projection site exactly: any observation
+ * carrying a code_structure_inventory OBJECT (no kind gate — only the code observer produces
+ * one, but matching the projection avoids a "bounded-but-unrecorded" divergence).
+ */
+export function recomputeCodeInventoryProjectionTruncations(
+  observations: readonly ReconstructSourceObservation[],
+): CodeInventoryProjectionTruncation[] {
+  const truncations: CodeInventoryProjectionTruncation[] = [];
+  for (const observation of observations) {
+    const inventory = observation.structural_data.code_structure_inventory;
+    if (
+      inventory === null ||
+      typeof inventory !== "object" ||
+      Array.isArray(inventory)
+    ) {
+      continue;
+    }
+    const projection = projectCodeInventoryForPrompt(inventory as CodeStructureInventory);
+    if (projection.truncated) {
+      truncations.push({
+        observation_id: observation.observation_id,
+        source_ref: observation.source_ref,
+        sections: projection.sections,
+      });
+    }
+  }
+  return truncations;
+}
+
 interface ObservationPromptPayloadOptions {
   observationIds?: readonly string[];
   contentExcerptCharLimit?: number;
@@ -10032,6 +10077,22 @@ function compactStructuralDataForPrompt(
     if (projection.truncated) {
       compacted.workbook_inventory_projection_truncated = true;
       compacted.workbook_inventory_projection_sections = projection.sections;
+    }
+  }
+
+  // Code structure inventory: bounded prompt projection (SIZE axis), the workbook block's
+  // code twin and applied UNCONDITIONALLY for the same reason — the inventory is not covered
+  // by the content_excerpt budget below, and a real large file's inventory (reconstruct/run.ts
+  // measured 407,822 chars) must not reach the prompt unprojected (pre-live flag, handoff
+  // 20260719 §2). Only this prompt payload is capped; the persisted artifact keeps the full
+  // inventory, and the semantic-map stage folds from the artifact, never from this projection.
+  const codeInventory = compacted.code_structure_inventory;
+  if (codeInventory !== null && typeof codeInventory === "object" && !Array.isArray(codeInventory)) {
+    const projection = projectCodeInventoryForPrompt(codeInventory as CodeStructureInventory);
+    compacted.code_structure_inventory = projection.inventory;
+    if (projection.truncated) {
+      compacted.code_structure_inventory_projection_truncated = true;
+      compacted.code_structure_inventory_projection_sections = projection.sections;
     }
   }
 
@@ -15174,6 +15235,40 @@ export function appendFinalOutputWorkbookInventoryProjectionTruncationSection(
   return upsertMarkdownSection(finalOutputText, content);
 }
 
+/**
+ * Surfaces seed-stage code inventory projection truncation in final output: a code file
+ * whose structure inventory exceeded the FIXED seed-stage char budget
+ * (CODE_STRUCTURE_INVENTORY_PROMPT_CHAR_BUDGET — model-agnostic, like the workbook caps)
+ * had only a bounded structural sample (hierarchy dropped, size-desc span prefix) projected
+ * into seed authoring. Sibling of the workbook section above; the durable machine signal is
+ * the runtime-events.ndjson status event. Operational wording only (section names + counts)
+ * — no claim-value fragments — so it never trips final-output provenance forbidden fragments.
+ */
+export function appendFinalOutputCodeInventoryProjectionTruncationSection(
+  finalOutputText: string,
+  truncations: CodeInventoryProjectionTruncation[],
+): string {
+  if (truncations.length === 0) return finalOutputText;
+  const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.codeInventoryProjectionTruncation}`;
+  const content = [
+    heading,
+    "",
+    "A code structure inventory exceeded the fixed seed-stage inventory projection budget, " +
+      "so only a bounded structural sample was projected into seed authoring. The full " +
+      "inventory is retained in source-observations; only the seed-stage prompt projection " +
+      "was bounded. Recovering the omitted detail is a later stage.",
+    "",
+    ...truncations.map((truncation) =>
+      `- ${truncation.source_ref} (${truncation.observation_id}): ` +
+      truncation.sections
+        .map((section) => `${section.section} ${section.kept}/${section.total}`)
+        .join(", ")
+    ),
+    "",
+  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
+}
+
 function appendFinalOutputProvenanceFooter(
   finalOutputText: string,
   requiredFragments: string[],
@@ -19649,6 +19744,28 @@ export async function runReconstruct(
         "(full inventory retained in source-observations).",
     });
   }
+  // Code twin (pre-live flag, handoff 20260719 §2): same unconditional/pure recompute
+  // discipline as the workbook sibling above — no per-call-site sink, resume-safe.
+  const codeInventoryProjectionTruncations =
+    recomputeCodeInventoryProjectionTruncations(
+      promptSourceObservations.observations,
+    );
+  for (const truncation of codeInventoryProjectionTruncations) {
+    appendRuntimeStatusEventSync({
+      pipeline: "reconstruct",
+      sessionRoot,
+      sourceLabel: "code-inventory-projection-caps",
+      stageId: "seed_authoring",
+      message:
+        `code ${truncation.source_ref} (${truncation.observation_id}) structure inventory ` +
+        `exceeded the seed-stage projection budget (` +
+        truncation.sections
+          .map((section) => `${section.section} ${section.kept}/${section.total}`)
+          .join(", ") +
+        "); only a bounded structural sample was projected into seed authoring " +
+        "(full inventory retained in source-observations).",
+    });
+  }
   let finalOutputText = appendFinalOutputProvenanceFooter(
     finalOutputWithArtifactTruth,
     requiredFinalOutputFragments,
@@ -19664,6 +19781,10 @@ export async function runReconstruct(
   finalOutputText = appendFinalOutputWorkbookInventoryProjectionTruncationSection(
     finalOutputText,
     workbookInventoryProjectionTruncations,
+  );
+  finalOutputText = appendFinalOutputCodeInventoryProjectionTruncationSection(
+    finalOutputText,
+    codeInventoryProjectionTruncations,
   );
   finalOutputText = appendFinalOutputUnresolvedRevisionSection(
     finalOutputText,
