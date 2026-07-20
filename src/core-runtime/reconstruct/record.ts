@@ -75,6 +75,7 @@ const RECORD_ARTIFACT_KEYS = [
   "semantic_map_census",
   "semantic_map_sidecar",
   "semantic_map_resume_validation",
+  "environment_context_profile",
   "source_safety_ledger",
   "source_safety_ledger_validation",
   "source_scout_pack",
@@ -124,6 +125,13 @@ const RECORD_ARTIFACT_KEYS = [
   "maturation_baseline_validation",
   "baseline_actionability_matrix",
   "baseline_actionability_matrix_validation",
+  // Pre-existing W3-001 latent drops surfaced by the exhaustiveness guard below: these maturation
+  // value-discharge refs are written (run.ts) + consumed but were silently dropped from the
+  // persisted record. Registered here so the record carries what the type declares (same fix as
+  // leaf_read_census / environment_context_profile).
+  "maturation_value_discharge",
+  "maturation_value_discharge_validation",
+  "maturation_value_discharge_census",
   "actionability_matrix",
   "actionability_matrix_validation",
   "maturation_question_frontier",
@@ -160,6 +168,20 @@ const RECORD_ARTIFACT_KEYS = [
   "final_output_provenance_validation",
   "reconstruct_run_manifest",
 ] as const satisfies readonly (keyof ReconstructRecordArtifactRefs)[];
+
+// W3-001 class closure: `satisfies` above only checks that every LISTED key is a valid interface key
+// — NOT that every interface key is listed. A typed ref key missing from RECORD_ARTIFACT_KEYS is
+// silently DROPPED by normalizeRefs (the leaf_read_census / environment_context_profile bug class).
+// This compile-time exhaustiveness assertion fails to typecheck — naming the offending key — if the
+// list ever drifts from ReconstructRecordArtifactRefs, converting the silent drop into a build error.
+type _MissingRecordArtifactKeys = Exclude<
+  keyof ReconstructRecordArtifactRefs,
+  (typeof RECORD_ARTIFACT_KEYS)[number]
+>;
+const _recordArtifactKeysExhaustive: _MissingRecordArtifactKeys extends never
+  ? true
+  : _MissingRecordArtifactKeys = true;
+void _recordArtifactKeysExhaustive;
 
 const PREPARATION_REQUIRED_KEYS = [
   "target_material_profile",

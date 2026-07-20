@@ -138,6 +138,8 @@ import {
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   TARGET_MATERIAL_KINDS,
+  TARGET_MATERIAL_WALK_MAX_ENTRIES,
+  TARGET_MATERIAL_WALK_MAX_DEPTH,
   type TargetMaterialRefDetection,
   type TargetMaterialKind,
 } from "../target-material-kind.js";
@@ -383,6 +385,13 @@ import {
   type CodeSetTierExcludedRef,
   type CodeSetTierMemberInput,
 } from "./comprehension-set-tier.js";
+import {
+  assembleEnvironmentContextProfile,
+  deepestCommonDirectory,
+  type EnvironmentCensusFile,
+  type EnvironmentContextProfileInput,
+  type EnvironmentObservedFile,
+} from "./environment-context-profile.js";
 import { classifyFrontierCore } from "./comprehension-semantic-map-core.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
@@ -1080,6 +1089,11 @@ export interface RunReconstructParams {
    *  (enforced fail-loud at the api settings projection). Gates observer import capture and
    *  the post-loop deterministic set assembly. Absent = off. */
   codeSetTier?: boolean;
+  /** Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0): set
+   *  from reconstruct.execution.environment_context_profile. Gates a deterministic, disclosure-only
+   *  environment/tech-stack profile derived from the EXISTING observation census (no new fs scan,
+   *  no seed impact). Independent of the code opt-ins. Absent = off (byte-identical, side-effect 0). */
+  environmentContextProfile?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -2183,6 +2197,126 @@ export const SEMANTIC_MAP_PROMPT_NOTE =
 export const SEMANTIC_MAP_SEED_PROMPT_NOTE =
   "When userPayload.semantic_map is present you MAY additionally consult it (it extends any exclusive input-field list above). " +
   SEMANTIC_MAP_PROMPT_NOTE;
+
+/** The closed set of top-level keys the seed-authoring userPayload may carry (W4 R2-02 discipline:
+ *  the seed system prompt enumerates its fields exclusively). This is the M2 capability-surface
+ *  boundary for the environment context profile: the profile is disclosure-only and MUST NOT reach
+ *  seed authoring, so `environment_context_profile` (and any profile field) is deliberately absent.
+ *  A future edit that folds it into the seed userPayload fails loud here rather than silently
+ *  crossing the boundary. Add a key here only when a field is a genuine, prompt-declared seed input. */
+export const SEED_USER_PAYLOAD_ALLOWED_KEYS: ReadonlySet<string> = new Set([
+  "intent",
+  "target_material_profile",
+  "source_purpose_candidates_ref",
+  "source_purpose_candidates_validation_ref",
+  "selected_source_purpose_candidate_id",
+  "selected_source_purpose_frame_id",
+  "source_purpose_confirmation_required",
+  "purpose_confirmation_ref",
+  "purpose_confirmation_validation_ref",
+  "purpose_confirmation_validation",
+  "source_purpose_projection",
+  "material_admission_ledger_ref",
+  "material_admission_rows",
+  "semantic_map",
+  "code_set_tier",
+  "seed_authoring_readiness_ref",
+  "seed_authoring_readiness_validation_ref",
+  "seed_authoring_readiness",
+  "candidate_inventory_ref",
+  "candidate_inventory",
+  "candidate_disposition_ref",
+  "candidate_disposition",
+  "candidate_target_ref_obligations",
+  "source_observations_ref",
+  "source_observations",
+  "observed_source_refs",
+  "skipped_source_ref_summary",
+  "repair_attempt",
+  // Minimal-kernel timeout-recovery seed dispatch (the second seed-authoring surface) carries this
+  // extra provenance field; it is a legitimate seed input, so it is in the closed set and the
+  // kernel payload is wrapped by the same M2 boundary guard.
+  "timeout_recovery",
+]);
+
+/** Identity wrapper that fails loud if the seed userPayload carries a key outside
+ *  {@link SEED_USER_PAYLOAD_ALLOWED_KEYS} — the M2 boundary regression guard. Returns the payload
+ *  unchanged so it can wrap the literal at the call site. */
+export function assertSeedUserPayloadBoundary<T extends Record<string, unknown>>(payload: T): T {
+  for (const key of Object.keys(payload)) {
+    if (!SEED_USER_PAYLOAD_ALLOWED_KEYS.has(key)) {
+      throw new Error(
+        `seed userPayload boundary violation: unexpected field "${key}". The seed-authoring input is ` +
+        `a closed set (SEED_USER_PAYLOAD_ALLOWED_KEYS); disclosure-only artifacts such as the ` +
+        `environment context profile must never be folded into it (M2 capability boundary). Add the ` +
+        `key to the allowed set ONLY if it is a genuine, prompt-declared seed input.`,
+      );
+    }
+  }
+  return payload;
+}
+
+/** Project the already-materialized target-material census + source observations down to the pure
+ *  {@link EnvironmentContextProfileInput} the profile assembler consumes (Stage 0). Deterministic
+ *  path/field math only — NO filesystem access. Absolute census/observation refs are relativized to
+ *  their deepest common directory so scope tokens + the fingerprint stay path-portable. Imports and
+ *  language come from the captured code inventory (present only under the set-tier opt-in). Exported
+ *  for direct coverage of the real-path projection (the assembler is unit-tested separately). */
+export function projectEnvironmentContextProfileInput(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): EnvironmentContextProfileInput {
+  const censusRefs = args.targetMaterialProfile.detection.per_ref;
+  const commonRoot = deepestCommonDirectory(
+    censusRefs.map((r) => r.ref).concat(
+      args.sourceObservations.observations.map((o) => o.source_ref),
+    ),
+  );
+  const relativize = (absPath: string): string => {
+    const rel = path.relative(commonRoot, absPath);
+    // path.relative can emit "" (the root itself) or ".."-escapes for refs outside commonRoot; the
+    // basename fallback keeps a signal (never dropped) and never carries an escape into the output.
+    return rel === "" || rel.startsWith("..") ? path.basename(absPath) : rel;
+  };
+  const census: EnvironmentCensusFile[] = censusRefs.map((r) => ({
+    rel_path: relativize(r.ref),
+    exists: r.exists,
+  }));
+  // imports_available is derived from the OBSERVED DATA (whether any inventory actually carries the
+  // captured imports field — present even when empty), NOT from a caller flag: this stays correct
+  // for a direct runReconstruct caller that passes codeSetTier without the capture opt-in (the
+  // set∧capture precondition is enforced only in the API), and honestly reflects what was captured.
+  let importsAvailable = false;
+  const observations: EnvironmentObservedFile[] = args.sourceObservations.observations.map((obs) => {
+    const structural = obs.structural_data as Record<string, unknown>;
+    const inventory = structural.code_structure_inventory;
+    const inv = inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)
+      ? (inventory as CodeStructureInventory)
+      : null;
+    const capturedImports = inv?.symbol_tiles.imports;
+    if (capturedImports !== undefined) importsAvailable = true;
+    const contentSha = typeof structural.content_sha256 === "string"
+      ? structural.content_sha256
+      : inv?.content_sha256 ?? null;
+    return {
+      rel_path: relativize(obs.source_ref),
+      language: inv?.language ?? null,
+      content_sha256: contentSha,
+      imports: capturedImports?.map((record) => record.to_specifier) ?? [],
+    };
+  });
+  return {
+    census,
+    observations,
+    // The reused census is a bounded walk (never a complete scan) — disclose its structural limits
+    // so detections are never read as a completeness claim (single-sourced from target-material-kind).
+    census_walk_bounds: {
+      max_entries_per_directory_ref: TARGET_MATERIAL_WALK_MAX_ENTRIES,
+      max_depth: TARGET_MATERIAL_WALK_MAX_DEPTH,
+    },
+    imports_available: importsAvailable,
+  };
+}
 
 /** Real-LLM cut (design 20260703 §2): the production synthesize prompt — a CG-1 catalog entry, so
  *  editing it rotates authoring_prompt_contract_sha256 (and thus every seed reuse key) tautologically.
@@ -5578,6 +5712,8 @@ export function artifactRefsWithDefaults(args: {
     semantic_map_sidecar: args.refs.semantic_map_sidecar ?? null,
     semantic_map_resume_validation:
       args.refs.semantic_map_resume_validation ?? null,
+    environment_context_profile:
+      args.refs.environment_context_profile ?? null,
     source_safety_ledger: args.refs.source_safety_ledger ?? null,
     source_safety_ledger_validation:
       args.refs.source_safety_ledger_validation ?? null,
@@ -12724,7 +12860,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               ? input.repairAttempt.repair_sections.join(", ")
               : null,
           })),
-          userPayload: {
+          // M2 boundary guard: assert the seed input carries only closed-set fields — a
+          // disclosure-only artifact (e.g. environment_context_profile) folded in here fails loud.
+          userPayload: assertSeedUserPayloadBoundary({
           intent: input.intent,
           target_material_profile:
             compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
@@ -12796,7 +12934,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 input.repairAttempt.previous_ontology_seed,
             }
             : null,
-          },
+          }),
         });
       } catch (error) {
         if (isGracefulTerminalSignal(error)) throw error;
@@ -12821,7 +12959,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               maturationHandoffPrompt:
                 ontologySeedMaturationHandoffPrompt(input.contractRegistry),
             })),
-            userPayload: {
+            // M2 boundary guard: the minimal-kernel recovery is the SECOND seed dispatch surface —
+            // it too must reject any disclosure-only field (e.g. environment_context_profile).
+            userPayload: assertSeedUserPayloadBoundary({
               ...(buildSemanticMapSeedRender(seedObservationIds).length > 0
                 ? { semantic_map: buildSemanticMapSeedRender(seedObservationIds) }
                 : {}),
@@ -12860,7 +13000,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 previous_artifact_name: "OntologySeed",
                 policy: "minimal_seed_kernel_retry_after_provider_timeout",
               },
-            },
+            }),
           });
         } catch (retryError) {
           if (isGracefulTerminalSignal(retryError)) throw retryError;
@@ -16997,6 +17137,7 @@ export async function runReconstruct(
   // the map. Multi-file code TARGETS (the Phase 1b use case = an explicit file list) are all in
   // this initial set. The "understand a whole codebase" case is served by directory→initial-set
   // expansion (backlog, impl-plan §adaptation 8), NOT by relocating this fold post-exploration.
+  let environmentContextProfileRef: string | null = null;
   let codeSetTierAggregateFingerprint: string | null = null;
   if (params.codeSetTier === true) {
     const setTierMembers: CodeSetTierMemberInput[] = [];
@@ -17030,6 +17171,28 @@ export async function runReconstruct(
     if (setTier.status === "complete" && setTier.overview_render !== null) {
       directiveAuthor.setCodeSetTierOverview?.(setTier.overview_render);
     }
+  }
+  // Environment context profile (design 20260720 env-context-profile §0, Stage 0). A sibling to the
+  // set-tier fold: a pure deterministic profile derived ENTIRELY from the already-materialized
+  // observation census + captured imports — no new filesystem scan (owner-confirmed 2026-07-20).
+  // DISCLOSURE-ONLY: the profile is written to its own artifact + surfaced via artifactRefs; it is
+  // DELIBERATELY never handed to directiveAuthor (no setter) so it can never reach the seed
+  // userPayload (M2 capability boundary — enforced structurally, not by a prompt rule). OFF ⇒ no
+  // artifact, no scan, no read, byte-identical.
+  if (params.environmentContextProfile === true) {
+    const profile = assembleEnvironmentContextProfile(
+      projectEnvironmentContextProfileInput({
+        targetMaterialProfile,
+        sourceObservations,
+      }),
+    );
+    const profilePath = path.join(
+      sessionRoot,
+      "comprehension",
+      "environment-context-profile.yaml",
+    );
+    await writeYamlDocument(profilePath, { session_id: sessionId, ...profile });
+    environmentContextProfileRef = profilePath;
   }
   const semanticMapCensusRef = semanticMapStage.censusPath;
   const semanticMapSidecarRef = semanticMapStage.sidecarPath;
@@ -17332,6 +17495,7 @@ export async function runReconstruct(
           semantic_map_census: semanticMapCensusRef,
           semantic_map_sidecar: semanticMapSidecarRef,
           semantic_map_resume_validation: semanticMapResumeValidationRef,
+          environment_context_profile: environmentContextProfileRef,
           source_observation_directive: sourceObservationDirectivePath,
           source_observation_directive_validation:
             sourceObservationDirectiveValidationPath,
@@ -17613,6 +17777,7 @@ export async function runReconstruct(
         semantic_map_census: semanticMapCensusRef,
         semantic_map_sidecar: semanticMapSidecarRef,
         semantic_map_resume_validation: semanticMapResumeValidationRef,
+        environment_context_profile: environmentContextProfileRef,
         source_observation_directive: sourceObservationDirectivePath,
         source_observation_directive_validation:
           sourceObservationDirectiveValidationPath,
@@ -17834,6 +17999,7 @@ export async function runReconstruct(
         semantic_map_census: semanticMapCensusRef,
         semantic_map_sidecar: semanticMapSidecarRef,
         semantic_map_resume_validation: semanticMapResumeValidationRef,
+        environment_context_profile: environmentContextProfileRef,
         source_observation_directive: sourceObservationDirectivePath,
         source_observation_directive_validation:
           sourceObservationDirectiveValidationPath,
@@ -18496,6 +18662,7 @@ export async function runReconstruct(
       semantic_map_census: semanticMapCensusRef,
       semantic_map_sidecar: semanticMapSidecarRef,
       semantic_map_resume_validation: semanticMapResumeValidationRef,
+      environment_context_profile: environmentContextProfileRef,
       source_safety_ledger: sourceSafetyLedgerPath,
       source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
       source_scout_pack: sourceScoutPackPath,

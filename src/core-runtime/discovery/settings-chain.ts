@@ -500,6 +500,12 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // fail-loud structural error (requires_code_structure_inventory), never implicit activation.
   // Absent = off — no set-tier artifact, no observer import capture, byte-identical.
   "semantic_map_code_set_tier",
+  // Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0). A
+  // deterministic environment/tech-stack profile derived from the EXISTING observation census
+  // (basenames/extensions/imports) — NO new filesystem scan, disclosure-only (never touches the
+  // seed). Independent of the code opt-ins: it reads whatever census/imports already exist.
+  // Absent = off — no profile artifact, no scan, no read, byte-identical.
+  "environment_context_profile",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

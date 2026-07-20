@@ -6,6 +6,7 @@ import type {
 import type { ReconstructSourceObservation } from "./source-observations.js";
 import type { SemanticSeedProjection } from "./comprehension-semantic-map.js";
 import type { CodeSemanticSeedProjection } from "./comprehension-semantic-map-code.js";
+import type { EnvironmentContextProfileResult } from "./environment-context-profile.js";
 
 export interface ReconstructSelectedSourceProfileRef {
   profile_id: string;
@@ -74,6 +75,15 @@ export interface ReconstructTargetMaterialProfileValidationArtifact {
   validation_results: string[];
   asserted_obligation_ids: string[];
   violations: ReconstructTargetMaterialProfileValidationViolation[];
+}
+
+/** Deterministic environment/tech-stack profile of the reconstruct target (design 20260720
+ *  env-context-profile §0, Stage 0). Body = the pure {@link EnvironmentContextProfileResult}; the
+ *  caller stamps session_id (set-tier idiom). Disclosure-only: surfaced via artifactRefs, never
+ *  folded into the seed userPayload (M2 boundary). */
+export interface ReconstructEnvironmentContextProfileArtifact
+  extends EnvironmentContextProfileResult {
+  session_id: string;
 }
 
 export type ReconstructRunControlRequestedStage =
@@ -3804,6 +3814,9 @@ export interface ReconstructRecordArtifactRefs {
   semantic_map_census: string | null;
   semantic_map_sidecar: string | null;
   semantic_map_resume_validation: string | null;
+  // Deterministic environment/tech-stack profile (design 20260720 env-context-profile §0). Written
+  // when the environment_context_profile opt-in is on; null otherwise. Disclosure-only surface.
+  environment_context_profile: string | null;
   source_safety_ledger: string | null;
   source_safety_ledger_validation: string | null;
   source_scout_pack: string | null;
