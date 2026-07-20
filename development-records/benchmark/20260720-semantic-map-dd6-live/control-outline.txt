@@ -1,0 +1,108 @@
+# G-SEM control — deterministic flat symbol outline (LLM-untouched)
+# observation: obs_9fe7177159ae9a09
+# source: /Users/kangmin/Documents/onto-mcp/src/core-runtime/code-structure-observer.ts
+# language: typescript  lines: 414
+# content_sha256: 8f055465204ffb4ea1dc10a474bfd23c1025ad06ebc0e4a8b3a5f6469e4f113f
+# extractor_logic_sha256: 61f4a602cd375187708ed364d529d7111d5d808d2b21a329f5d984b7f0d3a26c
+L1-1 depth=1 import | sig: import { createHash } from "node:crypto";
+L2-2 depth=1 import | sig: import { createRequire } from "node:module";
+L3-3 depth=1 import | sig: import { readFile } from "node:fs/promises";
+L4-4 depth=1 import | sig: import path from "node:path";
+L5-5 depth=1 import | sig: import { Parser, Language, type Node as SyntaxNode } from "web-tree-sitter";
+L6-7 depth=1 comment_block | sig: // ─────────────────────────────────────────────────────────────────────────────
+L8-8 depth=1 comment_block | doc: ───────────────────────────────────────────────────────────────────────────── | sig: // code-structure-observer — the deterministic per-position structural observer for CODE sources
+L9-9 depth=1 comment_block | doc: code-structure-observer — the deterministic per-position structural observer for CODE sources | sig: // (multi-artifact design 20260718 §3 DD4/DD5; the code analog of spreadsheet-structure-observer).
+L10-10 depth=1 comment_block | doc: (multi-artifact design 20260718 §3 DD4/DD5; the code analog of spreadsheet-structure-observer). | sig: // LLM-free. Parses via tree-sitter WASM (owner decision O-4: multi-language by grammar plug —
+L11-11 depth=1 comment_block | doc: LLM-free. Parses via tree-sitter WASM (owner decision O-4: multi-language by grammar plug — | sig: // v1 grammars TS/JS + Python) and emits a LINE-OWNERSHIP partition: every line of the file belongs
+L12-12 depth=1 comment_block | doc: v1 grammars TS/JS + Python) and emits a LINE-OWNERSHIP partition: every line of the file belongs | sig: // to exactly ONE leaf span (a standalone comment is its own comment_block leaf and blank lines
+L13-13 depth=1 comment_block | doc: to exactly ONE leaf span (a standalone comment is its own comment_block leaf and blank lines | sig: // attach to the FOLLOWING item; same-line siblings coalesce), so the spans are strictly non-overlapping and
+L14-14 depth=1 comment_block | doc: attach to the FOLLOWING item; same-line siblings coalesce), so the spans are strictly non-overlapping and | sig: // gapless — the shape the reduce monoid's contiguity law requires (리뷰 inv-F2 정정 규칙).
+L15-15 depth=1 comment_block | doc: gapless — the shape the reduce monoid's contiguity law requires (리뷰 inv-F2 정정 규칙). | sig: // Depth is fixed at 2 (file → top-level declaration → container member); a container declaration
+L16-16 depth=1 comment_block | doc: Depth is fixed at 2 (file → top-level declaration → container member); a container declaration | sig: // contributes decl_header / decl_footer leaves only when they own ≥1 line no member owns
+L17-17 depth=1 comment_block | doc: contributes decl_header / decl_footer leaves only when they own ≥1 line no member owns | sig: // (single-line container ⇒ one leaf).
+L18-18 depth=1 comment_block | doc: (single-line container ⇒ one leaf). | sig: //
+L19-19 depth=1 comment_block | sig: // Per-leaf O-5 enrichment (owner 2026-07-18): `doc_first_line` (the author's stated purpose —
+L20-20 depth=1 comment_block | doc: Per-leaf O-5 enrichment (owner 2026-07-18): `doc_first_line` (the author's stated purpose — | sig: // adjacent preceding comment's first meaningful line, or a Python docstring first line) and
+L21-21 depth=1 comment_block | doc: adjacent preceding comment's first meaningful line, or a Python docstring first line) and | sig: // `signature_line` (the declaration/statement's first source line), each hard-bounded. These are
+L22-22 depth=1 comment_block | doc: `signature_line` (the declaration/statement's first source line), each hard-bounded. These are | sig: // authoring-identity-level facts (the leaf-reader "header label = column IDENTITY" precedent);
+L23-23 depth=1 comment_block | doc: authoring-identity-level facts (the leaf-reader "header label = column IDENTITY" precedent); | sig: // declaration BODIES are never emitted.
+L24-24 depth=1 comment_block | doc: declaration BODIES are never emitted. | sig: //
+L25-25 depth=1 comment_block | sig: // Determinism: same bytes in ⇒ same inventory out. `extractor_logic_sha256` folds the partition
+L26-26 depth=1 comment_block | doc: Determinism: same bytes in ⇒ same inventory out. `extractor_logic_sha256` folds the partition | sig: // logic source + the kind-mapping tables + each grammar wasm's sha256, so editing ANY of them
+L27-27 depth=1 comment_block | doc: logic source + the kind-mapping tables + each grammar wasm's sha256, so editing ANY of them | sig: // rotates downstream reuse keys tautologically (semanticMapGateLogicSha256 pattern).
+L28-28 depth=1 comment_block | doc: rotates downstream reuse keys tautologically (semanticMapGateLogicSha256 pattern). | sig: // ─────────────────────────────────────────────────────────────────────────────
+L29-30 depth=1 const_decl | sig: export const CODE_STRUCTURE_SCHEMA_VERSION = "1" as const;
+L31-32 depth=1 comment_block | sig: /** Hard bound for doc/signature line captures (chars). */
+L33-33 depth=1 const_decl | doc: Hard bound for doc/signature line captures (chars). */ | sig: export const CODE_STRUCTURE_LINE_BOUND = 140;
+L34-35 depth=1 type_alias CodeStructureLanguage | sig: export type CodeStructureLanguage = "typescript" | "javascript" | "python";
+L36-37 depth=2 decl_header CodeSymbolSpan | sig: export interface CodeSymbolSpan {
+L38-38 depth=2 member_prop line_start | sig: line_start: number
+L39-39 depth=2 member_prop line_end | sig: line_end: number
+L40-40 depth=2 comment_block | sig: /** Language-neutral kind token (design DD5 vocabulary). */
+L41-41 depth=2 member_prop kind | doc: Language-neutral kind token (design DD5 vocabulary). */ | sig: kind: string
+L42-42 depth=2 comment_block | sig: /** Declaration identifiers covered by this span (same-line siblings coalesce; sorted). */
+L43-43 depth=2 member_prop symbol_names | doc: Declaration identifiers covered by this span (same-line siblings coalesce; sorted). */ | sig: symbol_names: string[]
+L44-44 depth=2 member_prop depth | sig: depth: number
+L45-45 depth=2 member_prop doc_first_line | sig: doc_first_line: string | null
+L46-46 depth=2 member_prop signature_line | sig: signature_line: string | null
+L47-47 depth=2 decl_footer
+L48-49 depth=2 decl_header CodeHierarchyNode | sig: export interface CodeHierarchyNode {
+L50-50 depth=2 comment_block | sig: /** Span key `${line_start}-${line_end}` — unique under the strict partition. */
+L51-51 depth=2 member_prop key | doc: Span key `${line_start}-${line_end}` — unique under the strict partition. */ | sig: key: string
+L52-52 depth=2 member_prop kind | sig: kind: string
+L53-53 depth=2 member_prop symbol_name | sig: symbol_name: string | null
+L54-54 depth=2 member_prop child_keys | sig: child_keys: string[]
+L55-55 depth=2 decl_footer
+L56-57 depth=2 decl_header CodeStructureInventory | sig: export interface CodeStructureInventory {
+L58-58 depth=2 member_prop schema_version | sig: schema_version: typeof CODE_STRUCTURE_SCHEMA_VERSION
+L59-59 depth=2 member_prop language | sig: language: CodeStructureLanguage
+L60-60 depth=2 member_prop line_count | sig: line_count: number
+L61-61 depth=2 member_prop content_sha256 | sig: content_sha256: string
+L62-62 depth=2 member_prop extractor_logic_sha256 | sig: extractor_logic_sha256: string
+L63-67 depth=2 member_prop symbol_tiles | sig: symbol_tiles: {
+L68-68 depth=2 decl_footer
+L69-72 depth=1 type_alias CodeStructureObservationResult | sig: export type CodeStructureObservationResult =
+L73-74 depth=1 comment_block | sig: // ── language registry (grammar plug — add a language by adding a row + mapping) ───────────────
+L75-85 depth=1 const_decl | doc: ── language registry (grammar plug — add a language by adding a row + mapping) ─────────────── | sig: const LANGUAGE_BY_EXTENSION: Record<string, CodeStructureLanguage> = {
+L86-91 depth=1 const_decl | sig: const GRAMMAR_WASM: Record<CodeStructureLanguage, string> = {
+L92-93 depth=1 comment_block | sig: // Language-neutral kind mapping (DD5): tree-sitter node type → common kind token. The tables are
+L94-94 depth=1 comment_block | doc: Language-neutral kind mapping (DD5): tree-sitter node type → common kind token. The tables are | sig: // part of the extractor logic (folded into extractor_logic_sha256).
+L95-115 depth=1 const_decl | doc: part of the extractor logic (folded into extractor_logic_sha256). | sig: const TS_KIND: Record<string, string> = {
+L116-126 depth=1 const_decl | sig: const PY_KIND: Record<string, string> = {
+L127-131 depth=1 const_decl | sig: const KIND_TABLE: Record<CodeStructureLanguage, Record<string, string>> = {
+L132-132 depth=1 const_decl | sig: const CONTAINER_KINDS = new Set(["class_decl", "interface_decl", "enum_decl", "namespace_decl"]);
+L133-134 depth=1 comment_block | sig: // ── parser singleton (WASM init once; grammars cached per language) ────────────────────────────
+L135-135 depth=1 const_decl | doc: ── parser singleton (WASM init once; grammars cached per language) ──────────────────────────── | sig: const requireFromHere = createRequire(import.meta.url);
+L136-136 depth=1 const_decl | sig: let parserInit: Promise<void> | null = null;
+L137-137 depth=1 const_decl | sig: const languageCache = new Map<CodeStructureLanguage, Promise<{ language: Language; wasmSha256: string }>>();
+L138-141 depth=1 function_decl grammarWasmPath | sig: function grammarWasmPath(language: CodeStructureLanguage): string {
+L142-158 depth=1 function_decl loadLanguage | sig: async function loadLanguage(language: CodeStructureLanguage): Promise<{ language: Language; wasmSha256: string }> {
+L159-160 depth=1 comment_block | sig: // ── line-ownership partition (DD5; ported from the N=1 probe after G-CODE PASS) ────────────────
+L161-162 depth=1 const_decl | doc: ── line-ownership partition (DD5; ported from the N=1 probe after G-CODE PASS) ──────────────── | sig: const bound = (s: string): string =>
+L163-180 depth=1 function_decl mapKind | sig: function mapKind(table: Record<string, string>, node: SyntaxNode): { kind: string; inner: SyntaxNode } {
+L181-185 depth=1 function_decl symbolNameOf | sig: function symbolNameOf(node: SyntaxNode): string | null {
+L186-208 depth=1 function_decl docFirstLineOf | sig: function docFirstLineOf(
+L209-210 depth=2 decl_header LeafDraft | sig: interface LeafDraft {
+L211-211 depth=2 member_prop lineStart | sig: lineStart: number
+L212-212 depth=2 member_prop lineEnd | sig: lineEnd: number
+L213-213 depth=2 member_prop kind | sig: kind: string
+L214-214 depth=2 member_prop symbolNames | sig: symbolNames: string[]
+L215-215 depth=2 member_prop docFirstLine | sig: docFirstLine: string | null
+L216-216 depth=2 member_prop signatureLine | sig: signatureLine: string | null
+L217-217 depth=2 member_prop astNode | sig: astNode: SyntaxNode | null
+L218-218 depth=2 decl_footer
+L219-221 depth=1 comment_block | sig: /** Partition sibling items into gapless, non-overlapping line-owned leaves (leading trivia
+L222-260 depth=1 function_decl partitionItems | doc: Partition sibling items into gapless, non-overlapping line-owned leaves (leading trivia | sig: function partitionItems(
+L261-266 depth=1 function_decl bodyItems | sig: function bodyItems(container: SyntaxNode): SyntaxNode[] {
+L267-268 depth=2 decl_header ExtractedTree | sig: interface ExtractedTree {
+L269-269 depth=2 member_prop spans | sig: spans: CodeSymbolSpan[]
+L270-270 depth=2 member_prop hierarchy | sig: hierarchy: CodeHierarchyNode[]
+L271-271 depth=2 member_prop rootKey | sig: rootKey: string
+L272-272 depth=2 decl_footer
+L273-276 depth=1 function_decl spanKey | sig: function spanKey(lineStart: number, lineEnd: number): string {
+L277-350 depth=1 function_decl extractTree | sig: function extractTree(language: CodeStructureLanguage, root: SyntaxNode, lineCount: number): ExtractedTree {
+L351-352 depth=1 comment_block | sig: // ── extractor logic digest (tautological rotation — DD5) ───────────────────────────────────────
+L353-361 depth=1 function_decl extractorSourceDigest | doc: ── extractor logic digest (tautological rotation — DD5) ─────────────────────────────────────── | sig: function extractorSourceDigest(): string {
+L362-365 depth=1 function_decl codeStructureLanguageForExtension | sig: export function codeStructureLanguageForExtension(ext: string): CodeStructureLanguage | null {
+L366-369 depth=1 comment_block | sig: /** Observe one code file's structure. `unsupported` (no bundled grammar for the extension) is an
+L370-414 depth=1 function_decl observeCodeStructure | doc: Observe one code file's structure. `unsupported` (no bundled grammar for the extension) is an | sig: export async function observeCodeStructure(args: {
