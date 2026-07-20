@@ -7111,8 +7111,12 @@ describe("observationPromptPayload — code_structure_inventory bounded prompt p
 
   it("caps an oversized code inventory and attaches an honest truncation manifest", () => {
     const artifact = codeArtifact(300);
+    // The budget contract is the PRETTY length — callJsonAuthor serializes the payload with
+    // JSON.stringify(payload, null, 2) (교차검증 gh HIGH; render-budget precedent).
     const full = JSON.stringify(
       artifact.observations[0]!.structural_data.code_structure_inventory,
+      null,
+      2,
     ).length;
     expect(full).toBeGreaterThan(40_000); // subject genuinely over budget — no vacuous pass
     const payload = observationPromptPayload(artifact as any) as Array<{
@@ -7120,7 +7124,9 @@ describe("observationPromptPayload — code_structure_inventory bounded prompt p
     }>;
     const sd = payload[0]!.structural_data;
     expect(sd.code_structure_inventory_projection_truncated).toBe(true);
-    expect(JSON.stringify(sd.code_structure_inventory).length).toBeLessThanOrEqual(40_000);
+    expect(JSON.stringify(sd.code_structure_inventory, null, 2).length).toBeLessThanOrEqual(
+      40_000,
+    );
     // Hierarchy is dropped first; spans survive as a bounded prefix in document order.
     expect(sd.code_structure_inventory.symbol_tiles.hierarchy).toEqual([]);
     const keptSpans = sd.code_structure_inventory.symbol_tiles.spans;

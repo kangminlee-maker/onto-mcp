@@ -7,9 +7,10 @@ import type { CodeSymbolSpan } from "./code-structure-observer.js";
 
 // Spec basis (INV-TEST-1): handoff 20260719-semantic-map-v2-live §2 pre-live flag — the prompt
 // payload must never carry an unbounded code inventory (reconstruct/run.ts measured 411,063
-// chars); projection mirrors projectInventoryForPrompt (workbook precedent) and consumes the
-// DD10 code admission order (span size desc → line_start asc) as a PREFIX, so the cut starves
-// leaf detail, never whole-file shape.
+// chars). The budget contract is the PRETTY length (JSON.stringify(x, null, 2)) because
+// callJsonAuthor serializes the payload pretty (render-budget precedent; 교차검증 gh HIGH).
+// Admission mirrors the DD10 order (span size desc → line_start asc → index) as a PREFIX, so
+// the cut starves leaf detail, never whole-file shape.
 describe("projectCodeInventoryForPrompt — bounded prompt projection (size axis)", () => {
   const span = (line_start: number, line_end: number): CodeSymbolSpan => ({
     line_start,
@@ -50,18 +51,19 @@ describe("projectCodeInventoryForPrompt — bounded prompt projection (size axis
     expect(r.inventory).toBe(inv); // pass-through, no copy
   });
 
+  const pretty = (value: unknown): number => JSON.stringify(value, null, 2).length;
+
   it("over budget: drops hierarchy first, admits spans as a size-desc prefix, emits document order", () => {
     // Sizes descend away from document order so admission ≠ document order: the LAST span is
-    // the largest. Budget sized to admit exactly the two largest spans.
+    // the largest. Budget = exact pretty length of the projection carrying the two largest
+    // spans — the third cannot fit (any addition strictly grows the pretty length).
     const spans = [span(1, 5), span(6, 30), span(31, 100)];
     const inv = inventoryOf(spans);
     const before = JSON.parse(JSON.stringify(inv));
-    const envelope = JSON.stringify({
+    const budget = pretty({
       ...inv,
-      symbol_tiles: { spans: [], hierarchy: [], root_key: "1-100" },
-    }).length;
-    const cost = (s: CodeSymbolSpan) => JSON.stringify(s).length + 1;
-    const budget = envelope + cost(spans[2]!) + cost(spans[1]!); // two largest fit, third does not
+      symbol_tiles: { spans: [spans[1]!, spans[2]!], hierarchy: [], root_key: "1-100" },
+    });
     const r = projectCodeInventoryForPrompt(inv, budget);
     expect(r.truncated).toBe(true);
     // Hierarchy dropped with an honest manifest record.
@@ -70,6 +72,8 @@ describe("projectCodeInventoryForPrompt — bounded prompt projection (size axis
     // Largest two spans admitted, re-emitted in ORIGINAL document order.
     expect(r.inventory.symbol_tiles.spans.map((s) => s.line_start)).toEqual([6, 31]);
     expect(r.sections).toContainEqual({ section: "symbol_tiles.spans", kept: 2, total: 3 });
+    // The REAL contract: pretty(projected) ≤ budget.
+    expect(pretty(r.inventory)).toBeLessThanOrEqual(budget);
     // Scalars (identity/provenance) are never trimmed.
     expect(r.inventory.content_sha256).toBe("c0de");
     expect(r.inventory.line_count).toBe(inv.line_count);
@@ -79,14 +83,33 @@ describe("projectCodeInventoryForPrompt — bounded prompt projection (size axis
     expect(JSON.stringify(projectCodeInventoryForPrompt(inv, budget))).toBe(JSON.stringify(r));
   });
 
-  it("respects the char budget on a large synthetic inventory (cardinality > 0 admitted)", () => {
+  it("respects the PRETTY char budget on a large synthetic inventory (cardinality > 0 admitted)", () => {
     const spans = Array.from({ length: 400 }, (_, i) => span(i * 10 + 1, i * 10 + 10));
     const inv = inventoryOf(spans);
-    expect(JSON.stringify(inv).length).toBeGreaterThan(40_000); // subject is genuinely over budget
+    expect(pretty(inv)).toBeGreaterThan(40_000); // subject is genuinely over budget
     const r = projectCodeInventoryForPrompt(inv);
     expect(r.truncated).toBe(true);
     expect(r.inventory.symbol_tiles.spans.length).toBeGreaterThan(0);
     expect(r.inventory.symbol_tiles.spans.length).toBeLessThan(400);
-    expect(JSON.stringify(r.inventory).length).toBeLessThanOrEqual(40_000);
+    // The budget bounds the ACTUAL prompt serialization (pretty), not the compact length.
+    expect(pretty(r.inventory)).toBeLessThanOrEqual(40_000);
+  });
+
+  it("never re-admits a duplicated object reference past the cut (index-based admission)", () => {
+    // Adversarial shape (교차검증 inv MEDIUM — unreachable from the real observer, sealed
+    // structurally): the SAME span object appears twice; the budget admits exactly one
+    // occurrence. Identity-based admission would emit both and overshoot the budget.
+    const shared = span(1, 50);
+    const spans = [shared, span(51, 60), shared];
+    const inv = inventoryOf(spans);
+    const budget = pretty({
+      ...inv,
+      symbol_tiles: { spans: [shared], hierarchy: [], root_key: "1-100" },
+    });
+    const r = projectCodeInventoryForPrompt(inv, budget);
+    expect(r.truncated).toBe(true);
+    expect(r.inventory.symbol_tiles.spans).toHaveLength(1);
+    expect(pretty(r.inventory)).toBeLessThanOrEqual(budget);
+    expect(r.sections).toContainEqual({ section: "symbol_tiles.spans", kept: 1, total: 3 });
   });
 });

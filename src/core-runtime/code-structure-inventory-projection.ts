@@ -33,19 +33,28 @@ export interface CodeInventoryPromptProjectionResult {
  * Bounded, deterministic prompt projection of a code inventory (SIZE axis). Pure and total:
  * never mutates the input, never throws; a within-budget inventory passes through unchanged.
  * Over budget: `hierarchy` is dropped first (nesting stays recoverable from each span's `depth`
- * + line range), then spans are admitted as a PREFIX of the DD10 code admission order — span
- * size descending, then line_start ascending (a total order under the strict line-ownership
- * partition: line_start is unique) — until the budget is consumed, and the admitted set is
- * emitted in original document order. Root/large container spans therefore survive the cut:
- * the budget starves leaf detail, never whole-file shape (the 7b starvation-diagnosis rule).
- * The cost model is per-part JSON.stringify length — an approximation of the final prompt
- * serialization, not a hard byte contract.
+ * + line range), then spans are admitted as a PREFIX of the admission order — span size
+ * descending, then line_start ascending (globally unique under the strict line-ownership
+ * partition), then original index (total by construction). This mirrors the DD10 admission
+ * ORDER; the DD10 comparator itself is a different site (comprehension-semantic-map-code.ts
+ * `admissionCompare`, untouched here). The admitted set is emitted in original document order,
+ * so root/large container spans survive the cut: the budget starves leaf detail, never
+ * whole-file shape (the 7b starvation-diagnosis rule).
+ *
+ * The budget bounds the ACTUAL prompt serialization: callJsonAuthor stringifies the payload
+ * with `JSON.stringify(payload, null, 2)`, so every measurement here is the pretty length of
+ * the CANDIDATE projected inventory (render-budget precedent, renderSemanticMapProjection —
+ * its original compact node-only estimate under-counted ~2x; 교차검증 gh HIGH가 이 클래스의
+ * 재발을 적발). Post-condition: pretty(projected) ≤ charBudget. Residual under-count from the
+ * payload's OUTER nesting indentation (the inventory sits levels deep in structural_data) is
+ * O(depth) per line — the same disclosed approximation the render budget accepts.
  */
 export function projectCodeInventoryForPrompt(
   inventory: CodeStructureInventory,
   charBudget: number = CODE_STRUCTURE_INVENTORY_PROMPT_CHAR_BUDGET,
 ): CodeInventoryPromptProjectionResult {
-  if (JSON.stringify(inventory).length <= charBudget) {
+  const pretty = (value: unknown): number => JSON.stringify(value, null, 2).length;
+  if (pretty(inventory) <= charBudget) {
     return { inventory, truncated: false, sections: [] };
   }
   const sections: CodeInventoryPromptProjectionResult["sections"] = [];
@@ -54,27 +63,33 @@ export function projectCodeInventoryForPrompt(
   };
   const { spans, hierarchy, root_key } = inventory.symbol_tiles;
   record("symbol_tiles.hierarchy", 0, hierarchy.length);
-  const envelope: CodeStructureInventory = {
+  const ranked = spans
+    .map((span, index) => ({ span, index }))
+    .sort((a, b) =>
+      (b.span.line_end - b.span.line_start) - (a.span.line_end - a.span.line_start) ||
+      a.span.line_start - b.span.line_start ||
+      a.index - b.index
+    );
+  // Index-based admission (NOT object identity): a spans array carrying the same object
+  // reference twice must never re-admit both occurrences past the cut (교차검증 inv MEDIUM —
+  // unreachable from the current observer, sealed structurally anyway).
+  const admitted = new Set<number>();
+  const candidate = (): CodeStructureInventory => ({
     ...inventory,
-    symbol_tiles: { spans: [], hierarchy: [], root_key },
-  };
-  let used = JSON.stringify(envelope).length;
-  const ranked = [...spans].sort((a, b) =>
-    (b.line_end - b.line_start) - (a.line_end - a.line_start) ||
-    a.line_start - b.line_start
-  );
-  const admitted = new Set<CodeSymbolSpan>();
-  for (const span of ranked) {
-    const cost = JSON.stringify(span).length + 1;
-    if (used + cost > charBudget) break;
-    used += cost;
-    admitted.add(span);
+    symbol_tiles: {
+      spans: spans.filter((_, index) => admitted.has(index)),
+      hierarchy: [],
+      root_key,
+    },
+  });
+  for (const { index } of ranked) {
+    admitted.add(index);
+    if (pretty(candidate()) > charBudget) {
+      admitted.delete(index);
+      break;
+    }
   }
-  const keptSpans = spans.filter((span) => admitted.has(span));
-  record("symbol_tiles.spans", keptSpans.length, spans.length);
-  return {
-    inventory: { ...envelope, symbol_tiles: { spans: keptSpans, hierarchy: [], root_key } },
-    truncated: true,
-    sections,
-  };
+  const projected = candidate();
+  record("symbol_tiles.spans", projected.symbol_tiles.spans.length, spans.length);
+  return { inventory: projected, truncated: true, sections };
 }
