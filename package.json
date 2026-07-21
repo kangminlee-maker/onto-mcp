@@ -1,6 +1,6 @@
 {
   "name": "onto-mcp",
-  "version": "0.4.14",
+  "version": "0.4.15",
   "description": "MCP server for LLM agents: check an artifact's ontological integrity (the logical consistency of its concepts, authority, and purpose) and derive a domain ontology from real sources, with every structured claim gated by runtime validation.",
   "keywords": [
     "mcp",
