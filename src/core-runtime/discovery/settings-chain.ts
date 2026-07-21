@@ -506,6 +506,12 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // seed). Independent of the code opt-ins: it reads whatever census/imports already exist.
   // Absent = off — no profile artifact, no scan, no read, byte-identical.
   "environment_context_profile",
+  // Manifest content_parse opt-in (design 20260721 env-context-profile Stage 3a). AUGMENTS the base
+  // profile: statically reads known dependency manifests (package.json) for declared-dependency
+  // framework signals + closed properties (engines.node, type). A new fs-read authority (file CONTENT,
+  // not just existence). Inert unless `environment_context_profile` is also on (nested in its hook).
+  // Absent = off — no manifest content is read, the profile is byte-identical to Stage 0.5.
+  "environment_context_profile_content",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

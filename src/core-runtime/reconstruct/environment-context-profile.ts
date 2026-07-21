@@ -28,6 +28,12 @@ export const ENVIRONMENT_CONTEXT_PROFILE_REALIZATION = "deterministic" as const;
  *  it is folded into the fingerprint so a ruleset revision can never silently reuse a stale
  *  profile even when the observed files are byte-identical (M5). */
 export const ENVIRONMENT_CONTEXT_PROFILE_RULESET_VERSION = "envprofile:v1" as const;
+/** Manifest content-parse logic identity (Stage 3a). BUMP whenever the parseable-basename sets,
+ *  the per-format extraction, or the version sanitizer change — it is folded into the fingerprint
+ *  (ONLY when content parsing ran) so a parser-logic revision can never silently reuse a stale
+ *  profile even when the raw file bytes are unchanged (M5). Absent from the fingerprint when the
+ *  content opt-in is off, so an off run stays byte-identical to Stage 0.5. */
+export const ENVIRONMENT_CONTENT_PARSE_VERSION = "envcontent:v1" as const;
 
 export type EnvironmentDetectionCategory =
   | "language"
@@ -44,6 +50,11 @@ export type EnvironmentSignalMethod =
   | "config_basename"
   | "extension_distribution"
   | "import_specifier"
+  // A dependency DECLARED in a statically-parsed manifest (Stage 3a content_parse) — e.g. `react`
+  // in package.json `dependencies`. A distinct evidence class from `import_specifier` (declaration
+  // vs usage), so the two independently corroborate a detection. Only catalog-matched dep names
+  // produce this signal; a domain dependency never matches and is never emitted.
+  | "manifest_dependency"
   // A signal identified by a file's PATH shape rather than its bare basename (e.g. a CI workflow
   // under `.github/workflows/`). The rel_path is used only for matching — never emitted.
   | "path_signal";
@@ -63,6 +74,12 @@ export interface EnvironmentContextDetection {
   /** Closed structural signal tokens (e.g. "manifest:package.json", "ext:.ts", "import:react").
    *  Only catalog-matched signals produce a token, so no raw domain string can appear here. */
   signal_refs: string[];
+  /** Closed-key structural properties from manifest content_parse (Stage 3a), present only when
+   *  content parsing contributed one. The KEY set is closed (`runtime_version_constraint`,
+   *  `module_type`); values are sanitized closed forms (a version constraint is charset-restricted +
+   *  shape-validated so a dependency path/org name can never leak through this channel). Attached to
+   *  the runtime detection the properties describe (e.g. `runtime:node`). Omitted when empty. */
+  properties?: Record<string, string>;
 }
 
 /** A mutual-exclusion collision (both detections are preserved — the profile never silently
@@ -97,6 +114,21 @@ export interface EnvironmentContextProfileCoverage {
   /** Count of distinct scope tokens: the target root ("root") plus each DEEPER package root. A
    *  manifest-less target still reports 1 (everything is root-scoped). */
   scope_count: number;
+  /** Manifest content-parse coverage (Stage 3a) — PRESENT ONLY when the content opt-in ran (absent
+   *  when off, so an off profile stays byte-identical to Stage 0.5). The honest failure taxonomy:
+   *  `parsed` = statically read + extracted; `parse_error` = malformed; `truncated` = exceeded the
+   *  byte cap (not trusted); `unsupported` = a dependency-declaring manifest whose format is not yet
+   *  statically parsed (TOML/text — fast-follow). `true_silence` = parsed>0 with zero catalog-matched
+   *  dependency contributions AND unsupported==0 (a genuine "no framework declared", distinguishable
+   *  from "could not read"). */
+  content_parse?: {
+    files_read: number;
+    parsed: number;
+    parse_error: number;
+    truncated: number;
+    unsupported: number;
+    true_silence: boolean;
+  };
 }
 
 export interface EnvironmentContextProfileResult {
@@ -137,6 +169,26 @@ export interface EnvironmentCensusWalkBounds {
   max_depth: number;
 }
 
+/** Per-manifest outcome of the Stage 3a content parse (honest failure taxonomy). `parsed` carries
+ *  the extracted signals; the others carry none (a failure is disclosed, NEVER fabricated away). */
+export type ManifestParseStatus = "parsed" | "parse_error" | "truncated" | "unsupported";
+
+/** One statically-parsed dependency manifest (Stage 3a), projected to a rel_path key by the caller
+ *  (the content-parse module works in absolute paths; the caller relativizes — scan→projection→
+ *  assembler idiom). `declared_packages` are the raw lowercased dependency NAMES read from the file;
+ *  they transit through the assembler which emits ONLY catalog-matched detections — a raw name never
+ *  reaches the profile output. `content_sha256` is the digest of the bytes actually read (folded
+ *  into the fingerprint so a manifest edit invalidates a stale profile); null when nothing was read
+ *  (`unsupported`). */
+export interface EnvironmentContentManifest {
+  rel_path: string;
+  status: ManifestParseStatus;
+  declared_packages: string[];
+  runtime_version_constraint: string | null;
+  module_type: string | null;
+  content_sha256: string | null;
+}
+
 export interface EnvironmentContextProfileInput {
   census: EnvironmentCensusFile[];
   observations: EnvironmentObservedFile[];
@@ -145,6 +197,11 @@ export interface EnvironmentContextProfileInput {
   /** The profile-specific known-signal scan that augments the bounded census (environment-signal-
    *  scan.ts). `truncated` = the scan hit its dirent cap, so some subtree was unscanned. */
   signal_scan: { truncated: boolean; max_depth: number; max_dirents: number };
+  /** Statically-parsed manifest contents (Stage 3a content_parse). UNDEFINED ⇒ the content opt-in
+   *  did not run: no dependency/property contributions, no content_parse coverage block, and the
+   *  content provenance is EXCLUDED from the fingerprint — the profile is byte-identical to Stage 0.5.
+   *  An empty array ⇒ the opt-in ran but found no parseable manifest (coverage block emitted, zeros). */
+  content_manifests?: EnvironmentContentManifest[];
 }
 
 // ── rule catalog (data table — a new signal is a new row; every emitted value is closed) ───────
@@ -327,6 +384,44 @@ export const KNOWN_SIGNAL_PATH_PATTERNS: readonly RegExp[] = PATH_SIGNAL_RULES.m
  *  noise/vendored for profiling purposes. */
 export const KNOWN_SIGNAL_DOTDIRS: ReadonlySet<string> = new Set<string>([".github"]);
 
+/** Dependency-declaring manifests whose content the Stage 3a content_parse reads STATICALLY (native
+ *  JSON.parse — no code execution). Scoped to package.json (owner 2026-07-21: "package.json 계열만"),
+ *  the high-value target: declared deps → framework even without a captured import; `engines.node` →
+ *  runtime version; `type` → module mode. Lowercased. Single-sourced: the content-parse module reads
+ *  exactly these. */
+export const JSON_DEP_MANIFEST_BASENAMES: ReadonlySet<string> = new Set<string>([
+  "package.json",
+]);
+
+/** Dependency-declaring manifests whose dependencies content_parse does not extract into detections
+ *  yet (TOML / plain-text / code-config, or a JSON ecosystem with no catalog rules like composer.json
+ *  php). Reported as `unsupported` — an honest gap distinguishing "did not read" from "read and found
+ *  nothing", a clean fast-follow. Language detection from their basename is unaffected (existence-only,
+ *  Stage 0). Lowercased. */
+export const UNSUPPORTED_DEP_MANIFEST_BASENAMES: ReadonlySet<string> = new Set<string>([
+  "cargo.toml", "pyproject.toml", "requirements.txt", "pipfile", "setup.py",
+  "gemfile", "pom.xml", "build.gradle", "build.gradle.kts", "go.mod", "composer.json",
+]);
+
+/** The single closed-vocabulary authority for the version-constraint property channel (Stage 3a). A
+ *  version CONSTRAINT is a bounded semver-range token (`>=18`, `^18.0.0`, `18.x`). This restricts to
+ *  the version charset + length and requires a digit, so a non-version-shaped value — a `file:`/
+ *  `github:`/`link:`/`npm:` dependency spec carrying a path, org, or url — is DROPPED rather than
+ *  emitted. Applied at BOTH ends: the content-parse producer sanitizes on read, and the assembler
+ *  re-applies it at the emission point so the barrier is capability-surface (structural), not producer
+ *  discipline — a future second producer of a manifest row cannot push an unsanitized value into the
+ *  emitted `properties`. Space (not `\s`) is the only whitespace allowed: a range uses spaces, never
+ *  tabs/newlines. Returns null when not version-shaped. */
+export function sanitizeVersionConstraint(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > 32) return null;
+  // digits, dots, spaces, range/comparison operators, wildcards, pre-release/build separators, a
+  // leading `v`. Deliberately NO `/`, `:`, letters (except x/X/v) — those signal a path/url/word.
+  if (!/^[0-9. vxX*|,><=~^+-]+$/.test(trimmed)) return null;
+  if (!/[0-9]/.test(trimmed)) return null; // a bare operator/word is not a version
+  return trimmed;
+}
+
 // ── module-local util twins (repo idiom: comprehension-set-tier.ts) ───────────────────────────
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) {
@@ -485,6 +580,19 @@ function combineConfidence(
   return "weak";
 }
 
+/** Emits for a DECLARED dependency name (Stage 3a). Reuses {@link IMPORT_RULES} as the single
+ *  package catalog: every rule prefix is a bare package name (react, @angular/core, …), so a declared
+ *  dependency matches by EXACT equality (unlike an import specifier, which also prefix-matches
+ *  sub-paths). An unmatched name (a domain package) returns [] and never contributes — the closed-
+ *  vocabulary barrier. */
+function dependencyEmits(depName: string): CatalogEmit[] {
+  const emits: CatalogEmit[] = [];
+  for (const rule of IMPORT_RULES) {
+    if (depName === rule.prefix) emits.push(...rule.emit);
+  }
+  return emits;
+}
+
 // ── assembly (the single deterministic entry point) ───────────────────────────────────────────
 
 interface DetectionBucket {
@@ -621,6 +729,55 @@ export function assembleEnvironmentContextProfile(
     }
   }
 
+  // Manifest content_parse (Stage 3a) — declared dependencies + closed properties. Present ONLY when
+  // the content opt-in ran (input.content_manifests !== undefined); off ⇒ this whole block is skipped
+  // and the profile is byte-identical to Stage 0.5. Only `parsed` manifests contribute; the raw
+  // declared names are matched against the catalog (dependencyEmits) and only matches are emitted.
+  const propertiesByScope = new Map<string, Record<string, string>>();
+  // Count catalog-matched dependency contributions — distinguishes a clean-but-empty content read
+  // (`true_silence`, a genuine "no framework declared") from a parse failure, for the Stage 3b trigger.
+  let contentDependencyMatches = 0;
+  if (input.content_manifests !== undefined) {
+    // Iterate in a deterministic rel_path order so the per-scope property last-wins is stable
+    // regardless of the caller's array order (contract-level determinism, not just live-path).
+    const sortedManifests = [...input.content_manifests].sort((a, b) =>
+      a.rel_path < b.rel_path ? -1 : a.rel_path > b.rel_path ? 1 : 0);
+    for (const manifest of sortedManifests) {
+      if (manifest.status !== "parsed") continue;
+      const scope = scopeOf(dirOf(manifest.rel_path));
+      // Closed-key properties → the runtime the JS manifest describes (node). Deterministic last-wins
+      // by rel_path. The version constraint is RE-SANITIZED here at the emission point (not only in the
+      // producer) so the closed-vocabulary barrier is capability-surface: a future producer of a
+      // manifest row cannot push an unsanitized value into the emitted `properties`.
+      const versionConstraint = manifest.runtime_version_constraint !== null
+        ? sanitizeVersionConstraint(manifest.runtime_version_constraint)
+        : null;
+      if (versionConstraint !== null || manifest.module_type !== null) {
+        const props = propertiesByScope.get(scope) ?? {};
+        if (versionConstraint !== null) props.runtime_version_constraint = versionConstraint;
+        if (manifest.module_type !== null) props.module_type = manifest.module_type;
+        propertiesByScope.set(scope, props);
+      }
+      const matchedForManifest = new Set<string>();
+      for (const dep of manifest.declared_packages) {
+        for (const emit of dependencyEmits(dep)) {
+          // Dedup identical (category, canonical_name) within one manifest's scope.
+          const dedupKey = `${emit.category} ${emit.canonical_name}`;
+          if (matchedForManifest.has(dedupKey)) continue;
+          matchedForManifest.add(dedupKey);
+          contentDependencyMatches += 1;
+          addContribution(emit.category, emit.canonical_name, scope, {
+            strength: emit.strength,
+            method: "manifest_dependency",
+            correlation_group: emit.correlation_group,
+            conflict_group: emit.conflict_group,
+            signal_ref: `dep:${dep}`,
+          });
+        }
+      }
+    }
+  }
+
   // Materialize detections (deterministic id + order).
   const bucketList = [...buckets.values()].sort((a, b) => {
     if (a.scope_id !== b.scope_id) return a.scope_id < b.scope_id ? -1 : 1;
@@ -630,6 +787,15 @@ export function assembleEnvironmentContextProfile(
   const detections: EnvironmentContextDetection[] = bucketList.map((bucket) => {
     const methods = [...new Set(bucket.contributions.map((c) => c.method))].sort();
     const signal_refs = [...new Set(bucket.contributions.map((c) => c.signal_ref))].sort();
+    // Attach content_parse properties to the runtime detection they describe (node — the runtime
+    // package.json's engines/type fields belong to). Keys emitted in sorted order for deterministic
+    // serialization; omitted entirely when empty (byte-stable with Stage 0.5 for non-node detections).
+    const scopedProps = bucket.category === "runtime" && bucket.canonical_name === "node"
+      ? propertiesByScope.get(bucket.scope_id)
+      : undefined;
+    const properties = scopedProps !== undefined && Object.keys(scopedProps).length > 0
+      ? Object.fromEntries(Object.entries(scopedProps).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : undefined;
     return {
       detection_id: `${bucket.category}:${bucket.canonical_name}@${bucket.scope_id}`,
       category: bucket.category,
@@ -638,6 +804,7 @@ export function assembleEnvironmentContextProfile(
       confidence: combineConfidence(bucket.category, bucket.contributions),
       methods: methods as EnvironmentSignalMethod[],
       signal_refs,
+      ...(properties !== undefined ? { properties } : {}),
     };
   });
 
@@ -684,6 +851,26 @@ export function assembleEnvironmentContextProfile(
       max_dirents: input.signal_scan.max_dirents,
     },
   };
+  // content_parse coverage — emitted ONLY when the content opt-in ran (undefined ⇒ absent ⇒ Stage 0.5
+  // byte-identical). Honest taxonomy counts; `true_silence` = clean read (parsed>0, no unsupported)
+  // that surfaced no catalog-matched dependency (a genuine "no framework declared", not a read failure).
+  if (input.content_manifests !== undefined) {
+    let parsed = 0, parseError = 0, truncated = 0, unsupported = 0;
+    for (const m of input.content_manifests) {
+      if (m.status === "parsed") parsed += 1;
+      else if (m.status === "parse_error") parseError += 1;
+      else if (m.status === "truncated") truncated += 1;
+      else unsupported += 1;
+    }
+    coverage.content_parse = {
+      files_read: parsed + parseError + truncated,
+      parsed,
+      parse_error: parseError,
+      truncated,
+      unsupported,
+      true_silence: parsed > 0 && unsupported === 0 && contentDependencyMatches === 0,
+    };
+  }
 
   // Fingerprint (M5): fold ruleset identity + the RULE CATALOG DIGEST (so a catalog edit rotates the
   // fingerprint STRUCTURALLY, not only via a manual ruleset_version bump) + walk-bound provenance +
@@ -709,6 +896,25 @@ export function assembleEnvironmentContextProfile(
         imports: [...o.imports].sort(),
       }))
       .sort((a, b) => (a.rel_path < b.rel_path ? -1 : a.rel_path > b.rel_path ? 1 : 0)),
+    // Content-parse provenance (Stage 3a) — folded ONLY when the opt-in ran, so an off run's
+    // fingerprint is byte-identical to Stage 0.5. Includes the parser-logic version (a parser change
+    // rotates the fingerprint even on unchanged bytes) + each manifest's status/content_sha256/
+    // extracted values (a manifest edit invalidates a stale profile). Reveals no paths (digest).
+    ...(input.content_manifests !== undefined
+      ? {
+          content_parse_version: ENVIRONMENT_CONTENT_PARSE_VERSION,
+          content_manifests: input.content_manifests
+            .map((m) => ({
+              rel_path: m.rel_path,
+              status: m.status,
+              content_sha256: m.content_sha256,
+              declared_packages: [...m.declared_packages].sort(),
+              runtime_version_constraint: m.runtime_version_constraint,
+              module_type: m.module_type,
+            }))
+            .sort((a, b) => (a.rel_path < b.rel_path ? -1 : a.rel_path > b.rel_path ? 1 : 0)),
+        }
+      : {}),
   }));
 
   return {

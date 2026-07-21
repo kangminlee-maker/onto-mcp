@@ -1175,6 +1175,10 @@ export function createOntoReconstructCoreApi(
       // it derives from the existing observation census, so it needs no capture precondition.
       const environmentContextProfile =
         settings.reconstruct?.execution?.environment_context_profile === true;
+      // Stage 3a content_parse opt-in — augments the base profile (statically reads package.json
+      // content for declared-dependency framework signals). Inert unless the base profile is on.
+      const environmentContextProfileContent =
+        settings.reconstruct?.execution?.environment_context_profile_content === true;
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1628,6 +1632,7 @@ export function createOntoReconstructCoreApi(
             ...(runOptIns.semanticMapCode ? { semanticMapCode: true } : {}),
             ...(runOptIns.codeSetTier ? { codeSetTier: true } : {}),
             ...(environmentContextProfile ? { environmentContextProfile: true } : {}),
+            ...(environmentContextProfileContent ? { environmentContextProfileContent: true } : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
                   dispatchFallback:

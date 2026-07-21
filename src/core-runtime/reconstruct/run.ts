@@ -389,10 +389,12 @@ import {
   assembleEnvironmentContextProfile,
   deepestCommonDirectory,
   type EnvironmentCensusFile,
+  type EnvironmentContentManifest,
   type EnvironmentContextProfileInput,
   type EnvironmentObservedFile,
 } from "./environment-context-profile.js";
 import { scanEnvironmentSignalFiles } from "./environment-signal-scan.js";
+import { parseEnvironmentManifests, type ParsedManifest } from "./environment-content-parse.js";
 import { classifyFrontierCore } from "./comprehension-semantic-map-core.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
@@ -1095,6 +1097,12 @@ export interface RunReconstructParams {
    *  environment/tech-stack profile derived from the EXISTING observation census (no new fs scan,
    *  no seed impact). Independent of the code opt-ins. Absent = off (byte-identical, side-effect 0). */
   environmentContextProfile?: boolean;
+  /** Manifest content_parse opt-in (design 20260721 env-context-profile Stage 3a): set from
+   *  reconstruct.execution.environment_context_profile_content. AUGMENTS the base profile — statically
+   *  reads known dependency manifests (package.json) for declared-dependency framework signals + closed
+   *  properties. Inert unless environmentContextProfile is also on (nested inside its hook). Absent =
+   *  off: no manifest content is read, the profile is byte-identical to Stage 0.5 (side-effect 0). */
+  environmentContextProfileContent?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -2270,6 +2278,10 @@ export function projectEnvironmentContextProfileInput(args: {
    *  census (deduped with per_ref) so manifests the bounded target walk buried are still detected.
    *  `truncated` flows to coverage. Empty/false when the scan did not run (e.g. unit tests). */
   scannedSignals?: { refs: readonly string[]; truncated: boolean; maxDepth: number; maxDirents: number };
+  /** Statically-parsed manifests (Stage 3a content_parse), keyed by absolute path. UNDEFINED ⇒ the
+   *  content opt-in did not run → `content_manifests` stays undefined → the profile is byte-identical
+   *  to Stage 0.5. Relativized here to the same common root as the census/observations. */
+  contentManifests?: readonly ParsedManifest[];
 }): EnvironmentContextProfileInput {
   const censusRefs = args.targetMaterialProfile.detection.per_ref;
   const scannedRefs = args.scannedSignals?.refs ?? [];
@@ -2333,6 +2345,20 @@ export function projectEnvironmentContextProfileInput(args: {
       max_depth: args.scannedSignals?.maxDepth ?? 0,
       max_dirents: args.scannedSignals?.maxDirents ?? 0,
     },
+    // Content manifests (Stage 3a) — undefined when the opt-in did not run (byte-identical Stage 0.5).
+    // Relativized to the same common root; the abs_path is a scanned/census ref so it is inside it.
+    ...(args.contentManifests !== undefined
+      ? {
+          content_manifests: args.contentManifests.map((m): EnvironmentContentManifest => ({
+            rel_path: relativize(m.abs_path),
+            status: m.status,
+            declared_packages: m.declared_packages,
+            runtime_version_constraint: m.runtime_version_constraint,
+            module_type: m.module_type,
+            content_sha256: m.content_sha256,
+          })),
+        }
+      : {}),
   };
 }
 
@@ -17221,6 +17247,21 @@ export async function runReconstruct(
     const scanRoots = sortedRoots.filter((r) =>
       !sortedRoots.some((other) => other !== r && (r === other || r.startsWith(other + path.sep))));
     const scan = await scanEnvironmentSignalFiles({ scanRoots });
+    // Content parse (Stage 3a) — nested inside the base profile gate, so it is inert unless the base
+    // profile is also on. OFF ⇒ contentManifests stays undefined ⇒ no manifest content is read and the
+    // profile is byte-identical to Stage 0.5 (side-effect 0). Candidates = the scan's known-signal
+    // paths ∪ the census refs (a target file passed directly), filtered to dep manifests + within the
+    // vetted scan roots by the content-parse module itself (path-safety).
+    let contentManifests: ParsedManifest[] | undefined;
+    if (params.environmentContextProfileContent === true) {
+      const censusRefs = targetMaterialProfile.detection.per_ref
+        .filter((r) => r.exists)
+        .map((r) => r.ref);
+      contentManifests = await parseEnvironmentManifests({
+        candidatePaths: [...scan.signals, ...censusRefs],
+        allowedRoots: scanRoots,
+      });
+    }
     const profile = assembleEnvironmentContextProfile(
       projectEnvironmentContextProfileInput({
         targetMaterialProfile,
@@ -17231,6 +17272,7 @@ export async function runReconstruct(
           maxDepth: scan.max_depth,
           maxDirents: scan.max_dirents,
         },
+        ...(contentManifests !== undefined ? { contentManifests } : {}),
       }),
     );
     const profilePath = path.join(
