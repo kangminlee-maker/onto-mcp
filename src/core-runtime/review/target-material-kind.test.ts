@@ -60,6 +60,29 @@ describe("detectTargetMaterialKind", () => {
     expect(detection.target_material_kind).toBe("unknown");
     expect(detection.target_material_kind_candidates).toEqual(["unknown"]);
   });
+
+  // PR-0 defect fix: the code-structure observer already maps .cjs/.mts/.cts to
+  // javascript/typescript grammars, but CODE_EXTENSIONS omitted them — so such a file was
+  // classified `unknown` and never reached observation (or review's code support path).
+  // Contrast: before this fix each extension below yielded kind "unknown".
+  it.each([".mts", ".cts", ".cjs"])(
+    "classifies %s module files as code so they reach observation",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `handler${ext}`);
+      await fs.writeFile(target, "export const ok = true;\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+      expect(detection.target_material_kind_candidates).toEqual(["code"]);
+      // Shared classifier ⇒ review's kind-level support path also resolves to supported.
+      expect(reviewMaterialSupportStatus(detection.target_material_kind)).toEqual({
+        status: "supported",
+        reason: null,
+      });
+    },
+  );
 });
 
 describe("reviewMaterialSupportStatus (kind-level claim)", () => {
