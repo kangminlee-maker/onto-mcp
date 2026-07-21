@@ -213,6 +213,7 @@
       "semantic_map_authoring": true,
       "code_structure_inventory": true,
       "environment_context_profile": true,
+      "environment_context_profile_content": true,
       "dispatch_breaker": {
         "enabled": true
       },
