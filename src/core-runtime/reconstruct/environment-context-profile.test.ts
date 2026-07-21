@@ -5,6 +5,7 @@ import {
   ENVIRONMENT_CONTEXT_PROFILE_RULESET_VERSION,
   KNOWN_SIGNAL_BASENAMES,
   type EnvironmentCensusFile,
+  type EnvironmentContentManifest,
   type EnvironmentContextProfileInput,
   type EnvironmentObservedFile,
 } from "./environment-context-profile.js";
@@ -40,6 +41,29 @@ function input(args: Partial<EnvironmentContextProfileInput> & {
     census_walk_bounds: args.census_walk_bounds ?? { max_entries_per_directory_ref: 200, max_depth: 3 },
     imports_available: args.imports_available ?? false,
     signal_scan: args.signal_scan ?? { truncated: false, max_depth: 8, max_dirents: 20000 },
+    // Undefined unless a test passes it → the content opt-in is off → byte-identical Stage 0.5.
+    content_manifests: args.content_manifests,
+  };
+}
+
+/** A parsed package.json manifest row (Stage 3a content_parse assembler input). */
+function manifest(
+  rel_path: string,
+  args: {
+    status?: EnvironmentContentManifest["status"];
+    deps?: string[];
+    version?: string | null;
+    module?: string | null;
+    sha?: string | null;
+  } = {},
+): EnvironmentContentManifest {
+  return {
+    rel_path,
+    status: args.status ?? "parsed",
+    declared_packages: args.deps ?? [],
+    runtime_version_constraint: args.version ?? null,
+    module_type: args.module ?? null,
+    content_sha256: args.sha ?? `sha-${rel_path}`,
   };
 }
 
@@ -448,5 +472,187 @@ describe("determinism", () => {
       imports_available: true,
     }));
     expect(JSON.stringify(build())).toBe(JSON.stringify(build()));
+  });
+});
+
+// ── Stage 3a content_parse (declared dependencies + closed properties) ───────────────────────────
+// Spec basis: env-context-profile Stage 3a design 20260721 §5. The assembler reads projected parsed
+// manifests, matches declared dep NAMES against the closed catalog (reused IMPORT_RULES), emits only
+// matches, promotes confidence via a distinct method, attaches closed properties, folds content into
+// the fingerprint, and surfaces an honest coverage taxonomy — all gated on content_manifests !==
+// undefined so an off run is byte-identical to Stage 0.5.
+describe("Stage 3a content_parse — declared dependency detection", () => {
+  it("detects a framework from a DECLARED dependency without any captured import (POSITIVE)", () => {
+    // package.json exists (census) but no import was captured → base profile has no react. content
+    // parse of the DECLARED dep surfaces it.
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      content_manifests: [manifest("package.json", { deps: ["react", "react-dom"] })],
+    }));
+    const react = find(result, "framework", "react");
+    expect(react).toBeDefined();
+    expect(react!.methods).toContain("manifest_dependency");
+    expect(react!.signal_refs).toContain("dep:react");
+    expect(react!.confidence).toBe("likely"); // one strong method (declaration) alone
+  });
+
+  it("promotes to CERTAIN when a declared dep and a captured import corroborate (two methods)", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      observations: [observed("src/app.ts", { imports: ["react"] })],
+      imports_available: true,
+      content_manifests: [manifest("package.json", { deps: ["react"] })],
+    }));
+    const react = find(result, "framework", "react");
+    expect(react!.confidence).toBe("certain");
+    expect(react!.methods).toEqual(expect.arrayContaining(["import_specifier", "manifest_dependency"]));
+  });
+
+  it("NEVER emits a domain dependency that matches no catalog rule (closed-vocabulary barrier)", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      content_manifests: [manifest("package.json", {
+        deps: ["@corp/payroll-tax-engine", "react", "@corp/patient-records"],
+      })],
+    }));
+    // react matched; the two domain packages contributed nothing and appear nowhere.
+    expect(find(result, "framework", "react")).toBeDefined();
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("payroll");
+    expect(serialized).not.toContain("patient");
+    expect(serialized).not.toContain("@corp");
+  });
+
+  it("attaches closed properties (version constraint + module type) to the node runtime detection", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      content_manifests: [manifest("package.json", {
+        deps: ["express"], version: ">=18", module: "module",
+      })],
+    }));
+    const node = find(result, "runtime", "node");
+    expect(node!.properties).toEqual({ module_type: "module", runtime_version_constraint: ">=18" });
+  });
+
+  it("RE-SANITIZES the version at the emission point — a rogue unsanitized row is dropped (barrier is structural)", () => {
+    // Simulate a future producer that skipped sanitization: a path-shaped 'version'. The assembler
+    // must drop it at emission (capability-surface barrier), never emit the path. Falsifiable — an
+    // input-trusting assembler would surface "secret".
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      content_manifests: [manifest("package.json", { deps: ["react"], version: "file:../secret/path" })],
+    }));
+    const node = find(result, "runtime", "node");
+    expect(node?.properties?.runtime_version_constraint).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain("secret");
+  });
+
+  it("scopes declared deps to their package root in a monorepo", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["packages/web/package.json"], ["packages/api/package.json"]),
+      content_manifests: [
+        manifest("packages/web/package.json", { deps: ["react"] }),
+        manifest("packages/api/package.json", { deps: ["express"] }),
+      ],
+    }));
+    // Each dep lands in its own package scope, not "root".
+    expect(result.detections.find((d) => d.canonical_name === "react")!.scope_id).toBe("package:2");
+    expect(result.detections.find((d) => d.canonical_name === "express")!.scope_id).toBe("package:1");
+  });
+
+  it("does not contribute from a parse_error / truncated / unsupported manifest (honest gap)", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"], ["backend/Cargo.toml"]),
+      content_manifests: [
+        manifest("package.json", { status: "parse_error", deps: ["react"] }),
+        manifest("backend/Cargo.toml", { status: "unsupported" }),
+      ],
+    }));
+    // The deps array on a non-parsed manifest is ignored — no react detection.
+    expect(find(result, "framework", "react")).toBeUndefined();
+  });
+});
+
+describe("Stage 3a content_parse — coverage taxonomy", () => {
+  it("reports honest per-status counts and true_silence for a clean-but-empty read", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      // parsed cleanly, but the only dep is a domain package (no catalog match) → true silence.
+      content_manifests: [manifest("package.json", { deps: ["@corp/thing"] })],
+    }));
+    expect(result.coverage.content_parse).toEqual({
+      files_read: 1, parsed: 1, parse_error: 0, truncated: 0, unsupported: 0, true_silence: true,
+    });
+  });
+
+  it("true_silence is FALSE when a catalog dep matched", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      content_manifests: [manifest("package.json", { deps: ["react"] })],
+    }));
+    expect(result.coverage.content_parse!.true_silence).toBe(false);
+  });
+
+  it("true_silence is FALSE when a dep manifest was unsupported (could-not-read, not empty)", () => {
+    const result = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"], ["Cargo.toml"]),
+      content_manifests: [
+        manifest("package.json", { deps: [] }),
+        manifest("Cargo.toml", { status: "unsupported" }),
+      ],
+    }));
+    const cov = result.coverage.content_parse!;
+    expect(cov.unsupported).toBe(1);
+    expect(cov.true_silence).toBe(false);
+  });
+});
+
+describe("Stage 3a content_parse — off = byte-identical to Stage 0.5", () => {
+  it("omits the content_parse coverage block and content fingerprint fold when content_manifests is undefined", () => {
+    const base = assembleEnvironmentContextProfile(input({ census: census(["package.json"], ["src/app.ts"]) }));
+    expect(base.coverage.content_parse).toBeUndefined();
+    expect(base.detections.every((d) => d.properties === undefined)).toBe(true);
+  });
+
+  it("an EMPTY content_manifests array (opt-in on, nothing found) still emits the coverage block", () => {
+    const on = assembleEnvironmentContextProfile(input({ census: census(["package.json"]), content_manifests: [] }));
+    expect(on.coverage.content_parse).toEqual({
+      files_read: 0, parsed: 0, parse_error: 0, truncated: 0, unsupported: 0, true_silence: false,
+    });
+  });
+
+  it("content off vs on produces a DIFFERENT fingerprint (content provenance is folded when on)", () => {
+    const off = assembleEnvironmentContextProfile(input({ census: census(["package.json"]) }));
+    const on = assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      content_manifests: [manifest("package.json", { deps: ["react"] })],
+    }));
+    expect(on.fingerprint).not.toBe(off.fingerprint);
+  });
+
+  it("a manifest content change (content_sha256) rotates the fingerprint even with identical dep names", () => {
+    const build = (sha: string) => assembleEnvironmentContextProfile(input({
+      census: census(["package.json"]),
+      content_manifests: [manifest("package.json", { deps: ["react"], sha })],
+    }));
+    expect(build("sha-a").fingerprint).not.toBe(build("sha-b").fingerprint);
+  });
+
+  it("fingerprint is order-invariant across content_manifests ordering", () => {
+    const a = assembleEnvironmentContextProfile(input({
+      census: census(["packages/web/package.json"], ["packages/api/package.json"]),
+      content_manifests: [
+        manifest("packages/web/package.json", { deps: ["react"] }),
+        manifest("packages/api/package.json", { deps: ["express"] }),
+      ],
+    }));
+    const b = assembleEnvironmentContextProfile(input({
+      census: census(["packages/web/package.json"], ["packages/api/package.json"]),
+      content_manifests: [
+        manifest("packages/api/package.json", { deps: ["express"] }),
+        manifest("packages/web/package.json", { deps: ["react"] }),
+      ],
+    }));
+    expect(a.fingerprint).toBe(b.fingerprint);
   });
 });

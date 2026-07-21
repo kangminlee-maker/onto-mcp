@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   assertSeedUserPayloadBoundary,
   projectEnvironmentContextProfileInput,
   SEED_USER_PAYLOAD_ALLOWED_KEYS,
 } from "./run.js";
 import { assembleEnvironmentContextProfile } from "./environment-context-profile.js";
+import { parseEnvironmentManifests } from "./environment-content-parse.js";
 import type { ReconstructTargetMaterialProfileArtifact } from "./artifact-types.js";
 import type { ReconstructSourceObservationsArtifact } from "./source-observations.js";
 
@@ -204,5 +208,78 @@ describe("projectEnvironmentContextProfileInput — real artifact shapes", () =>
     for (const d of profile.detections) {
       for (const ref of d.signal_refs) expect(ref).not.toContain("/home/dev");
     }
+  });
+});
+
+// ── Stage 3a content_parse — real-fs END-TO-END (module → projection → assembler) ────────────────
+// The deterministic integration proof for the content_parse chain: a REAL package.json on disk is
+// statically parsed by the real module, projected by the real run.ts projection, and assembled — the
+// same wiring the runReconstruct hook drives, minus the LLM. Proves declared-dep detection, confidence
+// promotion, closed properties, the closed-vocabulary barrier, and honest coverage on real inputs.
+describe("content_parse chain — real package.json on disk", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "env-content-e2e-"));
+  });
+  afterEach(async () => {
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it("promotes a framework to CERTAIN from a declared dep + a captured import, with node properties", async () => {
+    const pkg = path.join(root, "package.json");
+    await fs.writeFile(pkg, JSON.stringify({
+      dependencies: { react: "^18", express: "^4", "@corp/secret-billing": "1.0.0" },
+      engines: { node: ">=18" },
+      type: "module",
+    }));
+    const contentManifests = await parseEnvironmentManifests({
+      candidatePaths: [pkg],
+      allowedRoots: [root],
+    });
+    const profile = assembleEnvironmentContextProfile(
+      projectEnvironmentContextProfileInput({
+        targetMaterialProfile: targetProfile([{ ref: pkg }, { ref: path.join(root, "src/app.ts") }]),
+        sourceObservations: sourceObs([{
+          id: "obs-app",
+          source_ref: path.join(root, "src/app.ts"),
+          structural_data: {
+            content_sha256: "sha-app",
+            code_structure_inventory: {
+              language: "typescript", content_sha256: "sha-app",
+              symbol_tiles: { imports: [{ to_specifier: "react" }] },
+            },
+          },
+        }]),
+        contentManifests,
+      }),
+    );
+    // react: declared dep (manifest_dependency) + captured import (import_specifier) → two methods → certain.
+    const react = profile.detections.find((d) => d.canonical_name === "react")!;
+    expect(react.confidence).toBe("certain");
+    expect(react.methods).toEqual(expect.arrayContaining(["import_specifier", "manifest_dependency"]));
+    // express: declared dep only → likely.
+    const express = profile.detections.find((d) => d.canonical_name === "express")!;
+    expect(express.confidence).toBe("likely");
+    // node runtime carries the closed properties.
+    const node = profile.detections.find((d) => d.canonical_name === "node")!;
+    expect(node.properties).toEqual({ module_type: "module", runtime_version_constraint: ">=18" });
+    // Honest coverage: one file parsed, a real match ⇒ not true silence.
+    expect(profile.coverage.content_parse).toMatchObject({ parsed: 1, unsupported: 0, true_silence: false });
+    // The domain dependency never leaks anywhere in the artifact.
+    expect(JSON.stringify(profile)).not.toContain("secret-billing");
+  });
+
+  it("marks a real malformed package.json parse_error and contributes nothing (honest)", async () => {
+    const pkg = path.join(root, "package.json");
+    await fs.writeFile(pkg, "{ broken json ,,,");
+    const contentManifests = await parseEnvironmentManifests({ candidatePaths: [pkg], allowedRoots: [root] });
+    const profile = assembleEnvironmentContextProfile(
+      projectEnvironmentContextProfileInput({
+        targetMaterialProfile: targetProfile([{ ref: pkg }]),
+        sourceObservations: sourceObs([]),
+        contentManifests,
+      }),
+    );
+    expect(profile.coverage.content_parse).toMatchObject({ parse_error: 1, parsed: 0 });
   });
 });
