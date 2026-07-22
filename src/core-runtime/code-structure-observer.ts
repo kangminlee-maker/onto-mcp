@@ -825,6 +825,9 @@ const IMPORT_NODE_HANDLERS: Partial<Record<CodeStructureLanguage, (node: SyntaxN
   },
   ruby: (node, { admit, omit, census }) => {
     if (node.type !== "call") return;
+    // Only a BARE `require`/`load` (no receiver) is a module import — `config.load "x"` /
+    // `assets.require "y"` are ordinary method calls on a receiver, not imports.
+    if (node.childForFieldName?.("receiver")) return;
     const method = node.childForFieldName?.("method")?.text
       ?? node.namedChildren.find((c): c is SyntaxNode => c !== null && c.type === "identifier")?.text;
     if (!method || !RUBY_IMPORT_METHODS.has(method)) return;
@@ -866,14 +869,26 @@ const IMPORT_NODE_HANDLERS: Partial<Record<CodeStructureLanguage, (node: SyntaxN
   },
   php: (node, { admit, omit, census }) => {
     if (node.type === "namespace_use_declaration") {
-      for (const clause of node.namedChildren) {
-        if (!clause || clause.type !== "namespace_use_clause") continue;
+      // Two shapes: flat `use App\Foo [as F];` (clauses are direct children) and grouped
+      // `use App\{Bar, Baz};` (clauses nest under a namespace_use_group, prefixed by the leading
+      // namespace_name). Scanning only direct children silently drops the grouped form AND leaves
+      // the census reading clean — a false "no imports here" (FD4 census honesty invariant).
+      const group = node.namedChildren.find(
+        (c): c is SyntaxNode => c !== null && c.type === "namespace_use_group",
+      );
+      const prefix = group
+        ? node.namedChildren.find((c): c is SyntaxNode => c !== null && c.type === "namespace_name")?.text
+        : undefined;
+      const clauses = (group ?? node).namedChildren.filter(
+        (c): c is SyntaxNode => c !== null && c.type === "namespace_use_clause",
+      );
+      for (const clause of clauses) {
         census.import_nodes_seen += 1;
         const nameNode = clause.namedChildren.find(
           (c): c is SyntaxNode =>
             c !== null && (c.type === "qualified_name" || c.type === "name" || c.type === "namespace_name"),
         );
-        if (nameNode) admit(nameNode.text);
+        if (nameNode) admit(prefix ? `${prefix}\\${nameNode.text}` : nameNode.text);
         else omit("no_use_name");
       }
     } else if (PHP_INCLUDE_TYPES.has(node.type)) {
@@ -1019,7 +1034,18 @@ function extractorSourceDigest(): string {
     .update(firstDescendantOfTypes.toString())
     .update(foldRegistry(SYMBOL_NAME_RESOLVERS))
     .update(foldRegistry(IMPORT_NODE_HANDLERS))
-    .update(JSON.stringify({ KIND_TABLE, CONTAINER_KINDS: [...CONTAINER_KINDS].sort(), BODY_CONTAINER_TYPES: [...BODY_CONTAINER_TYPES].sort(), LANGUAGE_BY_EXTENSION, bound: CODE_STRUCTURE_LINE_BOUND }))
+    // Closed-over Sets referenced only by identifier inside handler sources are invisible to the
+    // handler .toString() fold, so their CONTENTS must be folded explicitly (else editing e.g.
+    // RUBY_IMPORT_METHODS would not rotate the reuse key — a silent-reuse hole).
+    .update(JSON.stringify({
+      KIND_TABLE,
+      CONTAINER_KINDS: [...CONTAINER_KINDS].sort(),
+      BODY_CONTAINER_TYPES: [...BODY_CONTAINER_TYPES].sort(),
+      RUBY_IMPORT_METHODS: [...RUBY_IMPORT_METHODS].sort(),
+      PHP_INCLUDE_TYPES: [...PHP_INCLUDE_TYPES].sort(),
+      LANGUAGE_BY_EXTENSION,
+      bound: CODE_STRUCTURE_LINE_BOUND,
+    }))
     .digest("hex");
 }
 

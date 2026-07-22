@@ -219,3 +219,34 @@ describe("code-structure-observer multi-language Tier 2 (T1)", () => {
     }
   });
 });
+
+// Cross-verification regression guards (2026-07-22): import-extraction honesty invariants surfaced
+// by the adversarial review of the multi-language expansion.
+describe("code-structure-observer import honesty (cross-verification regressions)", () => {
+  async function invOf(ref: string, text: string): Promise<CodeStructureInventory> {
+    const r = await observeCodeStructure({ ref, text, captureImports: true });
+    if (r.status !== "ok") throw new Error(`expected ok, got ${r.status}`);
+    return r.inventory;
+  }
+
+  it("PHP grouped `use A\\{B, C}` is recorded (not silently dropped) with an honest census", async () => {
+    const inv = await invOf("a.php", "<?php\nuse App\\{Bar, Baz};\nuse App\\Foo;\n");
+    const specs = (inv.symbol_tiles.imports ?? []).map((i) => i.to_specifier);
+    // Grouped members carry the group prefix; the flat use is unaffected.
+    expect(specs).toEqual(expect.arrayContaining(["App\\Bar", "App\\Baz", "App\\Foo"]));
+    // Census must reflect the 3 use clauses seen — never a false "nothing here" (0 seen).
+    expect(inv.import_census?.import_nodes_seen).toBe(3);
+    expect(inv.import_census?.imports_recorded).toBe(3);
+    expect(inv.import_census?.omitted).toBe(0);
+  });
+
+  it("Ruby only admits a BARE require/load — a method call on a receiver is not an import", async () => {
+    const inv = await invOf(
+      "a.rb",
+      'require "json"\nconfig.load "settings.yml"\ndata.require "thing"\nrequire_relative "helper"\n',
+    );
+    const specs = (inv.symbol_tiles.imports ?? []).map((i) => i.to_specifier);
+    expect(specs).toEqual(["json", "helper"]); // config.load / data.require excluded
+    expect(inv.import_census?.import_nodes_seen).toBe(2);
+  });
+});
