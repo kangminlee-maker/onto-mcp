@@ -66,6 +66,7 @@ import type {
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
 import { sourceSafetyRowIdForObservation } from "./source-safety-validation.js";
+import { regionCoverageKeys, regionKey } from "./source-observations.js";
 import { materialAdmissionIdForPurposeElement } from "./material-admission-validation.js";
 import { isRevisionBlocker } from "./post-seed-validation.js";
 import { assertObligation } from "./obligation-assertion.js";
@@ -2076,8 +2077,13 @@ export function validateMaturationClosureFrontier(args: {
     normalizedPathRef(unit.ref),
     unit,
   ]));
-  const observedRefs = new Set(args.sourceObservations.observations.map((observation) =>
-    normalizedPathRef(observation.source_ref)
+  // A7 (design §5): regionKey-keyed (registered under both coverage forms —
+  // see regionCoverageKeys). request.requested_location already carries real
+  // (LLM-authored, not-a-region-anchor) data — NOT threaded into the query key
+  // below (same byte-identity reason as source-observation-delta-validation.ts's
+  // normalizeFrontierForDelta maturation branch); PR-1b-2 threads it.
+  const observedRefs = new Set(args.sourceObservations.observations.flatMap((observation) =>
+    regionCoverageKeys(observation.source_ref, observation.location)
   ));
   const acceptedSourceRequestIds: string[] = [];
   const rejectedSourceRequests:
@@ -2116,6 +2122,10 @@ export function validateMaturationClosureFrontier(args: {
     sourceRequestsSeen.add(request.source_request_id);
     const requestedSourceRef = normalizedPathRef(request.requested_source_ref);
     const inventoryUnit = inventoryByRef.get(requestedSourceRef);
+    // coverageKey: request.requested_location is deliberately NOT consulted (see
+    // the observedRefs comment above) — this is the file-level form, byte-
+    // identical to the prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(request.requested_source_ref);
     const rejects: string[] = [];
     if (!inventoryUnit) {
       rejects.push("unsupported_source_ref");
@@ -2125,7 +2135,7 @@ export function validateMaturationClosureFrontier(args: {
         subjectId: request.source_request_id,
       }));
     }
-    if (observedRefs.has(requestedSourceRef)) {
+    if (observedRefs.has(coverageKey)) {
       rejects.push("already_observed_source_ref");
       violations.push(violation({
         code: "already_observed_source_ref",

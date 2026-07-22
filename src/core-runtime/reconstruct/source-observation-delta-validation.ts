@@ -21,7 +21,11 @@ import type {
   ReconstructSourceSafetyLedgerArtifact,
   ReconstructSourceSafetyLedgerValidationArtifact,
 } from "./artifact-types.js";
-import type { ReconstructSourceObservation } from "./source-observations.js";
+import {
+  regionCoverageKeys,
+  regionKey,
+  type ReconstructSourceObservation,
+} from "./source-observations.js";
 import { sourceSafetyRowIdForObservation } from "./source-safety-validation.js";
 import { assertObligation } from "./obligation-assertion.js";
 
@@ -37,7 +41,9 @@ interface NormalizedFrontierForDelta {
   roundId: string;
   validationStatus: "valid" | "invalid";
   acceptedRefIds: string[];
-  rowsById: Map<string, { sourceRef: string }>;
+  // location: Stage 1 source-region-decomposition (design 20260722 §5 A6) region
+  // anchor for this frontier row. Additive-absent — see the two branches below.
+  rowsById: Map<string, { sourceRef: string; location?: string }>;
 }
 
 function isoNow(): string {
@@ -130,14 +136,24 @@ function samePathRef(
   return path.resolve(left) === path.resolve(right);
 }
 
+// A4 (design §5): each observation is registered under BOTH coverage forms
+// (regionCoverageKeys) — the file-level key (`regionKey(source_ref)`, what a
+// location-less 1a lookup uses — byte-identical to the prior bare
+// `path.resolve(source_ref)` key) and the precise region key
+// (`regionKey(source_ref, location)`, what a location-aware PR-1b-2 lookup
+// will use). This is what stops a second observation of the SAME file at a
+// DIFFERENT region from colliding/last-winning here once regions land.
 function observationsBySourceRef(
   observations: ReconstructSourceObservationsArtifact,
 ): Map<string, ReconstructSourceObservation> {
   assertArrayField(observations.observations, "source-observations", "observations");
-  return new Map(observations.observations.map((observation) => [
-    path.resolve(observation.source_ref),
-    observation,
-  ]));
+  const map = new Map<string, ReconstructSourceObservation>();
+  for (const observation of observations.observations) {
+    for (const key of regionCoverageKeys(observation.source_ref, observation.location)) {
+      map.set(key, observation);
+    }
+  }
+  return map;
 }
 
 function hasSourceFrontierRows(
@@ -182,9 +198,16 @@ function normalizeFrontierForDelta(args: {
       roundId: args.frontier.round_id,
       validationStatus: validation.validation_status,
       acceptedRefIds: [...(validation.accepted_frontier_ref_ids ?? [])],
+      // frontier.location is additive-absent (no producer sets it in this PR — see
+      // artifact-types.ts) so this passthrough is a no-op today; PR-1b-2 populates it.
+      // exactOptionalPropertyTypes forbids `location: undefined` — spread it in only
+      // when present.
       rowsById: new Map(args.frontier.frontier_refs.map((frontier) => [
         frontier.frontier_ref_id,
-        { sourceRef: frontier.source_ref },
+        {
+          sourceRef: frontier.source_ref,
+          ...(frontier.location !== undefined ? { location: frontier.location } : {}),
+        },
       ])),
     };
   }
@@ -210,6 +233,12 @@ function normalizeFrontierForDelta(args: {
     roundId: args.frontier.round_id,
     validationStatus: validation.validation_status,
     acceptedRefIds: [...(validation.accepted_source_request_ids ?? [])],
+    // request.requested_location is a pre-existing, already-populated field (LLM-
+    // authored free text, not a region anchor) — NOT threaded into location here.
+    // Doing so would key regionKey lookups on unresolved free text that does not
+    // match the observation side's location (source_ref verbatim), breaking the
+    // byte-identity this PR requires. PR-1b-2 threads it once buildReconstruct-
+    // SourceObservation itself consumes requested_location (design §10 PR-1b-2).
     rowsById: new Map(args.frontier.source_requests.map((request) => [
       request.source_request_id,
       { sourceRef: request.requested_source_ref },
@@ -252,9 +281,14 @@ export function buildSourceObservationDeltaArtifact(args: {
     if (!frontier) {
       throw new Error(`accepted frontier id has no frontier row: ${frontierRefId}`);
     }
-    const resolvedSourceRef = path.resolve(frontier.sourceRef);
-    const observation = nextBySourceRef.get(resolvedSourceRef);
-    if (!observation || previousBySourceRef.has(resolvedSourceRef)) {
+    // A5 (design §5): frontier.location is additive-absent in this PR (see
+    // normalizeFrontierForDelta), so this is the file-level form — byte-
+    // identical to the prior resolve-only lookup key. Once a producer starts
+    // sending a real frontier.location (PR-1b-2), this automatically switches
+    // to the precise region key (see observationsBySourceRef/regionCoverageKeys).
+    const key = regionKey(frontier.sourceRef, frontier.location);
+    const observation = nextBySourceRef.get(key);
+    if (!observation || previousBySourceRef.has(key)) {
       throw new Error(
         `accepted frontier id did not produce a new observation: ${frontierRefId}`,
       );

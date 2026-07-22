@@ -42,7 +42,11 @@ function observation(args: {
     target_material_kind: "code",
     adapter_id: "code-file-observer",
     source_ref: args.ref,
-    location: "file",
+    // location = ref verbatim, matching the real invariant materialize-
+    // preparation.ts's buildReconstructSourceObservation maintains for a
+    // whole-file (unsegmented) observation (Stage 1 source-region-decomposition
+    // design 20260722 §3) — regionKey-based coverage/dedup (PR-1a) depends on it.
+    location: args.ref,
     summary: `Observed ${args.ref}`,
     structural_data: {
       content_excerpt: "export function feature() {}",
@@ -1381,5 +1385,145 @@ describe("validateSourceObservationLineageIndex rejection branches", () => {
         ),
       ).toBe(true);
     });
+  });
+});
+
+describe("regionKey region-readiness (Stage 1 source-region-decomposition design 20260722, PR-1a plumbing)", () => {
+  // No producer sets frontier_refs[].location yet (additive-absent — see artifact-types.ts); this
+  // test manually populates it to prove the DELTA BUILDER can already tell apart two observations of
+  // the SAME file at two DIFFERENT locations, once a future producer (PR-1b-2) starts sending it.
+  // Before this PR, `observationsBySourceRef` collapsed same-file observations last-wins (design §12
+  // confirmed-fact), so two accepted frontier ids for one file would have BOTH silently bound to
+  // whichever observation happened to be last in the array — never throwing, never surfacing the bug.
+  it("binds two accepted frontier ids for the SAME file to their OWN region-specific observation " +
+    "(no last-wins collapse)", () => {
+    const bigRef = "/repo/src/big.ts";
+    const region1 = observation({ id: "obs-big-region-1", ref: bigRef });
+    const region2 = observation({ id: "obs-big-region-2", ref: bigRef });
+    region1.location = "L1-50";
+    region2.location = "L51-100";
+
+    const twoRegionFrontier: ReconstructSourceFrontierArtifact = {
+      ...frontier(),
+      frontier_refs: [
+        {
+          frontier_ref_id: "frontier-big-1",
+          source_ref: bigRef,
+          location: "L1-50",
+          rationale: "Need the first half of a large file.",
+          priority: "high",
+        },
+        {
+          frontier_ref_id: "frontier-big-2",
+          source_ref: bigRef,
+          location: "L51-100",
+          rationale: "Need the second half of a large file.",
+          priority: "high",
+        },
+      ],
+    };
+    const twoRegionFrontierValidation: ReconstructSourceFrontierValidationArtifact = {
+      ...frontierValidation(),
+      accepted_frontier_ref_ids: ["frontier-big-1", "frontier-big-2"],
+    };
+    const previousObservations = observations([]);
+    const nextObservations = observations([region1, region2]);
+
+    const delta = buildSourceObservationDeltaArtifact({
+      sessionId: "session-1",
+      roundId: "round-1",
+      frontierKind: "source_frontier",
+      frontier: twoRegionFrontier,
+      frontierRef: "rounds/round-1/source-frontier.yaml",
+      frontierValidation: twoRegionFrontierValidation,
+      frontierValidationRef: "rounds/round-1/source-frontier-validation.yaml",
+      sourceInventoryRef: "source-inventory.yaml",
+      previousSourceObservations: previousObservations,
+      previousSourceObservationsRef: "source-observations.before.yaml",
+      nextSourceObservations: nextObservations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+
+    expect(delta.delta_rows).toHaveLength(2);
+    const byFrontierId = new Map(delta.delta_rows.map((row) => [row.frontier_ref_id, row]));
+    expect(byFrontierId.get("frontier-big-1")?.observation_id).toBe("obs-big-region-1");
+    expect(byFrontierId.get("frontier-big-2")?.observation_id).toBe("obs-big-region-2");
+  });
+
+  it("a re-observed region (already in previousSourceObservations) still throws, while a NEW " +
+    "region of the same already-observed file does not", () => {
+    const bigRef = "/repo/src/big.ts";
+    const region1 = observation({ id: "obs-big-region-1", ref: bigRef });
+    region1.location = "L1-50";
+    const region2 = observation({ id: "obs-big-region-2", ref: bigRef });
+    region2.location = "L51-100";
+
+    const previousObservations = observations([region1]);
+    const nextObservations = observations([region1, region2]);
+
+    // A NEW region of an already-observed file is accepted (negative-contrast §11: seen file, new
+    // region → accept).
+    const newRegionFrontier: ReconstructSourceFrontierArtifact = {
+      ...frontier(),
+      frontier_refs: [{
+        frontier_ref_id: "frontier-big-2",
+        source_ref: bigRef,
+        location: "L51-100",
+        rationale: "Need the second half.",
+        priority: "high",
+      }],
+    };
+    const newRegionValidation: ReconstructSourceFrontierValidationArtifact = {
+      ...frontierValidation(),
+      accepted_frontier_ref_ids: ["frontier-big-2"],
+    };
+    const delta = buildSourceObservationDeltaArtifact({
+      sessionId: "session-1",
+      roundId: "round-1",
+      frontierKind: "source_frontier",
+      frontier: newRegionFrontier,
+      frontierRef: "rounds/round-1/source-frontier.yaml",
+      frontierValidation: newRegionValidation,
+      frontierValidationRef: "rounds/round-1/source-frontier-validation.yaml",
+      sourceInventoryRef: "source-inventory.yaml",
+      previousSourceObservations: previousObservations,
+      previousSourceObservationsRef: "source-observations.before.yaml",
+      nextSourceObservations: nextObservations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+    expect(delta.delta_rows[0]?.observation_id).toBe("obs-big-region-2");
+
+    // The SAME region re-observed (negative-contrast §11: seen file, SAME region → reject) still
+    // throws "did not produce a new observation" — regionKey does not weaken the existing guard.
+    const sameRegionFrontier: ReconstructSourceFrontierArtifact = {
+      ...frontier(),
+      frontier_refs: [{
+        frontier_ref_id: "frontier-big-1",
+        source_ref: bigRef,
+        location: "L1-50",
+        rationale: "Repeats an already-observed region.",
+        priority: "high",
+      }],
+    };
+    const sameRegionValidation: ReconstructSourceFrontierValidationArtifact = {
+      ...frontierValidation(),
+      accepted_frontier_ref_ids: ["frontier-big-1"],
+    };
+    expect(() =>
+      buildSourceObservationDeltaArtifact({
+        sessionId: "session-1",
+        roundId: "round-1",
+        frontierKind: "source_frontier",
+        frontier: sameRegionFrontier,
+        frontierRef: "rounds/round-1/source-frontier.yaml",
+        frontierValidation: sameRegionValidation,
+        frontierValidationRef: "rounds/round-1/source-frontier-validation.yaml",
+        sourceInventoryRef: "source-inventory.yaml",
+        previousSourceObservations: previousObservations,
+        previousSourceObservationsRef: "source-observations.before.yaml",
+        nextSourceObservations: nextObservations,
+        sourceObservationsRef: "source-observations.yaml",
+      })
+    ).toThrow(/did not produce a new observation/);
   });
 });

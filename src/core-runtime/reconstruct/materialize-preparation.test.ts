@@ -7,6 +7,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { zipSync, strToU8 } from "fflate";
 import type {
   ReconstructSourceInventoryArtifact,
+  ReconstructSourceInventoryUnit,
   ReconstructSourceObservationsArtifact,
   ReconstructTargetMaterialProfileArtifact,
   ReconstructInitialSourceFrontierArtifact,
@@ -19,6 +20,7 @@ import {
   isFullExcerptCaptureEligible,
   materializeReconstructPreparationArtifacts,
   spreadsheetUnsupportedReason,
+  stableFrontierRefId,
 } from "./materialize-preparation.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
@@ -933,5 +935,45 @@ describe("buildReconstructSourceObservation spreadsheet seam (P2, csv)", () => {
     expect(inventory.unsupported_reason).toEqual(expect.stringMatching(/unzip failed|workbook\.xml/));
     expect(observation!.summary).toContain("extraction unsupported");
     expect(observation!.summary).toContain("structure_inspected_only");
+  });
+});
+
+describe("stableFrontierRefId (Stage 1 source-region-decomposition design 20260722 §5 A9)", () => {
+  function unit(overrides: Partial<ReconstructSourceInventoryUnit> = {}): ReconstructSourceInventoryUnit {
+    return {
+      ref: "/repo/src/feature.ts",
+      exists: true,
+      target_material_kind: "code",
+      inventory_unit: "file",
+      profile_ref: "code-file",
+      scan_status: "planned",
+      skip_reason: null,
+      ...overrides,
+    };
+  }
+
+  it("with location absent (this PR's only state), matches the pre-A9 formula byte-for-byte", () => {
+    const withoutLocation = unit();
+    const preA9Digest = crypto
+      .createHash("sha256")
+      .update(
+        `${withoutLocation.target_material_kind}\n${path.resolve(withoutLocation.ref)}\n${withoutLocation.inventory_unit}`,
+      )
+      .digest("hex")
+      .slice(0, 16);
+    expect(stableFrontierRefId(withoutLocation)).toBe(`frontier_initial_${preA9Digest}`);
+  });
+
+  it("folds location into the digest ONLY when present — two units differing only by an absent" +
+    "vs. present location produce DIFFERENT ids (region-readiness)", () => {
+    const wholeFile = unit();
+    const region = unit({ location: "L1-50" });
+    expect(stableFrontierRefId(region)).not.toBe(stableFrontierRefId(wholeFile));
+  });
+
+  it("two DIFFERENT locations on the same ref produce distinct ids", () => {
+    const region1 = unit({ location: "L1-50" });
+    const region2 = unit({ location: "L51-100" });
+    expect(stableFrontierRefId(region1)).not.toBe(stableFrontierRefId(region2));
   });
 });

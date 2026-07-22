@@ -298,7 +298,11 @@ import {
   ontologySeedClaimProjections,
   ontologySeedExcludedClaimIds,
 } from "./seed-claim-projections.js";
-import type { ReconstructSourceObservation } from "./source-observations.js";
+import {
+  regionCoverageKeys,
+  regionKey,
+  type ReconstructSourceObservation,
+} from "./source-observations.js";
 import {
   COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
   COMPREHENSION_ARTIFACT_CONTRACT_VERSION,
@@ -15087,20 +15091,28 @@ function validateSourceFrontier(args: {
   targetMaterialProfileValidation: ReconstructTargetMaterialProfileValidationArtifact;
   targetMaterialProfileValidationRef: string;
 }): ReconstructSourceFrontierValidationArtifact {
+  // A1 (design §5): regionKey-keyed. unit.location/frontier.location are
+  // additive-absent in this PR, so every query key here is `regionKey(ref)`
+  // (no location) — the bare resolved ref, byte-identical to the prior
+  // `path.resolve()` keys. The observation/inventory-unit (authoritative) side
+  // registers under regionCoverageKeys so a location-aware query (PR-1b-2) can
+  // also find it later without changing this PR's behavior.
   const inventoryRefs = new Set(
-    args.sourceInventory.inventory_units.map((unit) => path.resolve(unit.ref)),
+    args.sourceInventory.inventory_units.flatMap((unit) =>
+      regionCoverageKeys(unit.ref, unit.location)
+    ),
   );
   const observedRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const accepted: string[] = [];
   const rejected: ReconstructSourceFrontierValidationArtifact["rejected_frontier_refs"] = [];
   const seen = new Set<string>();
   for (const frontier of args.sourceFrontier.frontier_refs) {
-    const resolved = path.resolve(frontier.source_ref);
-    if (seen.has(resolved)) {
+    const key = regionKey(frontier.source_ref, frontier.location);
+    if (seen.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15108,8 +15120,8 @@ function validateSourceFrontier(args: {
       });
       continue;
     }
-    seen.add(resolved);
-    if (observedRefs.has(resolved)) {
+    seen.add(key);
+    if (observedRefs.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15117,7 +15129,7 @@ function validateSourceFrontier(args: {
       });
       continue;
     }
-    if (!inventoryRefs.has(resolved)) {
+    if (!inventoryRefs.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15197,9 +15209,12 @@ async function observeAcceptedFrontierRefs(args: {
   codeSetTierObservation?: boolean;
   codeStructureLayout?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
+  // A2 (design §5): regionKey-keyed coverage set (registered under both the
+  // file-level and precise forms — see regionCoverageKeys). inventoryByRef
+  // stays file-level (one inventory unit per file — unchanged by this PR).
   const observedSourceRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const frontierById = new Map(
@@ -15222,7 +15237,11 @@ async function observeAcceptedFrontierRefs(args: {
       throw new Error(`accepted source frontier id has no source-frontier row: ${frontierRefId}`);
     }
     const resolvedSourceRef = path.resolve(frontier.source_ref);
-    if (observedSourceRefs.has(resolvedSourceRef)) continue;
+    // coverageKey: frontier.location is additive-absent in this PR, so this is
+    // the file-level form (see regionKey's doc comment) — byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(frontier.source_ref, frontier.location);
+    if (observedSourceRefs.has(coverageKey)) continue;
     const inventoryUnit = inventoryByRef.get(resolvedSourceRef);
     if (!inventoryUnit) {
       throw new Error(
@@ -15268,7 +15287,12 @@ async function observeAcceptedFrontierRefs(args: {
       });
     }
     addedObservations.push(observation);
-    observedSourceRefs.add(resolvedSourceRef);
+    // Register the newly added observation under both coverage forms — same as
+    // the initial Set construction above — so a LATER accepted frontier row for
+    // the same file within this same batch is also correctly recognized.
+    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
+      observedSourceRefs.add(k);
+    }
   }
 
   const nextSourceObservations: ReconstructSourceObservationsArtifact = {
@@ -15279,7 +15303,7 @@ async function observeAcceptedFrontierRefs(args: {
       ...addedObservations,
     ],
     skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
-      !observedSourceRefs.has(path.resolve(skipped.ref))
+      !observedSourceRefs.has(regionKey(skipped.ref))
     ),
     validation_results: [
       ...new Set([
@@ -15304,9 +15328,14 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   codeSetTierObservation?: boolean;
   codeStructureLayout?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
+  // A3 (design §5): regionKey-keyed coverage set (registered under both the
+  // file-level and precise forms). request.requested_location is a pre-existing
+  // LLM-authored field (not a region anchor) — NOT threaded into the query key
+  // below for the same byte-identity reason as normalizeFrontierForDelta's
+  // maturation branch (see source-observation-delta-validation.ts); PR-1b-2 threads it.
   const observedSourceRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const sourceRequestById = new Map(
@@ -15334,7 +15363,11 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       );
     }
     const resolvedSourceRef = path.resolve(request.requested_source_ref);
-    if (observedSourceRefs.has(resolvedSourceRef)) {
+    // coverageKey: request.requested_location is deliberately NOT consulted (see
+    // the observedSourceRefs comment above) — this is the file-level form,
+    // byte-identical to the prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(request.requested_source_ref);
+    if (observedSourceRefs.has(coverageKey)) {
       throw new Error(
         `accepted maturation closure source request was already observed before re-entry: ${request.requested_source_ref}`,
       );
@@ -15369,7 +15402,11 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       );
     }
     addedObservations.push(observation);
-    observedSourceRefs.add(resolvedSourceRef);
+    // Register the newly added observation under both coverage forms — same as
+    // the initial Set construction above.
+    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
+      observedSourceRefs.add(k);
+    }
   }
 
   const nextSourceObservations: ReconstructSourceObservationsArtifact = {
@@ -15380,7 +15417,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       ...addedObservations,
     ],
     skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
-      !observedSourceRefs.has(path.resolve(skipped.ref))
+      !observedSourceRefs.has(regionKey(skipped.ref))
     ),
     validation_results: [
       ...new Set([

@@ -691,10 +691,18 @@ export function spreadsheetUnsupportedReason(
   return typeof reason === "string" && reason.length > 0 ? reason : null;
 }
 
-function stableFrontierRefId(unit: ReconstructSourceInventoryUnit): string {
+// A9 (design §5): fold unit.location into the digest ONLY when present, so a
+// non-region unit (location absent — everywhere in this PR, buildInventoryUnits
+// stays one unit per file) produces the exact same digest as before. PR-1b-2's
+// region units (location present) get distinct ids from the unit they share a
+// file with. Exported for the conditional-fold unit test.
+export function stableFrontierRefId(unit: ReconstructSourceInventoryUnit): string {
   const digest = crypto
     .createHash("sha256")
-    .update(`${unit.target_material_kind}\n${path.resolve(unit.ref)}\n${unit.inventory_unit}`)
+    .update(
+      `${unit.target_material_kind}\n${path.resolve(unit.ref)}\n${unit.inventory_unit}` +
+        (unit.location !== undefined ? `\n${unit.location}` : ""),
+    )
     .digest("hex")
     .slice(0, 16);
   return `frontier_initial_${digest}`;

@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { TargetMaterialKind } from "../target-material-kind.js";
 import {
   inventoryHasInspectedStructure,
@@ -35,6 +36,54 @@ export interface ReconstructSourceObservation {
 export interface ReconstructSourceObservationValidation {
   valid: boolean;
   violations: string[];
+}
+
+/**
+ * Composite coverage/dedup key (Stage 1 source-region-decomposition design
+ * 20260722 §5): a bare `path.resolve(source_ref)` identifies a FILE; once
+ * regions land (PR-1b-2) an observation identifies a REGION within a file, so
+ * every Bucket A coverage/dedup Set/Map must key on the (source_ref, location)
+ * tuple instead. `stableObservationId` already folds this exact tuple
+ * (materialize-preparation.ts, unchanged by this PR) — regionKey exists to give
+ * every OTHER coverage/dedup site the same single derivation path, so the
+ * exhaustiveness gate (source-region-key-coverage.test.ts) can assert none of
+ * them still key on a bare resolved source_ref.
+ *
+ * Only the `sourceRef` half is resolved to a canonical absolute path;
+ * `location` is folded in VERBATIM when present (never resolved — a real region
+ * anchor like "L128-210" must never be run through `path.resolve()`). When
+ * `location` is ABSENT, regionKey degrades to the bare resolved source_ref —
+ * BYTE-IDENTICAL to the pre-regionKey Set/Map key. This is deliberate, not just
+ * a convenience default: a query on the "no real region yet" side of a
+ * comparison (frontier refs / inventory units — Stage 1a carries no populated
+ * `location` for any of them) has no way to know what raw string an
+ * observation's OWN `location` happens to hold (it is carried verbatim, and its
+ * representation — relative vs. absolute — is whatever the caller that built
+ * the observation used), so a location FALLBACK guess on the query side can
+ * never be made byte-identity-safe. Matching purely on the resolved source_ref
+ * when location is unknown reproduces today's behavior exactly, independent of
+ * any raw-string spelling on either side. See `regionCoverageKeys` for how the
+ * observation (authoritative) side stays reachable by BOTH a location-less and
+ * a location-aware query.
+ */
+export function regionKey(sourceRef: string, location?: string): string {
+  const resolved = path.resolve(sourceRef);
+  return location !== undefined ? `${resolved}\n${location}` : resolved;
+}
+
+/**
+ * Every coverage key an observation of (sourceRef, location) must be
+ * discoverable under: always the FILE-LEVEL key (`regionKey(sourceRef)`,
+ * matches a location-less 1a query — see regionKey's doc comment), plus the
+ * precise region key (`regionKey(sourceRef, location)`, matches once a query
+ * itself carries a real location — PR-1b-2) when `location` is present. The
+ * observation/inventory-unit (authoritative) side calls this; the query side
+ * just calls `regionKey` directly with whatever it has.
+ */
+export function regionCoverageKeys(sourceRef: string, location?: string): string[] {
+  return location !== undefined
+    ? [regionKey(sourceRef), regionKey(sourceRef, location)]
+    : [regionKey(sourceRef)];
 }
 
 const PROHIBITED_STRUCTURAL_KEYS = new Set([
