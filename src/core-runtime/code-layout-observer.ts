@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 import {
   CODE_STRUCTURE_LINE_BOUND,
   CODE_STRUCTURE_SCHEMA_VERSION,
   CONTAINER_KINDS,
+  codeStructureLanguageForExtension,
   importRecordOf,
+  observeCodeStructure,
   type CodeHierarchyNode,
   type CodeImportInventoryCensus,
   type CodeStructureInventory,
@@ -11,7 +14,7 @@ import {
   type CodeSymbolSpan,
   type ObservedCodeImport,
 } from "./code-structure-observer.js";
-import type { LinguistIdentification } from "./linguist-language.js";
+import { identifyLanguage, type LinguistIdentification } from "./linguist-language.js";
 import {
   LINGUIST_CATALOG_SHA256,
   LINGUIST_LANGUAGE_META,
@@ -867,4 +870,42 @@ export function observeCodeLayout(args: {
     // file per-file, the run survives, the failure is loud via the reason string.
     return { status: "unsupported", reason: "layout_internal_invariant" };
   }
+}
+
+/** Grammar-availability-first dispatch (design §7): a tree-sitter grammar → the PRECISE Tier 2
+ *  observer ONLY (a parse failure stays `unsupported` — a precise failure is never hidden behind a
+ *  rough success). No grammar ∧ layout opt-in ∧ eligible → the Tier 1 layout observer. The single
+ *  entry the materialize hook calls, so the tier-routing rule has one home. */
+export async function observeCodeStructureWithLayoutTier(args: {
+  ref: string;
+  text: string;
+  captureImports?: boolean;
+  layoutEnabled: boolean;
+}): Promise<CodeStructureObservationResult> {
+  const ext = path.extname(args.ref).toLowerCase();
+  if (codeStructureLanguageForExtension(ext) !== null) {
+    return observeCodeStructure({
+      ref: args.ref,
+      text: args.text,
+      ...(args.captureImports ? { captureImports: true } : {}),
+    });
+  }
+  if (!args.layoutEnabled) {
+    return { status: "unsupported", reason: `language not supported: ${ext || "(no extension)"}` };
+  }
+  const firstLine = args.text.split(/\r?\n/, 1)[0] ?? "";
+  const identification = identifyLanguage({
+    basename: path.basename(args.ref),
+    extension: ext,
+    ...(firstLine ? { firstLine } : {}),
+  });
+  if (!isLayoutObserverEligible({ extension: ext, identification })) {
+    return { status: "unsupported", reason: `layout not eligible: ${ext || "(no extension)"}` };
+  }
+  return observeCodeLayout({
+    ref: args.ref,
+    text: args.text,
+    identification,
+    ...(args.captureImports ? { captureImports: true } : {}),
+  });
 }

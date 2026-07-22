@@ -22,7 +22,8 @@ import {
   validateSourceObservationBoundary,
   type ReconstructSourceObservation,
 } from "./source-observations.js";
-import { codeStructureLanguageForExtension, observeCodeStructure } from "../code-structure-observer.js";
+import { codeStructureLanguageForExtension } from "../code-structure-observer.js";
+import { observeCodeStructureWithLayoutTier } from "../code-layout-observer.js";
 import { buildDeterministicComprehensionArtifact } from "./comprehension-artifact.js";
 import {
   loadReconstructSourceProfiles,
@@ -464,7 +465,7 @@ export async function buildReconstructSourceObservation(
   // additionally carries the deterministic per-position structure inventory
   // (or an explicit unsupported reason) in structural_data. Absent/false ⇒
   // byte-identical to the pre-extension generic observation (G-OFF).
-  options?: { isRuntimeTargetSource?: boolean; codeStructureObservation?: boolean; codeSetTierObservation?: boolean },
+  options?: { isRuntimeTargetSource?: boolean; codeStructureObservation?: boolean; codeSetTierObservation?: boolean; codeStructureLayout?: boolean },
 ): Promise<ReconstructSourceObservation | null> {
   if (!detection.exists || !isConcreteTargetMaterialKind(detection.kind)) {
     return null;
@@ -517,9 +518,13 @@ export async function buildReconstructSourceObservation(
       text = null; // TOCTOU vanish — the generic observation still stands; no inventory.
     }
     if (text !== null) {
-      const structure = await observeCodeStructure({
+      // Grammar-availability-first dispatch (design 20260721 §7): a tree-sitter grammar → Tier 2
+      // (precise); no grammar ∧ layout opt-in ∧ eligible → Tier 1 (rough layout). A parse failure on
+      // a grammar language stays unsupported — never a rough fallback.
+      const structure = await observeCodeStructureWithLayoutTier({
         ref: detection.ref,
         text,
+        layoutEnabled: options?.codeStructureLayout === true,
         ...(options?.codeSetTierObservation === true ? { captureImports: true } : {}),
       });
       codeStructural =
@@ -839,6 +844,7 @@ export async function materializeReconstructPreparationArtifacts(
       isRuntimeTargetSource: true,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
+      ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
     });
     if (observation) {
       const unsupportedReason = spreadsheetUnsupportedReason(observation);

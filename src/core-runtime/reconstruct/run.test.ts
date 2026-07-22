@@ -7051,6 +7051,59 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
       sourceObservationsReuseSha256(base as any),
     );
   });
+
+  // design 20260721 §9: content_sha256 is a raw-byte hash and cannot reflect an EXTRACTOR-LOGIC or
+  // Linguist-CATALOG change, so the reuse digest folds the code inventory IDENTITY
+  // (content + extractor_logic_sha256 + tier) EXISTENCE-CONDITIONALLY — capture-on runs rotate on a
+  // logic change; no-capture runs stay byte-identical.
+  const codeArtifact = (inventory: unknown | null) => ({
+    observations: [
+      {
+        observation_id: "obs-code",
+        target_material_kind: "code",
+        adapter_id: "minimal-code-structure-observer",
+        source_ref: "/repo/src/a.lua",
+        location: "file",
+        summary: "code",
+        structural_data: {
+          path_kind: "file",
+          size_bytes: 100,
+          line_count: 10,
+          char_count: 100,
+          content_sha256: "sha-bytes",
+          excerpt_truncated: false,
+          content_excerpt: "local a = 1",
+          ...(inventory ? { code_structure_inventory: inventory } : {}),
+        },
+      },
+    ],
+    skipped_refs: [],
+  });
+  const inv = (extractorSha: string, tier?: "layout") => ({
+    schema_version: "1",
+    language: "lua",
+    content_sha256: "sha-bytes",
+    extractor_logic_sha256: extractorSha,
+    symbol_tiles: { spans: [], hierarchy: [], root_key: "1-10" },
+    ...(tier ? { extraction_tier: tier } : {}),
+  });
+
+  it("rotates the reuse digest when the code extractor_logic_sha256 changes (same file bytes)", () => {
+    const before = sourceObservationsReuseSha256(codeArtifact(inv("logic-v1", "layout")) as any);
+    const after = sourceObservationsReuseSha256(codeArtifact(inv("logic-v2", "layout")) as any);
+    expect(after).not.toBe(before);
+    // deterministic: same inputs → same hash
+    expect(sourceObservationsReuseSha256(codeArtifact(inv("logic-v1", "layout")) as any)).toBe(before);
+  });
+
+  it("folds the code inventory identity ONLY when an inventory is present (no-capture byte-identical)", () => {
+    // A capture-on observation (has inventory) differs from the byte-identical no-capture one.
+    const withInventory = sourceObservationsReuseSha256(codeArtifact(inv("logic-v1")) as any);
+    const noCapture = sourceObservationsReuseSha256(codeArtifact(null) as any);
+    expect(withInventory).not.toBe(noCapture);
+    // The no-capture digest is stable — the existence-conditional spread contributes nothing.
+    expect(sourceObservationsReuseSha256(codeArtifact(null) as any)).toBe(noCapture);
+  });
 });
 
 // Spec basis (INV-TEST-1): handoff 20260719-semantic-map-v2-live §2 pre-live flag — the code

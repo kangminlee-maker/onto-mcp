@@ -80,3 +80,71 @@ describe("materialize-preparation code-structure opt-in (DD4 / G-OFF)", () => {
     expect(on!.structural_data.code_structure_inventory).toBeUndefined();
   });
 });
+
+// Grammar-free layout tier (design 20260721 §7): the dispatch is grammar-availability-first. A
+// tree-sitter language always goes to Tier 2; a grammar-free eligible language reaches the Tier 1
+// layout observer ONLY under the layout opt-in (silent-off detection — an unwired opt-in would leave
+// the file `unsupported`).
+describe("materialize-preparation grammar-free layout dispatch (§7)", () => {
+  it("reaches the Tier 1 layout observer for a grammar-free file only under the opt-in", async () => {
+    const ref = path.join(FIXTURES, "greeter.lua");
+    // opt-in OFF: grammar-first leaves the grammar-free file unsupported (contrast).
+    const off = await buildReconstructSourceObservation(detectionFor(ref), undefined, {
+      isRuntimeTargetSource: true,
+      codeStructureObservation: true,
+    });
+    expect(off!.structural_data.code_structure_inventory).toBeUndefined();
+    const offReason = off!.structural_data.code_structure_unsupported as { reason: string };
+    expect(offReason.reason).toContain("language not supported");
+
+    // opt-in ON: the layout observer runs, marking extraction_tier "layout".
+    const on = await buildReconstructSourceObservation(detectionFor(ref), undefined, {
+      isRuntimeTargetSource: true,
+      codeStructureObservation: true,
+      codeStructureLayout: true,
+    });
+    const inv = on!.structural_data.code_structure_inventory as {
+      language: string;
+      extraction_tier?: string;
+      language_identification?: { basis: string };
+      symbol_tiles: { spans: unknown[] };
+    };
+    expect(inv).toBeDefined();
+    expect(inv.extraction_tier).toBe("layout");
+    expect(inv.language).toBe("lua");
+    expect(inv.language_identification!.basis).toBe("extension_unique");
+    expect(inv.symbol_tiles.spans.length).toBeGreaterThan(0);
+    expect(on!.structural_data.code_structure_unsupported).toBeUndefined();
+  });
+
+  it("runs layout on a block-declaration schema language (.graphql) under the opt-in", async () => {
+    const ref = path.join(FIXTURES, "schema.graphql");
+    const on = await buildReconstructSourceObservation(detectionFor(ref), undefined, {
+      isRuntimeTargetSource: true,
+      codeStructureObservation: true,
+      codeStructureLayout: true,
+    });
+    const inv = on!.structural_data.code_structure_inventory as {
+      extraction_tier?: string;
+      symbol_tiles: { spans: { symbol_names: string[] }[] };
+    };
+    expect(inv.extraction_tier).toBe("layout");
+    expect(inv.symbol_tiles.spans.flatMap((s) => s.symbol_names)).toContain("Product");
+  });
+
+  it("keeps a GRAMMAR language on Tier 2 even with the layout opt-in on (grammar-first)", async () => {
+    const ref = path.join(FIXTURES, "inventory_service.py");
+    const on = await buildReconstructSourceObservation(detectionFor(ref), undefined, {
+      isRuntimeTargetSource: true,
+      codeStructureObservation: true,
+      codeStructureLayout: true,
+    });
+    const inv = on!.structural_data.code_structure_inventory as {
+      language: string;
+      extraction_tier?: string;
+    };
+    // precise tree-sitter output — never downgraded to the rough layout tier
+    expect(inv.language).toBe("python");
+    expect(inv.extraction_tier).toBeUndefined();
+  });
+});

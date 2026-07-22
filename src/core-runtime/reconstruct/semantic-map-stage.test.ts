@@ -2163,6 +2163,34 @@ describe("runSemanticMapStage code kind routing (step 6 — G-L2 stage half + G-
     }
   });
 
+  it("§6-2 layout tier: a grammar-free ROUGH inventory is skipped (code_layout_tier_not_applicable), 0 dispatch", async () => {
+    // Build a layout-tier inventory whose excerpt/sha guards WOULD pass — the tier check fires FIRST
+    // (before the excerpt guard), so rough evidence never reaches the LLM map stage.
+    const base = await codeInventory();
+    const layoutInventory = { ...base, extraction_tier: "layout" as const, language: "lua" };
+    const { author, counters } = mockCodeAuthor();
+    const sessionRoot = await tempRoot();
+    const result = await runSemanticMapStage({
+      sourceObservations: mixedObservationsArtifact({
+        code: { structural: { code_structure_inventory: layoutInventory } },
+      }),
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      codeKindOptIn: true,
+      codePreImageBase: CODE_PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    const codeRow = result.census!.by_observation.find((r) => r.observation_id === "obs-code");
+    expect(codeRow?.map_present).toBe(false);
+    expect(codeRow?.skip_reason).toBe("code_layout_tier_not_applicable");
+    expect(counters.codeSynthesize).toBe(0); // rough evidence never dispatched
+    // Containment: the sibling spreadsheet observation still produces.
+    expect(result.census!.by_observation.find((r) => r.observation_id === "obs-sheet")?.map_present).toBe(true);
+    await fs.rm(sessionRoot, { recursive: true, force: true });
+  });
+
   it("G-OFF (i): settings opt-in absent → code observation invisible; outputs byte-identical to a code-less run; 0 code dispatches", async () => {
     const inventory = await codeInventory();
     const withCode = mixedObservationsArtifact({ code: { structural: { code_structure_inventory: inventory } } });

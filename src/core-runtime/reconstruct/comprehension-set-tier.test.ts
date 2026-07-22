@@ -29,6 +29,7 @@ function inventoryOf(args: {
   imports?: ObservedCodeImport[];
   symbols?: string[];
   lines?: number;
+  extractionTier?: "layout";
 }): CodeStructureInventory {
   const lines = args.lines ?? 10;
   return {
@@ -55,6 +56,7 @@ function inventoryOf(args: {
       root_key: `1-${lines}`,
       ...(args.imports ? { imports: args.imports } : {}),
     },
+    ...(args.extractionTier ? { extraction_tier: args.extractionTier } : {}),
   };
 }
 
@@ -215,6 +217,47 @@ describe("conservative resolver failure directions (FD5)", () => {
     expect(reasonOf(result, "./dup.js")).toBe("ambiguous_member_match");
     // The ONLY resolved relation is the unique one — cardinality, not vacuity.
     expect(result.relations!.filter((r) => r.resolved_in_set !== null)).toHaveLength(1);
+  });
+
+  // Grammar-free layout members (design 20260721 §6-3): rough imports never fake a resolved relation
+  // — held parse_unavailable — but the truncation gate is judged FIRST so an over-bound layout
+  // specifier keeps its honest truncation reason.
+  it("holds a layout member's imports parse_unavailable, truncation gate first", () => {
+    const result = assembleCodeSetTier({
+      members: [
+        member("obs-from", "/r/src/from.lua", inventoryOf({
+          contentSha: "f",
+          language: "lua",
+          extractionTier: "layout",
+          imports: [
+            record("./target"), // would be resolved_unique for a precise TS member — here parse_unavailable
+            { to_specifier: "./trunc…", resolved_in_set: null, specifier_truncated: true, original_length: 200, original_sha256: "cd" },
+          ],
+        })),
+        member("obs-b", "/r/src/target.ts", inventoryOf({ contentSha: "t", imports: [] })),
+      ],
+      excluded: [],
+    });
+    expect(result.status).toBe("complete");
+    expect(reasonOf(result, "./target")).toBe("parse_unavailable");
+    expect(reasonOf(result, "./trunc…")).toBe("specifier_truncated");
+    // no rough import ever produced a resolved relation
+    expect(result.relations!.filter((r) => r.resolved_in_set !== null)).toHaveLength(0);
+  });
+
+  it("renders a layout member's extraction_tier in the set overview (rough disclosure)", () => {
+    const result = assembleCodeSetTier({
+      members: [
+        member("obs-a", "/r/src/a.lua", inventoryOf({ contentSha: "a", language: "lua", extractionTier: "layout" })),
+        member("obs-b", "/r/src/b.ts", inventoryOf({ contentSha: "b" })),
+      ],
+      excluded: [],
+    });
+    const files = result.overview_render!.directories.flatMap((d) => d.files);
+    const luaFile = files.find((f) => f.path.endsWith("a.lua"))!;
+    const tsFile = files.find((f) => f.path.endsWith("b.ts"))!;
+    expect(luaFile.extraction_tier).toBe("layout");
+    expect(tsFile.extraction_tier).toBeUndefined(); // precise members carry no tier field
   });
 
   it("resolves python leading-dot relative imports only; absolute stays external", () => {
