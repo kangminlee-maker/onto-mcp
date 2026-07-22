@@ -531,6 +531,14 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // fold `location`) for any file it decomposes — hence INVARIANT-CHANGE. Absent = off — every
   // observation stays whole-file, byte-identical.
   "source_region_decomposition",
+  // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+  // §8/§12/§13 PR-2a). When true AND the planned-unit count exceeds
+  // SOURCE_ADMISSION_SELECTION_THRESHOLD, materialize enters admission mode: units get a
+  // lightweight outline instead of unconditional deep observation, and a purpose-driven
+  // selection stage chooses which admitted units are promoted to deep observation
+  // (INVARIANT-CHANGE, wired in PR-2b). UNUSED in this PR — no code branches on it yet. Absent
+  // = off — every planned unit is deep-observed exactly as today, byte-identical.
+  "source_admission_selection",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

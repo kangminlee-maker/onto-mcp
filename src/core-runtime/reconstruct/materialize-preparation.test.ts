@@ -23,6 +23,7 @@ import {
   isFullExcerptCaptureEligible,
   isSourceRegionDecompositionEligible,
   materializeReconstructPreparationArtifacts,
+  OUTLINE_EXCERPT_CHAR_LIMIT,
   spreadsheetUnsupportedReason,
   stableFrontierRefId,
 } from "./materialize-preparation.js";
@@ -1327,5 +1328,149 @@ describe("Stage 1 source-region-decomposition observe-time fanout — materializ
     for (const observation of regionObservations) {
       expect(observation.structural_data.code_structure_inventory).toBeUndefined();
     }
+  });
+});
+
+describe("buildReconstructSourceObservation outlineOnly (Core Stage 2 inter-document breadth design 20260722 §3, PR-2a substrate)", () => {
+  it("forces the small OUTLINE_EXCERPT_CHAR_LIMIT cap on a code file that would otherwise whole-capture, keeps content_sha256 as the WHOLE-FILE hash, and still captures the code-structure skeleton", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "big.ts");
+    // Source-language code whole-captures by default (M3a) — outlineOnly must override that
+    // regardless of isFullExcerptCaptureEligible, since outline mode never whole-captures.
+    const body = `// big code file\nexport function example(x: number): number {\n  return x + 1;\n}\n${"export const value = 1;\n".repeat(500)}`;
+    expect(body.length).toBeGreaterThan(OUTLINE_EXCERPT_CHAR_LIMIT);
+    await fs.writeFile(target, body, "utf8");
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "code" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+
+    const observation = await buildReconstructSourceObservation(detection, undefined, {
+      outlineOnly: true,
+      codeStructureObservation: true,
+    });
+    expect(observation).not.toBeNull();
+    const sd = observation!.structural_data as Record<string, unknown>;
+
+    // Bounded excerpt — never whole-capture in outline mode, even for a whole-capture-eligible kind.
+    expect((sd.content_excerpt as string).length).toBe(OUTLINE_EXCERPT_CHAR_LIMIT);
+    expect(sd.excerpt_truncated).toBe(true);
+
+    // content_sha256 stays the WHOLE-FILE hash (the provenance spine, design §3) even though the
+    // excerpt captured alongside it is tiny.
+    expect(sd.content_sha256).toBe(await sha256File(target));
+
+    // The kind-specific skeleton (exactly one — code_structure_inventory here) is still captured;
+    // outlineOnly only narrows the excerpt, it does not disable the structure observers.
+    expect(sd.code_structure_inventory).toBeDefined();
+    expect(sd.workbook_inventory).toBeUndefined();
+
+    // "The caller keeps only the outline fields" (design §3): plucking exactly the outline shape
+    // from the returned observation discards observation_id/adapter_id/summary/round_id/... —
+    // the full observation is never what gets persisted for an admitted unit.
+    const outline = {
+      content_sha256: sd.content_sha256 as string,
+      char_count: sd.char_count as number,
+      line_count: sd.line_count as number,
+      size_bytes: sd.size_bytes as number,
+      outline_excerpt: sd.content_excerpt as string | null,
+      outline_excerpt_truncated: sd.excerpt_truncated as boolean,
+      code_structure_inventory: sd.code_structure_inventory,
+    };
+    expect(Object.keys(outline).sort()).toEqual(
+      [
+        "char_count",
+        "code_structure_inventory",
+        "content_sha256",
+        "line_count",
+        "outline_excerpt",
+        "outline_excerpt_truncated",
+        "size_bytes",
+      ].sort(),
+    );
+  });
+
+  it("does not falsely mark a file shorter than the cap as truncated (cap, not a fixed slice)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "small.md");
+    const body = "# Title\n\nshort body\n";
+    await fs.writeFile(target, body, "utf8");
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "document" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+    const observation = await buildReconstructSourceObservation(detection, undefined, {
+      outlineOnly: true,
+    });
+    const sd = observation!.structural_data as Record<string, unknown>;
+    expect(sd.content_excerpt).toBe(body);
+    expect(sd.excerpt_truncated).toBe(false);
+  });
+
+  it("absent (the default) stays byte-identical to the pre-existing whole-capture behavior", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "big-default.ts");
+    const body = "export const value = 1;\n".repeat(500);
+    expect(body.length).toBeGreaterThan(OUTLINE_EXCERPT_CHAR_LIMIT);
+    await fs.writeFile(target, body, "utf8");
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "code" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+    const observation = await buildReconstructSourceObservation(detection);
+    const sd = observation!.structural_data as Record<string, unknown>;
+    // Whole-captured (M3a), unaffected by OUTLINE_EXCERPT_CHAR_LIMIT — outlineOnly was never passed.
+    expect(sd.content_excerpt).toBe(body);
+    expect(sd.excerpt_truncated).toBe(false);
+  });
+});
+
+describe("ReconstructSourceInventoryUnit admitted status + outline (Core Stage 2 inter-document breadth design 20260722 §2/§3, PR-2a substrate)", () => {
+  it("a hand-built 'admitted' unit with a populated outline (real code_structure_inventory) round-trips through YAML unchanged", async () => {
+    const root = await makeTmpProject();
+    const filePath = path.join(root, "admitted-unit.yaml");
+    const codeStructureResult = await observeCodeStructure({
+      ref: "big-module.ts",
+      text: "export function entry(): void {}\n",
+    });
+    expect(codeStructureResult.status).toBe("ok");
+    const codeStructureInventory =
+      codeStructureResult.status === "ok" ? codeStructureResult.inventory : undefined;
+
+    const admittedUnit: ReconstructSourceInventoryUnit = {
+      ref: "/repo/src/big-module.ts",
+      exists: true,
+      target_material_kind: "code",
+      inventory_unit: "file",
+      profile_ref: "code-file",
+      scan_status: "admitted",
+      skip_reason: null,
+      outline: {
+        content_sha256: crypto.createHash("sha256").update("whole file bytes").digest("hex"),
+        char_count: 12000,
+        line_count: 400,
+        size_bytes: 12000,
+        outline_excerpt: "export function entry(): void {}\n",
+        outline_excerpt_truncated: true,
+        code_structure_inventory: codeStructureInventory,
+      },
+    };
+
+    await fs.writeFile(filePath, stringifyYaml(admittedUnit), "utf8");
+    const roundTripped = await readYaml<ReconstructSourceInventoryUnit>(filePath);
+
+    expect(roundTripped).toEqual(admittedUnit);
+    expect(roundTripped.scan_status).toBe("admitted");
+    expect(roundTripped.outline?.code_structure_inventory).toBeDefined();
+    expect(roundTripped.outline?.workbook_inventory).toBeUndefined();
   });
 });

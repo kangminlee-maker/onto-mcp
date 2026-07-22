@@ -68,6 +68,12 @@ export interface MaterializeReconstructPreparationArtifactsParams {
    *  blank-line-paragraph strategy). Absent = off — every observation stays whole-file,
    *  byte-identical. */
   sourceRegionDecomposition?: boolean;
+  /** Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+   *  §8/§13 PR-2a, threaded like sourceRegionDecomposition): set from
+   *  reconstruct.execution.source_admission_selection. UNUSED in this PR — no code branches on
+   *  it yet (materialize keeps observing every planned unit regardless). PR-2b wires the
+   *  threshold-gated admission-mode decision. Absent = off, byte-identical. */
+  sourceAdmissionSelection?: boolean;
 }
 
 const CONCRETE_TARGET_MATERIAL_KINDS = new Set<TargetMaterialKind>([
@@ -282,6 +288,25 @@ const CHARS_PER_TOKEN_LB = 1;
  */
 const PROMPT_OVERHEAD_RESERVE_CHARS = 50_000;
 
+/**
+ * Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §3):
+ * the outline `outline_excerpt` cap — a small navigation/selection signal (title/first
+ * heading), deliberately far below `DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT` since outline mode
+ * never whole-captures regardless of kind (§3's "cheapness = LM tokens" point). Forced by
+ * `buildReconstructSourceObservation`'s `outlineOnly` option; unused elsewhere in this PR.
+ */
+export const OUTLINE_EXCERPT_CHAR_LIMIT = 500;
+
+/**
+ * Core Stage 2 inter-document breadth (design §8, PRELIMINARY — real-corpus tuning is a named
+ * follow-up): materialize enters admission mode only when `sourceAdmissionSelection` is on AND
+ * the planned-unit count exceeds this threshold — a small corpus keeps observing every unit
+ * (selection cost/risk is 0 there). Starting value per §8: the seed-directive prompt projects
+ * at most 64 observations, so admitted-unit counts near 32-64 are the regime this threshold
+ * targets. UNUSED in this PR (no code branches on it yet — PR-2b wires the mode decision).
+ */
+export const SOURCE_ADMISSION_SELECTION_THRESHOLD = 48;
+
 // Clamp integrity: the capture ceiling must be >= the projection floor so the
 // derived budget's clamp(raw, FLOOR, CEILING) range is well-formed and the
 // captured excerpt is always a superset of any projection (C4). A module-load
@@ -486,6 +511,14 @@ export async function buildReconstructSourceObservation(
     codeStructureObservation?: boolean;
     codeSetTierObservation?: boolean;
     codeStructureLayout?: boolean;
+    // Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §3):
+    // forces the small OUTLINE_EXCERPT_CHAR_LIMIT excerpt cap regardless of the kind-aware
+    // structuralExcerptCharLimit (whole-capture-eligible kinds included) — outline mode never
+    // whole-captures. Existing structure observers (code/spreadsheet) still run unchanged; the
+    // caller is responsible for keeping only the outline-shaped fields from the result rather
+    // than persisting it as a full observation. Absent (the default) ⇒ byte-identical to every
+    // pre-existing call. UNUSED by any pipeline call site in this PR — unit-tested only.
+    outlineOnly?: boolean;
     // Stage 1 source-region-decomposition (design 20260722 §5 A2/A3, §10 PR-1b-2): a re-observation
     // caller's already-real region anchor (source-frontier `frontier.location` / maturation-closure
     // `request.requested_location`) — the SAME `location` concept the whole-file default below
@@ -526,7 +559,12 @@ export async function buildReconstructSourceObservation(
     });
   }
   const stats = stat.isFile()
-    ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind, detection.ref))
+    ? await textStats(
+        detection.ref,
+        options?.outlineOnly === true
+          ? OUTLINE_EXCERPT_CHAR_LIMIT
+          : structuralExcerptCharLimit(detection.kind, detection.ref),
+      )
     : {
     line_count: null,
     char_count: null,
@@ -923,6 +961,111 @@ function buildInventoryUnits(args: {
   });
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §5/§13
+ * PR-2a): the per-unit observe+decompose block extracted verbatim from materialize's observe
+ * loop below — a PURE REFACTOR (same observations, same order, same fields for the
+ * off/below-threshold path materialize still runs unconditionally in this PR). Builds the
+ * whole-file observation, applies the spreadsheet-unsupported demotion, and — when eligible —
+ * fans it out into per-region observations (Stage 1 decomposition).
+ *
+ * `expandSourceObservationIntoRegions`'s ONLY call site (design §6 gate-ordering invariant,
+ * enforced by a static AST test — source-region-key-coverage.test.ts's sibling gate): PR-2b's
+ * admission-selection stage reuses this SAME helper for the accepted subset, so decomposition
+ * is reachable exclusively through here — an unselected unit that never reaches this helper can
+ * never reach the fan-out either, a call-graph property rather than a runtime check.
+ */
+export async function observeInventoryUnitDeep(
+  unit: ReconstructSourceInventoryUnit,
+  refDetection: TargetMaterialRefDetection,
+  opts: {
+    isRuntimeTargetSource?: boolean;
+    codeStructureObservation?: boolean;
+    codeSetTierObservation?: boolean;
+    codeStructureLayout?: boolean;
+    sourceRegionDecomposition?: boolean;
+    lineage?: {
+      roundId?: string | null;
+      observationBatchId?: string | null;
+      triggeringFrontierValidationRef?: string | null;
+    };
+  },
+): Promise<{
+  observations: ReconstructSourceObservation[];
+  units: ReconstructSourceInventoryUnit[];
+  skippedRef: ReconstructSourceObservationsArtifact["skipped_refs"][number] | null;
+}> {
+  const observation = await buildReconstructSourceObservation(refDetection, opts.lineage, {
+    isRuntimeTargetSource: Boolean(opts.isRuntimeTargetSource),
+    ...(opts.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+    ...(opts.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
+    ...(opts.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+  });
+  if (!observation) {
+    // buildReconstructSourceObservation returns null when the ref is no longer a concrete,
+    // existing source at observation time (e.g. deleted between detection and re-observation).
+    // Mark the inventory unit skipped — the single source of truth that the initial frontier,
+    // the zero-observation halt, and later frontier admission all derive from — so the vanished
+    // ref is excluded everywhere instead of being silently dropped or re-queued.
+    const reason = "source ref unavailable at observation time";
+    const skippedUnit: ReconstructSourceInventoryUnit = {
+      ...unit,
+      scan_status: "skipped",
+      skip_reason: reason,
+    };
+    return {
+      observations: [],
+      units: [skippedUnit],
+      skippedRef: { ref: skippedUnit.ref, target_material_kind: skippedUnit.target_material_kind, reason },
+    };
+  }
+  const unsupportedReason = spreadsheetUnsupportedReason(observation);
+  if (unsupportedReason) {
+    // A workbook whose format the observer cannot extract (.xls/.xlsb/.ods, corrupt, oversized)
+    // yields an inventory carrying only `unsupported_reason` — no structural evidence. Demote it
+    // to a skip so the run fails loud as unsupported (the evidence gate stays honest about
+    // un-observed material).
+    const reason = `spreadsheet extraction unsupported: ${unsupportedReason}`;
+    const skippedUnit: ReconstructSourceInventoryUnit = {
+      ...unit,
+      scan_status: "skipped",
+      skip_reason: reason,
+    };
+    return {
+      observations: [],
+      units: [skippedUnit],
+      skippedRef: { ref: skippedUnit.ref, target_material_kind: skippedUnit.target_material_kind, reason },
+    };
+  }
+  if (
+    opts.sourceRegionDecomposition === true &&
+    isSourceRegionDecompositionEligible(
+      observation.target_material_kind,
+      typeof observation.structural_data.char_count === "number"
+        ? observation.structural_data.char_count
+        : null,
+    )
+  ) {
+    // Observe-time fanout (design §10 PR-1b-2, extraction site moved here by §5/§6): N region
+    // observations replace the ONE whole-file observation, and N region-anchored inventory units
+    // replace the ONE unit, so `inventory.inventory_units` reflects the expansion and
+    // buildInitialSourceFrontier (derived FROM inventory_units) is automatically per-region.
+    const regionObservations = await expandSourceObservationIntoRegions(observation);
+    if (regionObservations.length <= 1) {
+      return { observations: [observation], units: [unit], skippedRef: null };
+    }
+    return {
+      observations: regionObservations,
+      units: regionObservations.map((regionObservation) => ({
+        ...unit,
+        location: regionObservation.location,
+      })),
+      skippedRef: null,
+    };
+  }
+  return { observations: [observation], units: [unit], skippedRef: null };
+}
+
 export async function materializeReconstructPreparationArtifacts(
   params: MaterializeReconstructPreparationArtifactsParams,
 ): Promise<ReconstructPreparationArtifactRefs> {
@@ -1010,74 +1153,16 @@ export async function materializeReconstructPreparationArtifacts(
     }
     // Defect-3 basis A: these are the user-provided reconstruct runtime-target
     // refs (the initial target inventory), so they are runtime-target sources.
-    const observation = await buildReconstructSourceObservation(refDetection, undefined, {
+    const deep = await observeInventoryUnitDeep(unit, refDetection, {
       isRuntimeTargetSource: true,
+      sourceRegionDecomposition: params.sourceRegionDecomposition === true,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
       ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
     });
-    if (observation) {
-      const unsupportedReason = spreadsheetUnsupportedReason(observation);
-      if (unsupportedReason) {
-        // A workbook whose format the observer cannot extract (.xls/.xlsb/.ods,
-        // corrupt, oversized) yields an inventory carrying only `unsupported_reason`
-        // — no structural evidence. After the gate flip such a ref is runnable and
-        // produces an observation, so without this demotion a sole legacy-format
-        // target would pass the zero-observation halt and reach LLM authoring with
-        // empty evidence. Demote it to a skip so the run fails loud as unsupported
-        // (the evidence gate stays honest about un-observed material).
-        unit.scan_status = "skipped";
-        unit.skip_reason = `spreadsheet extraction unsupported: ${unsupportedReason}`;
-        finalInventoryUnits.push(unit);
-        skippedRefs.push({
-          ref: unit.ref,
-          target_material_kind: unit.target_material_kind,
-          reason: unit.skip_reason,
-        });
-      } else if (
-        params.sourceRegionDecomposition === true &&
-        isSourceRegionDecompositionEligible(
-          observation.target_material_kind,
-          typeof observation.structural_data.char_count === "number"
-            ? observation.structural_data.char_count
-            : null,
-        )
-      ) {
-        // Observe-time fanout (design §10 PR-1b-2): N region observations replace the ONE
-        // whole-file observation, and N region-anchored inventory units replace the ONE unit, so
-        // `inventory.inventory_units` reflects the expansion and buildInitialSourceFrontier (below,
-        // derived FROM inventory_units) is automatically per-region.
-        const regionObservations = await expandSourceObservationIntoRegions(observation);
-        if (regionObservations.length <= 1) {
-          observations.push(observation);
-          finalInventoryUnits.push(unit);
-        } else {
-          observations.push(...regionObservations);
-          for (const regionObservation of regionObservations) {
-            finalInventoryUnits.push({ ...unit, location: regionObservation.location });
-          }
-        }
-      } else {
-        observations.push(observation);
-        finalInventoryUnits.push(unit);
-      }
-    } else {
-      // buildReconstructSourceObservation returns null when the ref is no longer
-      // a concrete, existing source at observation time (e.g. deleted between
-      // detection and re-observation). Mark the inventory unit skipped — the
-      // single source of truth that the initial frontier (built below), the
-      // zero-observation halt, and later frontier admission all derive from — so
-      // the vanished ref is excluded everywhere instead of being silently dropped
-      // or re-queued by the deterministic first-frontier scout.
-      unit.scan_status = "skipped";
-      unit.skip_reason = "source ref unavailable at observation time";
-      finalInventoryUnits.push(unit);
-      skippedRefs.push({
-        ref: unit.ref,
-        target_material_kind: unit.target_material_kind,
-        reason: unit.skip_reason,
-      });
-    }
+    observations.push(...deep.observations);
+    finalInventoryUnits.push(...deep.units);
+    if (deep.skippedRef) skippedRefs.push(deep.skippedRef);
   }
   inventory.inventory_units = finalInventoryUnits;
 
