@@ -155,8 +155,45 @@ describe("code-structure-observer multi-language Tier 2 (T1)", () => {
     expect(imports).toEqual(expect.arrayContaining(["App\\Models\\User", "App\\Services\\Auth", "bootstrap.php"]));
   });
 
+  it("Bash: functions, declaration commands, and source/. imports", async () => {
+    const inv = await observe("deploy.sh");
+    expect(inv.language).toBe("bash");
+    assertGaplessPartition(inv);
+    expect(topLevelDecl(inv, "build_image")?.kind).toBe("function_decl");
+    expect(topLevelDecl(inv, "push_image")?.kind).toBe("function_decl");
+    expect(topLevelDecl(inv, "MAX_RETRIES")?.kind).toBe("const_decl");
+    // `source ./x` and `. ./y` are the import occurrences; the sourced path is the specifier.
+    expect(importSpecifiers(inv)).toEqual(expect.arrayContaining(["./lib/common.sh", "./lib/logging.sh"]));
+    expect(inv.import_census?.imports_recorded).toBe(2);
+  });
+
+  it("CSS: @import specifiers + selectors preserved in signature_line (no code kinds)", async () => {
+    const inv = await observe("theme.css");
+    expect(inv.language).toBe("css");
+    assertGaplessPartition(inv);
+    // url() and bare-string @imports both yield the stylesheet specifier.
+    expect(importSpecifiers(inv)).toEqual(expect.arrayContaining(["reset.css", "fonts.css"]));
+    // Selectors are not code declarations — a rule_set is "other" and its selector is the signature.
+    const container = inv.symbol_tiles.spans.find((s) => s.signature_line?.startsWith(".container"));
+    expect(container).toBeDefined();
+    expect(container!.kind).toBe("other");
+  });
+
+  it("PowerShell: functions + classes (statement_list wrapper unwrapped)", async () => {
+    const inv = await observe("module.ps1");
+    expect(inv.language).toBe("powershell");
+    assertGaplessPartition(inv);
+    // The whole program is one statement_list; its children are the real top-level items.
+    expect(topLevelDecl(inv, "Get-Greeting")?.kind).toBe("function_decl");
+    expect(topLevelDecl(inv, "Set-Config")?.kind).toBe("function_decl");
+    expect(topLevelDecl(inv, "Widget")?.kind).toBe("class_decl");
+    // PowerShell import extraction (Import-Module/dot-source) is a v1 gap — honestly empty census.
+    expect(inv.symbol_tiles.imports ?? []).toEqual([]);
+    expect(inv.import_census?.imports_recorded ?? 0).toBe(0);
+  });
+
   it("is byte-deterministic across languages (same input ⇒ identical inventory JSON)", async () => {
-    for (const name of ["service.go", "shapes.rs", "UserController.php"]) {
+    for (const name of ["service.go", "shapes.rs", "UserController.php", "deploy.sh", "theme.css", "module.ps1"]) {
       const a = await observe(name);
       const b = await observe(name);
       expect(JSON.stringify(a)).toBe(JSON.stringify(b));

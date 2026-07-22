@@ -54,6 +54,7 @@ export interface TargetMaterialKindDetection {
 }
 
 const CODE_EXTENSIONS = new Set([
+  ".bash",
   ".c",
   ".cc",
   ".cfg",
@@ -82,6 +83,8 @@ const CODE_EXTENSIONS = new Set([
   ".php",
   ".prisma",
   ".proto",
+  ".ps1",
+  ".psm1",
   ".py",
   ".rb",
   ".rs",

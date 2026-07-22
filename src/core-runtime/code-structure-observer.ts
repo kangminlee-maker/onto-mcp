@@ -42,7 +42,10 @@ export type CodeStructureLanguage =
   | "java"
   | "csharp"
   | "cpp"
-  | "php";
+  | "php"
+  | "bash"
+  | "css"
+  | "powershell";
 
 export interface CodeSymbolSpan {
   line_start: number;
@@ -136,6 +139,11 @@ const LANGUAGE_BY_EXTENSION: Record<string, CodeStructureLanguage> = {
   ".hpp": "cpp",
   ".hh": "cpp",
   ".php": "php",
+  ".sh": "bash",
+  ".bash": "bash",
+  ".css": "css",
+  ".ps1": "powershell",
+  ".psm1": "powershell",
 };
 
 const GRAMMAR_WASM: Record<CodeStructureLanguage, string> = {
@@ -151,6 +159,9 @@ const GRAMMAR_WASM: Record<CodeStructureLanguage, string> = {
   // (VS Code routes .c/.h through it too), so .c/.h resolve to the cpp grammar.
   cpp: "@vscode/tree-sitter-wasm/wasm/tree-sitter-cpp.wasm",
   php: "@vscode/tree-sitter-wasm/wasm/tree-sitter-php.wasm",
+  bash: "@vscode/tree-sitter-wasm/wasm/tree-sitter-bash.wasm",
+  css: "@vscode/tree-sitter-wasm/wasm/tree-sitter-css.wasm",
+  powershell: "@vscode/tree-sitter-wasm/wasm/tree-sitter-powershell.wasm",
 };
 
 // Language-neutral kind mapping (DD5): tree-sitter node type → common kind token. The tables are
@@ -295,6 +306,30 @@ const PHP_KIND: Record<string, string> = {
   method_declaration: "member_method",
   expression_statement: "other", // require/include is import-extracted
 };
+const BASH_KIND: Record<string, string> = {
+  comment: "comment_block",
+  command: "other", // source/. commands are import-extracted, structurally "other"
+  function_definition: "function_decl",
+  variable_assignment: "const_decl",
+  declaration_command: "const_decl", // readonly/declare/local/export NAME=...
+};
+const CSS_KIND: Record<string, string> = {
+  // CSS carries selectors, not code declarations; a rule_set/at-rule is "other" and its selector
+  // is preserved in signature_line. Only @import is a structural relation.
+  comment: "comment_block",
+  import_statement: "import",
+  rule_set: "other",
+  media_statement: "other",
+  keyframes_statement: "other",
+  supports_statement: "other",
+  at_rule: "other",
+};
+const POWERSHELL_KIND: Record<string, string> = {
+  comment: "comment_block",
+  function_statement: "function_decl",
+  class_statement: "class_decl",
+  pipeline: "other", // Import-Module / dot-source / assignments
+};
 const KIND_TABLE: Record<CodeStructureLanguage, Record<string, string>> = {
   typescript: TS_KIND,
   javascript: TS_KIND,
@@ -306,6 +341,9 @@ const KIND_TABLE: Record<CodeStructureLanguage, Record<string, string>> = {
   csharp: CSHARP_KIND,
   cpp: CPP_KIND,
   php: PHP_KIND,
+  bash: BASH_KIND,
+  css: CSS_KIND,
+  powershell: POWERSHELL_KIND,
 };
 const CONTAINER_KINDS = new Set(["class_decl", "interface_decl", "enum_decl", "namespace_decl"]);
 
@@ -411,6 +449,17 @@ const SYMBOL_NAME_RESOLVERS: Partial<Record<CodeStructureLanguage, (node: Syntax
         (c): c is SyntaxNode => c !== null && (c.type === "scoped_identifier" || c.type === "identifier"),
       );
       return sid?.text ?? null;
+    }
+    return node.childForFieldName?.("name")?.text ?? null;
+  },
+  powershell: (node) => {
+    if (node.type === "function_statement") {
+      return node.childForFieldName?.("function_name")?.text
+        ?? node.namedChildren.find((c): c is SyntaxNode => c !== null && c.type === "function_name")?.text
+        ?? null;
+    }
+    if (node.type === "class_statement") {
+      return node.namedChildren.find((c): c is SyntaxNode => c !== null && c.type === "simple_name")?.text ?? null;
     }
     return node.childForFieldName?.("name")?.text ?? null;
   },
@@ -532,6 +581,17 @@ function spanKey(lineStart: number, lineEnd: number): string {
   return `${lineStart}-${lineEnd}`;
 }
 
+/** Top-level items to partition. Most grammars expose declarations as direct children of the root;
+ *  PowerShell wraps the whole program in a single `statement_list`, so its real top-level items are
+ *  one level deeper. */
+function topLevelItemsOf(language: CodeStructureLanguage, root: SyntaxNode): SyntaxNode[] {
+  const direct = root.namedChildren.filter((c): c is SyntaxNode => c !== null);
+  if (language === "powershell" && direct.length === 1 && direct[0]!.type === "statement_list") {
+    return direct[0]!.namedChildren.filter((c): c is SyntaxNode => c !== null);
+  }
+  return direct;
+}
+
 function extractTree(language: CodeStructureLanguage, root: SyntaxNode, lineCount: number): ExtractedTree {
   const table = KIND_TABLE[language];
   const spans: CodeSymbolSpan[] = [];
@@ -551,7 +611,7 @@ function extractTree(language: CodeStructureLanguage, root: SyntaxNode, lineCoun
     return key;
   };
 
-  const top = partitionItems(language, table, root.namedChildren.filter((c): c is SyntaxNode => c !== null), 1, Math.max(1, lineCount));
+  const top = partitionItems(language, table, topLevelItemsOf(language, root), 1, Math.max(1, lineCount));
   const topKeys: string[] = [];
   for (const draft of top) {
     const container = draft.astNode;
@@ -657,6 +717,18 @@ function firstStringDescendant(node: SyntaxNode): SyntaxNode | null {
   for (let i = 0; i < stack.length; i += 1) {
     const cur = stack[i]!;
     if (cur.type === "string" || cur.type === "string_literal" || cur.type === "encapsed_string") return cur;
+    for (const child of cur.namedChildren) if (child) stack.push(child);
+  }
+  return null;
+}
+
+/** First descendant node whose type is in `types` (breadth-first, document order). */
+function firstDescendantOfTypes(node: SyntaxNode, types: readonly string[]): SyntaxNode | null {
+  const wanted = new Set(types);
+  const stack: SyntaxNode[] = [...node.namedChildren.filter((c): c is SyntaxNode => c !== null)];
+  for (let i = 0; i < stack.length; i += 1) {
+    const cur = stack[i]!;
+    if (wanted.has(cur.type)) return cur;
     for (const child of cur.namedChildren) if (child) stack.push(child);
   }
   return null;
@@ -777,6 +849,28 @@ const IMPORT_NODE_HANDLERS: Partial<Record<CodeStructureLanguage, (node: SyntaxN
       else omit("no_include_path");
     }
   },
+  bash: (node, { admit, omit, census }) => {
+    if (node.type !== "command") return;
+    const cmd = node.childForFieldName?.("name")?.text;
+    if (cmd !== "source" && cmd !== ".") return;
+    census.import_nodes_seen += 1;
+    // The sourced path is the first argument after the command name (a word / string / concat).
+    const arg = node.namedChildren.find(
+      (c): c is SyntaxNode =>
+        c !== null && (c.type === "word" || c.type === "string" || c.type === "concatenation" || c.type === "raw_string"),
+    );
+    if (arg) admit(arg.type === "string" || arg.type === "raw_string" ? stringValueOf(arg) : arg.text);
+    else omit("no_source_argument");
+  },
+  css: (node, { admit, omit, census }) => {
+    if (node.type !== "import_statement") return;
+    census.import_nodes_seen += 1;
+    // @import "x.css";  or  @import url("x.css");  — the specifier is a string_value (also when
+    // nested in a url() call_expression), else a bare plain_value.
+    const value = firstDescendantOfTypes(node, ["string_value", "plain_value"]);
+    if (value) admit(value.type === "string_value" ? unquote(value.text) : value.text);
+    else omit("no_import_specifier");
+  },
 };
 // typescript and javascript share the ES-module import shape.
 IMPORT_NODE_HANDLERS.typescript = (node, { admit, omit, census }) => {
@@ -863,6 +957,7 @@ function extractorSourceDigest(): string {
   return createHash("sha256")
     .update(partitionItems.toString())
     .update(extractTree.toString())
+    .update(topLevelItemsOf.toString())
     .update(mapKind.toString())
     .update(nodeStartLine.toString())
     .update(nodeEndLine.toString())
@@ -875,6 +970,7 @@ function extractorSourceDigest(): string {
     .update(stringValueOf.toString())
     .update(stripIncludePath.toString())
     .update(firstStringDescendant.toString())
+    .update(firstDescendantOfTypes.toString())
     .update(foldRegistry(SYMBOL_NAME_RESOLVERS))
     .update(foldRegistry(IMPORT_NODE_HANDLERS))
     .update(JSON.stringify({ KIND_TABLE, CONTAINER_KINDS: [...CONTAINER_KINDS].sort(), LANGUAGE_BY_EXTENSION, bound: CODE_STRUCTURE_LINE_BOUND }))

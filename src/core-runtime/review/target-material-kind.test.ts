@@ -98,6 +98,20 @@ describe("detectTargetMaterialKind", () => {
       expect(detection.target_material_kind).toBe("code");
     },
   );
+
+  // Tier 2 scripts (T3): Bash/PowerShell files must classify as code to reach the observer.
+  it.each([".bash", ".ps1", ".psm1"])(
+    "classifies script extension %s as code",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `script${ext}`);
+      await fs.writeFile(target, "echo hi\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+    },
+  );
 });
 
 describe("reviewMaterialSupportStatus (kind-level claim)", () => {
