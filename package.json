@@ -80,6 +80,7 @@
     "test:review:live:cli": "npm run build:ts-core && tsx scripts/review-live-e2e.ts",
     "test:reconstruct:dispatch-fallback:live": "node --env-file=.env --import tsx scripts/reconstruct-dispatch-fallback-live-e2e.mts",
     "test:reconstruct:output-headroom:live": "node --env-file=.env --import tsx scripts/reconstruct-output-headroom-live-e2e.mts",
+    "test:reconstruct:admission:live": "node --import tsx scripts/stage2-admission-live-e2e.mts",
     "benchmark:review:pipeline": "tsx scripts/review-pipeline-benchmark.ts",
     "benchmark:reconstruct:pipeline": "tsx scripts/reconstruct-pipeline-benchmark.ts",
     "calibration:effort:report": "tsx scripts/effort-calibration-report.ts",

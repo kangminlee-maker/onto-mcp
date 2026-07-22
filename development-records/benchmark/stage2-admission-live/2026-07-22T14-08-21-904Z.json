@@ -1,0 +1,78 @@
+{
+  "schema_version": "stage2-admission-live-evidence/v1",
+  "evidence_class": "preliminary_n1_route_compatibility",
+  "started_at": "2026-07-22T14:08:21.931Z",
+  "completed_at": "2026-07-22T14:48:34.532Z",
+  "duration_ms": 2412601,
+  "project_root": "/Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-admission-live-2026-07-22T14-08-21-904Z",
+  "session_root": "/Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-admission-live-2026-07-22T14-08-21-904Z/.onto/reconstruct/session",
+  "route": {
+    "provider": "openai",
+    "auth": "oauth",
+    "model": "gpt-5.6-sol",
+    "effort": "medium",
+    "execution_route": "external_oauth_worker",
+    "execution_adapter": "codex_cli"
+  },
+  "actor_seats": [
+    "semantic_author",
+    "confirmation_provider"
+  ],
+  "corpus": {
+    "file_count": 60,
+    "threshold": 48,
+    "deep_file_limit": 16,
+    "theme_counts": {
+      "billing": 15,
+      "auth": 15,
+      "telemetry": 15,
+      "util": 15
+    }
+  },
+  "intent": "Reconstruct a compact operational ontology seed for the BILLING / INVOICING domain: how invoices, line items, tax, payments, and their approval and dunning state relate. Ignore authentication, telemetry, and generic utility code unless a billing rule depends on it.",
+  "terminal": {
+    "status": "completed",
+    "record_stage": "completed"
+  },
+  "done_when": {
+    "admission_selection": {
+      "frontier_ref_count": 1,
+      "accepted_count": 1,
+      "deep_file_limit": 16,
+      "has_authored_rationale": true,
+      "sample_rationales": [
+        {
+          "source_ref": "/Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-admission-live-2026-07-22T14-08-21-904Z/corpus/billing/billing-000.ts",
+          "rationale": "Representative billing source directly exposing the Invoice entity, amount and tax composition, approval state, overdue determination, and late-fee mutation. The other admitted billing outlines appear structurally duplicative, while no outline exposes line items, payments, or richer approval/dunning transitions."
+        }
+      ]
+    },
+    "deep_set": {
+      "admission_observation_count": 1,
+      "distinct_deep_file_count": 1,
+      "admitted_file_count": 60,
+      "all_runtime_target_source": true,
+      "strict_subset_of_admitted": true,
+      "selected_theme_counts": {
+        "billing": 1
+      }
+    },
+    "deferred": {
+      "deferred_count": 45,
+      "all_outline_present": true,
+      "sample_refs": [
+        "auth-001.ts",
+        "telemetry-002.ts",
+        "util-003.ts",
+        "auth-005.ts",
+        "telemetry-006.ts"
+      ]
+    }
+  },
+  "provenance": {
+    "git_head": "3fc91468de7592c9af83e41f88cc42be2f6fbd36",
+    "load_bearing_sources_stable_during_run": true,
+    "overlay_settings_sha256": "ed9897a2f34c6ed40cf31e31316f70ed3f2969b974a295b697476b94e2df5361"
+  },
+  "product_claim_limit": "N=1 route compatibility + real-dispatch only; not a default, quality, or cost decision"
+}
