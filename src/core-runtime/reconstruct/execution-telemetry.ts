@@ -128,6 +128,12 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     ["code-semantic-map-verify", "semantic_map"],
     ["ExplorationSynthesis", "exploration_synthesis"],
     ["SourceFrontier", "source_frontier"],
+    // Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §4/§13
+    // PR-2b): the admission-selection round-0 stage is the SAME class of activity as SourceFrontier
+    // (frontier authoring) — a scoped, single-shot round-0 variant, not a new pipeline stage — so it
+    // shares the source_frontier unit rather than adding a new ReconstructStageId (concept economy,
+    // design §11: no new pipeline-stage concept, reuse the existing frontier-authoring unit).
+    ["SourceAdmissionSelection", "source_frontier"],
     ["SourcePurposeCandidates", "source_purpose_candidates"],
     ["SourcePurposeCandidatesMinimalKernel", "source_purpose_candidates"],
     ["SourcePurposeContradictionRepair", "source_purpose_candidates"],

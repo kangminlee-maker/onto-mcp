@@ -1096,6 +1096,11 @@ export function createOntoReconstructCoreApi(
       // code opt-ins above (self-contained — no requires_code_structure_inventory dependency).
       const prepareSourceRegionDecomposition =
         prepareSettings.reconstruct?.execution?.source_region_decomposition === true;
+      // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+      // §12/§13 PR-2a): resolved like source_region_decomposition. UNUSED by materialize in this
+      // PR — no code branches on it yet.
+      const prepareSourceAdmissionSelection =
+        prepareSettings.reconstruct?.execution?.source_admission_selection === true;
       const preparationRefs = await materializeReconstructPreparationArtifacts({
         sessionRoot,
         targetRefs,
@@ -1107,6 +1112,7 @@ export function createOntoReconstructCoreApi(
         ...(prepareOptIns.codeSetTier ? { codeSetTierObservation: true } : {}),
         ...(prepareOptIns.codeStructureLayout ? { codeStructureLayout: true } : {}),
         ...(prepareSourceRegionDecomposition ? { sourceRegionDecomposition: true } : {}),
+        ...(prepareSourceAdmissionSelection ? { sourceAdmissionSelection: true } : {}),
       });
       const targetMaterialProfileValidationPath = path.join(
         sessionRoot,
@@ -1202,6 +1208,11 @@ export function createOntoReconstructCoreApi(
       // comment for why this one is resolved separately rather than folded into that helper.
       const sourceRegionDecomposition =
         settings.reconstruct?.execution?.source_region_decomposition === true;
+      // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+      // §12/§13 PR-2a): resolved like source_region_decomposition. UNUSED by the run path in this
+      // PR — no code branches on it yet (PR-2b wires the admission-selection stage).
+      const sourceAdmissionSelection =
+        settings.reconstruct?.execution?.source_admission_selection === true;
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1658,6 +1669,7 @@ export function createOntoReconstructCoreApi(
             ...(environmentContextProfile ? { environmentContextProfile: true } : {}),
             ...(environmentContextProfileContent ? { environmentContextProfileContent: true } : {}),
             ...(sourceRegionDecomposition ? { sourceRegionDecomposition: true } : {}),
+            ...(sourceAdmissionSelection ? { sourceAdmissionSelection: true } : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
                   dispatchFallback:
