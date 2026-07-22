@@ -646,9 +646,12 @@ export function isSourceRegionDecompositionEligible(
  * Each region observation keeps `content_sha256` as the WHOLE-FILE hash (the provenance spine that
  * scout-pack consumers bind to, design §6) and every other `structural_data` field describing the
  * FILE unchanged; only `content_excerpt` is replaced with the region's exact byte slice (never
- * truncated — D1 observe-all) and `region_line_start`/`region_line_end` are added additively.
- * `location` becomes the region's anchor, so `stableObservationId` yields a distinct per-region id
- * (the id/location fold is unchanged — design §1).
+ * truncated — D1 observe-all) and `region_line_start`/`region_line_end`/`region_role` are added
+ * additively. `region_role` carries the segmenter's `role_signal` ("declaration"|"heading"|"body")
+ * so a downstream projection budget (design §8 PR-1b-3) can rank declaration/heading regions ahead
+ * of body regions without re-deriving structure. `location` becomes the region's anchor, so
+ * `stableObservationId` yields a distinct per-region id (the id/location fold is unchanged —
+ * design §1).
  */
 export async function expandSourceObservationIntoRegions(
   observation: ReconstructSourceObservation,
@@ -682,6 +685,7 @@ export async function expandSourceObservationIntoRegions(
       excerpt_truncated: false,
       region_line_start: region.region_line_start,
       region_line_end: region.region_line_end,
+      region_role: region.role_signal,
     },
   }));
   for (const regionObservation of regionObservations) {

@@ -46,6 +46,7 @@ import type {
 import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
+  MAX_PROJECTED_REGIONS_PER_FILE,
   observationPromptPayload,
   recomputeCodeInventoryProjectionTruncations,
   recomputeWorkbookInventoryProjectionTruncations,
@@ -781,6 +782,175 @@ describe("runReconstruct", () => {
     expect(floored.prompt_content_excerpt_truncated).toBeUndefined();
   });
 
+  // Design 20260722-source-region-decomposition-stage1 §7 (PR-1b-3): the whole-document
+  // expansion gate generalizes from "a single projected observation" to "every projected
+  // observation is a region of the SAME decomposed file" — a budget-exceeding document that
+  // decomposed into N regions must not silently lose the whole-doc projection it would have kept
+  // as ONE observation.
+  describe("region-aware whole-document projection (design §7 PR-1b-3)", () => {
+    const regionObservation = (args: {
+      id: string;
+      sourceRef: string;
+      start: number;
+      end: number;
+      excerptLength: number;
+    }) => ({
+      observation_id: args.id,
+      target_material_kind: "document" as const,
+      adapter_id: "fixture-observer",
+      source_ref: args.sourceRef,
+      location: `L${args.start}-${args.end}`,
+      summary: `Region fixture ${args.id}.`,
+      structural_data: {
+        extension: ".md",
+        content_excerpt: "x".repeat(args.excerptLength),
+        region_line_start: args.start,
+        region_line_end: args.end,
+      },
+    });
+
+    it("budgets each region of a decomposed document at floor(budget/count), so the SUM of projected excerpts never exceeds the old single-doc budget", () => {
+      const budget = 1000;
+      const regionCount = 3;
+      const regions = [
+        regionObservation({ id: "r1", sourceRef: "/doc/big.md", start: 1, end: 50, excerptLength: 2000 }),
+        regionObservation({ id: "r2", sourceRef: "/doc/big.md", start: 51, end: 100, excerptLength: 2000 }),
+        regionObservation({ id: "r3", sourceRef: "/doc/big.md", start: 101, end: 150, excerptLength: 2000 }),
+      ];
+      const truncations: any[] = [];
+      const payload = observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-07-22T00:00:00.000Z",
+          observations: regions,
+          skipped_refs: [],
+          validation_results: [],
+        },
+        {
+          expandSingleDocumentExcerpt: true,
+          documentExcerptCharBudget: budget,
+          recordDocumentExcerptProjectionTruncation: (t) => truncations.push(t),
+        },
+      ) as Array<{
+        observation_id: string;
+        structural_data: { content_excerpt: string; prompt_content_excerpt_char_limit?: number };
+      }>;
+
+      expect(payload).toHaveLength(regionCount);
+      const perRegionLimit = Math.floor(budget / regionCount);
+      for (const observation of payload) {
+        expect(observation.structural_data.content_excerpt.length).toBe(perRegionLimit);
+        expect(observation.structural_data.prompt_content_excerpt_char_limit).toBe(perRegionLimit);
+      }
+      // The core §7 arithmetic proof: no aggregate blowup vs the old single-observation budget.
+      const totalProjected = payload.reduce(
+        (sum, observation) => sum + observation.structural_data.content_excerpt.length,
+        0,
+      );
+      expect(totalProjected).toBeLessThanOrEqual(budget);
+
+      // Per-region truncation is recorded (design §7 point 3 — singleDocumentProjectionTruncation
+      // parity), one event per region at the divided budget, never the undivided whole-doc budget.
+      expect(truncations).toHaveLength(regionCount);
+      for (const truncation of truncations) {
+        expect(truncation.projection_budget_chars).toBe(perRegionLimit);
+        expect(truncation.captured_chars).toBe(2000);
+      }
+      expect(new Set(truncations.map((t) => t.observation_id))).toEqual(
+        new Set(["r1", "r2", "r3"]),
+      );
+    });
+
+    it("does NOT expand a multi-FILE bundle of region-shaped observations (different source_ref) — bounded excerpt unchanged, matching today's multi-document behavior", () => {
+      const regions = [
+        regionObservation({ id: "a", sourceRef: "/doc/a.md", start: 1, end: 10, excerptLength: 2000 }),
+        regionObservation({ id: "b", sourceRef: "/doc/b.md", start: 1, end: 10, excerptLength: 2000 }),
+      ];
+      const payload = observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-07-22T00:00:00.000Z",
+          observations: regions,
+          skipped_refs: [],
+          validation_results: [],
+        },
+        {
+          expandSingleDocumentExcerpt: true,
+          contentExcerptCharLimit: 1200,
+          documentExcerptCharBudget: 1000,
+        },
+      ) as Array<{ structural_data: { content_excerpt: string } }>;
+      for (const observation of payload) {
+        expect(observation.structural_data.content_excerpt.length).toBe(1200);
+      }
+    });
+  });
+
+  describe("singleDocumentProjectionTruncation resume fallback — region-aware (design §7 PR-1b-3)", () => {
+    const regionArtifactOfOneFile = (sourceRef: string, excerptLength: number) => ({
+      schema_version: "1" as const,
+      session_id: "session-1",
+      created_at: "2026-07-22T00:00:00.000Z",
+      observations: [
+        { id: "r1", start: 1, end: 50 },
+        { id: "r2", start: 51, end: 100 },
+        { id: "r3", start: 101, end: 150 },
+      ].map(({ id, start, end }) => ({
+        observation_id: id,
+        target_material_kind: "document" as const,
+        adapter_id: "fixture-observer",
+        source_ref: sourceRef,
+        location: `L${start}-${end}`,
+        summary: `Region fixture ${id}.`,
+        structural_data: {
+          extension: ".md",
+          content_excerpt: "x".repeat(excerptLength),
+          region_line_start: start,
+          region_line_end: end,
+        },
+      })),
+      skipped_refs: [],
+      validation_results: [],
+    });
+
+    it("recomputes a per-region truncation for every region of a decomposed single document (resume parity with the live path)", () => {
+      const recorded = singleDocumentProjectionTruncation(
+        regionArtifactOfOneFile("/doc/big.md", 2000) as any,
+        1000,
+      );
+      const perRegionBudget = Math.floor(1000 / 3);
+      expect(recorded).toHaveLength(3);
+      for (const truncation of recorded) {
+        expect(truncation).toMatchObject({
+          source_ref: "/doc/big.md",
+          target_material_kind: "document",
+          captured_chars: 2000,
+          projection_budget_chars: perRegionBudget,
+        });
+      }
+      expect(new Set(recorded.map((t) => t.observation_id))).toEqual(
+        new Set(["r1", "r2", "r3"]),
+      );
+    });
+
+    it("recomputes nothing for a multi-FILE bundle of region-shaped observations (different source_ref stays out of scope)", () => {
+      const multiFile = {
+        schema_version: "1" as const,
+        session_id: "session-1",
+        created_at: "2026-07-22T00:00:00.000Z",
+        observations: [
+          ...regionArtifactOfOneFile("/doc/a.md", 2000).observations.slice(0, 1),
+          ...regionArtifactOfOneFile("/doc/b.md", 2000).observations.slice(0, 1),
+        ],
+        skipped_refs: [],
+        validation_results: [],
+      };
+      expect(singleDocumentProjectionTruncation(multiFile as any, 1000)).toEqual([]);
+    });
+  });
+
   it("canonicalizes duplicate direct-call source observation selections", async () => {
     const author = createDirectCallReconstructDirectiveAuthor({
       llmCall: () =>
@@ -1007,6 +1177,156 @@ describe("runReconstruct", () => {
     ]);
     expect(terminalFailureMessageFromTelemetry(telemetry))
       .toMatch(/returned no JSON object/);
+  });
+
+  // Design 20260722-source-region-decomposition-stage1 §8 (PR-1b-3, the core budget-contention
+  // proof): a heavily-decomposed file must not starve a different file's high-value observations
+  // out of the SourceObservationDirective catalog/selection.
+  describe("writeSourceObservationDirective — budget-contention per-file cap (design §8 PR-1b-3)", () => {
+    const bodyRegion = (index: number) => ({
+      observation_id: `x-body-${index}`,
+      target_material_kind: "document" as const,
+      adapter_id: "fixture-observer",
+      source_ref: "/doc/huge-x.md",
+      location: `L${index * 10 + 1}-${index * 10 + 10}`,
+      summary: `Body region ${index}.`,
+      structural_data: {
+        extension: ".md",
+        region_line_start: index * 10 + 1,
+        region_line_end: index * 10 + 10,
+        region_role: "body",
+      },
+    });
+    const declarationRegion = (index: number) => ({
+      observation_id: `y-decl-${index}`,
+      target_material_kind: "document" as const,
+      adapter_id: "fixture-observer",
+      source_ref: "/doc/small-y.md",
+      location: `L${index * 5 + 1}-${index * 5 + 5}`,
+      summary: `Declaration region ${index}.`,
+      structural_data: {
+        extension: ".md",
+        region_line_start: index * 5 + 1,
+        region_line_end: index * 5 + 5,
+        region_role: "declaration",
+      },
+    });
+
+    it("bounds file X's low-role regions to MAX_PROJECTED_REGIONS_PER_FILE so file Y's declaration regions survive the catalog AND reach the directive selection", async () => {
+      // X: 20 low-role ("body") regions of one huge file — well over the per-file cap.
+      const xRegions = Array.from({ length: 20 }, (_, index) => bodyRegion(index));
+      // Y: 2 high-role ("declaration") regions of a different file.
+      const yRegions = [declarationRegion(0), declarationRegion(1)];
+      const observations = [...xRegions, ...yRegions];
+
+      let capturedAvailableIds: string[] = [];
+      const author = createDirectCallReconstructDirectiveAuthor({
+        llmCall: (_systemPrompt, userPrompt) => {
+          const payload = JSON.parse(userPrompt) as { available_observation_ids: string[] };
+          capturedAvailableIds = payload.available_observation_ids;
+          // A permissive mock — "selects" every observation the catalog offered. This isolates
+          // the assertion to what the CATALOG bounded (the cap), not to any selection heuristic
+          // this mock might apply; a naive/greedy LLM cannot select what was never offered.
+          return Promise.resolve({
+            text: JSON.stringify({
+              selected_observations: capturedAvailableIds.map((observationId) => ({
+                observation_id: observationId,
+                selection_rationale: "offered by the catalog",
+              })),
+              open_questions: [],
+            }),
+          } satisfies LlmCallResult);
+        },
+      });
+
+      const result = await author.writeSourceObservationDirective({
+        sessionId: "session-1",
+        intent: "Create a bounded reconstruct Seed.",
+        targetMaterialProfile: {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-05-28T00:00:00.000Z",
+          target_refs: ["/doc/huge-x.md", "/doc/small-y.md"],
+          target_material_kind: "document",
+          target_material_kind_candidates: ["document"],
+          support_status: "partial",
+          unsupported_reason: null,
+          selected_source_profiles: [],
+          detection: {
+            owner: "runtime_heuristic",
+            confidence: 0.92,
+            confidence_basis: "fixture",
+            per_ref: [],
+          },
+        },
+        sourceObservations: {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-05-28T00:00:00.000Z",
+          observations,
+          skipped_refs: [],
+          validation_results: [],
+        },
+      });
+
+      // The cap: X never occupies more than its share of the catalog.
+      const xIdsOffered = capturedAvailableIds.filter((id) => id.startsWith("x-body-"));
+      expect(xIdsOffered.length).toBeLessThanOrEqual(MAX_PROJECTED_REGIONS_PER_FILE);
+      // The protection: BOTH of Y's declaration regions were offered — X cannot push Y out.
+      const yIdsOffered = capturedAvailableIds.filter((id) => id.startsWith("y-decl-"));
+      expect(yIdsOffered.sort()).toEqual(["y-decl-0", "y-decl-1"]);
+
+      // Reaching the directive selection: since the mock selects everything offered, Y's ids are
+      // in the final selected_observations too.
+      const selectedIds = result.selected_observations.map((o) => o.observation_id);
+      expect(selectedIds).toContain("y-decl-0");
+      expect(selectedIds).toContain("y-decl-1");
+    });
+
+    it("leaves a file at or under the cap fully offered, unchanged from today (no cap = no-op)", async () => {
+      const yRegions = [declarationRegion(0), declarationRegion(1)];
+      let capturedAvailableIds: string[] = [];
+      const author = createDirectCallReconstructDirectiveAuthor({
+        llmCall: (_systemPrompt, userPrompt) => {
+          capturedAvailableIds =
+            (JSON.parse(userPrompt) as { available_observation_ids: string[] })
+              .available_observation_ids;
+          return Promise.resolve({
+            text: JSON.stringify({ selected_observations: [], open_questions: [] }),
+          } satisfies LlmCallResult);
+        },
+      });
+      await author.writeSourceObservationDirective({
+        sessionId: "session-1",
+        intent: "Create a bounded reconstruct Seed.",
+        targetMaterialProfile: {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-05-28T00:00:00.000Z",
+          target_refs: ["/doc/small-y.md"],
+          target_material_kind: "document",
+          target_material_kind_candidates: ["document"],
+          support_status: "partial",
+          unsupported_reason: null,
+          selected_source_profiles: [],
+          detection: {
+            owner: "runtime_heuristic",
+            confidence: 0.92,
+            confidence_basis: "fixture",
+            per_ref: [],
+          },
+        },
+        sourceObservations: {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-05-28T00:00:00.000Z",
+          observations: yRegions,
+          skipped_refs: [],
+          validation_results: [],
+        },
+      });
+      expect(capturedAvailableIds).toEqual(["y-decl-0", "y-decl-1"]);
+    });
   });
 
   it("records purpose confirmation telemetry when confirmation is required", async () => {

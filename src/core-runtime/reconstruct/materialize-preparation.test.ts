@@ -1108,6 +1108,43 @@ describe("expandSourceObservationIntoRegions (design §10 PR-1b-2 observe-time f
     expect(sorted[sorted.length - 1]!.structural_data.region_line_end).toBe(lineCount);
   });
 
+  it("stores the segmenter's role_signal as an additive structural_data.region_role field — 'heading' for a heading-strategy region (design §10 PR-1b-3)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "headed3.md");
+    const text = "# Overview\nIntro.\n\n## Goals\nGoal text.\n";
+    await fs.writeFile(target, text, "utf8");
+    const observation = minimalObservation({
+      source_ref: target,
+      location: target,
+      structural_data: { content_excerpt: text, excerpt_truncated: false },
+    });
+
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions.length).toBeGreaterThanOrEqual(2);
+    for (const region of regions) {
+      expect(region.structural_data.region_role).toBe("heading");
+    }
+  });
+
+  it("stores structural_data.region_role 'body' for the blank-line-paragraph fallback (no headings)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "paragraphs.md");
+    const text =
+      "Paragraph one line one.\nParagraph one line two.\n\nParagraph two.\n\nParagraph three.\n";
+    await fs.writeFile(target, text, "utf8");
+    const observation = minimalObservation({
+      source_ref: target,
+      location: target,
+      structural_data: { content_excerpt: text, excerpt_truncated: false },
+    });
+
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions.length).toBeGreaterThanOrEqual(2);
+    for (const region of regions) {
+      expect(region.structural_data.region_role).toBe("body");
+    }
+  });
+
   it("re-validates every region observation through the source-observation boundary (fail-loud, never a silent malformed emission)", async () => {
     const root = await makeTmpProject();
     const target = path.join(root, "headed2.md");

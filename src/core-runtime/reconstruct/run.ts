@@ -10258,6 +10258,16 @@ interface ObservationPromptPayloadOptions {
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
 const SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT = 300;
 const SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT = 64;
+// Budget-contention guard (design §8 PR-1b-3, exported + tunable — value not spec-fixed, tune
+// against a real large corpus per design §13): the most region observations of any ONE file the
+// SourceObservationDirective catalog offers the selecting LLM. Bounds a heavily-decomposed file's
+// share of SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT (and, transitively, of
+// ONTOLOGY_SEED_OBSERVATION_LIMIT, since candidate authoring only ever sees the directive's
+// selected set) so it cannot starve a different file's high-value observations out of the
+// catalog. A file at or under the cap, and every whole-file (non-region) observation, is
+// unaffected — off-path / unsplit corpora project byte-identically (capProjectedRegionsPerFile
+// is then a no-op on every group).
+export const MAX_PROJECTED_REGIONS_PER_FILE = 8;
 const SOURCE_SCOUT_PROMPT_SIGNAL_LIMIT = 80;
 const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
@@ -10396,6 +10406,90 @@ function compactStructuralDataForPrompt(
 /** Bounded cap on provisional leaf-read labels rendered into one observation's prompt (Step E). */
 const MAX_PROVISIONAL_LABELS_PER_OBSERVATION = 64;
 
+/**
+ * Design §7 (whole-document-projection generalization, PR-1b-3): true when every observation in
+ * `observations` is a REGION of the SAME file — same `source_ref`, each carrying a distinct
+ * `location` and a numeric `region_line_start`/`region_line_end` (the additive fields
+ * `expandSourceObservationIntoRegions` stamps on a region observation — materialize-preparation.ts
+ * — never present on a whole-file observation). A decomposed document projected as N region
+ * observations qualifies for whole-document expansion exactly like a single whole-file observation
+ * does under the existing `observations.length <= 1` gate: both are "one document's worth". A
+ * multi-FILE bundle (mixed directory, several distinct documents) never qualifies (different
+ * `source_ref`), so it keeps today's bounded per-observation excerpt unchanged.
+ */
+function allObservationsAreRegionsOfOneFile(
+  observations: readonly ReconstructSourceObservation[],
+): boolean {
+  if (observations.length <= 1) return false;
+  const sourceRef = observations[0]!.source_ref;
+  const locations = new Set<string>();
+  for (const observation of observations) {
+    if (observation.source_ref !== sourceRef) return false;
+    if (
+      typeof observation.structural_data.region_line_start !== "number" ||
+      typeof observation.structural_data.region_line_end !== "number"
+    ) {
+      return false;
+    }
+    if (locations.has(observation.location)) return false;
+    locations.add(observation.location);
+  }
+  return true;
+}
+
+/** Rank tier for `capProjectedRegionsPerFile`'s within-file sort — declaration/heading regions
+ *  (structurally significant, design §8) outrank body regions and role-less (whole-file)
+ *  observations, which only ever appear alone in a group so their tier never actually competes. */
+function projectedRegionRoleTier(observation: ReconstructSourceObservation): number {
+  const role = observation.structural_data.region_role;
+  return role === "declaration" || role === "heading" ? 0 : 1;
+}
+
+/**
+ * Budget-contention guard (design §8 PR-1b-3): caps how many observations of any ONE file survive
+ * into a projection catalog at `maxPerFile`, so a heavily-decomposed file cannot occupy more than
+ * its share of a downstream selection cap (SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT). Within
+ * an over-cap file, declaration/heading regions rank ahead of body regions
+ * (`projectedRegionRoleTier`), then earlier regions (by `region_line_start`) break ties — so
+ * structurally significant regions survive even behind a long low-role tail. A file at or under
+ * the cap passes through UNCHANGED — both membership and relative order — so an off-path/unsplit
+ * corpus (never more than one observation per file) is byte-identical. This is a PROJECTION-ONLY
+ * selection: the full observation set (all region observations) stays in source-observations.yaml
+ * regardless; only what reaches a prompt catalog is bounded.
+ */
+function capProjectedRegionsPerFile(
+  observations: readonly ReconstructSourceObservation[],
+  maxPerFile: number,
+): ReconstructSourceObservation[] {
+  const bySourceRef = new Map<string, ReconstructSourceObservation[]>();
+  for (const observation of observations) {
+    const group = bySourceRef.get(observation.source_ref);
+    if (group) group.push(observation);
+    else bySourceRef.set(observation.source_ref, [observation]);
+  }
+  const keepIds = new Set<string>();
+  for (const group of bySourceRef.values()) {
+    if (group.length <= maxPerFile) {
+      for (const observation of group) keepIds.add(observation.observation_id);
+      continue;
+    }
+    const ranked = [...group].sort((a, b) => {
+      const tierDelta = projectedRegionRoleTier(a) - projectedRegionRoleTier(b);
+      if (tierDelta !== 0) return tierDelta;
+      const startA = a.structural_data.region_line_start;
+      const startB = b.structural_data.region_line_start;
+      return (typeof startA === "number" ? startA : 0) -
+        (typeof startB === "number" ? startB : 0);
+    });
+    for (const observation of ranked.slice(0, maxPerFile)) {
+      keepIds.add(observation.observation_id);
+    }
+  }
+  // Filter (not re-sort) the ORIGINAL array so kept observations keep their original relative
+  // order — the ranking above only decides membership, never display order.
+  return observations.filter((observation) => keepIds.has(observation.observation_id));
+}
+
 export function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
   options: ObservationPromptPayloadOptions = {},
@@ -10412,13 +10506,27 @@ export function observationPromptPayload(
         );
     })()
     : sourceObservations.observations;
-  // Full-document expansion needs the seed-authoring opt-in AND a single projected
-  // observation: a seed-authoring prompt over one document gets the whole document;
-  // multi-document bundles, mixed directories (one document among many observations),
-  // and post-seed/bounded prompts keep the budgeted excerpt (see
-  // effectiveContentExcerptCharLimit).
+  // Full-document expansion needs the seed-authoring opt-in AND either a single projected
+  // observation OR every projected observation being a region of the SAME decomposed file
+  // (design §7 PR-1b-3, allObservationsAreRegionsOfOneFile): a seed-authoring prompt over one
+  // document — whole-file, or fully split into regions — gets the whole document; multi-FILE
+  // bundles, mixed directories (one document among many observations), and post-seed/bounded
+  // prompts keep the budgeted excerpt (see effectiveContentExcerptCharLimit).
+  const isMultiRegionDocumentProjection = allObservationsAreRegionsOfOneFile(observations);
   const expandDocument =
-    options.expandSingleDocumentExcerpt === true && observations.length <= 1;
+    options.expandSingleDocumentExcerpt === true &&
+    (observations.length <= 1 || isMultiRegionDocumentProjection);
+  // Regions of one file SHARE the old single-observation whole-doc budget: each region's slice is
+  // floor(budget/count), so the SUM of every projected region's excerpt never exceeds what a
+  // single whole-file observation would have occupied (design §7 point 2 — no prompt growth). The
+  // single-observation path keeps the RAW options.documentExcerptCharBudget unchanged — byte-
+  // identical for an unsplit document.
+  const documentExcerptCharBudgetForProjection = isMultiRegionDocumentProjection
+    ? Math.floor(
+      (options.documentExcerptCharBudget ?? DOCUMENT_EXCERPT_PROJECTION_FLOOR) /
+        observations.length,
+    )
+    : options.documentExcerptCharBudget;
   return observations
     .map((observation) => {
       const payload: Record<string, unknown> = {
@@ -10434,7 +10542,7 @@ export function observationPromptPayload(
           options.contentExcerptCharLimit,
           observation.target_material_kind,
           expandDocument,
-          options.documentExcerptCharBudget,
+          documentExcerptCharBudgetForProjection,
           observation.source_ref,
         );
         payload.structural_data = compacted;
@@ -10460,7 +10568,7 @@ export function observationPromptPayload(
             captured_chars: typeof captured === "string" ? captured.length : 0,
             projection_budget_chars: typeof limit === "number"
               ? limit
-              : options.documentExcerptCharBudget ??
+              : documentExcerptCharBudgetForProjection ??
                 DOCUMENT_EXCERPT_PROJECTION_FLOOR,
           });
         }
@@ -10531,23 +10639,15 @@ export function observationPromptPayload(
 }
 
 /**
- * Resume fallback for the projection-truncation record. On
- * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
- * author's truncation sink are skipped, so it is empty even though the reused
- * artifacts may have been authored from a budget-sliced prompt. This recomputes
- * the unambiguous SINGLE-document case from the already-projected observations
- * (`promptSourceObservations` — source-safety redaction already applied, so a
- * redacted document has no `content_excerpt` and is correctly not reported) and
- * the budget. A multi-observation run that selected one large document would need
- * the persisted directives to recompute on resume — deferred; the primary
- * large-input scenario is a single document. Exported for the regression test.
+ * One observation's resume-fallback truncation record, or `[]` when the observation is not
+ * full-excerpt-projection-eligible or its captured excerpt fits `budget`. Shared by both branches
+ * of `singleDocumentProjectionTruncation` below so the single-observation and per-region cases
+ * apply the identical eligibility + slicing rule.
  */
-export function singleDocumentProjectionTruncation(
-  promptSourceObservations: ReconstructSourceObservationsArtifact,
+function singleObservationProjectionTruncation(
+  observation: ReconstructSourceObservation,
   budget: number,
 ): DocumentExcerptProjectionTruncation[] {
-  if (promptSourceObservations.observations.length !== 1) return [];
-  const observation = promptSourceObservations.observations[0]!;
   // Mirror the fresh-run eligibility (text-readable document OR source-language code, by ref
   // so build-language basenames count) so a resumed run records code truncation provenance
   // too — a document-only check silently dropped the event for a large single code file.
@@ -10570,6 +10670,40 @@ export function singleDocumentProjectionTruncation(
       projection_budget_chars: budget,
     },
   ];
+}
+
+/**
+ * Resume fallback for the projection-truncation record. On
+ * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
+ * author's truncation sink are skipped, so it is empty even though the reused
+ * artifacts may have been authored from a budget-sliced prompt. This recomputes
+ * the unambiguous SINGLE-document case from the already-projected observations
+ * (`promptSourceObservations` — source-safety redaction already applied, so a
+ * redacted document has no `content_excerpt` and is correctly not reported) and
+ * the budget — UNCHANGED, so still byte-identical for an unsplit resume.
+ *
+ * Design §7 (PR-1b-3): a decomposed document's seed-stage snapshot holds N region
+ * observations of the SAME file (`allObservationsAreRegionsOfOneFile`), the exact set the live
+ * path (`observationPromptPayload`) also recognizes as "one document's worth" and budgets at
+ * floor(budget/count) per region (mirrored here so a resumed run reports the SAME per-region
+ * truncations a fresh run would have recorded). A genuine multi-FILE bundle (mixed directory,
+ * several distinct documents) still recomputes nothing — deferred, same as before this PR;
+ * the primary large-input scenario is a single document (whole-file or fully split into regions).
+ * Exported for the regression test.
+ */
+export function singleDocumentProjectionTruncation(
+  promptSourceObservations: ReconstructSourceObservationsArtifact,
+  budget: number,
+): DocumentExcerptProjectionTruncation[] {
+  const observations = promptSourceObservations.observations;
+  if (observations.length === 1) {
+    return singleObservationProjectionTruncation(observations[0]!, budget);
+  }
+  if (!allObservationsAreRegionsOfOneFile(observations)) return [];
+  const perRegionBudget = Math.floor(budget / observations.length);
+  return observations.flatMap((observation) =>
+    singleObservationProjectionTruncation(observation, perRegionBudget)
+  );
 }
 
 function sourceScoutPackPromptPayload(args: {
@@ -12166,7 +12300,17 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
-      const availableObservationIds = input.sourceObservations.observations.map(
+      // Budget-contention guard (design §8 PR-1b-3): cap the CATALOG the selecting LLM sees to at
+      // most MAX_PROJECTED_REGIONS_PER_FILE observations per file BEFORE it is offered — a
+      // structural (not LLM-behavior-dependent) protection, since everything downstream
+      // (writeCandidateInventory etc.) only ever sees the directive's selected_observations. `byId`
+      // below is ALSO scoped to this capped set, so a hallucinated pick of a capped-out id fails
+      // the existing "unknown observation id" check rather than silently admitting it.
+      const cappedObservations = capProjectedRegionsPerFile(
+        input.sourceObservations.observations,
+        MAX_PROJECTED_REGIONS_PER_FILE,
+      );
+      const availableObservationIds = cappedObservations.map(
         (observation) => observation.observation_id,
       );
       const raw = await callJsonAuthor({
@@ -12188,12 +12332,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
           }),
           source_observations: projectObservationsForPrompt(input.sourceObservations, {
+            observationIds: availableObservationIds,
             contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
           }),
         },
       });
       const byId = new Map(
-        input.sourceObservations.observations.map((observation) => [
+        cappedObservations.map((observation) => [
           observation.observation_id,
           observation,
         ]),
