@@ -22,8 +22,12 @@ import {
   validateSourceObservationBoundary,
   type ReconstructSourceObservation,
 } from "./source-observations.js";
-import { codeStructureLanguageForExtension } from "../code-structure-observer.js";
+import {
+  codeStructureLanguageForExtension,
+  type CodeStructureInventory,
+} from "../code-structure-observer.js";
 import { observeCodeStructureWithLayoutTier } from "../code-layout-observer.js";
+import { segmentSourceIntoRegions, sliceRegionText, type Region } from "./source-region-segmenter.js";
 import { buildDeterministicComprehensionArtifact } from "./comprehension-artifact.js";
 import {
   loadReconstructSourceProfiles,
@@ -56,6 +60,14 @@ export interface MaterializeReconstructPreparationArtifactsParams {
    *  (Linguist unknown-fallback + extensionless shebang rung) so they reach observation. The Tier 1
    *  layout observer dispatch is wired separately (PR-B2). Absent = off (classifier byte-identical). */
   codeStructureLayout?: boolean;
+  /** Stage 1 source-region-decomposition opt-in (design 20260722 §10 PR-1b-2, INVARIANT-CHANGE):
+   *  when true, an ELIGIBLE captured file (kind-aware budget — see
+   *  isSourceRegionDecompositionEligible) is decomposed at observe time into one observation PER
+   *  REGION instead of one whole-file observation. Self-contained — does NOT require
+   *  codeStructureObservation (a code file with no captured inventory falls back to the segmenter's
+   *  blank-line-paragraph strategy). Absent = off — every observation stays whole-file,
+   *  byte-identical. */
+  sourceRegionDecomposition?: boolean;
 }
 
 const CONCRETE_TARGET_MATERIAL_KINDS = new Set<TargetMaterialKind>([
@@ -226,7 +238,11 @@ function defaultProfileForKind(
  * extension that the classifier does not map to `document` (e.g. `.html`) would never
  * reach this budget, so listing it here would be dead and misleading.
  */
-const DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT = 6000;
+// Exported (Stage 1 source-region-decomposition design 20260722 §10 PR-1b-2): the code half of
+// isSourceRegionDecompositionEligible's kind-aware threshold reuses this exact constant, and tests
+// must consult the same export rather than a duplicated literal (G2/INV-CFG-1: no second value
+// authority).
+export const DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT = 6000;
 /**
  * Capture ceiling (chars) for whole-document prose. Static and model-agnostic —
  * the upper bound for both capture AND the dynamic projection clamp, so the
@@ -465,13 +481,24 @@ export async function buildReconstructSourceObservation(
   // additionally carries the deterministic per-position structure inventory
   // (or an explicit unsupported reason) in structural_data. Absent/false ⇒
   // byte-identical to the pre-extension generic observation (G-OFF).
-  options?: { isRuntimeTargetSource?: boolean; codeStructureObservation?: boolean; codeSetTierObservation?: boolean; codeStructureLayout?: boolean },
+  options?: {
+    isRuntimeTargetSource?: boolean;
+    codeStructureObservation?: boolean;
+    codeSetTierObservation?: boolean;
+    codeStructureLayout?: boolean;
+    // Stage 1 source-region-decomposition (design 20260722 §5 A2/A3, §10 PR-1b-2): a re-observation
+    // caller's already-real region anchor (source-frontier `frontier.location` / maturation-closure
+    // `request.requested_location`) — the SAME `location` concept the whole-file default below
+    // already populates, not a new address kind (D2 opacity: exact string equality only). Absent
+    // (the default) ⇒ location = detection.ref, byte-identical to every pre-existing call.
+    locationOverride?: string;
+  },
 ): Promise<ReconstructSourceObservation | null> {
   if (!detection.exists || !isConcreteTargetMaterialKind(detection.kind)) {
     return null;
   }
   const extension = path.extname(detection.ref).toLowerCase();
-  const location = detection.ref;
+  const location = options?.locationOverride ?? detection.ref;
   // Re-observation runs after an earlier detection: the ref may have vanished
   // in between (TOCTOU). Treat a missing ref as nothing-to-observe (degrade to
   // null, like the !detection.exists guard above) instead of crashing the run
@@ -570,6 +597,124 @@ export async function buildReconstructSourceObservation(
     );
   }
   return observation;
+}
+
+/**
+ * Stage 1 source-region-decomposition (design 20260722-source-region-decomposition-stage1 §3/§10
+ * PR-1b-2) eligibility gate: decompose iff the opt-in is on AND the captured file exceeds the
+ * kind-aware budget it would otherwise be capped at as a SINGLE observation —
+ * DOCUMENT_EXCERPT_PROJECTION_FLOOR for `document` (the whole-document seed-stage projection
+ * budget a single observation would occupy) and DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT for `code`
+ * (the size at which a non-whole-capture-eligible code file's bounded structural sample truncates
+ * — see `structuralExcerptCharLimit`). Only code/document ever decompose: spreadsheet/database/
+ * mixed/unknown stay whole-file (matching the segmenter's own single-region fallback for those
+ * kinds — decomposing them is a later PR's concern per the design). Exported for direct unit
+ * testing of the threshold boundary.
+ */
+export function isSourceRegionDecompositionEligible(
+  kind: TargetMaterialKind,
+  charCount: number | null | undefined,
+): boolean {
+  if (typeof charCount !== "number") return false;
+  if (kind === "document") return charCount > DOCUMENT_EXCERPT_PROJECTION_FLOOR;
+  if (kind === "code") return charCount > DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;
+  return false;
+}
+
+/**
+ * Observe-time fanout (design §10 PR-1b-2 "구현 아키텍처 정정"): given the WHOLE-FILE observation
+ * `buildReconstructSourceObservation` already built (capture is unconditional and unchanged by this
+ * function), split it into one observation PER REGION the deterministic segmenter
+ * (source-region-segmenter.ts) partitions the file into.
+ *
+ * Independently re-reads the raw file bytes rather than reusing `observation.structural_data.
+ * content_excerpt`: a non-whole-capture-eligible code file's excerpt is bounded at EXACTLY
+ * DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT — the same value this module's eligibility gate fires at —
+ * so segmenting the excerpt instead of the file would silently drop the file's tail, violating
+ * observe-all completeness (design D1). The re-read uses the SAME line-count convention as the
+ * code/layout observers (`text.split(/\r?\n/).length`) so a captured `codeStructureInventory`'s
+ * `line_count` always matches, satisfying the segmenter's fail-loud partition precondition.
+ *
+ * A single-region result (the segmenter found nothing to split — e.g. a kind with no decomposition
+ * strategy, or a fallback that happens to yield exactly one region) degrades to the ORIGINAL
+ * whole-file observation UNCHANGED, so a no-op split stays byte-identical to the off-path shape (no
+ * `location`/`region_line_*` fields are introduced). A TOCTOU vanish (the file disappeared between
+ * the whole-file capture and this re-read) also degrades to the whole-file observation already
+ * built — never a hard failure for what is an additive enhancement over a capture that already
+ * succeeded. The same degrade covers a TOCTOU EDIT (the file changed, rather than vanished,
+ * between the whole-file capture and this re-read): the captured `code_structure_inventory` can
+ * then disagree with the freshly re-read text (segmentSourceIntoRegions' own
+ * `codeStructureInventory.line_count !== lineCount` guard, or its strict-partition invariant) and
+ * throw — a benign concurrent edit must degrade exactly like a vanish, never crash the run.
+ *
+ * Each region observation keeps `content_sha256` as the WHOLE-FILE hash (the provenance spine that
+ * scout-pack consumers bind to, design §6) and every other `structural_data` field describing the
+ * FILE unchanged; only `content_excerpt` is replaced with the region's exact byte slice (never
+ * truncated — D1 observe-all) and `region_line_start`/`region_line_end`/`region_role` are added
+ * additively. `region_role` carries the segmenter's `role_signal` ("declaration"|"heading"|"body")
+ * so a downstream projection budget (design §8 PR-1b-3) can rank declaration/heading regions ahead
+ * of body regions without re-deriving structure. `location` becomes the region's anchor, so
+ * `stableObservationId` yields a distinct per-region id (the id/location fold is unchanged —
+ * design §1).
+ */
+export async function expandSourceObservationIntoRegions(
+  observation: ReconstructSourceObservation,
+): Promise<ReconstructSourceObservation[]> {
+  let text: string;
+  try {
+    text = await fs.readFile(observation.source_ref, "utf8");
+  } catch {
+    return [observation];
+  }
+  const lineCount = text.length === 0 ? 0 : text.split(/\r?\n/).length;
+  const codeStructureInventory =
+    observation.target_material_kind === "code"
+      ? (observation.structural_data.code_structure_inventory as CodeStructureInventory | undefined)
+      : undefined;
+  // TOCTOU-edit guard (design review Finding 3): narrowly scoped to the segment+expand step — the
+  // re-read above already covers TOCTOU-vanish (its own try/catch), and this catch never masks a
+  // failure unrelated to the fanout itself. A file edited (not vanished) between the whole-file
+  // capture and the re-read above can make the captured code_structure_inventory disagree with the
+  // fresh text, which segmentSourceIntoRegions detects and throws on (fail-loud BY DESIGN there,
+  // since a violated precondition must never silently mis-segment) — here, one level up, that throw
+  // means only "decomposition is unsafe for this benign race", so degrade to the ORIGINAL whole-file
+  // observation exactly like every other degrade path in this function, rather than crash the run.
+  let regions: Region[];
+  let regionObservations: ReconstructSourceObservation[];
+  try {
+    regions = segmentSourceIntoRegions({
+      kind: observation.target_material_kind,
+      ref: observation.source_ref,
+      text,
+      lineCount,
+      ...(codeStructureInventory ? { codeStructureInventory } : {}),
+    });
+    if (regions.length <= 1) return [observation];
+    regionObservations = regions.map((region) => ({
+      ...observation,
+      observation_id: stableObservationId({ sourceRef: observation.source_ref, location: region.location }),
+      location: region.location,
+      structural_data: {
+        ...observation.structural_data,
+        content_excerpt: sliceRegionText(text, region.region_line_start, region.region_line_end),
+        excerpt_truncated: false,
+        region_line_start: region.region_line_start,
+        region_line_end: region.region_line_end,
+        region_role: region.role_signal,
+      },
+    }));
+    for (const regionObservation of regionObservations) {
+      const validation = validateSourceObservationBoundary(regionObservation);
+      if (!validation.valid) {
+        throw new Error(
+          `Invalid region source observation boundary for ${regionObservation.source_ref}#${regionObservation.location}: ${validation.violations.join("; ")}`,
+        );
+      }
+    }
+  } catch {
+    return [observation];
+  }
+  return regionObservations;
 }
 
 /**
@@ -691,10 +836,18 @@ export function spreadsheetUnsupportedReason(
   return typeof reason === "string" && reason.length > 0 ? reason : null;
 }
 
-function stableFrontierRefId(unit: ReconstructSourceInventoryUnit): string {
+// A9 (design §5): fold unit.location into the digest ONLY when present, so a
+// non-region unit (location absent — everywhere in this PR, buildInventoryUnits
+// stays one unit per file) produces the exact same digest as before. PR-1b-2's
+// region units (location present) get distinct ids from the unit they share a
+// file with. Exported for the conditional-fold unit test.
+export function stableFrontierRefId(unit: ReconstructSourceInventoryUnit): string {
   const digest = crypto
     .createHash("sha256")
-    .update(`${unit.target_material_kind}\n${path.resolve(unit.ref)}\n${unit.inventory_unit}`)
+    .update(
+      `${unit.target_material_kind}\n${path.resolve(unit.ref)}\n${unit.inventory_unit}` +
+        (unit.location !== undefined ? `\n${unit.location}` : ""),
+    )
     .digest("hex")
     .slice(0, 16);
   return `frontier_initial_${digest}`;
@@ -714,6 +867,12 @@ function buildInitialSourceFrontier(args: {
       .map((unit) => ({
         frontier_ref_id: stableFrontierRefId(unit),
         source_ref: unit.ref,
+        // Stage 1 source-region-decomposition (design 20260722 §5/§9/§10 PR-1b-2): additive-absent —
+        // a region-expanded unit (source_region_decomposition on) carries its region anchor here so
+        // this artifact's per-row frontier_ref_id (already region-distinct via stableFrontierRefId's
+        // conditional fold, A9) is not orphaned from the location it was folded from. Absent for every
+        // non-decomposed unit, matching today's output byte-for-byte.
+        ...(unit.location !== undefined ? { location: unit.location } : {}),
         target_material_kind: unit.target_material_kind,
         inventory_unit: unit.inventory_unit,
         profile_ref: unit.profile_ref,
@@ -811,14 +970,15 @@ export async function materializeReconstructPreparationArtifacts(
     },
   };
 
+  const baseInventoryUnits = buildInventoryUnits({
+    detections: detection.per_ref,
+    profiles,
+  });
   const inventory: ReconstructSourceInventoryArtifact = {
     schema_version: "1",
     session_id: sessionId,
     created_at: isoNow(),
-    inventory_units: buildInventoryUnits({
-      detections: detection.per_ref,
-      profiles,
-    }),
+    inventory_units: baseInventoryUnits,
     scan_boundary: {
       filesystem_allowed_roots:
         params.filesystemAllowedRoots?.map((root) => path.resolve(root)) ?? [],
@@ -827,8 +987,15 @@ export async function materializeReconstructPreparationArtifacts(
   };
   const observations: ReconstructSourceObservation[] = [];
   const skippedRefs: ReconstructSourceObservationsArtifact["skipped_refs"] = [];
-  for (const unit of inventory.inventory_units) {
+  // Stage 1 source-region-decomposition (design §10 PR-1b-2): rebuilt below rather than mutated
+  // in place, because a decomposed unit REPLACES its single file-level row with N region rows —
+  // an array length change a `for...of` mutation over `inventory.inventory_units` cannot express.
+  // When the opt-in is off (or no unit ever decomposes) every unit is pushed through unchanged, in
+  // the same order, so the result is content-identical to `baseInventoryUnits` — byte-identical.
+  const finalInventoryUnits: ReconstructSourceInventoryUnit[] = [];
+  for (const unit of baseInventoryUnits) {
     if (unit.scan_status === "skipped") {
+      finalInventoryUnits.push(unit);
       skippedRefs.push({
         ref: unit.ref,
         target_material_kind: unit.target_material_kind,
@@ -837,7 +1004,10 @@ export async function materializeReconstructPreparationArtifacts(
       continue;
     }
     const refDetection = detection.per_ref.find((candidate) => candidate.ref === unit.ref);
-    if (!refDetection) continue;
+    if (!refDetection) {
+      finalInventoryUnits.push(unit);
+      continue;
+    }
     // Defect-3 basis A: these are the user-provided reconstruct runtime-target
     // refs (the initial target inventory), so they are runtime-target sources.
     const observation = await buildReconstructSourceObservation(refDetection, undefined, {
@@ -858,13 +1028,38 @@ export async function materializeReconstructPreparationArtifacts(
         // (the evidence gate stays honest about un-observed material).
         unit.scan_status = "skipped";
         unit.skip_reason = `spreadsheet extraction unsupported: ${unsupportedReason}`;
+        finalInventoryUnits.push(unit);
         skippedRefs.push({
           ref: unit.ref,
           target_material_kind: unit.target_material_kind,
           reason: unit.skip_reason,
         });
+      } else if (
+        params.sourceRegionDecomposition === true &&
+        isSourceRegionDecompositionEligible(
+          observation.target_material_kind,
+          typeof observation.structural_data.char_count === "number"
+            ? observation.structural_data.char_count
+            : null,
+        )
+      ) {
+        // Observe-time fanout (design §10 PR-1b-2): N region observations replace the ONE
+        // whole-file observation, and N region-anchored inventory units replace the ONE unit, so
+        // `inventory.inventory_units` reflects the expansion and buildInitialSourceFrontier (below,
+        // derived FROM inventory_units) is automatically per-region.
+        const regionObservations = await expandSourceObservationIntoRegions(observation);
+        if (regionObservations.length <= 1) {
+          observations.push(observation);
+          finalInventoryUnits.push(unit);
+        } else {
+          observations.push(...regionObservations);
+          for (const regionObservation of regionObservations) {
+            finalInventoryUnits.push({ ...unit, location: regionObservation.location });
+          }
+        }
       } else {
         observations.push(observation);
+        finalInventoryUnits.push(unit);
       }
     } else {
       // buildReconstructSourceObservation returns null when the ref is no longer
@@ -876,6 +1071,7 @@ export async function materializeReconstructPreparationArtifacts(
       // or re-queued by the deterministic first-frontier scout.
       unit.scan_status = "skipped";
       unit.skip_reason = "source ref unavailable at observation time";
+      finalInventoryUnits.push(unit);
       skippedRefs.push({
         ref: unit.ref,
         target_material_kind: unit.target_material_kind,
@@ -883,6 +1079,7 @@ export async function materializeReconstructPreparationArtifacts(
       });
     }
   }
+  inventory.inventory_units = finalInventoryUnits;
 
   // Built after observation so refs marked skipped above (vanished mid-run) are
   // excluded from frontier source_refs rather than re-admitted later.

@@ -15,6 +15,8 @@ import {
 import { strToU8, zipSync } from "fflate";
 import { buildSpreadsheetObservationSummary } from "./materialize-preparation.js";
 import {
+  regionCoverageKeys,
+  regionKey,
   validateSourceObservationBoundary,
   type ReconstructSourceObservation,
 } from "./source-observations.js";
@@ -667,5 +669,84 @@ describe("validateSourceObservationBoundary — P1-C1 value-tile honesty (T6/T7)
     const result = validateSourceObservationBoundary(obs);
     expect(result.valid).toBe(false);
     expect(result.violations.some((v) => v.includes("comprehension_artifact"))).toBe(true);
+  });
+});
+
+describe("regionKey (Stage 1 source-region-decomposition design 20260722 §5)", () => {
+  it("is a pure, deterministic function of its two args", () => {
+    expect(regionKey("/repo/src/a.ts", "L1-10")).toBe(regionKey("/repo/src/a.ts", "L1-10"));
+  });
+
+  it("resolves only the source_ref half — location passes through verbatim (never resolved)", () => {
+    // A real region anchor ("L1-10", "../weird") must never be run through path.resolve — it is an
+    // opaque string, not a filesystem path (design §3 decision D2).
+    expect(regionKey("src/a.ts", "../weird")).toBe(`${path.resolve("src/a.ts")}\n../weird`);
+    expect(regionKey("src/a.ts", "L1-10")).toBe(`${path.resolve("src/a.ts")}\nL1-10`);
+  });
+
+  it("PR-1a byte-identity: with location OMITTED, regionKey partitions refs IDENTICALLY to the " +
+    "pre-regionKey bare path.resolve(source_ref) key", () => {
+    // Every Bucket A query site this PR wires (design §5) calls regionKey(ref) with NO location
+    // argument when no real region exists yet — this must group refs by resolved-path equality alone,
+    // exactly like the coverage Sets/Maps did before this PR, regardless of whether the two textual
+    // spellings of "the same file" are relative or absolute. (regionKey(ref, ref) — folding a location
+    // that merely DEFAULTS to the ref's own raw spelling — is deliberately NOT this property: two
+    // differently-spelled-but-resolve-equal refs would carry different unresolved location halves and
+    // fail to partition together, which is why every Bucket A site omits location entirely rather than
+    // defaulting it — see regionKey's and regionCoverageKeys' doc comments.)
+    const cwd = process.cwd();
+    const sameFilePairs: Array<[string, string]> = [
+      ["/repo/src/a.ts", "/repo/src/a.ts"],
+      ["src/a.ts", path.join(cwd, "src/a.ts")],
+      ["./src/a.ts", "src/a.ts"],
+      ["/repo/src/../src/a.ts", "/repo/src/a.ts"],
+    ];
+    for (const [left, right] of sameFilePairs) {
+      expect(path.resolve(left)).toBe(path.resolve(right)); // fixture sanity
+      expect(regionKey(left)).toBe(regionKey(right));
+      expect(regionKey(left)).toBe(path.resolve(left)); // exactly the pre-regionKey key, byte-for-byte
+    }
+    const differentFilePairs: Array<[string, string]> = [
+      ["/repo/src/a.ts", "/repo/src/b.ts"],
+      ["src/a.ts", "src/b.ts"],
+    ];
+    for (const [left, right] of differentFilePairs) {
+      expect(path.resolve(left)).not.toBe(path.resolve(right)); // fixture sanity
+      expect(regionKey(left)).not.toBe(regionKey(right));
+    }
+  });
+
+  it("region-readiness: distinct locations on the SAME resolved file produce distinct keys", () => {
+    // The forward-looking property PR-1b-2 depends on: once a real segmenter emits >1 location for a
+    // file, regionKey must be able to tell those observations apart (no last-wins collapse).
+    const a = regionKey("/repo/src/big.ts", "L1-50");
+    const b = regionKey("/repo/src/big.ts", "L51-100");
+    expect(a).not.toBe(b);
+    // Both are also distinct from the file-level (no-location) key.
+    const fileLevel = regionKey("/repo/src/big.ts");
+    expect(a).not.toBe(fileLevel);
+    expect(b).not.toBe(fileLevel);
+  });
+});
+
+describe("regionCoverageKeys (Stage 1 source-region-decomposition design 20260722 §5)", () => {
+  it("registers an observation under BOTH the file-level and precise forms", () => {
+    const keys = regionCoverageKeys("/repo/src/big.ts", "L1-50");
+    expect(keys).toEqual([
+      regionKey("/repo/src/big.ts"),
+      regionKey("/repo/src/big.ts", "L1-50"),
+    ]);
+  });
+
+  it("a location-less query (regionKey(ref), no arg) always finds an observation registered via " +
+    "regionCoverageKeys — this is the PR-1a byte-identity path every Bucket A site takes", () => {
+    const keys = new Set(regionCoverageKeys("/repo/src/a.ts", "/repo/src/a.ts"));
+    expect(keys.has(regionKey("/repo/src/a.ts"))).toBe(true);
+  });
+
+  it("a location-aware query (PR-1b-2) finds an observation ONLY at its own precise region", () => {
+    const keys = new Set(regionCoverageKeys("/repo/src/big.ts", "L1-50"));
+    expect(keys.has(regionKey("/repo/src/big.ts", "L1-50"))).toBe(true);
+    expect(keys.has(regionKey("/repo/src/big.ts", "L51-100"))).toBe(false);
   });
 });

@@ -298,7 +298,11 @@ import {
   ontologySeedClaimProjections,
   ontologySeedExcludedClaimIds,
 } from "./seed-claim-projections.js";
-import type { ReconstructSourceObservation } from "./source-observations.js";
+import {
+  regionCoverageKeys,
+  regionKey,
+  type ReconstructSourceObservation,
+} from "./source-observations.js";
 import {
   COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
   COMPREHENSION_ARTIFACT_CONTRACT_VERSION,
@@ -1110,6 +1114,14 @@ export interface RunReconstructParams {
    *  properties. Inert unless environmentContextProfile is also on (nested inside its hook). Absent =
    *  off: no manifest content is read, the profile is byte-identical to Stage 0.5 (side-effect 0). */
   environmentContextProfileContent?: boolean;
+  /** Stage 1 source-region-decomposition opt-in (design 20260722-source-region-decomposition-stage1
+   *  §10 PR-1b-2, INVARIANT-CHANGE): set from reconstruct.execution.source_region_decomposition.
+   *  When true, an eligible captured file is decomposed at observe time into one observation per
+   *  region, and a maturation-closure source request's requested_location becomes a re-observed
+   *  observation's anchor (both the identity/dedup keys AND the observe-time fanout change what
+   *  "already observed" means for that ref — INVARIANT-CHANGE). Self-contained: independent of the
+   *  code opt-ins. Absent = off — every observation stays whole-file, byte-identical. */
+  sourceRegionDecomposition?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -1710,7 +1722,17 @@ export function sourceObservationsReuseSha256(
       target_material_kind: observation.target_material_kind,
       adapter_id: observation.adapter_id,
       source_ref: path.resolve(observation.source_ref),
-      location: path.resolve(observation.location),
+      // Stage 1 source-region-decomposition (design 20260722 §5 "누락된 지점"/§10 PR-1b-2): folded
+      // RAW, never path.resolve()'d. A real region anchor (e.g. "L128-210") is not a path — resolving
+      // it would silently rewrite it to `${cwd}/L128-210`, making the reuse key CWD-dependent and
+      // non-deterministic across replays (the two-CWD determinism test in this PR's suite proves the
+      // fix). BYTE-IDENTICAL for every whole-file observation: `location` there is always
+      // `detection.ref`, which is ALREADY an absolute, `path.resolve()`-derived string
+      // (materialize-preparation.ts's targetRefs / the re-observation paths' inventory unit refs are
+      // resolved upstream, before any observation is built) — so `path.resolve` on it was always a
+      // no-op. The reuse key rotates ONLY when a real region anchor appears (opt-in on + a decomposed
+      // file), never for an off-path or sub-budget-only run.
+      location: observation.location,
       structural_data: {
         path_kind: observation.structural_data.path_kind ?? null,
         size_bytes: observation.structural_data.size_bytes ?? null,
@@ -7896,11 +7918,24 @@ function maturationAnswerSupportPromptCatalog(args: {
   maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
   maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
 }): MaturationAnswerSupportPromptCatalog {
+  // Budget-contention guard (design §8, mirroring writeSourceObservationDirective's identical
+  // capProjectedRegionsPerFile call): applied BEFORE grouping, so a decomposed file's N region
+  // observations sharing one source_ref never all become prioritized ids just because that file is
+  // a closure-prioritized answer-support ref (the normal case — it's the main material). Without
+  // this, a heavily-decomposed prioritized file either starves supplemental observations out of the
+  // ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT slots below, or — past that limit — trips
+  // assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow and crashes the run. A file at or under
+  // MAX_PROJECTED_REGIONS_PER_FILE observations passes through unchanged (no-op), so OFF /
+  // one-observation-per-file corpora are byte-identical.
+  const cappedObservations = capProjectedRegionsPerFile(
+    args.sourceObservations.observations,
+    MAX_PROJECTED_REGIONS_PER_FILE,
+  );
   const observationsBySourceRef = new Map<
     string,
     ReconstructSourceObservationsArtifact["observations"]
   >();
-  for (const observation of args.sourceObservations.observations) {
+  for (const observation of cappedObservations) {
     const observations = observationsBySourceRef.get(observation.source_ref) ??
       [];
     observations.push(observation);
@@ -7916,7 +7951,7 @@ function maturationAnswerSupportPromptCatalog(args: {
     ),
   ];
   const prioritizedObservationIdSet = new Set(prioritizedObservationIds);
-  const supplementalObservationIds = args.sourceObservations.observations
+  const supplementalObservationIds = cappedObservations
     .filter((observation) =>
       !prioritizedObservationIdSet.has(observation.observation_id)
     )
@@ -10236,6 +10271,16 @@ interface ObservationPromptPayloadOptions {
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
 const SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT = 300;
 const SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT = 64;
+// Budget-contention guard (design §8 PR-1b-3, exported + tunable — value not spec-fixed, tune
+// against a real large corpus per design §13): the most region observations of any ONE file the
+// SourceObservationDirective catalog offers the selecting LLM. Bounds a heavily-decomposed file's
+// share of SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT (and, transitively, of
+// ONTOLOGY_SEED_OBSERVATION_LIMIT, since candidate authoring only ever sees the directive's
+// selected set) so it cannot starve a different file's high-value observations out of the
+// catalog. A file at or under the cap, and every whole-file (non-region) observation, is
+// unaffected — off-path / unsplit corpora project byte-identically (capProjectedRegionsPerFile
+// is then a no-op on every group).
+export const MAX_PROJECTED_REGIONS_PER_FILE = 8;
 const SOURCE_SCOUT_PROMPT_SIGNAL_LIMIT = 80;
 const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
@@ -10374,6 +10419,90 @@ function compactStructuralDataForPrompt(
 /** Bounded cap on provisional leaf-read labels rendered into one observation's prompt (Step E). */
 const MAX_PROVISIONAL_LABELS_PER_OBSERVATION = 64;
 
+/**
+ * Design §7 (whole-document-projection generalization, PR-1b-3): true when every observation in
+ * `observations` is a REGION of the SAME file — same `source_ref`, each carrying a distinct
+ * `location` and a numeric `region_line_start`/`region_line_end` (the additive fields
+ * `expandSourceObservationIntoRegions` stamps on a region observation — materialize-preparation.ts
+ * — never present on a whole-file observation). A decomposed document projected as N region
+ * observations qualifies for whole-document expansion exactly like a single whole-file observation
+ * does under the existing `observations.length <= 1` gate: both are "one document's worth". A
+ * multi-FILE bundle (mixed directory, several distinct documents) never qualifies (different
+ * `source_ref`), so it keeps today's bounded per-observation excerpt unchanged.
+ */
+function allObservationsAreRegionsOfOneFile(
+  observations: readonly ReconstructSourceObservation[],
+): boolean {
+  if (observations.length <= 1) return false;
+  const sourceRef = observations[0]!.source_ref;
+  const locations = new Set<string>();
+  for (const observation of observations) {
+    if (observation.source_ref !== sourceRef) return false;
+    if (
+      typeof observation.structural_data.region_line_start !== "number" ||
+      typeof observation.structural_data.region_line_end !== "number"
+    ) {
+      return false;
+    }
+    if (locations.has(observation.location)) return false;
+    locations.add(observation.location);
+  }
+  return true;
+}
+
+/** Rank tier for `capProjectedRegionsPerFile`'s within-file sort — declaration/heading regions
+ *  (structurally significant, design §8) outrank body regions and role-less (whole-file)
+ *  observations, which only ever appear alone in a group so their tier never actually competes. */
+function projectedRegionRoleTier(observation: ReconstructSourceObservation): number {
+  const role = observation.structural_data.region_role;
+  return role === "declaration" || role === "heading" ? 0 : 1;
+}
+
+/**
+ * Budget-contention guard (design §8 PR-1b-3): caps how many observations of any ONE file survive
+ * into a projection catalog at `maxPerFile`, so a heavily-decomposed file cannot occupy more than
+ * its share of a downstream selection cap (SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT). Within
+ * an over-cap file, declaration/heading regions rank ahead of body regions
+ * (`projectedRegionRoleTier`), then earlier regions (by `region_line_start`) break ties — so
+ * structurally significant regions survive even behind a long low-role tail. A file at or under
+ * the cap passes through UNCHANGED — both membership and relative order — so an off-path/unsplit
+ * corpus (never more than one observation per file) is byte-identical. This is a PROJECTION-ONLY
+ * selection: the full observation set (all region observations) stays in source-observations.yaml
+ * regardless; only what reaches a prompt catalog is bounded.
+ */
+function capProjectedRegionsPerFile(
+  observations: readonly ReconstructSourceObservation[],
+  maxPerFile: number,
+): ReconstructSourceObservation[] {
+  const bySourceRef = new Map<string, ReconstructSourceObservation[]>();
+  for (const observation of observations) {
+    const group = bySourceRef.get(observation.source_ref);
+    if (group) group.push(observation);
+    else bySourceRef.set(observation.source_ref, [observation]);
+  }
+  const keepIds = new Set<string>();
+  for (const group of bySourceRef.values()) {
+    if (group.length <= maxPerFile) {
+      for (const observation of group) keepIds.add(observation.observation_id);
+      continue;
+    }
+    const ranked = [...group].sort((a, b) => {
+      const tierDelta = projectedRegionRoleTier(a) - projectedRegionRoleTier(b);
+      if (tierDelta !== 0) return tierDelta;
+      const startA = a.structural_data.region_line_start;
+      const startB = b.structural_data.region_line_start;
+      return (typeof startA === "number" ? startA : 0) -
+        (typeof startB === "number" ? startB : 0);
+    });
+    for (const observation of ranked.slice(0, maxPerFile)) {
+      keepIds.add(observation.observation_id);
+    }
+  }
+  // Filter (not re-sort) the ORIGINAL array so kept observations keep their original relative
+  // order — the ranking above only decides membership, never display order.
+  return observations.filter((observation) => keepIds.has(observation.observation_id));
+}
+
 export function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
   options: ObservationPromptPayloadOptions = {},
@@ -10390,13 +10519,27 @@ export function observationPromptPayload(
         );
     })()
     : sourceObservations.observations;
-  // Full-document expansion needs the seed-authoring opt-in AND a single projected
-  // observation: a seed-authoring prompt over one document gets the whole document;
-  // multi-document bundles, mixed directories (one document among many observations),
-  // and post-seed/bounded prompts keep the budgeted excerpt (see
-  // effectiveContentExcerptCharLimit).
+  // Full-document expansion needs the seed-authoring opt-in AND either a single projected
+  // observation OR every projected observation being a region of the SAME decomposed file
+  // (design §7 PR-1b-3, allObservationsAreRegionsOfOneFile): a seed-authoring prompt over one
+  // document — whole-file, or fully split into regions — gets the whole document; multi-FILE
+  // bundles, mixed directories (one document among many observations), and post-seed/bounded
+  // prompts keep the budgeted excerpt (see effectiveContentExcerptCharLimit).
+  const isMultiRegionDocumentProjection = allObservationsAreRegionsOfOneFile(observations);
   const expandDocument =
-    options.expandSingleDocumentExcerpt === true && observations.length <= 1;
+    options.expandSingleDocumentExcerpt === true &&
+    (observations.length <= 1 || isMultiRegionDocumentProjection);
+  // Regions of one file SHARE the old single-observation whole-doc budget: each region's slice is
+  // floor(budget/count), so the SUM of every projected region's excerpt never exceeds what a
+  // single whole-file observation would have occupied (design §7 point 2 — no prompt growth). The
+  // single-observation path keeps the RAW options.documentExcerptCharBudget unchanged — byte-
+  // identical for an unsplit document.
+  const documentExcerptCharBudgetForProjection = isMultiRegionDocumentProjection
+    ? Math.floor(
+      (options.documentExcerptCharBudget ?? DOCUMENT_EXCERPT_PROJECTION_FLOOR) /
+        observations.length,
+    )
+    : options.documentExcerptCharBudget;
   return observations
     .map((observation) => {
       const payload: Record<string, unknown> = {
@@ -10412,7 +10555,7 @@ export function observationPromptPayload(
           options.contentExcerptCharLimit,
           observation.target_material_kind,
           expandDocument,
-          options.documentExcerptCharBudget,
+          documentExcerptCharBudgetForProjection,
           observation.source_ref,
         );
         payload.structural_data = compacted;
@@ -10438,7 +10581,7 @@ export function observationPromptPayload(
             captured_chars: typeof captured === "string" ? captured.length : 0,
             projection_budget_chars: typeof limit === "number"
               ? limit
-              : options.documentExcerptCharBudget ??
+              : documentExcerptCharBudgetForProjection ??
                 DOCUMENT_EXCERPT_PROJECTION_FLOOR,
           });
         }
@@ -10509,23 +10652,15 @@ export function observationPromptPayload(
 }
 
 /**
- * Resume fallback for the projection-truncation record. On
- * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
- * author's truncation sink are skipped, so it is empty even though the reused
- * artifacts may have been authored from a budget-sliced prompt. This recomputes
- * the unambiguous SINGLE-document case from the already-projected observations
- * (`promptSourceObservations` — source-safety redaction already applied, so a
- * redacted document has no `content_excerpt` and is correctly not reported) and
- * the budget. A multi-observation run that selected one large document would need
- * the persisted directives to recompute on resume — deferred; the primary
- * large-input scenario is a single document. Exported for the regression test.
+ * One observation's resume-fallback truncation record, or `[]` when the observation is not
+ * full-excerpt-projection-eligible or its captured excerpt fits `budget`. Shared by both branches
+ * of `singleDocumentProjectionTruncation` below so the single-observation and per-region cases
+ * apply the identical eligibility + slicing rule.
  */
-export function singleDocumentProjectionTruncation(
-  promptSourceObservations: ReconstructSourceObservationsArtifact,
+function singleObservationProjectionTruncation(
+  observation: ReconstructSourceObservation,
   budget: number,
 ): DocumentExcerptProjectionTruncation[] {
-  if (promptSourceObservations.observations.length !== 1) return [];
-  const observation = promptSourceObservations.observations[0]!;
   // Mirror the fresh-run eligibility (text-readable document OR source-language code, by ref
   // so build-language basenames count) so a resumed run records code truncation provenance
   // too — a document-only check silently dropped the event for a large single code file.
@@ -10548,6 +10683,40 @@ export function singleDocumentProjectionTruncation(
       projection_budget_chars: budget,
     },
   ];
+}
+
+/**
+ * Resume fallback for the projection-truncation record. On
+ * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
+ * author's truncation sink are skipped, so it is empty even though the reused
+ * artifacts may have been authored from a budget-sliced prompt. This recomputes
+ * the unambiguous SINGLE-document case from the already-projected observations
+ * (`promptSourceObservations` — source-safety redaction already applied, so a
+ * redacted document has no `content_excerpt` and is correctly not reported) and
+ * the budget — UNCHANGED, so still byte-identical for an unsplit resume.
+ *
+ * Design §7 (PR-1b-3): a decomposed document's seed-stage snapshot holds N region
+ * observations of the SAME file (`allObservationsAreRegionsOfOneFile`), the exact set the live
+ * path (`observationPromptPayload`) also recognizes as "one document's worth" and budgets at
+ * floor(budget/count) per region (mirrored here so a resumed run reports the SAME per-region
+ * truncations a fresh run would have recorded). A genuine multi-FILE bundle (mixed directory,
+ * several distinct documents) still recomputes nothing — deferred, same as before this PR;
+ * the primary large-input scenario is a single document (whole-file or fully split into regions).
+ * Exported for the regression test.
+ */
+export function singleDocumentProjectionTruncation(
+  promptSourceObservations: ReconstructSourceObservationsArtifact,
+  budget: number,
+): DocumentExcerptProjectionTruncation[] {
+  const observations = promptSourceObservations.observations;
+  if (observations.length === 1) {
+    return singleObservationProjectionTruncation(observations[0]!, budget);
+  }
+  if (!allObservationsAreRegionsOfOneFile(observations)) return [];
+  const perRegionBudget = Math.floor(budget / observations.length);
+  return observations.flatMap((observation) =>
+    singleObservationProjectionTruncation(observation, perRegionBudget)
+  );
 }
 
 function sourceScoutPackPromptPayload(args: {
@@ -12144,7 +12313,17 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
-      const availableObservationIds = input.sourceObservations.observations.map(
+      // Budget-contention guard (design §8 PR-1b-3): cap the CATALOG the selecting LLM sees to at
+      // most MAX_PROJECTED_REGIONS_PER_FILE observations per file BEFORE it is offered — a
+      // structural (not LLM-behavior-dependent) protection, since everything downstream
+      // (writeCandidateInventory etc.) only ever sees the directive's selected_observations. `byId`
+      // below is ALSO scoped to this capped set, so a hallucinated pick of a capped-out id fails
+      // the existing "unknown observation id" check rather than silently admitting it.
+      const cappedObservations = capProjectedRegionsPerFile(
+        input.sourceObservations.observations,
+        MAX_PROJECTED_REGIONS_PER_FILE,
+      );
+      const availableObservationIds = cappedObservations.map(
         (observation) => observation.observation_id,
       );
       const raw = await callJsonAuthor({
@@ -12166,12 +12345,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
           }),
           source_observations: projectObservationsForPrompt(input.sourceObservations, {
+            observationIds: availableObservationIds,
             contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
           }),
         },
       });
       const byId = new Map(
-        input.sourceObservations.observations.map((observation) => [
+        cappedObservations.map((observation) => [
           observation.observation_id,
           observation,
         ]),
@@ -15075,7 +15255,10 @@ function reconstructContractRegistryPathFromProfilesRoot(profilesRoot: string): 
   );
 }
 
-function validateSourceFrontier(args: {
+// Exported for direct unit testing (Stage 1 source-region-decomposition design 20260722 §5/§11
+// Bucket A negative-control tests — the highest-value proof this design calls for, exercising the
+// REAL dedup site rather than a mock). Not part of the public reconstruct core API surface.
+export function validateSourceFrontier(args: {
   sessionId: string;
   roundId: string;
   sourceFrontier: ReconstructSourceFrontierArtifact;
@@ -15087,20 +15270,28 @@ function validateSourceFrontier(args: {
   targetMaterialProfileValidation: ReconstructTargetMaterialProfileValidationArtifact;
   targetMaterialProfileValidationRef: string;
 }): ReconstructSourceFrontierValidationArtifact {
+  // A1 (design §5): regionKey-keyed. unit.location/frontier.location are
+  // additive-absent in this PR, so every query key here is `regionKey(ref)`
+  // (no location) — the bare resolved ref, byte-identical to the prior
+  // `path.resolve()` keys. The observation/inventory-unit (authoritative) side
+  // registers under regionCoverageKeys so a location-aware query (PR-1b-2) can
+  // also find it later without changing this PR's behavior.
   const inventoryRefs = new Set(
-    args.sourceInventory.inventory_units.map((unit) => path.resolve(unit.ref)),
+    args.sourceInventory.inventory_units.flatMap((unit) =>
+      regionCoverageKeys(unit.ref, unit.location)
+    ),
   );
   const observedRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const accepted: string[] = [];
   const rejected: ReconstructSourceFrontierValidationArtifact["rejected_frontier_refs"] = [];
   const seen = new Set<string>();
   for (const frontier of args.sourceFrontier.frontier_refs) {
-    const resolved = path.resolve(frontier.source_ref);
-    if (seen.has(resolved)) {
+    const key = regionKey(frontier.source_ref, frontier.location);
+    if (seen.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15108,8 +15299,8 @@ function validateSourceFrontier(args: {
       });
       continue;
     }
-    seen.add(resolved);
-    if (observedRefs.has(resolved)) {
+    seen.add(key);
+    if (observedRefs.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15117,7 +15308,7 @@ function validateSourceFrontier(args: {
       });
       continue;
     }
-    if (!inventoryRefs.has(resolved)) {
+    if (!inventoryRefs.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15186,7 +15377,8 @@ function validateSourceFrontier(args: {
 
 const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;
 
-async function observeAcceptedFrontierRefs(args: {
+// Exported for direct unit testing — see validateSourceFrontier's export comment above.
+export async function observeAcceptedFrontierRefs(args: {
   sourceFrontier: ReconstructSourceFrontierArtifact;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
   sourceFrontierValidationPath: string;
@@ -15197,9 +15389,12 @@ async function observeAcceptedFrontierRefs(args: {
   codeSetTierObservation?: boolean;
   codeStructureLayout?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
+  // A2 (design §5): regionKey-keyed coverage set (registered under both the
+  // file-level and precise forms — see regionCoverageKeys). inventoryByRef
+  // stays file-level (one inventory unit per file — unchanged by this PR).
   const observedSourceRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const frontierById = new Map(
@@ -15222,7 +15417,11 @@ async function observeAcceptedFrontierRefs(args: {
       throw new Error(`accepted source frontier id has no source-frontier row: ${frontierRefId}`);
     }
     const resolvedSourceRef = path.resolve(frontier.source_ref);
-    if (observedSourceRefs.has(resolvedSourceRef)) continue;
+    // coverageKey: frontier.location is additive-absent in this PR, so this is
+    // the file-level form (see regionKey's doc comment) — byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(frontier.source_ref, frontier.location);
+    if (observedSourceRefs.has(coverageKey)) continue;
     const inventoryUnit = inventoryByRef.get(resolvedSourceRef);
     if (!inventoryUnit) {
       throw new Error(
@@ -15242,9 +15441,15 @@ async function observeAcceptedFrontierRefs(args: {
       observationBatchId:
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
-    }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
-      : undefined);
+    }, {
+      ...(args.codeStructureObservation === true
+        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
+        : {}),
+      // A2 thread-through (design §5/§10 PR-1b-2): frontier.location is additive-absent — no
+      // producer sets it in this PR (the round-N frontier-authoring prompt has no location field) —
+      // so this spread is a no-op today, unconditionally safe to always evaluate.
+      ...(frontier.location !== undefined ? { locationOverride: frontier.location } : {}),
+    });
     // A null observation (vanished ref) and an unsupported workbook format
     // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
     // un-observable by the current runtime. Site 2 graceful terminal (design site2 §9): this is a
@@ -15268,7 +15473,12 @@ async function observeAcceptedFrontierRefs(args: {
       });
     }
     addedObservations.push(observation);
-    observedSourceRefs.add(resolvedSourceRef);
+    // Register the newly added observation under both coverage forms — same as
+    // the initial Set construction above — so a LATER accepted frontier row for
+    // the same file within this same batch is also correctly recognized.
+    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
+      observedSourceRefs.add(k);
+    }
   }
 
   const nextSourceObservations: ReconstructSourceObservationsArtifact = {
@@ -15279,7 +15489,7 @@ async function observeAcceptedFrontierRefs(args: {
       ...addedObservations,
     ],
     skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
-      !observedSourceRefs.has(path.resolve(skipped.ref))
+      !observedSourceRefs.has(regionKey(skipped.ref))
     ),
     validation_results: [
       ...new Set([
@@ -15292,7 +15502,8 @@ async function observeAcceptedFrontierRefs(args: {
   return nextSourceObservations;
 }
 
-async function observeAcceptedMaturationClosureSourceRequests(args: {
+// Exported for direct unit testing — see validateSourceFrontier's export comment above.
+export async function observeAcceptedMaturationClosureSourceRequests(args: {
   maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
   maturationClosureFrontierValidation:
     ReconstructMaturationClosureFrontierValidationArtifact;
@@ -15303,10 +15514,20 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   codeStructureObservation?: boolean;
   codeSetTierObservation?: boolean;
   codeStructureLayout?: boolean;
+  // Stage 1 source-region-decomposition opt-in (design §5 A3, §10 PR-1b-2, INVARIANT-CHANGE): gates
+  // whether request.requested_location is consulted below. requested_location is a PRE-EXISTING,
+  // always-populated field (unlike frontier.location in A2) — threading it unconditionally would
+  // change accept/reject outcomes for every maturation closure run, on or off, so this must stay
+  // opt-in-gated to hold the off-path byte-identical.
+  sourceRegionDecomposition?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
+  // A3 (design §5): regionKey-keyed coverage set (registered under both the
+  // file-level and precise forms). request.requested_location is a pre-existing
+  // LLM-authored field (not a region anchor); threaded into the query key ONLY when
+  // sourceRegionDecomposition is on (see the field doc comment above) — PR-1b-2.
   const observedSourceRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const sourceRequestById = new Map(
@@ -15334,7 +15555,14 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       );
     }
     const resolvedSourceRef = path.resolve(request.requested_source_ref);
-    if (observedSourceRefs.has(resolvedSourceRef)) {
+    // coverageKey: request.requested_location is consulted ONLY when sourceRegionDecomposition is
+    // on (see the field doc comment above) — off is the file-level form, byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(
+      request.requested_source_ref,
+      args.sourceRegionDecomposition === true ? (request.requested_location ?? undefined) : undefined,
+    );
+    if (observedSourceRefs.has(coverageKey)) {
       throw new Error(
         `accepted maturation closure source request was already observed before re-entry: ${request.requested_source_ref}`,
       );
@@ -15358,9 +15586,16 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       observationBatchId:
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
-    }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
-      : undefined);
+    }, {
+      ...(args.codeStructureObservation === true
+        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
+        : {}),
+      // A3 thread-through (design §5/§10 PR-1b-2): the re-observed observation's anchor becomes the
+      // maturation-requested location, ONLY when the opt-in is on (matches the coverage key above).
+      ...(args.sourceRegionDecomposition === true && request.requested_location
+        ? { locationOverride: request.requested_location }
+        : {}),
+    });
     // Unsupported workbook formats are un-observable like a vanished ref — no
     // evidence to admit (mirrors the materialize-loop demotion and F1).
     if (!observation || spreadsheetUnsupportedReason(observation)) {
@@ -15369,7 +15604,11 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       );
     }
     addedObservations.push(observation);
-    observedSourceRefs.add(resolvedSourceRef);
+    // Register the newly added observation under both coverage forms — same as
+    // the initial Set construction above.
+    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
+      observedSourceRefs.add(k);
+    }
   }
 
   const nextSourceObservations: ReconstructSourceObservationsArtifact = {
@@ -15380,7 +15619,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       ...addedObservations,
     ],
     skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
-      !observedSourceRefs.has(path.resolve(skipped.ref))
+      !observedSourceRefs.has(regionKey(skipped.ref))
     ),
     validation_results: [
       ...new Set([
@@ -16398,6 +16637,7 @@ export async function runReconstruct(
     ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
     ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+    ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
   });
   const targetMaterialProfile =
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
@@ -17720,6 +17960,7 @@ export async function runReconstruct(
       previousSourceObservationsRef: preparationRefs.source_observations,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceObservationDeltaPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     const sourceObservationDeltaValidation =
       await writeSourceObservationDeltaValidationArtifact({
@@ -17728,6 +17969,7 @@ export async function runReconstruct(
         frontierValidationPath: sourceFrontierValidationPath,
         sourceObservationsPath: preparationRefs.source_observations,
         outputPath: sourceObservationDeltaValidationPath,
+        ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
       });
     assertRuntimeValidationValid({
       artifactName: `source-observation-delta ${roundId}`,
@@ -19197,6 +19439,7 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       targetMaterialProfileValidationPath,
       outputPath: maturationClosureFrontierValidationPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
   assertRuntimeValidationValid({
     artifactName: "maturation-closure-frontier",
@@ -19217,6 +19460,7 @@ export async function runReconstruct(
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
       ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     sourceObservationDeltaPath = path.join(
       maturationRoundRoot,
@@ -19249,6 +19493,7 @@ export async function runReconstruct(
       previousSourceObservationsRef: preparationRefs.source_observations,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceObservationDeltaPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     const maturationSourceObservationDeltaValidation =
       await writeSourceObservationDeltaValidationArtifact({
@@ -19257,6 +19502,7 @@ export async function runReconstruct(
         frontierValidationPath: maturationClosureFrontierValidationPath,
         sourceObservationsPath: preparationRefs.source_observations,
         outputPath: sourceObservationDeltaValidationPath,
+        ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
       });
     assertRuntimeValidationValid({
       artifactName: "source-observation-delta maturation-round-1",

@@ -520,6 +520,17 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // not just existence). Inert unless `environment_context_profile` is also on (nested in its hook).
   // Absent = off — no manifest content is read, the profile is byte-identical to Stage 0.5.
   "environment_context_profile_content",
+  // Stage 1 source-region-decomposition opt-in (design 20260722-source-region-decomposition-stage1
+  // §10 PR-1b-2, INVARIANT-CHANGE). When true, an eligible captured file (kind-aware budget: document
+  // over DOCUMENT_EXCERPT_PROJECTION_FLOOR, code over DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT) is
+  // decomposed at observe time into one observation PER REGION (the deterministic source-region-
+  // segmenter) instead of one whole-file observation, and a maturation-closure source request's
+  // requested_location becomes the re-observed observation's anchor. Self-contained — does not
+  // require code_structure_inventory (a code file with no captured inventory falls back to the
+  // segmenter's blank-line-paragraph strategy). Changes observation identity (dedup/coverage keys
+  // fold `location`) for any file it decomposes — hence INVARIANT-CHANGE. Absent = off — every
+  // observation stays whole-file, byte-identical.
+  "source_region_decomposition",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

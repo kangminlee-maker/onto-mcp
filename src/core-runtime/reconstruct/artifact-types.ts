@@ -348,6 +348,10 @@ export interface ReconstructRegistryVerificationEvidenceValidationArtifact {
 
 export interface ReconstructSourceInventoryUnit {
   ref: string;
+  // Stage 1 source-region-decomposition (design 20260722 §5/§9): region anchor
+  // within ref. Absent everywhere in this PR (buildInventoryUnits stays one unit
+  // per file; PR-1b-2 emits one unit per region) — additive-absent.
+  location?: string;
   exists: boolean;
   target_material_kind: TargetMaterialKind;
   inventory_unit: string;
@@ -370,6 +374,9 @@ export interface ReconstructSourceInventoryArtifact {
 export interface ReconstructInitialSourceFrontierRef {
   frontier_ref_id: string;
   source_ref: string;
+  // Stage 1 source-region-decomposition (design 20260722 §5/§9): region anchor
+  // within source_ref. Absent everywhere in this PR — additive-absent.
+  location?: string;
   target_material_kind: TargetMaterialKind;
   inventory_unit: string;
   profile_ref: string | null;
@@ -1534,6 +1541,11 @@ export interface ReconstructSourceFrontierArtifact {
   frontier_refs: Array<{
     frontier_ref_id: string;
     source_ref: string;
+    // Stage 1 source-region-decomposition (design 20260722 §5/§9): region anchor
+    // within source_ref. Absent everywhere in this PR (no producer sets it yet;
+    // PR-1b-2 populates it) — additive-absent so today's byte-for-byte output is
+    // unchanged.
+    location?: string;
     rationale: string;
     priority: "high" | "medium" | "low";
   }>;
