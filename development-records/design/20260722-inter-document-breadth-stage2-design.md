@@ -127,7 +127,7 @@ LM이 전부 defer(`frontier_refs:[]`)면 zero-obs 게이트 crash. **기존 `ap
 ## §12. opt-in·가역성·INVARIANT-CHANGE
 
 - **opt-in** `source_admission_selection`(RECONSTRUCT_EXECUTION_SCALAR_KEYS)·reconstruct-api.ts에서 `source_region_decomposition`처럼 resolve·`params.sourceAdmissionSelection` thread.
-- **off/below-threshold = 오늘 verbatim**: 모든 신규 경로가 `sourceAdmissionSelection===true && plannedCount>THRESHOLD`(materialize) 또는 Stage-2-active(run.ts) guard 안. off=관찰-ALL loop 불변·buildInitialSourceFrontier 불변·admission 스테이지 없음·신규 필드 미emit. **diff 증명**(default-false flag의 strict superset) + off vs baseline golden byte-identity. 유일 non-guarded 변경=`buildInitialSourceFrontier` 필터 `==="planned"`→`!=="skipped"`는 off-path byte-identical(off면 admitted unit 없음→두 술어 일치).
+- **off/below-threshold = 오늘 verbatim**: 모든 신규 경로가 `sourceAdmissionSelection===true && plannedCount>THRESHOLD`(materialize) 또는 Stage-2-active(run.ts) guard 안. off=관찰-ALL loop 불변·`buildInitialSourceFrontier` 불변·admission 스테이지 없음·신규 필드 미emit. **diff 증명**(default-false flag의 strict superset) + off vs baseline golden byte-identity. **[구현 정정 2026-07-22, full-stack 리뷰 L1]**: `buildInitialSourceFrontier` 필터는 `==="planned"` **그대로 유지**(초안이 언급한 `!=="skipped"` 변경은 미적용·불필요). 이유: `ReconstructInitialSourceFrontierArtifact`는 **write-only**(materialize에서 쓰기만·재파싱/교차검증 없음, 실코드 확인)이고, admission 모드에서 초기 deep set은 비어야 옳으므로 `==="planned"`(admitted unit 제외→source_refs 빈값)가 **더 정확**하다. deferred 공개는 `deferred_refs`+`source-inventory`가 담당(write-only 초기 frontier 아님). → non-guarded 변경 0, 전부 guarded.
 - **INVARIANT-CHANGE(문서화, Stage 1 유사)**: on+above-threshold면 모든 planned unit 무조건 deep 관찰 아님·deep 관찰이 selection-gated. 관찰 identity 불변(Stage1 위 신규 fold 없음)·deep 관찰 *집합*이 목적선택 subset+deferred 전수공개. 의도된·공개된 behavior change·flag off로 가역. **보안/authority 강화 아님**: admission이 filesystem scope 안 넓힘(같은 ref 읽음)·초기 승격이 runtime-target 권위 보존(§5).
 
 ## §13. 단계 PR 계획
@@ -154,6 +154,7 @@ Stage 1 규율(순수/plumbing byte-identical 먼저·behavior opt-in 뒤·ident
 - **시나리오-2 provenance 강등(§5)**: Core 보수적/안전·완전 parity named follow-up.
 - **deferred-forever 파일**: 어느 round도 승격 안 하면 outline-only 유지 — **설계상·공개**(`deferred_refs`)·"미deep관찰"이지 "드롭" 아님(outline 유지·승격 가능).
 - **maturation-closure 상호작용**: 불변(`observeAcceptedMaturationClosureSourceRequests`가 inventory unit 위 실행·deferred unit도 유효 타깃·공짜 재사용).
+- **[LOW·follow-up, full-stack 리뷰 L2] floor "never vacuous"의 TOCTOU**: LM이 empty/전부 invalid 선택 → floor가 admitted unit ~1개 승격 → 그 파일이 selection window 중 삭제되면 `observeInventoryUnitDeep` skip → deep 관찰 0 → 나머지 N-1은 "admitted"라 `isZeroObservationGracefulTerminalEligible` false → `assertSemanticAuthoringHasObservedEvidence` **hard throw**(graceful terminal 대신). narrow(vanish window)·**fail-loud**(silent 아님)이라 LOW. window가 observe-all의 detect→observe 갭보다 크고 floor가 ~1만 승격해 관찰-all보다 덜 resilient. **하드닝 follow-up**: floor가 ≥1 실관찰 보장까지 재승격, 또는 vanish 시 graceful terminal로 강등.
 
 ## §15. 검증 기록 (주 세션 실코드 재확인)
 
