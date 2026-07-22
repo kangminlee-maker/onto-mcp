@@ -1092,6 +1092,10 @@ export function createOntoReconstructCoreApi(
         projectRoot,
       );
       const prepareOptIns = resolveCodeObservationOptIns(prepareSettings);
+      // Stage 1 source-region-decomposition opt-in (design 20260722 §10 PR-1b-2): independent of the
+      // code opt-ins above (self-contained — no requires_code_structure_inventory dependency).
+      const prepareSourceRegionDecomposition =
+        prepareSettings.reconstruct?.execution?.source_region_decomposition === true;
       const preparationRefs = await materializeReconstructPreparationArtifacts({
         sessionRoot,
         targetRefs,
@@ -1102,6 +1106,7 @@ export function createOntoReconstructCoreApi(
         ...(prepareOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
         ...(prepareOptIns.codeSetTier ? { codeSetTierObservation: true } : {}),
         ...(prepareOptIns.codeStructureLayout ? { codeStructureLayout: true } : {}),
+        ...(prepareSourceRegionDecomposition ? { sourceRegionDecomposition: true } : {}),
       });
       const targetMaterialProfileValidationPath = path.join(
         sessionRoot,
@@ -1192,6 +1197,11 @@ export function createOntoReconstructCoreApi(
       // content for declared-dependency framework signals). Inert unless the base profile is on.
       const environmentContextProfileContent =
         settings.reconstruct?.execution?.environment_context_profile_content === true;
+      // Stage 1 source-region-decomposition opt-in (design 20260722 §10 PR-1b-2, INVARIANT-CHANGE):
+      // independent of the code opt-ins (self-contained) — see resolveCodeObservationOptIns's doc
+      // comment for why this one is resolved separately rather than folded into that helper.
+      const sourceRegionDecomposition =
+        settings.reconstruct?.execution?.source_region_decomposition === true;
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1647,6 +1657,7 @@ export function createOntoReconstructCoreApi(
             ...(runOptIns.codeStructureLayout ? { codeStructureLayout: true } : {}),
             ...(environmentContextProfile ? { environmentContextProfile: true } : {}),
             ...(environmentContextProfileContent ? { environmentContextProfileContent: true } : {}),
+            ...(sourceRegionDecomposition ? { sourceRegionDecomposition: true } : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
                   dispatchFallback:

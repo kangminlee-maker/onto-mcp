@@ -102,6 +102,25 @@ function sha256OfRange(content: string[], sep: string[], start: number, end: num
   return hash.digest("hex");
 }
 
+/**
+ * Returns the EXACT original bytes (line content + original terminators) for lines
+ * [startLine, endLine] (1-based, inclusive) of `text` — the same byte-perfect range
+ * `region_sha256` hashes (see `sha256OfRange` above, which this mirrors line-for-line).
+ * Exported so a consumer building a region's `content_excerpt` (design §10 PR-1b-2) never
+ * needs its own line-splitting logic, which could silently drift from the segmenter's own
+ * line-numbering convention (`text.split(/\r?\n/).length`, shared with the code/layout
+ * observers — see the module header comment).
+ */
+export function sliceRegionText(text: string, startLine: number, endLine: number): string {
+  const { content, sep } = splitPreservingTerminators(text);
+  const parts: string[] = [];
+  for (let line = startLine; line <= endLine; line += 1) {
+    parts.push(content[line - 1] ?? "");
+    parts.push(sep[line - 1] ?? "");
+  }
+  return parts.join("");
+}
+
 function spanToken(start: number, end: number): string {
   return `L${start}-${end}`;
 }

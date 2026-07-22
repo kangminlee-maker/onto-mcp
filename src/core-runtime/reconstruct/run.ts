@@ -1114,6 +1114,14 @@ export interface RunReconstructParams {
    *  properties. Inert unless environmentContextProfile is also on (nested inside its hook). Absent =
    *  off: no manifest content is read, the profile is byte-identical to Stage 0.5 (side-effect 0). */
   environmentContextProfileContent?: boolean;
+  /** Stage 1 source-region-decomposition opt-in (design 20260722-source-region-decomposition-stage1
+   *  §10 PR-1b-2, INVARIANT-CHANGE): set from reconstruct.execution.source_region_decomposition.
+   *  When true, an eligible captured file is decomposed at observe time into one observation per
+   *  region, and a maturation-closure source request's requested_location becomes a re-observed
+   *  observation's anchor (both the identity/dedup keys AND the observe-time fanout change what
+   *  "already observed" means for that ref — INVARIANT-CHANGE). Self-contained: independent of the
+   *  code opt-ins. Absent = off — every observation stays whole-file, byte-identical. */
+  sourceRegionDecomposition?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -1714,7 +1722,17 @@ export function sourceObservationsReuseSha256(
       target_material_kind: observation.target_material_kind,
       adapter_id: observation.adapter_id,
       source_ref: path.resolve(observation.source_ref),
-      location: path.resolve(observation.location),
+      // Stage 1 source-region-decomposition (design 20260722 §5 "누락된 지점"/§10 PR-1b-2): folded
+      // RAW, never path.resolve()'d. A real region anchor (e.g. "L128-210") is not a path — resolving
+      // it would silently rewrite it to `${cwd}/L128-210`, making the reuse key CWD-dependent and
+      // non-deterministic across replays (the two-CWD determinism test in this PR's suite proves the
+      // fix). BYTE-IDENTICAL for every whole-file observation: `location` there is always
+      // `detection.ref`, which is ALREADY an absolute, `path.resolve()`-derived string
+      // (materialize-preparation.ts's targetRefs / the re-observation paths' inventory unit refs are
+      // resolved upstream, before any observation is built) — so `path.resolve` on it was always a
+      // no-op. The reuse key rotates ONLY when a real region anchor appears (opt-in on + a decomposed
+      // file), never for an off-path or sub-budget-only run.
+      location: observation.location,
       structural_data: {
         path_kind: observation.structural_data.path_kind ?? null,
         size_bytes: observation.structural_data.size_bytes ?? null,
@@ -15079,7 +15097,10 @@ function reconstructContractRegistryPathFromProfilesRoot(profilesRoot: string): 
   );
 }
 
-function validateSourceFrontier(args: {
+// Exported for direct unit testing (Stage 1 source-region-decomposition design 20260722 §5/§11
+// Bucket A negative-control tests — the highest-value proof this design calls for, exercising the
+// REAL dedup site rather than a mock). Not part of the public reconstruct core API surface.
+export function validateSourceFrontier(args: {
   sessionId: string;
   roundId: string;
   sourceFrontier: ReconstructSourceFrontierArtifact;
@@ -15198,7 +15219,8 @@ function validateSourceFrontier(args: {
 
 const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;
 
-async function observeAcceptedFrontierRefs(args: {
+// Exported for direct unit testing — see validateSourceFrontier's export comment above.
+export async function observeAcceptedFrontierRefs(args: {
   sourceFrontier: ReconstructSourceFrontierArtifact;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
   sourceFrontierValidationPath: string;
@@ -15261,9 +15283,15 @@ async function observeAcceptedFrontierRefs(args: {
       observationBatchId:
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
-    }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
-      : undefined);
+    }, {
+      ...(args.codeStructureObservation === true
+        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
+        : {}),
+      // A2 thread-through (design §5/§10 PR-1b-2): frontier.location is additive-absent — no
+      // producer sets it in this PR (the round-N frontier-authoring prompt has no location field) —
+      // so this spread is a no-op today, unconditionally safe to always evaluate.
+      ...(frontier.location !== undefined ? { locationOverride: frontier.location } : {}),
+    });
     // A null observation (vanished ref) and an unsupported workbook format
     // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
     // un-observable by the current runtime. Site 2 graceful terminal (design site2 §9): this is a
@@ -15316,7 +15344,8 @@ async function observeAcceptedFrontierRefs(args: {
   return nextSourceObservations;
 }
 
-async function observeAcceptedMaturationClosureSourceRequests(args: {
+// Exported for direct unit testing — see validateSourceFrontier's export comment above.
+export async function observeAcceptedMaturationClosureSourceRequests(args: {
   maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
   maturationClosureFrontierValidation:
     ReconstructMaturationClosureFrontierValidationArtifact;
@@ -15327,12 +15356,17 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   codeStructureObservation?: boolean;
   codeSetTierObservation?: boolean;
   codeStructureLayout?: boolean;
+  // Stage 1 source-region-decomposition opt-in (design §5 A3, §10 PR-1b-2, INVARIANT-CHANGE): gates
+  // whether request.requested_location is consulted below. requested_location is a PRE-EXISTING,
+  // always-populated field (unlike frontier.location in A2) — threading it unconditionally would
+  // change accept/reject outcomes for every maturation closure run, on or off, so this must stay
+  // opt-in-gated to hold the off-path byte-identical.
+  sourceRegionDecomposition?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
   // A3 (design §5): regionKey-keyed coverage set (registered under both the
   // file-level and precise forms). request.requested_location is a pre-existing
-  // LLM-authored field (not a region anchor) — NOT threaded into the query key
-  // below for the same byte-identity reason as normalizeFrontierForDelta's
-  // maturation branch (see source-observation-delta-validation.ts); PR-1b-2 threads it.
+  // LLM-authored field (not a region anchor); threaded into the query key ONLY when
+  // sourceRegionDecomposition is on (see the field doc comment above) — PR-1b-2.
   const observedSourceRefs = new Set(
     args.sourceObservations.observations.flatMap((observation) =>
       regionCoverageKeys(observation.source_ref, observation.location)
@@ -15363,10 +15397,13 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       );
     }
     const resolvedSourceRef = path.resolve(request.requested_source_ref);
-    // coverageKey: request.requested_location is deliberately NOT consulted (see
-    // the observedSourceRefs comment above) — this is the file-level form,
-    // byte-identical to the prior bare `path.resolve()` lookup.
-    const coverageKey = regionKey(request.requested_source_ref);
+    // coverageKey: request.requested_location is consulted ONLY when sourceRegionDecomposition is
+    // on (see the field doc comment above) — off is the file-level form, byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(
+      request.requested_source_ref,
+      args.sourceRegionDecomposition === true ? (request.requested_location ?? undefined) : undefined,
+    );
     if (observedSourceRefs.has(coverageKey)) {
       throw new Error(
         `accepted maturation closure source request was already observed before re-entry: ${request.requested_source_ref}`,
@@ -15391,9 +15428,16 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       observationBatchId:
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
-    }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
-      : undefined);
+    }, {
+      ...(args.codeStructureObservation === true
+        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
+        : {}),
+      // A3 thread-through (design §5/§10 PR-1b-2): the re-observed observation's anchor becomes the
+      // maturation-requested location, ONLY when the opt-in is on (matches the coverage key above).
+      ...(args.sourceRegionDecomposition === true && request.requested_location
+        ? { locationOverride: request.requested_location }
+        : {}),
+    });
     // Unsupported workbook formats are un-observable like a vanished ref — no
     // evidence to admit (mirrors the materialize-loop demotion and F1).
     if (!observation || spreadsheetUnsupportedReason(observation)) {
@@ -16435,6 +16479,7 @@ export async function runReconstruct(
     ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
     ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+    ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
   });
   const targetMaterialProfile =
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
@@ -17757,6 +17802,7 @@ export async function runReconstruct(
       previousSourceObservationsRef: preparationRefs.source_observations,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceObservationDeltaPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     const sourceObservationDeltaValidation =
       await writeSourceObservationDeltaValidationArtifact({
@@ -17765,6 +17811,7 @@ export async function runReconstruct(
         frontierValidationPath: sourceFrontierValidationPath,
         sourceObservationsPath: preparationRefs.source_observations,
         outputPath: sourceObservationDeltaValidationPath,
+        ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
       });
     assertRuntimeValidationValid({
       artifactName: `source-observation-delta ${roundId}`,
@@ -19234,6 +19281,7 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       targetMaterialProfileValidationPath,
       outputPath: maturationClosureFrontierValidationPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
   assertRuntimeValidationValid({
     artifactName: "maturation-closure-frontier",
@@ -19254,6 +19302,7 @@ export async function runReconstruct(
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
       ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     sourceObservationDeltaPath = path.join(
       maturationRoundRoot,
@@ -19286,6 +19335,7 @@ export async function runReconstruct(
       previousSourceObservationsRef: preparationRefs.source_observations,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceObservationDeltaPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     const maturationSourceObservationDeltaValidation =
       await writeSourceObservationDeltaValidationArtifact({
@@ -19294,6 +19344,7 @@ export async function runReconstruct(
         frontierValidationPath: maturationClosureFrontierValidationPath,
         sourceObservationsPath: preparationRefs.source_observations,
         outputPath: sourceObservationDeltaValidationPath,
+        ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
       });
     assertRuntimeValidationValid({
       artifactName: "source-observation-delta maturation-round-1",

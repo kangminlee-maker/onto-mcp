@@ -1527,3 +1527,178 @@ describe("regionKey region-readiness (Stage 1 source-region-decomposition design
     ).toThrow(/did not produce a new observation/);
   });
 });
+
+describe("regionKey region-readiness — maturation_closure_frontier kind (Stage 1 source-region-decomposition design 20260722 §5 A6, §10 PR-1b-2)", () => {
+  // request.requested_location is a PRE-EXISTING, always-populated field (unlike source-frontier's
+  // `frontier.location` above, which stays additive-absent) — normalizeFrontierForDelta's
+  // maturation branch threads it into the delta-row binding key ONLY when sourceRegionDecomposition
+  // is on, so every existing/off-path caller (none of which pass the new flag) stays byte-identical.
+  function maturationRequestRow(
+    overrides: Partial<ReconstructMaturationClosureFrontierArtifact["source_requests"][number]> = {},
+  ): ReconstructMaturationClosureFrontierArtifact["source_requests"][number] {
+    return {
+      source_request_id: "source-request-1",
+      question_refs: ["question-1"],
+      member_scope_refs: [],
+      member_source_refs: [],
+      cross_material_ref_refs: [],
+      requested_source_ref: "/repo/src/big.ts",
+      requested_location: "L1-50",
+      target_material_kind: "code",
+      expected_evidence_kind: "code_structure",
+      reason: "test",
+      ...overrides,
+    };
+  }
+
+  function closureFrontierWith(
+    requests: ReconstructMaturationClosureFrontierArtifact["source_requests"],
+  ): ReconstructMaturationClosureFrontierArtifact {
+    return { ...maturationClosureFrontier(), source_requests: requests };
+  }
+
+  function closureFrontierValidationWith(
+    acceptedIds: string[],
+  ): ReconstructMaturationClosureFrontierValidationArtifact {
+    return {
+      ...maturationClosureFrontierValidation(),
+      accepted_source_request_ids: acceptedIds,
+      source_request_count: acceptedIds.length,
+    };
+  }
+
+  // Lineage matching maturation_closure_frontier delta builds below (the `observation()` helper's
+  // defaults are source_frontier-flavored — a maturation delta row's frontierValidationRef differs,
+  // and buildSourceObservationDeltaArtifact rejects a lineage mismatch with a DIFFERENT error than
+  // the one these tests are proving, so the region fixtures must carry matching lineage explicitly).
+  function maturationRegionObservation(id: string, ref: string, location: string): ReconstructSourceObservation {
+    const region = observation({
+      id,
+      ref,
+      observationBatchId: "source-observation-batch:round-1:maturation_closure_frontier",
+      triggeringFrontierValidationRef: "maturation-closure-frontier-validation.yaml",
+    });
+    region.location = location;
+    return region;
+  }
+
+  it("opt-in ON: binds two accepted source requests for the SAME file to their OWN region-specific observation (no last-wins collapse)", () => {
+    const bigRef = "/repo/src/big.ts";
+    const region1 = maturationRegionObservation("obs-big-region-1", bigRef, "L1-50");
+    const region2 = maturationRegionObservation("obs-big-region-2", bigRef, "L51-100");
+
+    const twoRegionFrontier = closureFrontierWith([
+      maturationRequestRow({ source_request_id: "source-request-1", requested_location: "L1-50" }),
+      maturationRequestRow({ source_request_id: "source-request-2", requested_location: "L51-100" }),
+    ]);
+    const twoRegionValidation = closureFrontierValidationWith(["source-request-1", "source-request-2"]);
+    const previousObservations = observations([]);
+    const nextObservations = observations([region1, region2]);
+
+    const delta = buildSourceObservationDeltaArtifact({
+      sessionId: "session-1",
+      roundId: "round-1",
+      frontierKind: "maturation_closure_frontier",
+      frontier: twoRegionFrontier,
+      frontierRef: "maturation-closure-frontier.yaml",
+      frontierValidation: twoRegionValidation,
+      frontierValidationRef: "maturation-closure-frontier-validation.yaml",
+      sourceInventoryRef: "source-inventory.yaml",
+      previousSourceObservations: previousObservations,
+      previousSourceObservationsRef: "source-observations.before.yaml",
+      nextSourceObservations: nextObservations,
+      sourceObservationsRef: "source-observations.yaml",
+      sourceRegionDecomposition: true,
+    });
+
+    expect(delta.delta_rows).toHaveLength(2);
+    const byFrontierId = new Map(delta.delta_rows.map((row) => [row.frontier_ref_id, row]));
+    expect(byFrontierId.get("source-request-1")?.observation_id).toBe("obs-big-region-1");
+    expect(byFrontierId.get("source-request-2")?.observation_id).toBe("obs-big-region-2");
+  });
+
+  it("opt-in ON: a NEW region of an already-observed file is accepted while the SAME region re-observed still throws 'did not produce a new observation'", () => {
+    const bigRef = "/repo/src/big.ts";
+    const region1 = maturationRegionObservation("obs-big-region-1", bigRef, "L1-50");
+    const region2 = maturationRegionObservation("obs-big-region-2", bigRef, "L51-100");
+    const previousObservations = observations([region1]);
+    const nextObservations = observations([region1, region2]);
+
+    const newRegionFrontier = closureFrontierWith([
+      maturationRequestRow({ source_request_id: "source-request-2", requested_location: "L51-100" }),
+    ]);
+    const newRegionValidation = closureFrontierValidationWith(["source-request-2"]);
+    const delta = buildSourceObservationDeltaArtifact({
+      sessionId: "session-1",
+      roundId: "round-1",
+      frontierKind: "maturation_closure_frontier",
+      frontier: newRegionFrontier,
+      frontierRef: "maturation-closure-frontier.yaml",
+      frontierValidation: newRegionValidation,
+      frontierValidationRef: "maturation-closure-frontier-validation.yaml",
+      sourceInventoryRef: "source-inventory.yaml",
+      previousSourceObservations: previousObservations,
+      previousSourceObservationsRef: "source-observations.before.yaml",
+      nextSourceObservations: nextObservations,
+      sourceObservationsRef: "source-observations.yaml",
+      sourceRegionDecomposition: true,
+    });
+    expect(delta.delta_rows[0]?.observation_id).toBe("obs-big-region-2");
+
+    const sameRegionFrontier = closureFrontierWith([
+      maturationRequestRow({ source_request_id: "source-request-1", requested_location: "L1-50" }),
+    ]);
+    const sameRegionValidation = closureFrontierValidationWith(["source-request-1"]);
+    expect(() =>
+      buildSourceObservationDeltaArtifact({
+        sessionId: "session-1",
+        roundId: "round-1",
+        frontierKind: "maturation_closure_frontier",
+        frontier: sameRegionFrontier,
+        frontierRef: "maturation-closure-frontier.yaml",
+        frontierValidation: sameRegionValidation,
+        frontierValidationRef: "maturation-closure-frontier-validation.yaml",
+        sourceInventoryRef: "source-inventory.yaml",
+        previousSourceObservations: previousObservations,
+        previousSourceObservationsRef: "source-observations.before.yaml",
+        nextSourceObservations: nextObservations,
+        sourceObservationsRef: "source-observations.yaml",
+        sourceRegionDecomposition: true,
+      })
+    ).toThrow(/did not produce a new observation/);
+  });
+
+  it("opt-in OFF (absent): the SAME two-region closure frontier collapses to the file-level key — today's behavior, unchanged", () => {
+    const bigRef = "/repo/src/big.ts";
+    const region1 = maturationRegionObservation("obs-big-region-1", bigRef, "L1-50");
+    const region2 = maturationRegionObservation("obs-big-region-2", bigRef, "L51-100");
+    const previousObservations = observations([region1]);
+    const nextObservations = observations([region1, region2]);
+
+    // Without the opt-in, requesting the "new" region L51-100 for an already-observed file is
+    // treated exactly like requesting the file again (file-level key) — buildSourceObservationDelta
+    // Artifact's own lookup collapses to `previousBySourceRef.has(key)` for the bare ref, so the
+    // SAME "did not produce a new observation" throw fires even for the genuinely-new region.
+    const newRegionFrontier = closureFrontierWith([
+      maturationRequestRow({ source_request_id: "source-request-2", requested_location: "L51-100" }),
+    ]);
+    const newRegionValidation = closureFrontierValidationWith(["source-request-2"]);
+    expect(() =>
+      buildSourceObservationDeltaArtifact({
+        sessionId: "session-1",
+        roundId: "round-1",
+        frontierKind: "maturation_closure_frontier",
+        frontier: newRegionFrontier,
+        frontierRef: "maturation-closure-frontier.yaml",
+        frontierValidation: newRegionValidation,
+        frontierValidationRef: "maturation-closure-frontier-validation.yaml",
+        sourceInventoryRef: "source-inventory.yaml",
+        previousSourceObservations: previousObservations,
+        previousSourceObservationsRef: "source-observations.before.yaml",
+        nextSourceObservations: nextObservations,
+        sourceObservationsRef: "source-observations.yaml",
+        // sourceRegionDecomposition intentionally OMITTED.
+      })
+    ).toThrow(/did not produce a new observation/);
+  });
+});

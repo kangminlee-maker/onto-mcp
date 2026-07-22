@@ -2052,6 +2052,12 @@ export function validateMaturationClosureFrontier(args: {
   sourceObservationsRef?: string | null;
   targetMaterialProfileValidation:
     ReconstructTargetMaterialProfileValidationArtifact;
+  // Stage 1 source-region-decomposition opt-in (design §5 A7, §10 PR-1b-2, INVARIANT-CHANGE): gates
+  // whether request.requested_location is consulted in the coverage key below. requested_location
+  // is a PRE-EXISTING, always-populated field, so threading it unconditionally would change
+  // already_observed_source_ref outcomes for every maturation closure run, on or off — this must
+  // stay opt-in-gated to hold the off-path byte-identical.
+  sourceRegionDecomposition?: boolean;
 }): ReconstructMaturationClosureFrontierValidationArtifact {
   const frontier = args.maturationClosureFrontier;
   const violations: ReconstructMaturationValidationViolation[] = [];
@@ -2077,11 +2083,11 @@ export function validateMaturationClosureFrontier(args: {
     normalizedPathRef(unit.ref),
     unit,
   ]));
-  // A7 (design §5): regionKey-keyed (registered under both coverage forms —
-  // see regionCoverageKeys). request.requested_location already carries real
-  // (LLM-authored, not-a-region-anchor) data — NOT threaded into the query key
-  // below (same byte-identity reason as source-observation-delta-validation.ts's
-  // normalizeFrontierForDelta maturation branch); PR-1b-2 threads it.
+  // A7 (design §5, PR-1b-2): regionKey-keyed (registered under both coverage forms —
+  // see regionCoverageKeys). request.requested_location already carries real (LLM-
+  // authored, not-necessarily-a-segmenter-anchor, but "a concrete location" — D2
+  // opacity: exact string equality only) data; the coverage key below consults it
+  // ONLY when sourceRegionDecomposition is on (see the field doc comment).
   const observedRefs = new Set(args.sourceObservations.observations.flatMap((observation) =>
     regionCoverageKeys(observation.source_ref, observation.location)
   ));
@@ -2122,10 +2128,13 @@ export function validateMaturationClosureFrontier(args: {
     sourceRequestsSeen.add(request.source_request_id);
     const requestedSourceRef = normalizedPathRef(request.requested_source_ref);
     const inventoryUnit = inventoryByRef.get(requestedSourceRef);
-    // coverageKey: request.requested_location is deliberately NOT consulted (see
-    // the observedRefs comment above) — this is the file-level form, byte-
-    // identical to the prior bare `path.resolve()` lookup.
-    const coverageKey = regionKey(request.requested_source_ref);
+    // coverageKey: request.requested_location is consulted ONLY when sourceRegionDecomposition is
+    // on (see the field doc comment above) — off is the file-level form, byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(
+      request.requested_source_ref,
+      args.sourceRegionDecomposition === true ? (request.requested_location ?? undefined) : undefined,
+    );
     const rejects: string[] = [];
     if (!inventoryUnit) {
       rejects.push("unsupported_source_ref");
@@ -6233,6 +6242,7 @@ export async function writeMaturationClosureFrontierValidationArtifact(args: {
   sourceObservationsPath: string;
   targetMaterialProfileValidationPath: string;
   outputPath: string;
+  sourceRegionDecomposition?: boolean;
 }): Promise<ReconstructMaturationClosureFrontierValidationArtifact> {
   const [
     maturationClosureFrontier,
@@ -6273,6 +6283,7 @@ export async function writeMaturationClosureFrontierValidationArtifact(args: {
     sourceObservations,
     sourceObservationsRef: args.sourceObservationsPath,
     targetMaterialProfileValidation,
+    ...(args.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;
