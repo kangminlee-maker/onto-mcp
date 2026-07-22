@@ -50,6 +50,11 @@ export interface MaterializeReconstructPreparationArtifactsParams {
   /** Phase 1b FD4 (set-tier opt-in, requires codeStructureObservation): code FILE observations
    *  additionally carry import specifiers + honesty census in the inventory. Absent = off. */
   codeSetTierObservation?: boolean;
+  /** Grammar-free layout observer opt-in (design 20260721 §7, requires codeStructureObservation):
+   *  when true, the target classifier promotes tree-sitter-unsupported long-tail sources to `code`
+   *  (Linguist unknown-fallback + extensionless shebang rung) so they reach observation. The Tier 1
+   *  layout observer dispatch is wired separately (PR-B2). Absent = off (classifier byte-identical). */
+  codeStructureLayout?: boolean;
 }
 
 const CONCRETE_TARGET_MATERIAL_KINDS = new Set<TargetMaterialKind>([
@@ -765,7 +770,10 @@ export async function materializeReconstructPreparationArtifacts(
   const sessionId = path.basename(sessionRoot);
   const targetRefs = params.targetRefs.map((ref) => path.resolve(ref));
   const profiles = await loadReconstructSourceProfiles(params.profilesRoot);
-  const perRefDetections = await detectTargetMaterialRefs(targetRefs);
+  const perRefDetections = await detectTargetMaterialRefs(
+    targetRefs,
+    params.codeStructureLayout === true ? { layoutFallback: true } : undefined,
+  );
   const detection = aggregateTargetMaterialDetections(perRefDetections);
   const profileCandidateKinds: TargetMaterialKind[] =
     detection.target_material_kind === "mixed"

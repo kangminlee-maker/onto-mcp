@@ -1092,6 +1092,13 @@ export interface RunReconstructParams {
    *  (enforced fail-loud at the api settings projection). Gates observer import capture and
    *  the post-loop deterministic set assembly. Absent = off. */
   codeSetTier?: boolean;
+  /** Grammar-free layout observer opt-in (design 20260721 §7): set from
+   *  reconstruct.execution.code_structure_layout. Requires codeStructureObservation (enforced
+   *  fail-loud at the api settings projection). Extends deterministic code capture to tree-sitter
+   *  UNSUPPORTED languages: (a) long-tail classification (Linguist unknown-fallback + extensionless
+   *  shebang rung) so .lua/.hs/.vue … reach observation, and (b) the Tier 1 layout observer dispatch.
+   *  Absent = off (byte-identical). */
+  codeStructureLayout?: boolean;
   /** Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0): set
    *  from reconstruct.execution.environment_context_profile. Gates a deterministic, disclosure-only
    *  environment/tech-stack profile derived from the EXISTING observation census (no new fs scan,
@@ -16351,6 +16358,7 @@ export async function runReconstruct(
     filesystemAllowedRoots,
     ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+    ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
   });
   const targetMaterialProfile =
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(

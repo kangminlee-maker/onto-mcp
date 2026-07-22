@@ -641,6 +641,66 @@ describe("reconstruct api mock E2E over a 2-file code fixture (§6-4)", () => {
       }
     }
   });
+
+  // Layout tier (design 20260721 §7): the grammar-free layout observer extends capture, so it too
+  // never activates capture implicitly — code_structure_layout=true ∧ capture=false is fail-loud.
+  it("rejects code_structure_layout without code_structure_inventory (requires_code_structure_inventory)", async () => {
+    const projectRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "onto-reconstruct-mock-layout-gate-"),
+    );
+    tmpRoots.push(projectRoot);
+    for (const [relPath, content] of Object.entries(SET_TIER_FIXTURE_FILES)) {
+      const filePath = path.join(projectRoot, relPath);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, content, "utf8");
+    }
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      JSON.stringify(
+        {
+          schema_version: "settings.json/v3",
+          reconstruct: {
+            execution: {
+              semantic_map_authoring: true,
+              code_structure_layout: true,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    const previousEnv = {
+      ONTO_LLM_MOCK: process.env.ONTO_LLM_MOCK,
+      ONTO_RUNTIME_WATCHER: process.env.ONTO_RUNTIME_WATCHER,
+      HOME: process.env.HOME,
+    };
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(isolatedHome, { recursive: true });
+    process.env.ONTO_LLM_MOCK = "1";
+    process.env.ONTO_RUNTIME_WATCHER = "0";
+    process.env.HOME = isolatedHome;
+    try {
+      const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+      await expect(
+        api.runReconstruct({
+          projectRoot,
+          targetRefs: Object.keys(SET_TIER_FIXTURE_FILES),
+          sessionRoot: ".onto/reconstruct/mock-e2e-layout-gate",
+          intent: "Must fail loud before any session work.",
+          semanticAuthorRealization: "direct_call",
+          confirmationProviderRealization: "direct_call",
+        }),
+      ).rejects.toThrow(/requires_code_structure_inventory/);
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
 });
 
 // ─── INV-MODEL-1 role-aware B3 (P3 consumption proof + N11 live-path pair) ───
