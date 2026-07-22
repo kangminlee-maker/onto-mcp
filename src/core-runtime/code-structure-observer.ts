@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Parser, Language, type Node as SyntaxNode } from "web-tree-sitter";
+import type { LinguistIdentificationBasis } from "./linguist-language.js";
+import type { LinguistLanguageToken } from "./linguist-language-catalog.generated.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // code-structure-observer — the deterministic per-position structural observer for CODE sources
@@ -97,7 +99,10 @@ export interface CodeImportInventoryCensus {
 
 export interface CodeStructureInventory {
   schema_version: typeof CODE_STRUCTURE_SCHEMA_VERSION;
-  language: CodeStructureLanguage;
+  /** tree-sitter (Tier 2) emits a CodeStructureLanguage; the grammar-free layout observer (Tier 1,
+   *  design 20260721) emits a Linguist token or "unknown". The union is additive — Tier 2 output is
+   *  byte-unchanged and no consumer switches exhaustively on this field (it is read as a string). */
+  language: CodeStructureLanguage | LinguistLanguageToken | "unknown";
   line_count: number;
   content_sha256: string;
   extractor_logic_sha256: string;
@@ -111,6 +116,25 @@ export interface CodeStructureInventory {
   };
   /** Present iff symbol_tiles.imports is present (one opt-in, one shape). */
   import_census?: CodeImportInventoryCensus;
+  // ── Tier 1 layout additive fields (absent on tree-sitter output — Tier 2 stays byte-identical) ──
+  /** Present only on layout-tier output. Absence = precise tree-sitter (Tier 2). The signal that
+   *  routes rough evidence away from precise-evidence consumers (design 20260721 §6). */
+  extraction_tier?: "layout";
+  /** Present only on Tier 1. The honest language-identification ambiguity record (basis + all
+   *  candidate tokens the winning Linguist rung matched). */
+  language_identification?: {
+    basis: LinguistIdentificationBasis;
+    candidates: Array<{ language_id: number; token: string }>;
+  };
+  /** Present only on Tier 1. Closed counters exposing the rough parser's give-ups (never silent):
+   *  unconfirmed heredocs left unmasked, incomparable tab/space indent pairs downgraded to the same
+   *  depth, crossing block candidates discarded by the laminar merge, and opaque/unbalanced lines. */
+  layout_census?: {
+    heredoc_unconfirmed: number;
+    incomparable_indent_pairs: number;
+    discarded_crossing_candidates: number;
+    opaque_or_unbalanced_lines: number;
+  };
 }
 
 export type CodeStructureObservationResult =
@@ -366,7 +390,9 @@ const KIND_TABLE: Record<CodeStructureLanguage, Record<string, string>> = {
   powershell: POWERSHELL_KIND,
   kotlin: KOTLIN_KIND,
 };
-const CONTAINER_KINDS = new Set(["class_decl", "interface_decl", "enum_decl", "namespace_decl"]);
+/** Syntax kinds that expand into a decl_header + members + decl_footer subtree (depth-2). Exported
+ *  so the Tier 1 layout observer applies the identical container rule (design 20260721 §4.2.5). */
+export const CONTAINER_KINDS = new Set(["class_decl", "interface_decl", "enum_decl", "namespace_decl"]);
 
 // ── parser singleton (WASM init once; grammars cached per language) ────────────────────────────
 const requireFromHere = createRequire(import.meta.url);
@@ -711,7 +737,11 @@ function unquote(text: string): string {
   return text;
 }
 
-function importRecordOf(rawSpecifier: string): ObservedCodeImport {
+/** Build an ObservedCodeImport, preserving an over-bound specifier UNRESOLVABLE (bounded text +
+ *  length + hash — never a silently truncated-then-resolved path). Exported so the Tier 1 layout
+ *  observer reuses the identical truncation contract (adding `export` does not change the function
+ *  body `.toString()` folds into extractor_logic_sha256, so Tier 2 reuse keys do not rotate). */
+export function importRecordOf(rawSpecifier: string): ObservedCodeImport {
   if (rawSpecifier.length <= CODE_STRUCTURE_LINE_BOUND) {
     return { to_specifier: rawSpecifier, resolved_in_set: null };
   }
