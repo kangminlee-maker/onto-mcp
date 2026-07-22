@@ -215,6 +215,30 @@ describe("observeCodeLayout — rough-parser census (give-ups are disclosed, nev
     expect(kindsAt(inv, 2)).not.toContain("member_method");
     expect(inv.layout_census!.heredoc_unconfirmed).toBe(0);
   });
+
+  it("tracks NESTED Haskell block comments so an inner close does not leak the tail as code", () => {
+    // `{- … {- … -} … -}` genuinely nests in Haskell — closing at the FIRST `-}` would leak the
+    // `class Leaked` tail and fabricate a container. Depth tracking must keep the whole comment masked.
+    const nested = `{- doc {- inner -} class Leaked where\n  evil = 1\n-}\nreal = 9\n`;
+    const inv = okInventory(".hs", nested);
+    assertGaplessPartition(inv);
+    expect(symbolsOf(inv)).toEqual(["real"]); // only the real binding; nothing fabricated
+  });
+
+  it("masks a multi-line Lua long string ([[ … ]]) so its body cannot fabricate structure", () => {
+    const longString = `local x = [[\nclass Fake {}\nfunction ghost() end\n]]\nreal = 2\n`;
+    const inv = okInventory(".lua", longString);
+    assertGaplessPartition(inv);
+    expect(symbolsOf(inv).sort()).toEqual(["real", "x"]); // no Fake / ghost leaked
+    expect(kindsAt(inv, 2)).toEqual([]);
+  });
+
+  it("carries a multi-line backtick string across lines so its body cannot fabricate structure", () => {
+    const template = "val s = `raw\nclass Ghost {\n def haunt() = 1\n}\n`\nreal = 2\n";
+    const inv = okInventory(".scala", template);
+    assertGaplessPartition(inv);
+    expect(symbolsOf(inv).sort()).toEqual(["real", "s"]); // no Ghost / haunt leaked
+  });
 });
 
 describe("observeCodeLayout — negatives and give-ups", () => {

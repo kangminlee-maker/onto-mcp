@@ -54,14 +54,17 @@ const MINIFIED_AVG_LINE = 500;
 const MINIFIED_AVG_LINE_MAX_LINE = 1000;
 
 // ── masking vocabulary (closed) ────────────────────────────────────────────────────────────────
-/** Block comment / triple-string pairs, longest-open-first so `--[[` beats `--` and `{-` beats `{`. */
-const BLOCK_PAIRS: ReadonlyArray<readonly [open: string, close: string]> = [
-  ["<!--", "-->"],
-  ["--[[", "]]"],
-  ['"""', '"""'],
-  ["'''", "'''"],
-  ["/*", "*/"],
-  ["{-", "-}"],
+/** Block comment / long-string pairs. Longest-open-first at a position so `--[[` beats `[[`/`--`
+ *  and `{-` beats `{`. `nests` marks a delimiter that genuinely nests with itself (Haskell `{- -}`);
+ *  Lua long brackets (`--[[`/`[[`) do NOT nest at the same level, so they close at the first `]]`. */
+const BLOCK_PAIRS: ReadonlyArray<{ open: string; close: string; nests: boolean }> = [
+  { open: "<!--", close: "-->", nests: false }, // HTML/XML/Vue comment
+  { open: "--[[", close: "]]", nests: false }, // Lua block comment (long bracket — no same-level nesting)
+  { open: "[[", close: "]]", nests: false }, // Lua long string (multi-line; after --[[)
+  { open: '"""', close: '"""', nests: false }, // triple-quoted string (Python/Scala/…)
+  { open: "'''", close: "'''", nests: false },
+  { open: "/*", close: "*/", nests: false }, // C-family block comment
+  { open: "{-", close: "-}", nests: true }, // Haskell block comment — genuinely nests
 ];
 /** Line-comment openers (rough — the layout target languages: Lua/Haskell `--`, `#` scripts/GraphQL,
  *  `//` Scala/Dart/Swift/Proto/Prisma). `--` decrement does not occur in these languages. */
@@ -135,7 +138,41 @@ function stringEnd(s: string, openIdx: number, quote: string): number {
   return -1;
 }
 
-interface InlineScan { masked: string; blockClose: string | null; heredoc: string | null; }
+/** A block comment / multi-line string still open at end-of-line, carried to the next line. `open`
+ *  is set only for nesting delimiters (Haskell `{-`), so `depth` counts nested opens; `kind:"string"`
+ *  masks with `\`-escape handling (backtick template literals / Lua long strings). */
+interface Pending { close: string; open: string | null; depth: number; kind: "block" | "string"; }
+
+/** Mask a pending block/string starting at `from`, blanking into `out`. Returns the index just past
+ *  the close, or -1 if it runs to EOL (the pending — with its updated depth — carries to next line). */
+function consumePending(s: string, from: number, out: string[], pending: Pending): number {
+  let depth = pending.depth;
+  let j = from;
+  while (j < s.length) {
+    if (pending.kind === "string") {
+      if (s[j] === "\\") { out[j] = " "; if (j + 1 < s.length) out[j + 1] = " "; j += 2; continue; }
+      if (s[j] === pending.close) { out[j] = " "; return j + 1; }
+      out[j] = " "; j += 1;
+      continue;
+    }
+    if (pending.open !== null && s.startsWith(pending.open, j)) {
+      for (let x = j; x < j + pending.open.length; x++) out[x] = " ";
+      depth += 1; j += pending.open.length;
+      continue;
+    }
+    if (s.startsWith(pending.close, j)) {
+      for (let x = j; x < j + pending.close.length; x++) out[x] = " ";
+      depth -= 1; j += pending.close.length;
+      if (depth <= 0) return j;
+      continue;
+    }
+    out[j] = " "; j += 1;
+  }
+  pending.depth = depth;
+  return -1;
+}
+
+interface InlineScan { masked: string; pending: Pending | null; heredoc: string | null; }
 
 /** Mask strings/comments in one line's text (whitespace substitution, positions preserved), starting
  *  from a clean state, detecting cross-line block-comment and heredoc openings. */
@@ -146,7 +183,6 @@ function scanInline(
   census: LayoutCensus,
 ): InlineScan {
   const out = s.split("");
-  let blockClose: string | null = null;
   let heredoc: string | null = null;
   let k = 0;
   while (k < s.length) {
@@ -159,26 +195,23 @@ function scanInline(
         break;
       }
     }
-    // block comment / triple-string open
-    let matchedPair: readonly [string, string] | null = null;
+    // block comment / long-string open (nesting-aware; may carry to the next line)
+    let matchedPair: { open: string; close: string; nests: boolean } | null = null;
     for (const pair of BLOCK_PAIRS) {
-      if (s.startsWith(pair[0], k)) { matchedPair = pair; break; }
+      if (s.startsWith(pair.open, k)) { matchedPair = pair; break; }
     }
     if (matchedPair) {
-      const [open, close] = matchedPair;
-      const closeIdx = s.indexOf(close, k + open.length);
-      if (closeIdx >= 0) {
-        for (let j = k; j < closeIdx + close.length; j++) out[j] = " ";
-        k = closeIdx + close.length;
-        continue;
-      }
-      for (let j = k; j < s.length; j++) out[j] = " ";
-      blockClose = close;
-      break;
+      const { open, close, nests } = matchedPair;
+      for (let x = k; x < k + open.length; x++) out[x] = " ";
+      const pending: Pending = { close, open: nests ? open : null, depth: 1, kind: "block" };
+      const after = consumePending(s, k + open.length, out, pending);
+      if (after >= 0) { k = after; continue; }
+      return { masked: out.join(""), pending, heredoc: null };
     }
-    // same-line string
+    // same-line string; `"`/`'` never carry (an unterminated one is malformed — blank to EOL safely),
+    // but a backtick template literal / Lua-style long string can span lines (carry as a string).
     const c = s[k]!;
-    if (c === '"' || c === "'" || c === "`") {
+    if (c === '"' || c === "'") {
       const end = stringEnd(s, k, c);
       if (end >= 0) {
         for (let j = k + 1; j < end; j++) out[j] = " ";
@@ -187,6 +220,12 @@ function scanInline(
       }
       for (let j = k + 1; j < s.length; j++) out[j] = " ";
       break;
+    }
+    if (c === "`") {
+      const pending: Pending = { close: "`", open: null, depth: 0, kind: "string" };
+      const after = consumePending(s, k + 1, out, pending);
+      if (after >= 0) { k = after; continue; }
+      return { masked: out.join(""), pending, heredoc: null };
     }
     // heredoc open: `<<[-~]?DELIM` in assignment/argument context, terminator confirmed ahead
     if (two === "<<") {
@@ -212,13 +251,13 @@ function scanInline(
     }
     k += 1;
   }
-  return { masked: out.join(""), blockClose, heredoc };
+  return { masked: out.join(""), pending: null, heredoc };
 }
 
-/** Mask every line's strings/comments, carrying block-comment/heredoc state across lines. */
+/** Mask every line's strings/comments, carrying block-comment/long-string/heredoc state across lines. */
 function maskFile(lines: readonly string[], census: LayoutCensus): string[] {
   const masked = new Array<string>(lines.length);
-  let blockClose: string | null = null;
+  let pending: Pending | null = null;
   let heredoc: string | null = null;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
@@ -227,22 +266,25 @@ function maskFile(lines: readonly string[], census: LayoutCensus): string[] {
       if (raw.trim() === heredoc) heredoc = null;
       continue;
     }
-    if (blockClose !== null) {
-      const idx = raw.indexOf(blockClose);
-      if (idx < 0) { masked[i] = " ".repeat(raw.length); continue; }
-      const consumedEnd = idx + blockClose.length;
-      blockClose = null;
-      const scan = scanInline(raw.slice(consumedEnd), lines, i, census);
-      masked[i] = " ".repeat(consumedEnd) + scan.masked;
-      blockClose = scan.blockClose;
+    if (pending !== null) {
+      const out = raw.split("");
+      const after = consumePending(raw, 0, out, pending);
+      if (after < 0) { masked[i] = out.join(""); continue; } // still open — whole line masked
+      pending = null;
+      const scan = scanInline(raw.slice(after), lines, i, census);
+      masked[i] = out.slice(0, after).join("") + scan.masked;
+      pending = scan.pending;
       heredoc = scan.heredoc;
       continue;
     }
     const scan = scanInline(raw, lines, i, census);
     masked[i] = scan.masked;
-    blockClose = scan.blockClose;
+    pending = scan.pending;
     heredoc = scan.heredoc;
   }
+  // An unbalanced block/long-string/heredoc still open at EOF is a give-up worth disclosing (the
+  // remainder was masked wholesale — no fabrication, but the census must not read as all-clean).
+  if (pending !== null || heredoc !== null) census.opaque_or_unbalanced_lines += 1;
   return masked;
 }
 
@@ -447,7 +489,7 @@ interface BuildCtx {
   commentOnly: ReadonlyMap<number, boolean>;
 }
 
-function buildItem(block: Block, ctx: BuildCtx): LayoutItem {
+function buildItem(block: Block, ctx: BuildCtx, computeMembers: boolean): LayoutItem {
   const headerLine = block.start;
   const { kind, symbolNames } = lexiconOf(ctx.masked[headerLine - 1] ?? "");
   const item: LayoutItem = {
@@ -459,8 +501,11 @@ function buildItem(block: Block, ctx: BuildCtx): LayoutItem {
     signatureLine: bound(ctx.lines[headerLine - 1] ?? ""),
     memberItems: null,
   };
-  if (CONTAINER_KINDS.has(kind)) {
-    const members = itemsFor(block.start + 1, block.end, block.children, ctx);
+  // buildTree folds at depth 2: a top-level container's members become LEAVES, so members never need
+  // members of their own. Recursing past depth 1 would compute subtrees buildTree discards — a waste
+  // and a deep-recursion hazard on pathologically nested input (contained by never-throw, but avoided).
+  if (computeMembers && CONTAINER_KINDS.has(kind)) {
+    const members = itemsFor(block.start + 1, block.end, block.children, ctx, false);
     if (members.length > 0) item.memberItems = members;
   }
   return item;
@@ -487,6 +532,7 @@ function itemsFor(
   rangeEnd: number,
   childBlocks: readonly Block[],
   ctx: BuildCtx,
+  computeMembers: boolean,
 ): LayoutItem[] {
   const byStart = new Map<number, Block>();
   for (const cb of childBlocks) {
@@ -498,7 +544,7 @@ function itemsFor(
     if (ctx.trivia.get(i)) { i += 1; continue; }
     const block = byStart.get(i);
     if (block && block.end <= rangeEnd) {
-      items.push(buildItem(block, ctx));
+      items.push(buildItem(block, ctx, computeMembers));
       i = block.end + 1;
       continue;
     }
@@ -731,15 +777,24 @@ let layoutDigestCache: string | null = null;
 function layoutExtractorSourceDigest(): string {
   if (layoutDigestCache !== null) return layoutDigestCache;
   const digest = createHash("sha256")
+    // Every function whose LOGIC shapes the output is folded (editing it must rotate the reuse key).
+    // A helper referenced only by NAME inside another folded function is invisible to that function's
+    // `.toString()`, so it is listed here explicitly (the code-structure-observer fold discipline).
     .update(scanInline.toString())
     .update(maskFile.toString())
+    .update(consumePending.toString())
+    .update(stringEnd.toString())
+    .update(lastNonSpace.toString())
     .update(indentIntervals.toString())
     .update(indentRel.toString())
+    .update(leadingWhitespace.toString())
     .update(keywordEvents.toString())
     .update(delimiterIntervals.toString())
     .update(mergeToForest.toString())
     .update(lexiconOf.toString())
+    .update(firstNonControl.toString())
     .update(docFirstLineOf.toString())
+    .update(bound.toString())
     .update(itemsFor.toString())
     .update(buildItem.toString())
     .update(standaloneItem.toString())
@@ -750,8 +805,14 @@ function layoutExtractorSourceDigest(): string {
     .update(extractLayoutImports.toString())
     .update(extractSpecifier.toString())
     .update(isLayoutObserverEligible.toString())
+    .update(isBinaryish.toString())
+    .update(isMinified.toString())
     .update(JSON.stringify({
       BLOCK_PAIRS,
+      // Module-scope regexes are referenced by identifier inside folded functions, so their PATTERN
+      // is not captured by `.toString()` — fold the source explicitly (the RUBY_IMPORT_METHODS lesson).
+      WORD_RE: WORD_RE.source,
+      ASSIGN_RE: ASSIGN_RE.source,
       LINE_COMMENT_TWO: [...LINE_COMMENT_TWO].sort(),
       KEYWORD_OPENERS: [...KEYWORD_OPENERS].sort(),
       KEYWORD_CLOSERS: [...KEYWORD_CLOSERS].sort(),
@@ -835,7 +896,7 @@ export function observeCodeLayout(args: {
     ];
     const forest = mergeToForest(intervals, census);
     const ctx: BuildCtx = { lines, masked, trivia, contentLine, commentOnly };
-    const topItems = itemsFor(1, Math.max(1, lineCount), forest, ctx);
+    const topItems = itemsFor(1, Math.max(1, lineCount), forest, ctx, true);
     const { spans, hierarchy, rootKey } = buildTree(topItems, lineCount);
     validatePartition(spans, lineCount);
 
