@@ -192,8 +192,26 @@ describe("code-structure-observer multi-language Tier 2 (T1)", () => {
     expect(inv.import_census?.imports_recorded ?? 0).toBe(0);
   });
 
+  it("Kotlin: class/interface/object/enum/data class + members, dotted imports (vendored wasm)", async () => {
+    const inv = await observe("Ledger.kt");
+    expect(inv.language).toBe("kotlin");
+    assertGaplessPartition(inv);
+    // class/interface/enum/object/data class all surface as class_decl (the keyword lives in
+    // signature_line); members come from the class_body fallback (Kotlin exposes no `body` field).
+    const ledger = inv.symbol_tiles.hierarchy.find((h) => h.symbol_name === "Ledger" && h.kind === "class_decl");
+    expect(ledger).toBeDefined();
+    expect(ledger!.child_keys.length).toBeGreaterThan(0); // withdraw() member reached via fallback
+    expect(topLevelDecl(inv, "Reader")?.kind).toBe("class_decl"); // interface
+    expect(topLevelDecl(inv, "Registry")?.kind).toBe("class_decl"); // object
+    expect(topLevelDecl(inv, "Severity")?.kind).toBe("class_decl"); // enum class
+    expect(topLevelDecl(inv, "Point")?.kind).toBe("class_decl"); // data class
+    expect(topLevelDecl(inv, "newLedger")?.kind).toBe("function_decl");
+    // `import a.b.C as D` records the dotted path, alias stripped.
+    expect(importSpecifiers(inv)).toEqual(expect.arrayContaining(["java.util.UUID", "kotlin.collections.List"]));
+  });
+
   it("is byte-deterministic across languages (same input ⇒ identical inventory JSON)", async () => {
-    for (const name of ["service.go", "shapes.rs", "UserController.php", "deploy.sh", "theme.css", "module.ps1"]) {
+    for (const name of ["service.go", "shapes.rs", "UserController.php", "deploy.sh", "theme.css", "module.ps1", "Ledger.kt"]) {
       const a = await observe(name);
       const b = await observe(name);
       expect(JSON.stringify(a)).toBe(JSON.stringify(b));

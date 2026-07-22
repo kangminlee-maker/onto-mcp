@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Parser, Language, type Node as SyntaxNode } from "web-tree-sitter";
 
@@ -45,7 +46,8 @@ export type CodeStructureLanguage =
   | "php"
   | "bash"
   | "css"
-  | "powershell";
+  | "powershell"
+  | "kotlin";
 
 export interface CodeSymbolSpan {
   line_start: number;
@@ -144,6 +146,8 @@ const LANGUAGE_BY_EXTENSION: Record<string, CodeStructureLanguage> = {
   ".css": "css",
   ".ps1": "powershell",
   ".psm1": "powershell",
+  ".kt": "kotlin",
+  ".kts": "kotlin",
 };
 
 const GRAMMAR_WASM: Record<CodeStructureLanguage, string> = {
@@ -162,6 +166,8 @@ const GRAMMAR_WASM: Record<CodeStructureLanguage, string> = {
   bash: "@vscode/tree-sitter-wasm/wasm/tree-sitter-bash.wasm",
   css: "@vscode/tree-sitter-wasm/wasm/tree-sitter-css.wasm",
   powershell: "@vscode/tree-sitter-wasm/wasm/tree-sitter-powershell.wasm",
+  // Vendored (not shipped by @vscode/tree-sitter-wasm) — see vendor/tree-sitter/README.md.
+  kotlin: "vendor/tree-sitter/tree-sitter-kotlin.wasm",
 };
 
 // Language-neutral kind mapping (DD5): tree-sitter node type → common kind token. The tables are
@@ -330,6 +336,20 @@ const POWERSHELL_KIND: Record<string, string> = {
   class_statement: "class_decl",
   pipeline: "other", // Import-Module / dot-source / assignments
 };
+const KOTLIN_KIND: Record<string, string> = {
+  package_header: "other",
+  import: "import",
+  line_comment: "comment_block",
+  block_comment: "comment_block",
+  property_declaration: "const_decl",
+  // class / interface / enum class / data class are all `class_declaration`; `object` is a
+  // singleton container. The keyword (interface/enum/data/object) is preserved in signature_line.
+  class_declaration: "class_decl",
+  object_declaration: "class_decl",
+  function_declaration: "function_decl",
+  type_alias: "type_alias",
+  enum_entry: "member_prop",
+};
 const KIND_TABLE: Record<CodeStructureLanguage, Record<string, string>> = {
   typescript: TS_KIND,
   javascript: TS_KIND,
@@ -344,6 +364,7 @@ const KIND_TABLE: Record<CodeStructureLanguage, Record<string, string>> = {
   bash: BASH_KIND,
   css: CSS_KIND,
   powershell: POWERSHELL_KIND,
+  kotlin: KOTLIN_KIND,
 };
 const CONTAINER_KINDS = new Set(["class_decl", "interface_decl", "enum_decl", "namespace_decl"]);
 
@@ -353,7 +374,14 @@ let parserInit: Promise<void> | null = null;
 const languageCache = new Map<CodeStructureLanguage, Promise<{ language: Language; wasmSha256: string }>>();
 
 function grammarWasmPath(language: CodeStructureLanguage): string {
-  return requireFromHere.resolve(GRAMMAR_WASM[language]);
+  const spec = GRAMMAR_WASM[language];
+  if (spec.startsWith("vendor/")) {
+    // Vendored wasm — resolve relative to the package root. This module lives at
+    // {src,dist}/core-runtime/, so `../../` is the package root in both the source and built
+    // layouts (and inside node_modules/onto-mcp/ once published; vendor/ ships via package.json).
+    return fileURLToPath(new URL(`../../${spec}`, import.meta.url));
+  }
+  return requireFromHere.resolve(spec);
 }
 
 async function loadLanguage(language: CodeStructureLanguage): Promise<{ language: Language; wasmSha256: string }> {
@@ -565,8 +593,14 @@ function partitionItems(
   return leaves;
 }
 
+/** Body-container node types that some grammars expose WITHOUT a `body` field (Kotlin
+ *  class_body / enum_class_body), used as the fallback when childForFieldName("body") is absent. */
+const BODY_CONTAINER_TYPES = new Set(["class_body", "enum_class_body"]);
+
 function bodyItems(container: SyntaxNode): SyntaxNode[] {
-  const body = container.childForFieldName?.("body");
+  const body =
+    container.childForFieldName?.("body") ??
+    container.namedChildren.find((c): c is SyntaxNode => c !== null && BODY_CONTAINER_TYPES.has(c.type));
   if (!body) return [];
   return body.namedChildren.filter((c): c is SyntaxNode => c !== null);
 }
@@ -871,6 +905,17 @@ const IMPORT_NODE_HANDLERS: Partial<Record<CodeStructureLanguage, (node: SyntaxN
     if (value) admit(value.type === "string_value" ? unquote(value.text) : value.text);
     else omit("no_import_specifier");
   },
+  kotlin: (node, { admit, omit, census }) => {
+    if (node.type !== "import") return;
+    census.import_nodes_seen += 1;
+    // `import a.b.C` / `import a.b.C as D` — the imported path is the qualified_identifier; the
+    // trailing `as <alias>` identifier is ignored.
+    const qualified = node.namedChildren.find(
+      (c): c is SyntaxNode => c !== null && c.type === "qualified_identifier",
+    );
+    if (qualified) admit(qualified.text);
+    else omit("no_import_path");
+  },
 };
 // typescript and javascript share the ES-module import shape.
 IMPORT_NODE_HANDLERS.typescript = (node, { admit, omit, census }) => {
@@ -958,6 +1003,7 @@ function extractorSourceDigest(): string {
     .update(partitionItems.toString())
     .update(extractTree.toString())
     .update(topLevelItemsOf.toString())
+    .update(bodyItems.toString())
     .update(mapKind.toString())
     .update(nodeStartLine.toString())
     .update(nodeEndLine.toString())
@@ -973,7 +1019,7 @@ function extractorSourceDigest(): string {
     .update(firstDescendantOfTypes.toString())
     .update(foldRegistry(SYMBOL_NAME_RESOLVERS))
     .update(foldRegistry(IMPORT_NODE_HANDLERS))
-    .update(JSON.stringify({ KIND_TABLE, CONTAINER_KINDS: [...CONTAINER_KINDS].sort(), LANGUAGE_BY_EXTENSION, bound: CODE_STRUCTURE_LINE_BOUND }))
+    .update(JSON.stringify({ KIND_TABLE, CONTAINER_KINDS: [...CONTAINER_KINDS].sort(), BODY_CONTAINER_TYPES: [...BODY_CONTAINER_TYPES].sort(), LANGUAGE_BY_EXTENSION, bound: CODE_STRUCTURE_LINE_BOUND }))
     .digest("hex");
 }
 

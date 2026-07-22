@@ -35,6 +35,7 @@
   "files": [
     "bin/",
     "dist/",
+    "vendor/tree-sitter/",
     "scripts/check-retired-root-paths.sh",
     "scripts/onto-runtime-watch.sh",
     "scripts/onto-review-watch.sh",

@@ -77,6 +77,7 @@ const CODE_EXTENSIONS = new Set([
   ".json",
   ".jsx",
   ".kt",
+  ".kts",
   ".lock",
   ".mjs",
   ".mts",

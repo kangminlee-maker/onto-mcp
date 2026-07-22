@@ -112,6 +112,17 @@ describe("detectTargetMaterialKind", () => {
       expect(detection.target_material_kind).toBe("code");
     },
   );
+
+  // Kotlin (T2): .kt already classified; .kts (Kotlin script) added so both reach the observer.
+  it.each([".kt", ".kts"])("classifies Kotlin extension %s as code", async (ext) => {
+    const root = await makeTmpProject();
+    const target = path.join(root, `Main${ext}`);
+    await fs.writeFile(target, "fun main() {}\n", "utf8");
+
+    const detection = await detectTargetMaterialKind([target]);
+
+    expect(detection.target_material_kind).toBe("code");
+  });
 });
 
 describe("reviewMaterialSupportStatus (kind-level claim)", () => {
