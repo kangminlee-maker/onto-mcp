@@ -98,11 +98,22 @@ describe("code-structure-observer", () => {
   });
 
   it("returns an explicit unsupported reason for a language without a bundled grammar (gf-F5)", async () => {
-    const result = await observeCodeStructure({ ref: "/tmp/x/main.go", text: "package main\n" });
-    expect(result).toEqual({ status: "unsupported", reason: "language not supported: .go" });
-    expect(codeStructureLanguageForExtension(".go")).toBeNull();
+    // Haskell has no bundled tree-sitter grammar (a long-tail language the layout observer, not
+    // Tier 2, will eventually cover) — it stays on the explicit `unsupported` path.
+    const result = await observeCodeStructure({ ref: "/tmp/x/main.hs", text: "main = putStrLn \"hi\"\n" });
+    expect(result).toEqual({ status: "unsupported", reason: "language not supported: .hs" });
+    expect(codeStructureLanguageForExtension(".hs")).toBeNull();
     expect(codeStructureLanguageForExtension(".py")).toBe("python");
     expect(codeStructureLanguageForExtension(".ts")).toBe("typescript");
+    // Multi-language Tier 2 expansion (T1): these now resolve to a bundled grammar.
+    expect(codeStructureLanguageForExtension(".go")).toBe("go");
+    expect(codeStructureLanguageForExtension(".rs")).toBe("rust");
+    expect(codeStructureLanguageForExtension(".rb")).toBe("ruby");
+    expect(codeStructureLanguageForExtension(".java")).toBe("java");
+    expect(codeStructureLanguageForExtension(".cs")).toBe("csharp");
+    expect(codeStructureLanguageForExtension(".cpp")).toBe("cpp");
+    expect(codeStructureLanguageForExtension(".c")).toBe("cpp");
+    expect(codeStructureLanguageForExtension(".php")).toBe("php");
   });
 });
 

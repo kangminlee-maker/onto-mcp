@@ -40,6 +40,8 @@ jobs:
         run: npx tsx scripts/check-obligation-coverage.ts "origin/${{ github.base_ref }}"
       - name: G11 reconstruct terminal-signal rethrow (INV-SCHEMA-1)
         run: npx tsx scripts/check-graceful-signal-rethrow.ts
+      - name: G12 Linguist catalog drift (generated == regeneration)
+        run: npx tsx scripts/check-linguist-drift.ts
       - name: Full vitest suite (unit + integration merge gate)
         # vitest.config include set; superset of the G3 invariant subset above.
         # Live/benchmark scripts (npm test, benchmark:*) stay out — they need credentials.

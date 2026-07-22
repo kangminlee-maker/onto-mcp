@@ -60,6 +60,69 @@ describe("detectTargetMaterialKind", () => {
     expect(detection.target_material_kind).toBe("unknown");
     expect(detection.target_material_kind_candidates).toEqual(["unknown"]);
   });
+
+  // PR-0 defect fix: the code-structure observer already maps .cjs/.mts/.cts to
+  // javascript/typescript grammars, but CODE_EXTENSIONS omitted them — so such a file was
+  // classified `unknown` and never reached observation (or review's code support path).
+  // Contrast: before this fix each extension below yielded kind "unknown".
+  it.each([".mts", ".cts", ".cjs"])(
+    "classifies %s module files as code so they reach observation",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `handler${ext}`);
+      await fs.writeFile(target, "export const ok = true;\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+      expect(detection.target_material_kind_candidates).toEqual(["code"]);
+      // Shared classifier ⇒ review's kind-level support path also resolves to supported.
+      expect(reviewMaterialSupportStatus(detection.target_material_kind)).toEqual({
+        status: "supported",
+        reason: null,
+      });
+    },
+  );
+
+  // Multi-language Tier 2 expansion (T1): the C/C++ observer parses .c/.h/.cpp/... via the cpp
+  // grammar, so C/C++ headers and alternate source extensions must classify as code to reach it.
+  it.each([".h", ".hpp", ".hh", ".cxx"])(
+    "classifies C/C++ header/source extension %s as code",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `widget${ext}`);
+      await fs.writeFile(target, "int main() { return 0; }\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+    },
+  );
+
+  // Tier 2 scripts (T3): Bash/PowerShell files must classify as code to reach the observer.
+  it.each([".bash", ".ps1", ".psm1"])(
+    "classifies script extension %s as code",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `script${ext}`);
+      await fs.writeFile(target, "echo hi\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+    },
+  );
+
+  // Kotlin (T2): .kt already classified; .kts (Kotlin script) added so both reach the observer.
+  it.each([".kt", ".kts"])("classifies Kotlin extension %s as code", async (ext) => {
+    const root = await makeTmpProject();
+    const target = path.join(root, `Main${ext}`);
+    await fs.writeFile(target, "fun main() {}\n", "utf8");
+
+    const detection = await detectTargetMaterialKind([target]);
+
+    expect(detection.target_material_kind).toBe("code");
+  });
 });
 
 describe("reviewMaterialSupportStatus (kind-level claim)", () => {

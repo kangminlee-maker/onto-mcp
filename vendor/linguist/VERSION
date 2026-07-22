@@ -1,0 +1,12 @@
+tag: v9.6.0
+commit: 1d7ac7ed569bd6edef5d0cfc73feea2573cb0e03
+source: https://github.com/github-linguist/linguist
+file: lib/linguist/languages.yml
+languages_yml_sha256: 8e9590cb293ec547030df9843c5046f2ba283ceddf2831c899d288d67f01ab12
+license: MIT (see LICENSE)
+
+Pinned by tag + commit SHA (never a moving branch). To update: fetch
+lib/linguist/languages.yml at the new tag/SHA, replace languages.yml + this file,
+re-run `npm run generate:linguist`, and commit the regenerated catalog. The drift
+check (npm run check:linguist-drift) fails if the committed catalog does not match
+a fresh regeneration.
