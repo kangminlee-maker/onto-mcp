@@ -9242,6 +9242,10 @@ function deferredSourceRefPromptSummary(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
 }): unknown {
   const deferred = deferredSourceRefs(args);
+  // Off-path byte-identity: with no admitted-but-deferred refs (opt-in off / below threshold /
+  // everything promoted) the deferred disclosure is vacuous — return null so the seed payload
+  // OMITS the key (deferredSourceRefSummaryEntry), keeping the prompt byte-identical to pre-Stage-2.
+  if (deferred.length === 0) return null;
   return {
     deferred_ref_count: deferred.length,
     sample_refs: deferred.slice(0, DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT)
@@ -9252,6 +9256,18 @@ function deferredSourceRefPromptSummary(args: {
       })),
     sample_limit: DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT,
   };
+}
+
+/** Conditional seed-payload entry for the deferred disclosure (design §9): present ONLY when there
+ *  are admitted-but-deferred refs, so off-path (Stage 2 inactive) the seed prompt is byte-identical
+ *  to the pre-Stage-2 payload. `deferred_source_ref_summary` is in the closed key allowlist
+ *  (subset guard, not a required-present gate), so omission is safe. */
+function deferredSourceRefSummaryEntry(args: {
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): Record<string, unknown> {
+  const summary = deferredSourceRefPromptSummary(args);
+  return summary !== null ? { deferred_source_ref_summary: summary } : {};
 }
 
 function ontologySeedMaturationHandoffPrompt(
@@ -13545,7 +13561,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             targetMaterialProfile: input.targetMaterialProfile,
             sourceObservations: input.sourceObservations,
           }),
-          deferred_source_ref_summary: deferredSourceRefPromptSummary({
+          ...deferredSourceRefSummaryEntry({
             sourceInventory: input.sourceInventory,
             sourceObservations: input.sourceObservations,
           }),
@@ -13627,7 +13643,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 targetMaterialProfile: input.targetMaterialProfile,
                 sourceObservations: input.sourceObservations,
               }),
-              deferred_source_ref_summary: deferredSourceRefPromptSummary({
+              ...deferredSourceRefSummaryEntry({
                 sourceInventory: input.sourceInventory,
                 sourceObservations: input.sourceObservations,
               }),
