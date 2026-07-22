@@ -99,6 +99,7 @@ import type {
   ReconstructSourceFrontierArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceInventoryArtifact,
+  ReconstructSourceInventoryUnit,
   ReconstructSourceObservationsArtifact,
   ReconstructStopDecisionArtifact,
   ReconstructStopDecision,
@@ -144,6 +145,7 @@ import {
   type TargetMaterialKind,
 } from "../target-material-kind.js";
 import {
+  deriveWorkbookInventoryPromptCaps,
   projectInventoryForPrompt,
   readTargetedCellValues,
   type WorkbookInventorySectionTruncation,
@@ -155,6 +157,7 @@ import {
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   isFullExcerptCaptureEligible,
   materializeReconstructPreparationArtifacts,
+  observeInventoryUnitDeep,
   spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
@@ -589,6 +592,20 @@ export interface ReconstructDirectiveAuthor {
   writeSourceFrontier(
     input: ReconstructSourceFrontierAuthorInput,
   ): Promise<ReconstructSourceFrontierArtifact>;
+  /**
+   * Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §4, PR-2b):
+   * the admission-selection round-0 stage. Runs on the SAME `semantic_author` seat as every other
+   * author method (INV-MODEL-1 — no new actor/model) but under a DEDICATED system prompt (NOT
+   * sourceFrontierSystemPrompt, which is exploration-synthesis-shaped and unsuited to a round-0
+   * outline-only decision). Reuses `ReconstructSourceFrontierArtifact` as the return shape so the
+   * caller can validate it with the EXISTING `validateSourceFrontier` verbatim (no new artifact
+   * type). The author sees ONLY the bounded outline catalog `input` carries — never whole-file
+   * content — and proposes which admitted files are worth a deep observation; the runtime clamps
+   * the proposal to the inter-file budget and applies the floor policy (design §6/§7).
+   */
+  writeSourceAdmissionSelection(
+    input: ReconstructSourceAdmissionSelectionAuthorInput,
+  ): Promise<ReconstructSourceFrontierArtifact>;
   writeSourcePurposeCandidates(
     input: ReconstructSourcePurposeCandidatesAuthorInput,
   ): Promise<ReconstructSourcePurposeCandidatesArtifact>;
@@ -760,6 +777,27 @@ export interface ReconstructSourceFrontierAuthorInput {
   sourceObservations: ReconstructSourceObservationsArtifact;
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design §4.3, PR-2b): the raw materials for the
+ * admission-selection round-0 stage. `sourceInventory` carries the full inventory (including
+ * every `"admitted"` unit's `outline`); the author implementation is responsible for projecting
+ * it down to the bounded `admitted_outlines` catalog the LM actually sees (never whole-file
+ * content, design §4.3) — the same "author owns prompt shaping, runtime owns the artifact" split
+ * every other author-input type in this file follows.
+ */
+export interface ReconstructSourceAdmissionSelectionAuthorInput {
+  sessionId: string;
+  intent: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  /** Advisory (design §4.3): the runtime enforces the actual budget after validation
+   *  (capAdmissionSelectionAcceptedRefs) regardless of what the author proposes. */
+  admissionFileLimit: number;
+  /** Advisory floor disclosure; the runtime enforces it via applyAdmissionSelectionFloorPolicy
+   *  even when the author proposes fewer (or zero) files. */
+  admissionFloor: number;
+}
+
 export interface ReconstructCandidateInventoryAuthorInput {
   sessionId: string;
   intent: string;
@@ -823,6 +861,10 @@ export interface ReconstructOntologySeedAuthorInput {
   seedAuthoringReadinessValidationRef: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef: string;
+  /** Core Stage 2 inter-document breadth (design §9): the seed-stage source-inventory read the
+   *  deferred-telemetry projection (deferredSourceRefPromptSummary) needs — an admitted-but-not-
+   *  promoted unit is invisible to sourceObservations alone. */
+  sourceInventory: ReconstructSourceInventoryArtifact;
   contractRegistry: ReconstructContractRegistry;
   repairAttempt?: {
     attempt_id: string;
@@ -2296,6 +2338,10 @@ export const SEED_USER_PAYLOAD_ALLOWED_KEYS: ReadonlySet<string> = new Set([
   "source_observations",
   "observed_source_refs",
   "skipped_source_ref_summary",
+  // Core Stage 2 inter-document breadth (design §9): the prompt-visible mirror of
+  // skipped_source_ref_summary for admitted-but-not-deep-observed files (voluntary defer, not an
+  // involuntary skip) — same disclosure-of-source-depth-limitation rationale.
+  "deferred_source_ref_summary",
   "repair_attempt",
   // Minimal-kernel timeout-recovery seed dispatch (the second seed-authoring surface) carries this
   // extra provenance field; it is a legitimate seed input, so it is in the closed set and the
@@ -5659,7 +5705,10 @@ function buildZeroObservationDiagnostic(args: {
   ].join("; ");
 }
 
-function assertSemanticAuthoringHasObservedEvidence(args: {
+// Exported (Core Stage 2 inter-document breadth design 20260722-inter-document-breadth-stage2 §4
+// PR-2b): direct unit testing that the admission-selection stage's floor policy populates
+// `sourceObservations` before this gate would otherwise crash (design §4/§7 gate-ordering).
+export function assertSemanticAuthoringHasObservedEvidence(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceInventory: ReconstructSourceInventoryArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -9149,6 +9198,62 @@ function skippedSourceRefPromptSummary(args: {
   };
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design §2/§9): the DERIVED set of admitted units with no
+ * deep observation yet — never stored (mirrors how promoted/deferred are derived from `admitted`
+ * ∪ deep-observed regionKeys, design §2), so it can never drift from the persisted state. Distinct
+ * from involuntary `skipped_refs` (a ref the runtime could not observe at all): a deferred ref WAS
+ * outlined and remains promotable via a later frontier round (design §5 scenario 2) — "not yet
+ * deep-read", never "dropped". Exported for the partition test (deferred ∪ promoted ∪ skipped =
+ * admitted ∪ planned ∪ skipped, design §9 falsifiability).
+ */
+export function deferredSourceRefs(args: {
+  sourceInventory: Pick<ReconstructSourceInventoryArtifact, "inventory_units">;
+  sourceObservations: Pick<ReconstructSourceObservationsArtifact, "observations">;
+}): Array<{
+  ref: string;
+  target_material_kind: TargetMaterialKind;
+  reason: string;
+  outline_present: boolean;
+}> {
+  const observedKeys = new Set(
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
+    ),
+  );
+  return args.sourceInventory.inventory_units
+    .filter((unit) =>
+      unit.scan_status === "admitted" && !observedKeys.has(regionKey(unit.ref, unit.location))
+    )
+    .map((unit) => ({
+      ref: unit.ref,
+      target_material_kind: unit.target_material_kind,
+      reason:
+        "admitted; outline retained; not selected for deep observation; promotable via a later frontier round",
+      outline_present: unit.outline !== undefined,
+    }));
+}
+
+/** Prompt-visible mirror of {@link skippedSourceRefPromptSummary} (design §9) — seed authoring
+ *  sees which admitted files it never read in depth, an explicit source-depth disclosure distinct
+ *  from the involuntary skip census. Same bounded-sample shape/limit class. */
+function deferredSourceRefPromptSummary(args: {
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): unknown {
+  const deferred = deferredSourceRefs(args);
+  return {
+    deferred_ref_count: deferred.length,
+    sample_refs: deferred.slice(0, DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT)
+      .map((entry) => ({
+        source_ref: entry.ref,
+        target_material_kind: entry.target_material_kind,
+        reason: entry.reason,
+      })),
+    sample_limit: DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT,
+  };
+}
+
 function ontologySeedMaturationHandoffPrompt(
   registry: ReconstructContractRegistry,
 ): string {
@@ -10295,6 +10400,97 @@ const POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT = 500;
 const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
+// Core Stage 2 inter-document breadth (design §6/§7 PR-2b, PRELIMINARY — real-corpus tuning is a
+// named follow-up, PR-2c): the inter-file admission budget — at most this many admitted files are
+// promoted to a deep observation per admission-selection stage run, priority-ranked then stable
+// resolved-source_ref order (capAdmissionSelectionAcceptedRefs). Orthogonal to
+// MAX_PROJECTED_REGIONS_PER_FILE (intra-file): this bounds how many FILES go deep, that bounds how
+// many REGIONS one file contributes once it does — no shared pool (design §6).
+export const SOURCE_ADMISSION_DEEP_FILE_LIMIT = 16;
+// The minimum accepted files the runtime guarantees regardless of what the admission-selection LM
+// proposes (design §7 floor policy) — matches the design's literal admission_budget.
+// must_select_at_least. Semantic authoring must never proceed with zero deep observations while
+// admitted evidence sits unread.
+export const SOURCE_ADMISSION_SELECTION_FLOOR = 1;
+if (SOURCE_ADMISSION_SELECTION_FLOOR > SOURCE_ADMISSION_DEEP_FILE_LIMIT) {
+  throw new Error(
+    "Invalid admission-selection budgets: SOURCE_ADMISSION_SELECTION_FLOOR " +
+      `(${SOURCE_ADMISSION_SELECTION_FLOOR}) must be <= SOURCE_ADMISSION_DEEP_FILE_LIMIT ` +
+      `(${SOURCE_ADMISSION_DEEP_FILE_LIMIT}), or a floor-promoted set could be cut back below the ` +
+      "floor by the post-floor budget cap.",
+  );
+}
+const DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
+// Per-unit skeleton-digest budgets for the admission-selection catalog (design §4.3): dozens of
+// admitted units project into ONE selection prompt, so each unit's skeleton must be bounded far
+// more tightly than the single-observation prompt budgets above (CODE_STRUCTURE_INVENTORY_PROMPT_
+// CHAR_BUDGET / DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS). Reuses the SAME projectors those budgets
+// bound a single inventory with — projectCodeInventoryForPrompt takes a char budget directly;
+// projectInventoryForPrompt takes a caps object, so deriveWorkbookInventoryPromptCaps scales the
+// shared defaults down by this multiplier instead of hand-building a bespoke tight caps object.
+const ADMISSION_OUTLINE_CODE_SKELETON_CHAR_BUDGET = 600;
+const ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER = 0.04;
+
+/**
+ * Core Stage 2 inter-document breadth (design §4.3): the per-unit `structure_skeleton_digest` the
+ * admission-selection LM sees — a bounded projection of whichever structure skeleton the outline
+ * captured (exactly one of code_structure_inventory/workbook_inventory is ever present, mirroring
+ * the outline's own "kind별 skeleton" invariant), reusing the SAME projectors the seed/directive
+ * prompts already bound a single inventory with, just at the far tighter per-unit scale this
+ * catalog needs (design §4.3 "기존 projectCodeInventoryForPrompt/projectInventoryForPrompt로
+ * unit별 bounded"). A document/database unit (no skeleton observer yet, design §3) or an outline
+ * whose codeStructureObservation opt-in was off returns null — the LM still sees size/line_count/
+ * outline_excerpt for those.
+ */
+function admissionOutlineSkeletonDigest(
+  outline: NonNullable<ReconstructSourceInventoryUnit["outline"]>,
+): unknown {
+  if (outline.code_structure_inventory) {
+    return projectCodeInventoryForPrompt(
+      outline.code_structure_inventory,
+      ADMISSION_OUTLINE_CODE_SKELETON_CHAR_BUDGET,
+    ).inventory;
+  }
+  if (outline.workbook_inventory) {
+    return projectInventoryForPrompt(
+      outline.workbook_inventory,
+      deriveWorkbookInventoryPromptCaps(ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER),
+    ).inventory;
+  }
+  return null;
+}
+
+/**
+ * Core Stage 2 inter-document breadth (design §4.3): the bounded, deterministic, stable-sorted
+ * projection of every `"admitted"` unit the admission-selection author sees — NEVER whole-file
+ * content (design §4.3's explicit cost boundary). Stable-sorted by resolved source_ref so the
+ * prompt (and any resume/replay of it) is order-independent of inventory_units' own accidental
+ * ordering.
+ */
+function admittedOutlinesForPrompt(
+  sourceInventory: ReconstructSourceInventoryArtifact,
+): Array<{
+  source_ref: string;
+  kind: TargetMaterialKind;
+  size: number;
+  line_count: number;
+  outline_excerpt: string | null;
+  structure_skeleton_digest: unknown;
+}> {
+  return sourceInventory.inventory_units
+    .filter((unit): unit is ReconstructSourceInventoryUnit & {
+      outline: NonNullable<ReconstructSourceInventoryUnit["outline"]>;
+    } => unit.scan_status === "admitted" && unit.outline !== undefined)
+    .sort((a, b) => path.resolve(a.ref).localeCompare(path.resolve(b.ref)))
+    .map((unit) => ({
+      source_ref: unit.ref,
+      kind: unit.target_material_kind,
+      size: unit.outline.size_bytes,
+      line_count: unit.outline.line_count,
+      outline_excerpt: unit.outline.outline_excerpt,
+      structure_skeleton_digest: admissionOutlineSkeletonDigest(unit.outline),
+    }));
+}
 
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -10475,8 +10671,12 @@ function projectedRegionRoleTier(observation: ReconstructSourceObservation): num
  * corpus (never more than one observation per file) is byte-identical. This is a PROJECTION-ONLY
  * selection: the full observation set (all region observations) stays in source-observations.yaml
  * regardless; only what reaches a prompt catalog is bounded.
+ *
+ * Exported (Core Stage 2 inter-document breadth design 20260722-inter-document-breadth-stage2 §6
+ * PR-2b): the admission-selection stage's promoted observations flow into the SAME downstream
+ * catalog this caps — direct testing proves that integration without duplicating the cap logic.
  */
-function capProjectedRegionsPerFile(
+export function capProjectedRegionsPerFile(
   observations: readonly ReconstructSourceObservation[],
   maxPerFile: number,
 ): ReconstructSourceObservation[] {
@@ -10839,6 +11039,96 @@ function applyFirstFrontierScoutPolicy(args: {
       rationale: candidate.rationale,
       priority: candidate.priority,
     })),
+    no_next_frontier_rationale: null,
+  };
+}
+
+const ADMISSION_SELECTION_PRIORITY_RANK: Record<"high" | "medium" | "low", number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+/**
+ * Core Stage 2 inter-document breadth (design §6 inter-file budget, PR-2b): the runtime-owned
+ * budget clamp over an ALREADY-VALIDATED accepted set. `validateSourceFrontier` only enforces
+ * dedup/inventory-membership (no size cap); this ranks the accepted rows priority-first (high
+ * before medium before low), then by stable resolved source_ref, and slices to `fileLimit` — so
+ * an admission-selection LM that proposes more than the budget still yields a deterministic,
+ * priority-respecting subset rather than an arbitrary one. Pure, exported for direct unit testing.
+ */
+export function capAdmissionSelectionAcceptedRefs(args: {
+  sourceFrontier: ReconstructSourceFrontierArtifact;
+  acceptedFrontierRefIds: string[];
+  fileLimit: number;
+}): string[] {
+  const byId = new Map(
+    args.sourceFrontier.frontier_refs.map((frontier) => [frontier.frontier_ref_id, frontier]),
+  );
+  return args.acceptedFrontierRefIds
+    .flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [{ id, row }] : [];
+    })
+    .sort((a, b) =>
+      ADMISSION_SELECTION_PRIORITY_RANK[a.row.priority] -
+        ADMISSION_SELECTION_PRIORITY_RANK[b.row.priority] ||
+      path.resolve(a.row.source_ref).localeCompare(path.resolve(b.row.source_ref))
+    )
+    .slice(0, args.fileLimit)
+    .map((entry) => entry.id);
+}
+
+/**
+ * Core Stage 2 inter-document breadth (design §7 floor policy, PR-2b): mirrors
+ * {@link applyFirstFrontierScoutPolicy}'s exact shape (append synthetic, runtime-authored
+ * frontier_refs rows; leave a non-empty/already-adequate proposal untouched) but triggers on the
+ * VALIDATED accepted count rather than the raw authored count — an LM proposal that names refs
+ * outside the admitted inventory validates to 0 accepted despite a non-empty `frontier_refs`
+ * array, and that case must ALSO reach the floor (design §7 "LM이 전부 defer"). Candidates are
+ * admitted units not already accepted, stable-sorted by resolved source_ref (deterministic
+ * tiebreak, design §7) — never re-consulting the LM. The disclosure channel is the SAME one the
+ * scout policy uses: a runtime-authored `rationale` string distinguishes a floor-promoted row from
+ * an LM-selected one (design §7 "selection_basis" intent), so no new field/type is needed. Pure —
+ * the caller re-validates the returned frontier (this function never re-validates itself, matching
+ * applyFirstFrontierScoutPolicy's own contract).
+ */
+export function applyAdmissionSelectionFloorPolicy(args: {
+  sourceFrontier: ReconstructSourceFrontierArtifact;
+  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
+  admittedUnits: ReconstructSourceInventoryUnit[];
+  floor: number;
+}): ReconstructSourceFrontierArtifact {
+  const acceptedCount = args.sourceFrontierValidation.accepted_frontier_ref_ids.length;
+  if (acceptedCount >= args.floor) return args.sourceFrontier;
+  const acceptedById = new Set(args.sourceFrontierValidation.accepted_frontier_ref_ids);
+  const alreadyAcceptedRefs = new Set(
+    args.sourceFrontier.frontier_refs
+      .filter((frontier) => acceptedById.has(frontier.frontier_ref_id))
+      .map((frontier) => path.resolve(frontier.source_ref)),
+  );
+  const needed = args.floor - acceptedCount;
+  const candidates = args.admittedUnits
+    .filter((unit) => !alreadyAcceptedRefs.has(path.resolve(unit.ref)))
+    .sort((a, b) => path.resolve(a.ref).localeCompare(path.resolve(b.ref)))
+    .slice(0, needed);
+  if (candidates.length === 0) return args.sourceFrontier;
+  return {
+    ...args.sourceFrontier,
+    frontier_refs: [
+      ...args.sourceFrontier.frontier_refs,
+      ...candidates.map((unit, index) => ({
+        frontier_ref_id: `admission_floor_${index + 1}`,
+        source_ref: unit.ref,
+        rationale:
+          `Runtime admission floor policy: the source-admission-selection author accepted fewer ` +
+          `than ${args.floor} file(s); the runtime deterministically promoted this admitted unit ` +
+          "(selection_basis: runtime_floor) so semantic authoring never proceeds with zero deep " +
+          "observations while admitted evidence sits unread (design 20260722-inter-document-" +
+          "breadth-stage2 §7).",
+        priority: "high" as const,
+      })),
+    ],
     no_next_frontier_rationale: null,
   };
 }
@@ -11329,6 +11619,21 @@ function sourceFrontierSystemPrompt(args: {
     "JSON shape: {\"frontier_refs\":[{\"source_ref\":\"...\",\"rationale\":\"...\",\"priority\":\"high|medium|low\"}],\"no_next_frontier_rationale\":\"... or null\"}",
   ].join("\n");
 }
+
+// Core Stage 2 inter-document breadth (design §4, PR-2b): a DEDICATED admission-selection prompt
+// (not sourceFrontierSystemPrompt, which is exploration-synthesis-shaped and assumes prior-round
+// context this round-0 decision does not have). The author sees only bounded outlines, never
+// whole-file content — the system prompt makes that boundary explicit so the LM does not treat
+// admitted_outlines as if it were reading the files themselves.
+const SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT = [
+  RECONSTRUCT_AUTHORING_BASE_SYSTEM,
+  "Select which admitted source files deserve a deep observation for the declared reconstruct purpose. You see only a bounded OUTLINE per file (size, line_count, a small excerpt, and a bounded structure skeleton) — never the whole file content.",
+  "admission_budget.file_limit is the runtime's hard cap on how many files it will actually deep-observe; it enforces the cap itself regardless of how many you propose, so propose only the files that genuinely matter for the declared purpose, most important first.",
+  "admission_budget.must_select_at_least is the runtime's own floor — it will deterministically promote additional admitted files if you select fewer, so you do not need to pad the selection to avoid an empty result; select as many or as few as the evidence in admitted_outlines actually supports.",
+  "If no admitted file looks relevant, return an empty frontier_refs array and explain why in no_next_frontier_rationale — do not select a file just to select something.",
+  "Copy source_ref verbatim from admitted_outlines. Do not invent, rename, or duplicate source refs, and do not select a source_ref that is not present in admitted_outlines.",
+  "JSON shape: {\"frontier_refs\":[{\"source_ref\":\"...\",\"rationale\":\"...\",\"priority\":\"high|medium|low\"}],\"no_next_frontier_rationale\":\"... or null\"}",
+].join("\n");
 
 const SOURCE_PURPOSE_CANDIDATES_SYSTEM_PROMPT = [
   RECONSTRUCT_AUTHORING_BASE_SYSTEM,
@@ -12659,6 +12964,54 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       });
     },
 
+    async writeSourceAdmissionSelection(input) {
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        telemetry,
+        artifactName: "SourceAdmissionSelection",
+        maxTokens: 2000,
+        systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
+        userPayload: {
+          intent: input.intent,
+          target_material_profile:
+            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+          admitted_outlines: admittedOutlinesForPrompt(input.sourceInventory),
+          admission_budget: {
+            file_limit: input.admissionFileLimit,
+            must_select_at_least: input.admissionFloor,
+          },
+        },
+      });
+      const frontierRefs = records(raw.frontier_refs ?? [], "frontier_refs")
+        .map((frontier, index) => {
+          const priorityValue = stringValue(frontier.priority, `frontier_refs[${index}].priority`);
+          if (priorityValue !== "high" && priorityValue !== "medium" && priorityValue !== "low") {
+            throw new Error(`frontier_refs[${index}].priority is invalid.`);
+          }
+          const priority = priorityValue as "high" | "medium" | "low";
+          return {
+            frontier_ref_id: `admission_${index + 1}`,
+            source_ref: stringValue(frontier.source_ref, `frontier_refs[${index}].source_ref`),
+            rationale: stringValue(frontier.rationale, `frontier_refs[${index}].rationale`),
+            priority,
+          };
+        });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        round_id: "admission",
+        created_at: isoNow(),
+        exploration_synthesis_ref: null,
+        frontier_refs: frontierRefs,
+        no_next_frontier_rationale: optionalString(raw.no_next_frontier_rationale),
+        directive_author: {
+          owner: "host_llm",
+          author_id: authorId,
+        },
+      };
+    },
+
     async writeSourcePurposeCandidates(input) {
       const selectedObservationIdsForPurpose = selectedObservationIds(
         input.sourceObservationDirective,
@@ -13192,6 +13545,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             targetMaterialProfile: input.targetMaterialProfile,
             sourceObservations: input.sourceObservations,
           }),
+          deferred_source_ref_summary: deferredSourceRefPromptSummary({
+            sourceInventory: input.sourceInventory,
+            sourceObservations: input.sourceObservations,
+          }),
           repair_attempt: input.repairAttempt
             ? {
               attempt_id: input.repairAttempt.attempt_id,
@@ -13268,6 +13625,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               ),
               skipped_source_ref_summary: skippedSourceRefPromptSummary({
                 targetMaterialProfile: input.targetMaterialProfile,
+                sourceObservations: input.sourceObservations,
+              }),
+              deferred_source_ref_summary: deferredSourceRefPromptSummary({
+                sourceInventory: input.sourceInventory,
                 sourceObservations: input.sourceObservations,
               }),
               timeout_recovery: {
@@ -15381,6 +15742,195 @@ export function validateSourceFrontier(args: {
   };
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §4-§7/§13
+ * PR-2b, INVARIANT-CHANGE): the admission-selection round-0 stage. Runs ONCE per reconstruct run,
+ * guarded on Stage-2-active — returns `null` (no-op) when no unit is `"admitted"` (opt-in off, or
+ * on but materialize stayed below SOURCE_ADMISSION_SELECTION_THRESHOLD), so the caller can branch
+ * on the return value alone without a separate guard.
+ *
+ * Order (design §6 gate-ordering, §7 floor, §15 is_runtime_target_source split):
+ *   1. author call — the author sees only the bounded `admitted_outlines` catalog, never
+ *      whole-file content (design §4.3).
+ *   2. `validateSourceFrontier` — REUSED VERBATIM (allowlist = admitted units via
+ *      `regionCoverageKeys`; `observedRefs` = ∅ since admission mode leaves
+ *      `source-observations.yaml` empty, design §1).
+ *   3. floor policy (design §7) when the VALIDATED accepted count is under `floor` — re-validates
+ *      afterward so the returned validation is always internally consistent with the returned
+ *      frontier.
+ *   4. inter-file budget cap (design §6, priority-ranked then stable source_ref) over the
+ *      (possibly floor-augmented) accepted set.
+ *   5. promotion via `observeInventoryUnitDeep` with `isRuntimeTargetSource:true` — the SAME
+ *      helper the off-path deep-observe-all loop uses (materialize-preparation.ts), so
+ *      `expandSourceObservationIntoRegions`'s one call site is untouched (an unselected/deferred
+ *      unit never reaches this helper, hence never reaches decomposition either — a call-graph
+ *      property, design §6). NEVER `observeAcceptedFrontierRefs` (below): that path stamps
+ *      `is_runtime_target_source:false` plus a non-null `triggering_frontier_validation_ref` — a
+ *      source-safety authority DOWNGRADE on the user's own runtime-target files that the boundary
+ *      validator (source-observations.ts mutual-exclusion rule) rejects outright (design §5/§15).
+ *
+ * Persists the admission-selection artifact + its validation, and the UPDATED source-inventory /
+ * source-observations, to the paths the caller already owns (`sourceInventoryRef`/
+ * `sourceObservationsRef` — the SAME `preparationRefs.*` paths materialize wrote), so a downstream
+ * reader that re-reads from disk (writeSourceSafetyLedgerArtifact, the round loop's delta writer)
+ * sees the promoted state without the caller doing anything beyond adopting the returned objects.
+ *
+ * A promoted unit's `scan_status` stays `"admitted"` (design §2 — promotion never rewrites status,
+ * it only adds an observation); `deferredSourceRefs` derives which admitted units remain
+ * un-promoted from the returned `sourceObservations`.
+ */
+export async function runSourceAdmissionSelectionStage(args: {
+  sessionId: string;
+  intent: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  targetMaterialProfileValidation: ReconstructTargetMaterialProfileValidationArtifact;
+  targetMaterialProfileValidationRef: string;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceInventoryRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  directiveAuthor: Pick<ReconstructDirectiveAuthor, "writeSourceAdmissionSelection">;
+  admissionSelectionPath: string;
+  admissionSelectionValidationPath: string;
+  fileLimit?: number;
+  floor?: number;
+  sourceRegionDecomposition?: boolean;
+  codeStructureObservation?: boolean;
+  codeSetTierObservation?: boolean;
+  codeStructureLayout?: boolean;
+}): Promise<{
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  admissionSelection: ReconstructSourceFrontierArtifact;
+  admissionSelectionValidation: ReconstructSourceFrontierValidationArtifact;
+} | null> {
+  const admittedUnits = args.sourceInventory.inventory_units.filter(
+    (unit) => unit.scan_status === "admitted",
+  );
+  if (admittedUnits.length === 0) return null;
+  const fileLimit = args.fileLimit ?? SOURCE_ADMISSION_DEEP_FILE_LIMIT;
+  const floor = args.floor ?? SOURCE_ADMISSION_SELECTION_FLOOR;
+
+  const authoredSelection = await args.directiveAuthor.writeSourceAdmissionSelection({
+    sessionId: args.sessionId,
+    intent: args.intent,
+    targetMaterialProfile: args.targetMaterialProfile,
+    sourceInventory: args.sourceInventory,
+    admissionFileLimit: fileLimit,
+    admissionFloor: floor,
+  });
+  await writeYamlDocument(args.admissionSelectionPath, authoredSelection);
+
+  const revalidate = (
+    frontier: ReconstructSourceFrontierArtifact,
+  ): ReconstructSourceFrontierValidationArtifact =>
+    validateSourceFrontier({
+      sessionId: args.sessionId,
+      roundId: "admission",
+      sourceFrontier: frontier,
+      sourceFrontierRef: args.admissionSelectionPath,
+      sourceInventory: args.sourceInventory,
+      sourceInventoryRef: args.sourceInventoryRef,
+      sourceObservations: args.sourceObservations,
+      sourceObservationsRef: args.sourceObservationsRef,
+      targetMaterialProfileValidation: args.targetMaterialProfileValidation,
+      targetMaterialProfileValidationRef: args.targetMaterialProfileValidationRef,
+    });
+
+  let effectiveSelection = authoredSelection;
+  let effectiveValidation = revalidate(effectiveSelection);
+  if (effectiveValidation.accepted_frontier_ref_ids.length < floor) {
+    effectiveSelection = applyAdmissionSelectionFloorPolicy({
+      sourceFrontier: effectiveSelection,
+      sourceFrontierValidation: effectiveValidation,
+      admittedUnits,
+      floor,
+    });
+    effectiveValidation = revalidate(effectiveSelection);
+    await writeYamlDocument(args.admissionSelectionPath, effectiveSelection);
+  }
+  await writeYamlDocument(args.admissionSelectionValidationPath, effectiveValidation);
+  assertRuntimeValidationValid({
+    artifactName: "source-admission-selection",
+    artifactRef: args.admissionSelectionValidationPath,
+    validation: effectiveValidation,
+  });
+
+  const cappedAcceptedIds = new Set(
+    capAdmissionSelectionAcceptedRefs({
+      sourceFrontier: effectiveSelection,
+      acceptedFrontierRefIds: effectiveValidation.accepted_frontier_ref_ids,
+      fileLimit,
+    }),
+  );
+  const frontierBySourceRef = new Map(
+    effectiveSelection.frontier_refs
+      .filter((frontier) => cappedAcceptedIds.has(frontier.frontier_ref_id))
+      .map((frontier) => [path.resolve(frontier.source_ref), frontier] as const),
+  );
+
+  const promotedObservations: ReconstructSourceObservation[] = [];
+  const promotionSkippedRefs: ReconstructSourceObservationsArtifact["skipped_refs"] = [];
+  const nextInventoryUnits: ReconstructSourceInventoryUnit[] = [];
+  for (const unit of args.sourceInventory.inventory_units) {
+    const accepted = unit.scan_status === "admitted"
+      ? frontierBySourceRef.get(path.resolve(unit.ref))
+      : undefined;
+    if (!accepted) {
+      nextInventoryUnits.push(unit);
+      continue;
+    }
+    const detection: TargetMaterialRefDetection = {
+      ref: unit.ref,
+      exists: unit.exists,
+      kind: unit.target_material_kind,
+      confidence: unit.exists ? 0.92 : 0.1,
+      confidence_basis: "source-admission-selection accepted inventory ref",
+    };
+    // §5 scenario 1: materialize's deep-observe helper, isRuntimeTargetSource:true (the split).
+    const deep = await observeInventoryUnitDeep(unit, detection, {
+      isRuntimeTargetSource: true,
+      sourceRegionDecomposition: args.sourceRegionDecomposition === true,
+      ...(args.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+      ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
+      ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+      lineage: {
+        roundId: "admission",
+        observationBatchId: "source-observation-batch:admission",
+      },
+    });
+    promotedObservations.push(...deep.observations);
+    nextInventoryUnits.push(...deep.units);
+    if (deep.skippedRef) promotionSkippedRefs.push(deep.skippedRef);
+  }
+
+  const nextSourceInventory: ReconstructSourceInventoryArtifact = {
+    ...args.sourceInventory,
+    inventory_units: nextInventoryUnits,
+  };
+  const nextSourceObservations: ReconstructSourceObservationsArtifact = {
+    ...args.sourceObservations,
+    created_at: isoNow(),
+    observations: [...args.sourceObservations.observations, ...promotedObservations],
+    skipped_refs: [...args.sourceObservations.skipped_refs, ...promotionSkippedRefs],
+    validation_results: [
+      ...new Set([
+        ...args.sourceObservations.validation_results,
+        "source_admission_selection_promoted",
+      ]),
+    ],
+  };
+  await writeYamlDocument(args.sourceInventoryRef, nextSourceInventory);
+  await writeYamlDocument(args.sourceObservationsRef, nextSourceObservations);
+
+  return {
+    sourceInventory: nextSourceInventory,
+    sourceObservations: nextSourceObservations,
+    admissionSelection: effectiveSelection,
+    admissionSelectionValidation: effectiveValidation,
+  };
+}
+
 const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;
 
 // Exported for direct unit testing — see validateSourceFrontier's export comment above.
@@ -16654,7 +17204,10 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructSourceObservationsArtifact>(
       preparationRefs.source_observations,
     );
-  const sourceInventory =
+  // Core Stage 2 inter-document breadth (design §4/§13 PR-2b): `let`, not `const` — the
+  // admission-selection stage below may replace this with a NEW object (promoted units'
+  // observations added) rather than mutate in place, unlike materialize's own in-place style.
+  let sourceInventory =
     await readYamlDocument<ReconstructSourceInventoryArtifact>(
       preparationRefs.source_inventory,
     );
@@ -16683,6 +17236,39 @@ export async function runReconstruct(
     artifactRef: targetMaterialProfileValidationPath,
     validation: targetMaterialProfileValidation,
   });
+  // Core Stage 2 inter-document breadth (design §4/§13 PR-2b, INVARIANT-CHANGE): the
+  // admission-selection stage runs here — AFTER targetMaterialProfileValidation (which does not
+  // depend on observations, so no reorder was needed) and BEFORE both the zero-observation
+  // graceful-terminal check and the hard-throw evidence gate below, so a promoted unit's
+  // observation is already in `sourceObservations` before either gate reads it. No-ops (returns
+  // null, `sourceInventory`/`sourceObservations` untouched) unless Stage 2 actually admitted units
+  // (opt-in on AND materialize crossed SOURCE_ADMISSION_SELECTION_THRESHOLD) — off / below-
+  // threshold runs never reach the guard inside runSourceAdmissionSelectionStage.
+  const admissionSelectionResult = await runSourceAdmissionSelectionStage({
+    sessionId,
+    intent: params.intent,
+    targetMaterialProfile,
+    targetMaterialProfileValidation,
+    targetMaterialProfileValidationRef: targetMaterialProfileValidationPath,
+    sourceInventory,
+    sourceInventoryRef: preparationRefs.source_inventory,
+    sourceObservations,
+    sourceObservationsRef: preparationRefs.source_observations,
+    directiveAuthor,
+    admissionSelectionPath: path.join(sessionRoot, "source-admission-selection.yaml"),
+    admissionSelectionValidationPath: path.join(
+      sessionRoot,
+      "source-admission-selection-validation.yaml",
+    ),
+    ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
+    ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+    ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+    ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+  });
+  if (admissionSelectionResult) {
+    sourceInventory = admissionSelectionResult.sourceInventory;
+    sourceObservations = admissionSelectionResult.sourceObservations;
+  }
   // Site 1 graceful terminal (design §16.2): a zero-observation run whose every planned target was
   // skipped (unsupported/vanished) is a graceful BLOCKED terminal, not a crash. Populate the
   // assembly context the catch-side needs (the inside-`try` pieces it cannot see), then throw the
@@ -18482,6 +19068,7 @@ export async function runReconstruct(
     seedAuthoringReadinessValidationRef: seedAuthoringReadinessValidationPath,
     sourceObservations: promptSourceObservations,
     sourceObservationsRef: preparationRefs.source_observations,
+    sourceInventory,
     contractRegistry,
   };
   let ontologySeed = await writeAuthoredYamlDocument(

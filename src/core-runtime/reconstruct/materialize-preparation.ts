@@ -69,10 +69,13 @@ export interface MaterializeReconstructPreparationArtifactsParams {
    *  byte-identical. */
   sourceRegionDecomposition?: boolean;
   /** Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
-   *  §8/§13 PR-2a, threaded like sourceRegionDecomposition): set from
-   *  reconstruct.execution.source_admission_selection. UNUSED in this PR — no code branches on
-   *  it yet (materialize keeps observing every planned unit regardless). PR-2b wires the
-   *  threshold-gated admission-mode decision. Absent = off, byte-identical. */
+   *  §8/§13 PR-2b, threaded like sourceRegionDecomposition): set from
+   *  reconstruct.execution.source_admission_selection. When true AND the planned-unit count
+   *  exceeds SOURCE_ADMISSION_SELECTION_THRESHOLD, materialize enters admission mode: every
+   *  planned unit is admitted (outline captured, `scan_status:"admitted"`) instead of deep-
+   *  observed, and source-observations.yaml starts empty — the admission-selection stage
+   *  (run.ts) promotes a purpose-selected subset afterward. Off / below-threshold = today's
+   *  deep-observe-all path, byte-identical. */
   sourceAdmissionSelection?: boolean;
 }
 
@@ -1066,6 +1069,103 @@ export async function observeInventoryUnitDeep(
   return { observations: [observation], units: [unit], skippedRef: null };
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design §3): projects a captured observation's
+ * `structural_data` down to the small `ReconstructSourceInventoryUnit.outline` shape. The
+ * observation itself is discarded (never persisted for an admitted unit) — only these fields
+ * survive. `char_count`/`line_count`/`size_bytes` fall back to 0 for a kind whose observer never
+ * populates them (spreadsheet: `buildSpreadsheetSourceObservation` carries no raw text stats,
+ * only `workbook_inventory`) — the outline type requires plain numbers, and 0 is the honest
+ * "not applicable" value there (the real structural signal is the skeleton field, not these
+ * counts). Exactly one of code_structure_inventory/workbook_inventory is ever populated, matching
+ * whichever structure observer the source's kind + opt-in combination actually ran.
+ */
+function outlineFromObservation(
+  observation: ReconstructSourceObservation,
+): NonNullable<ReconstructSourceInventoryUnit["outline"]> {
+  const sd = observation.structural_data;
+  return {
+    content_sha256: typeof sd.content_sha256 === "string" ? sd.content_sha256 : "",
+    char_count: typeof sd.char_count === "number" ? sd.char_count : 0,
+    line_count: typeof sd.line_count === "number" ? sd.line_count : 0,
+    size_bytes: typeof sd.size_bytes === "number" ? sd.size_bytes : 0,
+    outline_excerpt: typeof sd.content_excerpt === "string" ? sd.content_excerpt : null,
+    outline_excerpt_truncated: sd.excerpt_truncated === true,
+    ...(sd.code_structure_inventory !== undefined
+      ? { code_structure_inventory: sd.code_structure_inventory as CodeStructureInventory }
+      : {}),
+    ...(sd.workbook_inventory !== undefined
+      ? { workbook_inventory: sd.workbook_inventory as WorkbookStructuralInventory }
+      : {}),
+  };
+}
+
+/**
+ * Core Stage 2 inter-document breadth (design §2/§3/§8, PR-2b): the admission-mode counterpart of
+ * `observeInventoryUnitDeep` — captures a lightweight OUTLINE (`buildReconstructSourceObservation`
+ * with `outlineOnly:true`) instead of a deep observation, and marks the unit `"admitted"` rather
+ * than adding anything to `source-observations.yaml`. Never decomposes (Stage 1 region fan-out is
+ * a deep-observation concern only — `expandSourceObservationIntoRegions`'s one caller stays
+ * `observeInventoryUnitDeep`, unchanged by this function, design §6 gate-ordering). A ref that
+ * vanishes or is an unsupported workbook is demoted to `"skipped"` — the SAME two demotions
+ * `observeInventoryUnitDeep` applies — so admission mode's skip accounting matches the
+ * deep-observe-all path exactly (an unobservable ref is unobservable regardless of mode).
+ */
+async function admitInventoryUnit(
+  unit: ReconstructSourceInventoryUnit,
+  refDetection: TargetMaterialRefDetection,
+  opts: {
+    codeStructureObservation?: boolean;
+    codeSetTierObservation?: boolean;
+    codeStructureLayout?: boolean;
+  },
+): Promise<{
+  unit: ReconstructSourceInventoryUnit;
+  skippedRef: ReconstructSourceObservationsArtifact["skipped_refs"][number] | null;
+}> {
+  const observation = await buildReconstructSourceObservation(refDetection, undefined, {
+    isRuntimeTargetSource: true,
+    outlineOnly: true,
+    ...(opts.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+    ...(opts.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
+    ...(opts.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+  });
+  if (!observation) {
+    const reason = "source ref unavailable at observation time";
+    const skippedUnit: ReconstructSourceInventoryUnit = {
+      ...unit,
+      scan_status: "skipped",
+      skip_reason: reason,
+    };
+    return {
+      unit: skippedUnit,
+      skippedRef: { ref: skippedUnit.ref, target_material_kind: skippedUnit.target_material_kind, reason },
+    };
+  }
+  const unsupportedReason = spreadsheetUnsupportedReason(observation);
+  if (unsupportedReason) {
+    const reason = `spreadsheet extraction unsupported: ${unsupportedReason}`;
+    const skippedUnit: ReconstructSourceInventoryUnit = {
+      ...unit,
+      scan_status: "skipped",
+      skip_reason: reason,
+    };
+    return {
+      unit: skippedUnit,
+      skippedRef: { ref: skippedUnit.ref, target_material_kind: skippedUnit.target_material_kind, reason },
+    };
+  }
+  return {
+    unit: {
+      ...unit,
+      scan_status: "admitted",
+      skip_reason: null,
+      outline: outlineFromObservation(observation),
+    },
+    skippedRef: null,
+  };
+}
+
 export async function materializeReconstructPreparationArtifacts(
   params: MaterializeReconstructPreparationArtifactsParams,
 ): Promise<ReconstructPreparationArtifactRefs> {
@@ -1130,6 +1230,14 @@ export async function materializeReconstructPreparationArtifacts(
   };
   const observations: ReconstructSourceObservation[] = [];
   const skippedRefs: ReconstructSourceObservationsArtifact["skipped_refs"] = [];
+  // Core Stage 2 inter-document breadth (design §8): materialize's mode decision — deterministic,
+  // computed once from the pre-observe planned count, never re-evaluated per unit. Off / at-or-
+  // under-threshold keeps the deep-observe-all loop below byte-identical to pre-PR-2b; a real
+  // corpus above the threshold, with the opt-in on, enters admission mode instead.
+  const admissionMode =
+    params.sourceAdmissionSelection === true &&
+    baseInventoryUnits.filter((unit) => unit.scan_status === "planned").length >
+      SOURCE_ADMISSION_SELECTION_THRESHOLD;
   // Stage 1 source-region-decomposition (design §10 PR-1b-2): rebuilt below rather than mutated
   // in place, because a decomposed unit REPLACES its single file-level row with N region rows —
   // an array length change a `for...of` mutation over `inventory.inventory_units` cannot express.
@@ -1149,6 +1257,19 @@ export async function materializeReconstructPreparationArtifacts(
     const refDetection = detection.per_ref.find((candidate) => candidate.ref === unit.ref);
     if (!refDetection) {
       finalInventoryUnits.push(unit);
+      continue;
+    }
+    if (admissionMode) {
+      // Core Stage 2 (design §2/§3): admit — outline only, no deep observation, nothing pushed to
+      // `observations`. The admission-selection stage (run.ts) promotes a purpose-selected subset
+      // afterward via the SAME observeInventoryUnitDeep this loop uses off-path (design §5 split).
+      const admitted = await admitInventoryUnit(unit, refDetection, {
+        ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+        ...(params.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
+        ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+      });
+      finalInventoryUnits.push(admitted.unit);
+      if (admitted.skippedRef) skippedRefs.push(admitted.skippedRef);
       continue;
     }
     // Defect-3 basis A: these are the user-provided reconstruct runtime-target

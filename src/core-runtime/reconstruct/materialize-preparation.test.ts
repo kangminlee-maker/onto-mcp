@@ -24,6 +24,7 @@ import {
   isSourceRegionDecompositionEligible,
   materializeReconstructPreparationArtifacts,
   OUTLINE_EXCERPT_CHAR_LIMIT,
+  SOURCE_ADMISSION_SELECTION_THRESHOLD,
   spreadsheetUnsupportedReason,
   stableFrontierRefId,
 } from "./materialize-preparation.js";
@@ -1472,5 +1473,148 @@ describe("ReconstructSourceInventoryUnit admitted status + outline (Core Stage 2
     expect(roundTripped.scan_status).toBe("admitted");
     expect(roundTripped.outline?.code_structure_inventory).toBeDefined();
     expect(roundTripped.outline?.workbook_inventory).toBeUndefined();
+  });
+});
+
+describe("materializeReconstructPreparationArtifacts admission mode (Core Stage 2 inter-document breadth design 20260722 §2/§3/§8, PR-2b)", () => {
+  async function writeTinyCodeFiles(root: string, count: number): Promise<string[]> {
+    const refs: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const ref = path.join(root, `file-${String(i).padStart(3, "0")}.ts`);
+      await fs.writeFile(ref, `export function fn${i}(): number {\n  return ${i};\n}\n`, "utf8");
+      refs.push(ref);
+    }
+    return refs;
+  }
+
+  it("opt-in on, planned count AT the threshold: stays deep-observe-all (strict > gating, byte-identical to opt-in off)", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD);
+    const off = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, "off", ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+    const on = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, "on", ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+    });
+    const offObservations = await readYaml<ReconstructSourceObservationsArtifact>(off.source_observations);
+    const onObservations = await readYaml<ReconstructSourceObservationsArtifact>(on.source_observations);
+    expect(offObservations.observations).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD);
+    expect(onObservations.observations).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD);
+    const offInventory = await readYaml<ReconstructSourceInventoryArtifact>(off.source_inventory);
+    const onInventory = await readYaml<ReconstructSourceInventoryArtifact>(on.source_inventory);
+    expect(onInventory.inventory_units.every((u) => u.scan_status === "planned")).toBe(true);
+    const stripCreatedAt = <T extends { created_at: string }>(artifact: T): T => ({
+      ...artifact,
+      created_at: "STRIPPED",
+    });
+    expect(stringifyYaml(stripCreatedAt(onObservations))).toBe(
+      stringifyYaml(stripCreatedAt(offObservations)),
+    );
+    expect(stringifyYaml(stripCreatedAt(onInventory))).toBe(stringifyYaml(stripCreatedAt(offInventory)));
+  });
+
+  it("planned count OVER the threshold, opt-in OFF: stays deep-observe-all (threshold alone never triggers admission)", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(refsResult.source_observations);
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    expect(observations.observations).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    expect(inventory.inventory_units.every((u) => u.scan_status === "planned")).toBe(true);
+    expect(inventory.inventory_units.every((u) => u.outline === undefined)).toBe(true);
+  });
+
+  it("planned count OVER the threshold, opt-in ON: enters admission mode — every planned unit becomes 'admitted' with a populated outline, zero deep observations, source-observations.yaml stays empty", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+      codeStructureObservation: true,
+    });
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(refsResult.source_observations);
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    expect(observations.observations).toHaveLength(0);
+    expect(inventory.inventory_units).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    expect(inventory.inventory_units.every((u) => u.scan_status === "admitted")).toBe(true);
+    for (const unit of inventory.inventory_units) {
+      expect(unit.outline).toBeDefined();
+      expect(unit.outline!.content_sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(unit.outline!.content_sha256).toBe(await sha256File(unit.ref));
+      expect(unit.outline!.outline_excerpt).not.toBeNull();
+      expect((unit.outline!.outline_excerpt as string).length).toBeLessThanOrEqual(OUTLINE_EXCERPT_CHAR_LIMIT);
+      // codeStructureObservation opt-in was on: the code skeleton is captured (§3 "kind별 skeleton").
+      expect(unit.outline!.code_structure_inventory).toBeDefined();
+      expect(unit.outline!.workbook_inventory).toBeUndefined();
+    }
+    // initial-source-frontier's "planned" filter yields nothing in admission mode (design §8) — this
+    // is informational/audit-only downstream (never re-read for content), not a correctness defect.
+    const initialFrontier = await readYaml<ReconstructInitialSourceFrontierArtifact>(
+      refsResult.initial_source_frontier,
+    );
+    expect(initialFrontier.source_refs).toEqual([]);
+  });
+
+  it("admission mode without codeStructureObservation: outline carries no code_structure_inventory (additive-absent, mirrors the deep-observe path's own opt-in gating)", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+      // codeStructureObservation intentionally OMITTED.
+    });
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    for (const unit of inventory.inventory_units) {
+      expect(unit.outline).toBeDefined();
+      expect(unit.outline!.code_structure_inventory).toBeUndefined();
+      expect(unit.outline!.workbook_inventory).toBeUndefined();
+    }
+  });
+
+  it("admission mode over a spreadsheet corpus: outline falls back to char_count/line_count=0 (no raw-text stats for a workbook) and carries workbook_inventory as the skeleton", async () => {
+    const root = await makeTmpProject();
+    const refs: string[] = [];
+    const csvHeader = "a,b,c\n1,2,3\n";
+    for (let i = 0; i < SOURCE_ADMISSION_SELECTION_THRESHOLD + 1; i += 1) {
+      const ref = path.join(root, `sheet-${String(i).padStart(3, "0")}.csv`);
+      await fs.writeFile(ref, csvHeader, "utf8");
+      refs.push(ref);
+    }
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+    });
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    expect(inventory.inventory_units.length).toBeGreaterThan(0); // non-vacuous
+    for (const unit of inventory.inventory_units) {
+      expect(unit.scan_status).toBe("admitted");
+      expect(unit.outline).toBeDefined();
+      expect(unit.outline!.char_count).toBe(0);
+      expect(unit.outline!.line_count).toBe(0);
+      expect(unit.outline!.outline_excerpt).toBeNull();
+      expect(unit.outline!.workbook_inventory).toBeDefined();
+      expect(unit.outline!.code_structure_inventory).toBeUndefined();
+    }
   });
 });
