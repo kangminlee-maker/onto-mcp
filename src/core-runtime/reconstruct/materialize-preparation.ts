@@ -27,7 +27,7 @@ import {
   type CodeStructureInventory,
 } from "../code-structure-observer.js";
 import { observeCodeStructureWithLayoutTier } from "../code-layout-observer.js";
-import { segmentSourceIntoRegions, sliceRegionText } from "./source-region-segmenter.js";
+import { segmentSourceIntoRegions, sliceRegionText, type Region } from "./source-region-segmenter.js";
 import { buildDeterministicComprehensionArtifact } from "./comprehension-artifact.js";
 import {
   loadReconstructSourceProfiles,
@@ -641,7 +641,11 @@ export function isSourceRegionDecompositionEligible(
  * `location`/`region_line_*` fields are introduced). A TOCTOU vanish (the file disappeared between
  * the whole-file capture and this re-read) also degrades to the whole-file observation already
  * built — never a hard failure for what is an additive enhancement over a capture that already
- * succeeded.
+ * succeeded. The same degrade covers a TOCTOU EDIT (the file changed, rather than vanished,
+ * between the whole-file capture and this re-read): the captured `code_structure_inventory` can
+ * then disagree with the freshly re-read text (segmentSourceIntoRegions' own
+ * `codeStructureInventory.line_count !== lineCount` guard, or its strict-partition invariant) and
+ * throw — a benign concurrent edit must degrade exactly like a vanish, never crash the run.
  *
  * Each region observation keeps `content_sha256` as the WHOLE-FILE hash (the provenance spine that
  * scout-pack consumers bind to, design §6) and every other `structural_data` field describing the
@@ -667,34 +671,48 @@ export async function expandSourceObservationIntoRegions(
     observation.target_material_kind === "code"
       ? (observation.structural_data.code_structure_inventory as CodeStructureInventory | undefined)
       : undefined;
-  const regions = segmentSourceIntoRegions({
-    kind: observation.target_material_kind,
-    ref: observation.source_ref,
-    text,
-    lineCount,
-    ...(codeStructureInventory ? { codeStructureInventory } : {}),
-  });
-  if (regions.length <= 1) return [observation];
-  const regionObservations = regions.map((region) => ({
-    ...observation,
-    observation_id: stableObservationId({ sourceRef: observation.source_ref, location: region.location }),
-    location: region.location,
-    structural_data: {
-      ...observation.structural_data,
-      content_excerpt: sliceRegionText(text, region.region_line_start, region.region_line_end),
-      excerpt_truncated: false,
-      region_line_start: region.region_line_start,
-      region_line_end: region.region_line_end,
-      region_role: region.role_signal,
-    },
-  }));
-  for (const regionObservation of regionObservations) {
-    const validation = validateSourceObservationBoundary(regionObservation);
-    if (!validation.valid) {
-      throw new Error(
-        `Invalid region source observation boundary for ${regionObservation.source_ref}#${regionObservation.location}: ${validation.violations.join("; ")}`,
-      );
+  // TOCTOU-edit guard (design review Finding 3): narrowly scoped to the segment+expand step — the
+  // re-read above already covers TOCTOU-vanish (its own try/catch), and this catch never masks a
+  // failure unrelated to the fanout itself. A file edited (not vanished) between the whole-file
+  // capture and the re-read above can make the captured code_structure_inventory disagree with the
+  // fresh text, which segmentSourceIntoRegions detects and throws on (fail-loud BY DESIGN there,
+  // since a violated precondition must never silently mis-segment) — here, one level up, that throw
+  // means only "decomposition is unsafe for this benign race", so degrade to the ORIGINAL whole-file
+  // observation exactly like every other degrade path in this function, rather than crash the run.
+  let regions: Region[];
+  let regionObservations: ReconstructSourceObservation[];
+  try {
+    regions = segmentSourceIntoRegions({
+      kind: observation.target_material_kind,
+      ref: observation.source_ref,
+      text,
+      lineCount,
+      ...(codeStructureInventory ? { codeStructureInventory } : {}),
+    });
+    if (regions.length <= 1) return [observation];
+    regionObservations = regions.map((region) => ({
+      ...observation,
+      observation_id: stableObservationId({ sourceRef: observation.source_ref, location: region.location }),
+      location: region.location,
+      structural_data: {
+        ...observation.structural_data,
+        content_excerpt: sliceRegionText(text, region.region_line_start, region.region_line_end),
+        excerpt_truncated: false,
+        region_line_start: region.region_line_start,
+        region_line_end: region.region_line_end,
+        region_role: region.role_signal,
+      },
+    }));
+    for (const regionObservation of regionObservations) {
+      const validation = validateSourceObservationBoundary(regionObservation);
+      if (!validation.valid) {
+        throw new Error(
+          `Invalid region source observation boundary for ${regionObservation.source_ref}#${regionObservation.location}: ${validation.violations.join("; ")}`,
+        );
+      }
     }
+  } catch {
+    return [observation];
   }
   return regionObservations;
 }

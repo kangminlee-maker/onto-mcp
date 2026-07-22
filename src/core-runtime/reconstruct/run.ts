@@ -7918,11 +7918,24 @@ function maturationAnswerSupportPromptCatalog(args: {
   maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
   maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
 }): MaturationAnswerSupportPromptCatalog {
+  // Budget-contention guard (design §8, mirroring writeSourceObservationDirective's identical
+  // capProjectedRegionsPerFile call): applied BEFORE grouping, so a decomposed file's N region
+  // observations sharing one source_ref never all become prioritized ids just because that file is
+  // a closure-prioritized answer-support ref (the normal case — it's the main material). Without
+  // this, a heavily-decomposed prioritized file either starves supplemental observations out of the
+  // ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT slots below, or — past that limit — trips
+  // assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow and crashes the run. A file at or under
+  // MAX_PROJECTED_REGIONS_PER_FILE observations passes through unchanged (no-op), so OFF /
+  // one-observation-per-file corpora are byte-identical.
+  const cappedObservations = capProjectedRegionsPerFile(
+    args.sourceObservations.observations,
+    MAX_PROJECTED_REGIONS_PER_FILE,
+  );
   const observationsBySourceRef = new Map<
     string,
     ReconstructSourceObservationsArtifact["observations"]
   >();
-  for (const observation of args.sourceObservations.observations) {
+  for (const observation of cappedObservations) {
     const observations = observationsBySourceRef.get(observation.source_ref) ??
       [];
     observations.push(observation);
@@ -7938,7 +7951,7 @@ function maturationAnswerSupportPromptCatalog(args: {
     ),
   ];
   const prioritizedObservationIdSet = new Set(prioritizedObservationIds);
-  const supplementalObservationIds = args.sourceObservations.observations
+  const supplementalObservationIds = cappedObservations
     .filter((observation) =>
       !prioritizedObservationIdSet.has(observation.observation_id)
     )

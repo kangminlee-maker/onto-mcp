@@ -29,7 +29,7 @@ import {
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import { SPREADSHEET_OBSERVER_ADAPTER_ID } from "../spreadsheet-structure-observer.js";
-import { codeStructureLanguageForExtension } from "../code-structure-observer.js";
+import { codeStructureLanguageForExtension, observeCodeStructure } from "../code-structure-observer.js";
 
 describe("isFullExcerptCaptureEligible (M3a shared whole-capture policy)", () => {
   it("whole-captures source-language code; bounds config/data code (the M3a allowlist)", () => {
@@ -1156,6 +1156,36 @@ describe("expandSourceObservationIntoRegions (design §10 PR-1b-2 observe-time f
       expect(region.location.trim().length).toBeGreaterThan(0);
       expect(region.observation_id.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  // Adversarial review Finding 3: the fanout re-reads the file bytes SEPARATELY from the
+  // whole-file capture (only the fs.readFile a few lines up is guarded — a stale
+  // code_structure_inventory disagreeing with the fresh re-read was NOT). A benign concurrent
+  // edit between capture and re-read must degrade to the whole-file observation, never crash.
+  it("degrades to the ORIGINAL whole-file observation when a stale code_structure_inventory disagrees with the re-read text (TOCTOU edit, not vanish)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "toctou.py");
+    const text = "def a():\n    return 1\n";
+    await fs.writeFile(target, text, "utf8");
+    const result = await observeCodeStructure({ ref: target, text });
+    if (result.status !== "ok") throw new Error(`expected ok observation: ${result.status}`);
+    // The captured inventory disagrees with the (unchanged-on-disk) re-read text — simulating the
+    // file having been edited between the whole-file capture and this fanout's independent re-read.
+    const staleInventory = { ...result.inventory, line_count: result.inventory.line_count + 5 };
+    const observation = minimalObservation({
+      target_material_kind: "code",
+      source_ref: target,
+      location: target,
+      structural_data: {
+        char_count: text.length,
+        content_excerpt: text,
+        excerpt_truncated: false,
+        code_structure_inventory: staleInventory,
+      },
+    });
+
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions).toEqual([observation]); // degrade, not throw
   });
 });
 

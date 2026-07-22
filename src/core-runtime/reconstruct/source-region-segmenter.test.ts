@@ -5,6 +5,7 @@ import path from "node:path";
 import { observeCodeStructure, type CodeSymbolSpan } from "../code-structure-observer.js";
 import {
   segmentSourceIntoRegions,
+  sliceRegionText,
   CODE_REGION_COALESCE_MIN_LINES,
   type Region,
 } from "./source-region-segmenter.js";
@@ -289,5 +290,61 @@ describe("source-region-segmenter", () => {
 
   it("CODE_REGION_COALESCE_MIN_LINES is a positive tunable constant", () => {
     expect(CODE_REGION_COALESCE_MIN_LINES).toBeGreaterThan(0);
+  });
+
+  // Adversarial review Finding 2: splitPreservingTerminators previously split on
+  // /(\r\n|\r|\n)/ — a lone `\r` counted as a line break there, but `lineCount` (and every
+  // caller's line numbering) uses `text.split(/\r?\n/).length`, where a lone `\r` is WITHIN a
+  // line. On a lone `\r` this made content.length exceed lineCount, so document/fallback
+  // strategies (iterating only 1..lineCount) silently dropped the file's tail and
+  // sliceRegionText/region_line_* misaligned. CRLF and LF are unaffected — only a lone `\r`
+  // (classic-Mac, or a stray `\r` embedded in an LF file) exposed the divergence.
+  describe("line-terminator convention (\\r?\\n, matching lineCount — Finding 2)", () => {
+    it("treats an embedded lone \\r as ordinary line content, not a break: gap-free coverage + exact reconstruction (document strategy)", () => {
+      const text = [
+        "# Heading",
+        "body line with a lone CR\rinside it",
+        "second body line",
+        "",
+        "## Sub",
+        "sub body line",
+      ].join("\n");
+      const lineCount = text.split(/\r?\n/).length;
+      expect(lineCount).toBe(6); // the lone \r must NOT count as an extra line
+
+      const regions = segmentSourceIntoRegions({ kind: "document", ref: "doc.md", text, lineCount });
+      assertGaplessNonOverlappingPartition(regions, lineCount); // pre-fix: dropped the tail
+      assertDistinctLocations(regions);
+
+      // Excerpt alignment: reconstructing every region's exact slice and concatenating in
+      // line order reproduces the ORIGINAL text byte-for-byte — nothing dropped, nothing
+      // duplicated, the embedded \r preserved exactly where it was.
+      const sorted = [...regions].sort((a, b) => a.region_line_start - b.region_line_start);
+      const reconstructed = sorted
+        .map((region) => sliceRegionText(text, region.region_line_start, region.region_line_end))
+        .join("");
+      expect(reconstructed).toBe(text);
+      // The lone \r must survive inside whichever region covers line 2 — never treated as a
+      // region boundary of its own.
+      const line2Region = sorted.find((r) => r.region_line_start <= 2 && r.region_line_end >= 2);
+      expect(line2Region).toBeDefined();
+      expect(sliceRegionText(text, 2, 2)).toBe("body line with a lone CR\rinside it\n");
+    });
+
+    it("preserves gap-free coverage + exact reconstruction across mixed CRLF/LF/lone-CR line endings", () => {
+      const text = "# Heading\r\ncrlf body line\r\nlone CR line\rcontinuing\nfinal line";
+      const lineCount = text.split(/\r?\n/).length;
+      expect(lineCount).toBe(4);
+
+      const regions = segmentSourceIntoRegions({ kind: "document", ref: "doc.md", text, lineCount });
+      assertGaplessNonOverlappingPartition(regions, lineCount);
+      assertDistinctLocations(regions);
+
+      const sorted = [...regions].sort((a, b) => a.region_line_start - b.region_line_start);
+      const reconstructed = sorted
+        .map((region) => sliceRegionText(text, region.region_line_start, region.region_line_end))
+        .join("");
+      expect(reconstructed).toBe(text); // CRLF/LF terminators preserved exactly, lone \r untouched
+    });
   });
 });

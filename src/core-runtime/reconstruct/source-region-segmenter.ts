@@ -76,14 +76,17 @@ interface RegionDraft {
 }
 
 /** Splits `text` into per-line content and the ORIGINAL trailing terminator of each line
- *  (`\r\n` / `\r` / `\n` / "" for a final line with no terminator), using the same line-count
- *  convention as the code/layout observers (`text.split(/\r?\n/).length` — a trailing newline
- *  counts one more, empty, line). Concatenating `content[i] + sep[i]` for every i reconstructs
- *  `text` byte-for-byte, so a region's exact-bytes slice (and its sha256) never depends on
- *  normalizing line endings. */
+ *  (`\r\n` / `\n` / "" for a final line with no terminator), using the SAME `\r?\n` line-break
+ *  convention as the code/layout observers and `lineCount` (`text.split(/\r?\n/).length` — a
+ *  trailing newline counts one more, empty, line). A lone `\r` (classic-Mac line ending, or a
+ *  stray `\r` embedded in an LF file) is NOT a break under this convention — it stays inside
+ *  `content[i]` like any other character, so `content.length` always equals `lineCount` and
+ *  `region_line_*` never misaligns against it. Concatenating `content[i] + sep[i]` for every i
+ *  reconstructs `text` byte-for-byte, so a region's exact-bytes slice (and its sha256) never
+ *  depends on normalizing line endings. */
 function splitPreservingTerminators(text: string): { content: string[]; sep: string[] } {
   if (text.length === 0) return { content: [], sep: [] };
-  const parts = text.split(/(\r\n|\r|\n)/);
+  const parts = text.split(/(\r\n|\n)/);
   const content: string[] = [];
   const sep: string[] = [];
   for (let i = 0; i < parts.length; i += 2) {

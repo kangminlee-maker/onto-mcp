@@ -2409,6 +2409,74 @@ describe("runReconstruct", () => {
       .toBe("obs-needed");
   });
 
+  // Adversarial review finding (design §8 budget contention lists ALL THREE contention surfaces:
+  // directive selection, ontology-seed 160, and this ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT 64 —
+  // only the directive got capProjectedRegionsPerFile in PR-1b-3). A decomposed file's N region
+  // observations share one source_ref; when that file is closure-prioritized (the normal case —
+  // it's the main material), EVERY region became a prioritized id pre-fix, either starving a
+  // different file's observations out of the 64-slot catalog or — past 64 — crashing the run via
+  // assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow.
+  it("caps a decomposed prioritized file's region observations to MAX_PROJECTED_REGIONS_PER_FILE in the answer-support catalog — no starvation, no overflow crash", async () => {
+    const decomposedSourceRef = "/fixture/decomposed-source.ts";
+    const regionCount = 70; // > ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT (64) AND > MAX_PROJECTED_REGIONS_PER_FILE (8)
+    const regionObservations = Array.from({ length: regionCount }, (_, index) => ({
+      observation_id: `obs-region-${index + 1}`,
+      target_material_kind: "code" as const,
+      adapter_id: "fixture",
+      source_ref: decomposedSourceRef,
+      location: `L${index * 10 + 1}-${index * 10 + 10}`,
+      summary: `Fixture region observation ${index + 1}`,
+      structural_data: {
+        content_excerpt: `region body ${index + 1}`,
+        region_line_start: index * 10 + 1,
+        region_line_end: index * 10 + 10,
+        region_role: (index === 0 ? "declaration" : "body") as const,
+      },
+    }));
+    // A DIFFERENT file's observation — the fanout must not starve it out of the catalog.
+    const secondFileObservation = {
+      observation_id: "obs-second-file",
+      target_material_kind: "document" as const,
+      adapter_id: "fixture",
+      source_ref: "/fixture/second-file.md",
+      location: "/fixture/second-file.md",
+      summary: "Fixture second-file observation",
+      structural_data: { content_excerpt: "second file content" },
+    };
+    const sourceObservations: ReconstructSourceObservationsArtifact = {
+      schema_version: "1",
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      observations: [...regionObservations, secondFileObservation],
+      skipped_refs: [],
+      validation_results: [],
+    };
+    const { questionFrontier, closureFrontier } = answerSupportPromptFixture({
+      supplementalObservationCount: 0,
+      priorityObservations: [],
+      closureHintSourceRefs: [decomposedSourceRef],
+      sourceRequest: null,
+    });
+
+    const capturedPayload = await captureAnswerSupportPromptPayload({
+      sourceObservations,
+      questionFrontier,
+      closureFrontier,
+    });
+
+    // (a) the decomposed file contributes at most MAX_PROJECTED_REGIONS_PER_FILE prioritized ids —
+    // no starvation of the second file's observation out of the catalog.
+    expect(capturedPayload.source_observation_prompt_policy.prioritized_observation_count)
+      .toBeLessThanOrEqual(MAX_PROJECTED_REGIONS_PER_FILE);
+    expect(capturedPayload.prompt_visible_observation_ids).toContain("obs-second-file");
+    const promptRegionIds = (capturedPayload.prompt_visible_observation_ids as string[])
+      .filter((id: string) => id.startsWith("obs-region-"));
+    expect(promptRegionIds.length).toBeLessThanOrEqual(MAX_PROJECTED_REGIONS_PER_FILE);
+    // (b) with >64 regions from ONE file, the run does NOT throw the overflow error (pre-fix: it did).
+    expect(capturedPayload.source_observation_prompt_policy.omitted_prioritized_observation_count)
+      .toBe(0);
+  });
+
   it.each([
     {
       caseName: "question hint refs",
@@ -2670,12 +2738,19 @@ describe("runReconstruct", () => {
   it("fails before answer-support authoring when closure-prioritized observations exceed the prompt catalog cap", async () => {
     const highFanoutRef = "/fixture/high-fanout-requested-source.md";
     const competingRef = "/fixture/competing-requested-source.md";
+    // Regression note (Stage 1 review Finding 1 fix): each priority observation now carries a
+    // DISTINCT source_ref — 65 genuinely different closure-prioritized files, not one file's
+    // region fanout. capProjectedRegionsPerFile (the Finding-1 fix, mirroring
+    // writeSourceObservationDirective) caps a SINGLE file's regions to MAX_PROJECTED_REGIONS_PER_FILE,
+    // so 65 observations sharing ONE ref would no longer overflow the 64 limit here — this fixture
+    // must exercise the guard's real target: too many DISTINCT prioritized files, which the
+    // per-file cap neither does nor should suppress.
     const fixture = answerSupportPromptFixture({
       supplementalObservationCount: 0,
       priorityObservations: [
         ...Array.from({ length: 65 }, (_, index) => ({
           observationId: `obs-priority-${index + 1}`,
-          sourceRef: highFanoutRef,
+          sourceRef: `${highFanoutRef}-${index + 1}`,
         })),
         {
           observationId: "obs-competing",
@@ -2684,9 +2759,12 @@ describe("runReconstruct", () => {
       ],
       closureHintSourceRefs: [],
       sourceRequest: {
-        requestedSourceRef: highFanoutRef,
+        requestedSourceRef: `${highFanoutRef}-1`,
         targetMaterialKind: "mixed",
-        memberSourceRefs: [competingRef],
+        memberSourceRefs: [
+          ...Array.from({ length: 64 }, (_, index) => `${highFanoutRef}-${index + 2}`),
+          competingRef,
+        ],
       },
     });
     let llmCalled = false;
