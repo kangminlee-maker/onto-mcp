@@ -72,6 +72,8 @@
     "check:obligation-coverage": "tsx scripts/check-obligation-coverage.ts",
     "check:dispatch-fallback-package-parity": "tsx scripts/check-dispatch-fallback-package-parity.ts",
     "check:graceful-signal-rethrow": "tsx scripts/check-graceful-signal-rethrow.ts",
+    "generate:linguist": "tsx scripts/generate-linguist-tables.ts",
+    "check:linguist-drift": "tsx scripts/check-linguist-drift.ts",
     "test": "npm run test:e2e",
     "test:vitest": "vitest run",
     "test:review:live": "npm run build:ts-core && tsx scripts/review-mcp-live-e2e.ts",

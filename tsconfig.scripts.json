@@ -41,7 +41,9 @@
     "scripts/effort-bench-itt-analyzer.ts",
     "scripts/effort-bench-judge-invariance.ts",
     "scripts/effort-bench-run-admission.ts",
-    "scripts/effort-bench-pilot-report.ts"
+    "scripts/effort-bench-pilot-report.ts",
+    "scripts/generate-linguist-tables.ts",
+    "scripts/check-linguist-drift.ts"
   ],
   "exclude": []
 }
