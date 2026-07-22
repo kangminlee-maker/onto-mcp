@@ -83,6 +83,21 @@ describe("detectTargetMaterialKind", () => {
       });
     },
   );
+
+  // Multi-language Tier 2 expansion (T1): the C/C++ observer parses .c/.h/.cpp/... via the cpp
+  // grammar, so C/C++ headers and alternate source extensions must classify as code to reach it.
+  it.each([".h", ".hpp", ".hh", ".cxx"])(
+    "classifies C/C++ header/source extension %s as code",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `widget${ext}`);
+      await fs.writeFile(target, "int main() { return 0; }\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+    },
+  );
 });
 
 describe("reviewMaterialSupportStatus (kind-level claim)", () => {
