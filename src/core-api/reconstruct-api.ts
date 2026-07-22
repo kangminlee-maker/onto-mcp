@@ -573,24 +573,29 @@ async function directoryExists(directoryPath: string): Promise<boolean> {
   }
 }
 
-/** The three code-observation opt-ins as one projection (경계 결정 2026-07-20 + Phase 1b FD1).
+/** The four code-observation opt-ins as one projection (경계 결정 2026-07-20 + Phase 1b FD1 +
+ *  layout 20260721).
  *  - capture (codeStructureObservation) = code_structure_inventory OR semantic_map_code —
  *    the LLM map folds from the captured inventory, so the map opt-in implies capture.
  *  - semanticMapCode = the LLM map stage gate (DD7), never capture.
  *  - codeSetTier = semantic_map_code_set_tier; REQUIRES capture (fail-loud
- *    `requires_code_structure_inventory` — never implicit activation, FD1). */
+ *    `requires_code_structure_inventory` — never implicit activation, FD1).
+ *  - codeStructureLayout = code_structure_layout; the grammar-free layout tier extends capture to
+ *    tree-sitter-unsupported languages, so it too REQUIRES capture (same fail-loud). */
 function resolveCodeObservationOptIns(settings: {
   reconstruct?: {
     execution?: {
       code_structure_inventory?: boolean;
       semantic_map_code?: boolean;
       semantic_map_code_set_tier?: boolean;
+      code_structure_layout?: boolean;
     };
   };
 }): {
   codeStructureObservation: boolean;
   semanticMapCode: boolean;
   codeSetTier: boolean;
+  codeStructureLayout: boolean;
 } {
   const execution = settings.reconstruct?.execution;
   const codeStructureObservation =
@@ -602,10 +607,17 @@ function resolveCodeObservationOptIns(settings: {
       "requires_code_structure_inventory: reconstruct.execution.semantic_map_code_set_tier=true needs the code structure inventory captured — set reconstruct.execution.code_structure_inventory=true (or semantic_map_code=true). The set tier never activates capture implicitly (Phase 1b FD1).",
     );
   }
+  const codeStructureLayout = execution?.code_structure_layout === true;
+  if (codeStructureLayout && !codeStructureObservation) {
+    throw new Error(
+      "requires_code_structure_inventory: reconstruct.execution.code_structure_layout=true needs the code structure inventory captured — set reconstruct.execution.code_structure_inventory=true (or semantic_map_code=true). The layout tier extends capture to grammar-free languages; it never activates capture implicitly.",
+    );
+  }
   return {
     codeStructureObservation,
     semanticMapCode: execution?.semantic_map_code === true,
     codeSetTier,
+    codeStructureLayout,
   };
 }
 
@@ -1089,6 +1101,7 @@ export function createOntoReconstructCoreApi(
           [projectRoot],
         ...(prepareOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
         ...(prepareOptIns.codeSetTier ? { codeSetTierObservation: true } : {}),
+        ...(prepareOptIns.codeStructureLayout ? { codeStructureLayout: true } : {}),
       });
       const targetMaterialProfileValidationPath = path.join(
         sessionRoot,
@@ -1631,6 +1644,7 @@ export function createOntoReconstructCoreApi(
             ...(runOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
             ...(runOptIns.semanticMapCode ? { semanticMapCode: true } : {}),
             ...(runOptIns.codeSetTier ? { codeSetTier: true } : {}),
+            ...(runOptIns.codeStructureLayout ? { codeStructureLayout: true } : {}),
             ...(environmentContextProfile ? { environmentContextProfile: true } : {}),
             ...(environmentContextProfileContent ? { environmentContextProfileContent: true } : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback

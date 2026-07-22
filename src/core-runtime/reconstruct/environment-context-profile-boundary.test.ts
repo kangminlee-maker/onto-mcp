@@ -152,6 +152,59 @@ describe("projectEnvironmentContextProfileInput — real artifact shapes", () =>
     expect(input.imports_available).toBe(false);
   });
 
+  it("excludes a grammar-free layout member's rough imports from framework detection (§6-5)", () => {
+    // A rough `require "react"` extracted by the layout observer must NOT drive import-based
+    // framework detection: excluded from BOTH the imports list and imports_available, exactly as if
+    // this member had not captured imports.
+    const input = projectEnvironmentContextProfileInput({
+      targetMaterialProfile: targetProfile([{ ref: "/p/app/init.lua" }]),
+      sourceObservations: sourceObs([{
+        id: "obs-lua",
+        source_ref: "/p/app/init.lua",
+        structural_data: {
+          content_sha256: "sha-lua",
+          code_structure_inventory: {
+            language: "lua",
+            content_sha256: "sha-lua",
+            extraction_tier: "layout",
+            symbol_tiles: { imports: [{ to_specifier: "react" }, { to_specifier: "express" }] },
+          },
+        },
+      }]),
+    });
+    expect(input.observations[0]).toMatchObject({ language: "lua", imports: [] });
+    // No PRECISE imports were available for framework detection.
+    expect(input.imports_available).toBe(false);
+  });
+
+  it("keeps precise (tree-sitter) imports available even alongside an excluded layout member", () => {
+    const input = projectEnvironmentContextProfileInput({
+      targetMaterialProfile: targetProfile([{ ref: "/p/a.ts" }, { ref: "/p/b.lua" }]),
+      sourceObservations: sourceObs([
+        {
+          id: "obs-ts",
+          source_ref: "/p/a.ts",
+          structural_data: {
+            content_sha256: "sha-ts",
+            code_structure_inventory: { language: "typescript", content_sha256: "sha-ts", symbol_tiles: { imports: [{ to_specifier: "react" }] } },
+          },
+        },
+        {
+          id: "obs-lua",
+          source_ref: "/p/b.lua",
+          structural_data: {
+            content_sha256: "sha-lua",
+            code_structure_inventory: { language: "lua", content_sha256: "sha-lua", extraction_tier: "layout", symbol_tiles: { imports: [{ to_specifier: "vue" }] } },
+          },
+        },
+      ]),
+    });
+    const byRef = new Map(input.observations.map((o) => [o.rel_path, o.imports]));
+    expect(byRef.get("a.ts")).toEqual(["react"]); // precise import kept
+    expect(byRef.get("b.lua")).toEqual([]); // rough import excluded
+    expect(input.imports_available).toBe(true); // the precise member makes imports available
+  });
+
   it("reports imports_available true when the inventory captured an EMPTY imports list", () => {
     // Empty-but-present imports = capture ran, found none. Must be `true` (distinguishes "captured,
     // none" from "never captured") — the flag reflects capture, not import existence.

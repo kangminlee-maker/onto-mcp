@@ -500,6 +500,14 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // fail-loud structural error (requires_code_structure_inventory), never implicit activation.
   // Absent = off — no set-tier artifact, no observer import capture, byte-identical.
   "semantic_map_code_set_tier",
+  // Grammar-free layout observer opt-in (design 20260721 language-agnostic-structure-parsing §7 /
+  // structure-evidence-framework §6). Extends deterministic code structure capture to tree-sitter
+  // UNSUPPORTED languages (.lua/.hs/.scala/.vue/GraphQL/Proto/Prisma …) via a rough indentation +
+  // bracket layout parser (Tier 1), separate from the precise tree-sitter observer (Tier 2). REQUIRES
+  // code_structure_inventory (or semantic_map_code) — layout=true ∧ capture=false is a fail-loud
+  // structural error (requires_code_structure_inventory). Absent = off — no long-tail classification,
+  // no layout observation, byte-identical.
+  "code_structure_layout",
   // Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0). A
   // deterministic environment/tech-stack profile derived from the EXISTING observation census
   // (basenames/extensions/imports) — NO new filesystem scan, disclosure-only (never touches the

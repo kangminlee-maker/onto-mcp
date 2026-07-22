@@ -1092,6 +1092,13 @@ export interface RunReconstructParams {
    *  (enforced fail-loud at the api settings projection). Gates observer import capture and
    *  the post-loop deterministic set assembly. Absent = off. */
   codeSetTier?: boolean;
+  /** Grammar-free layout observer opt-in (design 20260721 §7): set from
+   *  reconstruct.execution.code_structure_layout. Requires codeStructureObservation (enforced
+   *  fail-loud at the api settings projection). Extends deterministic code capture to tree-sitter
+   *  UNSUPPORTED languages: (a) long-tail classification (Linguist unknown-fallback + extensionless
+   *  shebang rung) so .lua/.hs/.vue … reach observation, and (b) the Tier 1 layout observer dispatch.
+   *  Absent = off (byte-identical). */
+  codeStructureLayout?: boolean;
   /** Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0): set
    *  from reconstruct.execution.environment_context_profile. Gates a deterministic, disclosure-only
    *  environment/tech-stack profile derived from the EXISTING observation census (no new fs scan,
@@ -1736,6 +1743,26 @@ export function sourceObservationsReuseSha256(
         workbook_inventory_data_layer_caps: workbookInventoryDataLayerCaps(
           observation.structural_data.workbook_inventory,
         ),
+        // Code structure inventory IDENTITY (design 20260721 §9): content_sha256 is a raw-byte hash
+        // and cannot reflect an EXTRACTOR-LOGIC or Linguist-CATALOG change, so an inventory-only run
+        // (capture on, map/set-tier off) could silently reuse a seed authored under stale extractor
+        // logic. Folded EXISTENCE-CONDITIONALLY (never an always-null key) so a spreadsheet-only or
+        // no-capture run's reuse hash is byte-identical — only capture-on runs rotate (the intended,
+        // owner-approved 1-time rotation when this lands; extractor_logic_sha256 already folds the
+        // layout digest + LINGUIST_CATALOG_SHA256).
+        ...(() => {
+          const inv = (observation.structural_data as Record<string, unknown>)
+            .code_structure_inventory as CodeStructureInventory | undefined;
+          return inv
+            ? {
+                code_structure_inventory_identity: {
+                  content_sha256: inv.content_sha256,
+                  extractor_logic_sha256: inv.extractor_logic_sha256,
+                  ...(inv.extraction_tier !== undefined ? { extraction_tier: inv.extraction_tier } : {}),
+                },
+              }
+            : {};
+        })(),
       },
     })),
     skipped_refs: artifact.skipped_refs.map((skipped) => ({
@@ -2318,7 +2345,12 @@ export function projectEnvironmentContextProfileInput(args: {
     const inv = inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)
       ? (inventory as CodeStructureInventory)
       : null;
-    const capturedImports = inv?.symbol_tiles.imports;
+    // Grammar-free ROUGH layout imports were extracted heuristically (no static parse) — they must
+    // NOT drive import-based framework detection (design 20260721 §6-5): a rough `require "react"`
+    // in a Lua string could otherwise mis-promote `framework:react` (the import signal's "near
+    // certain" class assumes AST extraction). Excluded from BOTH the imports list and
+    // imports_available, exactly as if this member had not captured imports.
+    const capturedImports = inv?.extraction_tier === "layout" ? undefined : inv?.symbol_tiles.imports;
     if (capturedImports !== undefined) importsAvailable = true;
     const contentSha = typeof structural.content_sha256 === "string"
       ? structural.content_sha256
@@ -3053,11 +3085,15 @@ function semanticMapCodeSourceExcerptGuardFailure(
 
 function semanticMapSkipReasonForCurrentObservation(
   observation: SemanticMapObservation,
-): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | "code_source_excerpt_unavailable" | null {
+): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | "code_source_excerpt_unavailable" | "code_layout_tier_not_applicable" | null {
   if (observation.target_material_kind === "code") {
     const { inventory, unsupportedReason } = semanticMapCodeStructural(observation);
     if (unsupportedReason !== undefined) return "code_extraction_unsupported";
     if (!inventory) return "no_code_inventory";
+    // Grammar-free ROUGH layout evidence is explicitly not sliced into the LLM map stage (§6-2). The
+    // check sits AFTER inventory-presence and BEFORE the excerpt guard so the live and resume paths
+    // agree on the reason even for a >6K non-whole-capture layout file (else source_ref_mismatch).
+    if (inventory.extraction_tier === "layout") return "code_layout_tier_not_applicable";
     return semanticMapCodeSourceExcerptGuardFailure(observation, inventory) === null
       ? null
       : "code_source_excerpt_unavailable";
@@ -3367,7 +3403,8 @@ function buildSemanticMapResumeValidationArtifact(args: {
         row.skip_reason !== "no_value_tiles" &&
         row.skip_reason !== "no_code_inventory" &&
         row.skip_reason !== "code_extraction_unsupported" &&
-        row.skip_reason !== "code_source_excerpt_unavailable"
+        row.skip_reason !== "code_source_excerpt_unavailable" &&
+        row.skip_reason !== "code_layout_tier_not_applicable"
       ) {
         nonReusableRetainedIds.push(id);
         continue;
@@ -4139,6 +4176,13 @@ export async function runSemanticMapStage(args: {
     }
     if (!inventory) {
       recordSkippedObservation(observation.observation_id, "no_code_inventory", undefined, "code");
+      return;
+    }
+    // §6-2: grammar-free ROUGH layout evidence is explicitly NOT fed to the LLM map stage — same
+    // predicate/placement as the resume partition (semanticMapSkipReasonForCurrentObservation) so the
+    // live and resume skip reasons never diverge (DD7 same-predicate discipline).
+    if (inventory.extraction_tier === "layout") {
+      recordSkippedObservation(observation.observation_id, "code_layout_tier_not_applicable", undefined, "code");
       return;
     }
     // DD6′ source admission (리뷰 ct M-1, fail-closed): frontier envelopes slice the
@@ -15151,6 +15195,7 @@ async function observeAcceptedFrontierRefs(args: {
   sourceObservationsPath: string;
   codeStructureObservation?: boolean;
   codeSetTierObservation?: boolean;
+  codeStructureLayout?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
   const observedSourceRefs = new Set(
     args.sourceObservations.observations.map((observation) =>
@@ -15198,7 +15243,7 @@ async function observeAcceptedFrontierRefs(args: {
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
     }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}) }
+      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
       : undefined);
     // A null observation (vanished ref) and an unsupported workbook format
     // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
@@ -15257,6 +15302,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   sourceObservationsPath: string;
   codeStructureObservation?: boolean;
   codeSetTierObservation?: boolean;
+  codeStructureLayout?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
   const observedSourceRefs = new Set(
     args.sourceObservations.observations.map((observation) =>
@@ -15313,7 +15359,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
     }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}) }
+      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
       : undefined);
     // Unsupported workbook formats are un-observable like a vanished ref — no
     // evidence to admit (mirrors the materialize-loop demotion and F1).
@@ -16351,6 +16397,7 @@ export async function runReconstruct(
     filesystemAllowedRoots,
     ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+    ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
   });
   const targetMaterialProfile =
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
@@ -17645,6 +17692,7 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+      ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
     });
     // Reached this line ⇒ the round observed successfully; drop the context so it cannot be read
     // stale by a later graceful terminal that forgets to set its own.
@@ -19168,6 +19216,7 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+      ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
     });
     sourceObservationDeltaPath = path.join(
       maturationRoundRoot,

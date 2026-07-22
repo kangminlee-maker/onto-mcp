@@ -2613,7 +2613,10 @@ export interface ReconstructSemanticMapCensusObservation {
    *  observer's reason for the unsupported case).
    *  code_source_excerpt_unavailable (DD6′): the frontier-source admission guard failed — the
    *  whole-capture excerpt is absent, sha-mismatched against the inventory, or truncated, so v2
-   *  envelopes cannot slice trustworthy source (skip_detail names which precondition failed). */
+   *  envelopes cannot slice trustworthy source (skip_detail names which precondition failed).
+   *  code_layout_tier_not_applicable (design 20260721 §6-2): the inventory is grammar-free ROUGH
+   *  layout evidence (extraction_tier "layout"), explicitly NOT fed to the LLM semantic-map stage —
+   *  rough structure must never be mistaken for precise tree-sitter structure. */
   skip_reason:
     | "no_workbook_inventory"
     | "no_value_tiles"
@@ -2621,6 +2624,7 @@ export interface ReconstructSemanticMapCensusObservation {
     | "no_code_inventory"
     | "code_extraction_unsupported"
     | "code_source_excerpt_unavailable"
+    | "code_layout_tier_not_applicable"
     | null;
   /** Present for deterministic_phase_failed (contained error) and code_extraction_unsupported
    *  (observer reason). */

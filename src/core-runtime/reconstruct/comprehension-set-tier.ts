@@ -138,6 +138,10 @@ export interface CodeSetTierOverviewFile {
   language: string;
   lines: number;
   symbols: string[];
+  /** Present only for grammar-free ROUGH layout members (design 20260721 §6-4) — the tier field
+   *  surfaces in the rendered overview so the seed reader treats these facts as rough, not precise.
+   *  Absent for tree-sitter members (overview byte-identical when the set has no layout member). */
+  extraction_tier?: "layout";
 }
 
 export interface CodeSetTierOverviewDirectory {
@@ -306,6 +310,7 @@ function stemOf(memberPath: string): string {
 
 function resolveOneImport(args: {
   language: string;
+  extractionTier?: string;
   fromComponents: string[];
   record: ObservedCodeImport;
   byExact: Map<string, string>;
@@ -314,6 +319,13 @@ function resolveOneImport(args: {
   const { record } = args;
   if (record.specifier_truncated === true) {
     return { resolved: null, reason: "specifier_truncated" };
+  }
+  // Grammar-free ROUGH layout imports were extracted heuristically (no static parse), so they must
+  // never fake a resolved relation — held `parse_unavailable` (design 20260721 §6-3). Truncation is
+  // judged FIRST above so an over-bound layout specifier keeps its honest truncation reason. This
+  // also blocks a Tier 1 language token (e.g. Linguist "javascript") from entering TS_LANGS below.
+  if (args.extractionTier === "layout") {
+    return { resolved: null, reason: "parse_unavailable" };
   }
   const specifier = record.to_specifier;
   const fromDir = args.fromComponents.slice(0, -1);
@@ -418,6 +430,7 @@ function renderOverview(args: {
       language: member.inventory.language,
       lines: member.inventory.line_count,
       symbols: [...names],
+      ...(member.inventory.extraction_tier === "layout" ? { extraction_tier: "layout" as const } : {}),
     };
   };
   const exposedRelations = args.relations.slice(0, CODE_SET_TIER_RELATIONS_RENDER_CAP);
@@ -666,6 +679,7 @@ export function assembleCodeSetTier(input: CodeSetTierAssemblyInput): CodeSetTie
     for (const record of imports) {
       const { resolved, reason } = resolveOneImport({
         language: member.inventory.language,
+        ...(member.inventory.extraction_tier !== undefined ? { extractionTier: member.inventory.extraction_tier } : {}),
         fromComponents,
         record,
         byExact,
