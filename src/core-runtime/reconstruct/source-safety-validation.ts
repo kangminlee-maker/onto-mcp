@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml";
 import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import { assertObligation } from "./obligation-assertion.js";
 import type {
+  ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationsArtifact,
   ReconstructSourceSafetyAuthorizationState,
   ReconstructSourceSafetyCanonicalAxis,
@@ -85,6 +86,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function readYamlDocument<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
+}
+
+/**
+ * Core Stage 2 inter-document breadth (design 20260723-stage2-value-bench §9, provenance parity):
+ * the set of resolved source_refs whose inventory unit the runtime's own materialize scan marked
+ * `scan_status:"admitted"`. This is the TRUSTED, unforgeable signal that a source is a user
+ * runtime-target: `"admitted"` is written only by `admitInventoryUnit` during materialize, exists
+ * only when admission mode ran (opt-in `source_admission_selection`), and cannot be manufactured by
+ * a forged observation (it lives in `source-inventory.yaml`, a different artifact). Absent path /
+ * off-path → empty set → source-safety authorization collapses to the observation-flag-only Basis A,
+ * byte-identical to pre-Stage-2.
+ */
+async function readAdmittedSourceRefs(
+  sourceInventoryPath?: string | null,
+): Promise<ReadonlySet<string>> {
+  if (!sourceInventoryPath) return new Set<string>();
+  const inventory = await readYamlDocument<ReconstructSourceInventoryArtifact>(
+    sourceInventoryPath,
+  );
+  return new Set(
+    inventory.inventory_units
+      .filter((unit) => unit.scan_status === "admitted")
+      .map((unit) => path.resolve(unit.ref)),
+  );
 }
 
 function violation(args: {
@@ -200,16 +225,29 @@ export function deriveSourceSafetyVisibilityTier(
 function buildSafetyRowForObservation(
   observation: ReconstructSourceObservation,
   intendedConsumption: ReconstructSourceSafetyIntendedConsumption,
+  admittedSourceRefs: ReadonlySet<string>,
 ): ReconstructSourceSafetyRow {
   const explicitlyAuthorized = explicitConsumptionAuthorizations(observation)
     .has(intendedConsumption);
   // Defect-3 basis A (runtime-target provenance): a user-provided reconstruct
   // runtime-target source authorizes the outward tiers (material_claim,
   // public_output) by provenance. Scoped to the two upper tiers only — the
-  // internal tiers are already covered by runtimeInternalConsumption, and a
-  // non-target observation (is_runtime_target_source absent/false) never gets
-  // basis A, so this cannot leak to frontier-discovered sources.
-  const provenanceAuthorized = observation.is_runtime_target_source === true &&
+  // internal tiers are already covered by runtimeInternalConsumption.
+  // Basis A has TWO admissible proofs of the SAME concept (Stage 2 parity,
+  // design 20260723 §9): (1) the observation's own is_runtime_target_source flag
+  // (materialize-path initial observation), OR (2) the source_ref resolves to an
+  // inventory unit the runtime marked scan_status:"admitted". Proof (2) covers a
+  // user runtime-target file that admission DEFERRED and a later frontier round
+  // RECOVERED: that path is forced to stamp is_runtime_target_source:false
+  // (the boundary guard forbids target+trigger; delta requires the trigger), so
+  // the flag alone under-reports its true provenance. Keying proof (2) on the
+  // TRUSTED inventory census (never the observation) preserves forgery-resistance:
+  // a forged observation cannot manufacture an inventory unit, and the boundary
+  // mutual-exclusion guard is untouched. Off-path (no admitted units) → empty set
+  // → identical to proof (1) alone → cannot leak to frontier-discovered sources.
+  const runtimeTargetProven = observation.is_runtime_target_source === true ||
+    admittedSourceRefs.has(path.resolve(observation.source_ref));
+  const provenanceAuthorized = runtimeTargetProven &&
     (intendedConsumption === "material_claim" ||
       intendedConsumption === "public_output");
   const consumptionAuthorized =
@@ -266,24 +304,29 @@ function buildSafetyRowForObservation(
 
 function buildSafetyRowsForObservation(
   observation: ReconstructSourceObservation,
+  admittedSourceRefs: ReadonlySet<string>,
 ): ReconstructSourceSafetyRow[] {
   return INTENDED_CONSUMPTIONS.map((intendedConsumption) =>
-    buildSafetyRowForObservation(observation, intendedConsumption)
+    buildSafetyRowForObservation(observation, intendedConsumption, admittedSourceRefs)
   );
 }
 
 export function buildSourceSafetyLedgerFromSourceObservations(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef?: string | null;
+  // Stage 2 parity (design 20260723 §9): resolved source_refs of inventory units the runtime marked
+  // scan_status:"admitted". Absent/empty → off-path, identical to pre-Stage-2 (see readAdmittedSourceRefs).
+  admittedSourceRefs?: ReadonlySet<string>;
 }): ReconstructSourceSafetyLedgerArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  const admittedSourceRefs = args.admittedSourceRefs ?? new Set<string>();
   return {
     schema_version: "1",
     session_id: args.sourceObservations.session_id,
     created_at: isoNow(),
     source_observations_ref: args.sourceObservationsRef ?? null,
     safety_rows: args.sourceObservations.observations.flatMap(
-      buildSafetyRowsForObservation,
+      (observation) => buildSafetyRowsForObservation(observation, admittedSourceRefs),
     ),
   };
 }
@@ -400,8 +443,13 @@ export function validateSourceSafetyLedger(args: {
   sourceSafetyLedgerRef?: string | null;
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef?: string | null;
+  // Stage 2 parity (design 20260723 §9): MUST mirror the builder's admittedSourceRefs, else the D3
+  // basis check rejects the builder's own admitted-proof consumption_allowed rows. Absent/empty →
+  // off-path, identical to pre-Stage-2.
+  admittedSourceRefs?: ReadonlySet<string>;
 }): ReconstructSourceSafetyLedgerValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  const admittedSourceRefs = args.admittedSourceRefs ?? new Set<string>();
   const violations: ReconstructSourceSafetyValidationViolation[] = [];
   // G(a) deferred-7 slice 1: record the three obligations this validator fully enforces. Stamped here,
   // before the per-row loop, so they fire on zero-row input (the enforcement sites exist unconditionally).
@@ -589,7 +637,12 @@ export function validateSourceSafetyLedger(args: {
       deriveSourceSafetyVisibilityTier(row) === "consumption_allowed" &&
       expectedObservation
     ) {
-      const basisA = expectedObservation.is_runtime_target_source === true;
+      // Basis A now has two admissible proofs (design 20260723 §9): the observation flag OR the
+      // trusted inventory scan_status:"admitted" signal (see buildSafetyRowForObservation). Must
+      // stay in lockstep with the builder — otherwise a builder-authorized admitted-proof row would
+      // self-fail here as unjustified.
+      const basisA = expectedObservation.is_runtime_target_source === true ||
+        admittedSourceRefs.has(path.resolve(expectedObservation.source_ref));
       const basisB = explicitConsumptionAuthorizations(expectedObservation)
         .has(consumption);
       if (!basisA && !basisB) {
@@ -638,14 +691,20 @@ export function validateSourceSafetyLedger(args: {
 export async function writeSourceSafetyLedgerArtifact(args: {
   sourceObservationsPath: string;
   outputPath: string;
+  // Stage 2 parity (design 20260723 §9): when present, admitted user-target refs get material-claim
+  // provenance even when recovered via the frontier path. Callers pass this ONLY under the opt-in
+  // (params.sourceAdmissionSelection); absent/off → empty set → byte-identical to pre-Stage-2.
+  sourceInventoryPath?: string | null;
 }): Promise<ReconstructSourceSafetyLedgerArtifact> {
   const sourceObservations =
     await readYamlDocument<ReconstructSourceObservationsArtifact>(
       args.sourceObservationsPath,
     );
+  const admittedSourceRefs = await readAdmittedSourceRefs(args.sourceInventoryPath);
   const ledger = buildSourceSafetyLedgerFromSourceObservations({
     sourceObservations,
     sourceObservationsRef: path.resolve(args.sourceObservationsPath),
+    admittedSourceRefs,
   });
   await writeYamlDocument(args.outputPath, ledger);
   return ledger;
@@ -655,20 +714,25 @@ export async function writeSourceSafetyLedgerValidationArtifact(args: {
   sourceSafetyLedgerPath: string;
   sourceObservationsPath: string;
   outputPath: string;
+  // MUST mirror the builder's sourceInventoryPath (same opt-in gate) — the D3 basis check rejects
+  // the builder's admitted-proof rows otherwise. Absent/off → empty set → byte-identical.
+  sourceInventoryPath?: string | null;
 }): Promise<ReconstructSourceSafetyLedgerValidationArtifact> {
-  const [sourceSafetyLedger, sourceObservations] = await Promise.all([
+  const [sourceSafetyLedger, sourceObservations, admittedSourceRefs] = await Promise.all([
     readYamlDocument<ReconstructSourceSafetyLedgerArtifact>(
       args.sourceSafetyLedgerPath,
     ),
     readYamlDocument<ReconstructSourceObservationsArtifact>(
       args.sourceObservationsPath,
     ),
+    readAdmittedSourceRefs(args.sourceInventoryPath),
   ]);
   const validation = validateSourceSafetyLedger({
     sourceSafetyLedger,
     sourceSafetyLedgerRef: path.resolve(args.sourceSafetyLedgerPath),
     sourceObservations,
     sourceObservationsRef: path.resolve(args.sourceObservationsPath),
+    admittedSourceRefs,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;

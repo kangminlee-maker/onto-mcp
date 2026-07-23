@@ -17416,14 +17416,23 @@ export async function runReconstruct(
   const refreshSourceSafetyArtifacts = async (options?: {
     sourceObservationLineageIndexValidationPath?: string | null;
   }): Promise<void> => {
+    // Core Stage 2 provenance parity (design 20260723 §9): under the admission opt-in, pass the
+    // source-inventory so the safety ledger grants material-claim provenance to a user runtime-target
+    // file that admission DEFERRED and a later frontier round RECOVERED (stamped is_runtime_target_
+    // source:false by the frontier path). Gated on the opt-in AND self-gated by scan_status:"admitted"
+    // inside the ledger builder — off / normal-mode → omitted → byte-identical to pre-Stage-2.
+    const sourceSafetyInventoryPath =
+      params.sourceAdmissionSelection === true ? preparationRefs.source_inventory : null;
     sourceSafetyLedger = await writeSourceSafetyLedgerArtifact({
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceSafetyLedgerPath,
+      ...(sourceSafetyInventoryPath ? { sourceInventoryPath: sourceSafetyInventoryPath } : {}),
     });
     sourceSafetyLedgerValidation = await writeSourceSafetyLedgerValidationArtifact({
       sourceSafetyLedgerPath,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceSafetyLedgerValidationPath,
+      ...(sourceSafetyInventoryPath ? { sourceInventoryPath: sourceSafetyInventoryPath } : {}),
     });
     assertRuntimeValidationValid({
       artifactName: "source-safety-ledger",
