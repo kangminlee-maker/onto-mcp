@@ -3,11 +3,12 @@ import {
   foldObservationsToBudget,
   SOURCE_BREADTH_FOLD_LEVELS,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
-  SOURCE_OBSERVATION_DIRECTIVE_PROMPT_BYTE_BUDGET,
+  SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
   type BreadthFoldLevel,
 } from "./source-breadth-fold.js";
 import {
   assertPromptPayloadByteLimit,
+  createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
   promptPayloadByteCount,
 } from "./run.js";
@@ -101,7 +102,7 @@ describe("foldObservationsToBudget — pick the finest rung that fits (pure sele
 
   it("exposes the canonical ladder finest→coarsest", () => {
     expect(SOURCE_BREADTH_FOLD_LEVELS).toEqual(["full", "inventory_skeleton", "one_line"]);
-    expect(SOURCE_OBSERVATION_DIRECTIVE_PROMPT_BYTE_BUDGET).toBeLessThan(1_048_576); // below codex ceiling
+    expect(SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET).toBeLessThan(1_048_576); // below codex 1 MiB ceiling
     expect(SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET).toBeLessThan(
       CODE_STRUCTURE_INVENTORY_PROMPT_CHAR_BUDGET,
     );
@@ -252,5 +253,146 @@ describe("assertPromptPayloadByteLimit / promptPayloadByteCount — byte semanti
         byteLimit: 10_000,
       }),
     ).not.toThrow();
+  });
+});
+
+describe("PR-2 — always-on byte guard wired to both dispatch surfaces (DW-2b)", () => {
+  // DW-2a (byte-identical below budget) is proven by the full suite staying green: every existing
+  // directive/admission test dispatches unchanged (the guard is a no-op under budget). These tests
+  // prove DW-2b: an OVER-budget catalog fails loud PRE-dispatch (deterministic budget error, not a
+  // codex nonzero-exit) and the llmCall is NEVER reached.
+
+  // A code inventory whose raw size forces projectCodeInventoryForPrompt to project near its 40k cap.
+  const bigCodeInventory = () => {
+    const spans = Array.from({ length: 260 }, (_, i) => ({
+      line_start: i * 4 + 1,
+      line_end: i * 4 + 4,
+      kind: "function_decl" as const,
+      symbol_names: [`symbolNumber${i}WithAReasonablyLongDescriptiveName`],
+      depth: 1,
+      doc_first_line: `Documentation first line describing the behavior of symbol number ${i} in detail.`,
+      signature_line: `export function symbolNumber${i}(argument: SomeParameterType, other: AnotherType): ResultType {`,
+    }));
+    return {
+      schema_version: "1" as const,
+      language: "typescript" as const,
+      line_count: 260 * 4,
+      content_sha256: "c0de",
+      extractor_logic_sha256: "10g1c",
+      symbol_tiles: {
+        spans,
+        hierarchy: spans.map((s) => ({
+          key: `${s.line_start}-${s.line_end}`,
+          kind: s.kind,
+          symbol_name: s.symbol_names[0] ?? null,
+          child_keys: [],
+        })),
+        root_key: "1-1040",
+      },
+    };
+  };
+
+  const overBudgetObservations = () => {
+    const inv = bigCodeInventory();
+    // 40 files × ~40k projected inventory ≈ 1.6 MB > the 1,000,000-byte budget.
+    const observations = Array.from({ length: 40 }, (_, i) => ({
+      observation_id: `obs_${i}`,
+      target_material_kind: "code" as const,
+      adapter_id: "fixture-observer",
+      source_ref: `/src/module${i}/service.ts`,
+      location: "file",
+      summary: `Service module ${i}.`,
+      structural_data: { content_excerpt: "export const handler = () => doWork();", code_structure_inventory: inv },
+    }));
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-07-24T00:00:00.000Z",
+      observations,
+      skipped_refs: [],
+      validation_results: [],
+    };
+  };
+
+  it("directive: an over-budget catalog fails loud pre-dispatch (llmCall never reached)", async () => {
+    let llmCalls = 0;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () => {
+        llmCalls += 1;
+        return Promise.resolve({ text: JSON.stringify({ selected_observations: [], open_questions: [] }) });
+      },
+    });
+    await expect(
+      author.writeSourceObservationDirective({
+        sessionId: "session-1",
+        intent: "reconstruct the api surface",
+        targetMaterialProfile: {} as never,
+        sourceObservations: overBudgetObservations() as never,
+        sourceScoutPack: null,
+        sourceScoutPackValidation: null,
+        sourceScoutPackRef: null,
+        sourceScoutPackValidationRef: null,
+      }),
+    ).rejects.toThrow(/SourceObservationDirective compact prompt exceeds deterministic prompt budget: \d+ > \d+ bytes/);
+    expect(llmCalls).toBe(0); // guard fired BEFORE dispatch
+  });
+
+  const overBudgetInventory = () => {
+    // ~2500 admitted units, each with a ~500-char outline excerpt → outline catalog ≈ 1.3 MB > budget.
+    const excerpt = "x".repeat(500);
+    const inventory_units = Array.from({ length: 2500 }, (_, i) => ({
+      ref: `/src/module${i}/file.ts`,
+      target_material_kind: "code" as const,
+      scan_status: "admitted" as const,
+      outline: {
+        content_sha256: "c0de",
+        char_count: 500,
+        line_count: 20,
+        size_bytes: 500,
+        outline_excerpt: excerpt,
+        outline_excerpt_truncated: false,
+      },
+    }));
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-07-24T00:00:00.000Z",
+      inventory_units,
+      skipped_refs: [],
+    };
+  };
+
+  it("admission: an over-budget outline catalog fails loud pre-dispatch (llmCall never reached)", async () => {
+    let llmCalls = 0;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () => {
+        llmCalls += 1;
+        return Promise.resolve({ text: JSON.stringify({ frontier_refs: [], no_next_frontier_rationale: "none" }) });
+      },
+    });
+    // admission compacts the profile (compactTargetMaterialProfileForPrompt reads detection.per_ref
+    // etc.), so a minimal-but-valid profile is required to reach the guard.
+    const minimalProfile = {
+      schema_version: "1",
+      session_id: "session-1",
+      target_refs: [],
+      target_material_kind: "code",
+      target_material_kind_candidates: [],
+      support_status: "supported",
+      unsupported_reason: null,
+      detection: { owner: "runtime", confidence: "high", confidence_basis: "fixture", per_ref: [] },
+      selected_source_profiles: [],
+    };
+    await expect(
+      author.writeSourceAdmissionSelection({
+        sessionId: "session-1",
+        intent: "reconstruct the api surface",
+        targetMaterialProfile: minimalProfile as never,
+        sourceInventory: overBudgetInventory() as never,
+        admissionFileLimit: 16,
+        admissionFloor: 1,
+      }),
+    ).rejects.toThrow(/SourceAdmissionSelection compact prompt exceeds deterministic prompt budget: \d+ > \d+ bytes/);
+    expect(llmCalls).toBe(0); // guard fired BEFORE dispatch
   });
 });

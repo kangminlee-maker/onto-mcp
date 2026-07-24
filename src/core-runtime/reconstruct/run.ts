@@ -306,6 +306,7 @@ import {
   regionKey,
   type ReconstructSourceObservation,
 } from "./source-observations.js";
+import { SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET } from "./source-breadth-fold.js";
 import {
   COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
   COMPREHENSION_ARTIFACT_CONTRACT_VERSION,
@@ -12697,6 +12698,33 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const availableObservationIds = cappedObservations.map(
         (observation) => observation.observation_id,
       );
+      const directiveUserPayload = {
+        intent: input.intent,
+        target_material_profile: input.targetMaterialProfile,
+        available_observation_ids: availableObservationIds,
+        selection_limit: SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT,
+        source_scout_pack: sourceScoutPackPromptPayload({
+          sourceScoutPack: input.sourceScoutPack,
+          sourceScoutPackValidation: input.sourceScoutPackValidation,
+          sourceScoutPackRef: input.sourceScoutPackRef,
+          sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
+        }),
+        source_observations: projectObservationsForPrompt(input.sourceObservations, {
+          observationIds: availableObservationIds,
+          contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
+        }),
+      };
+      // Always-on total-size safety net (design 20260723 §7 Alt-4c): the directive projects the
+      // pre-selection candidate catalog, whose file-count axis is unbounded — a large corpus overflows
+      // the codex worker stdin limit. Refuse pre-dispatch with an actionable error instead of codex's
+      // opaque nonzero-exit. Byte-identical below budget; PR-3's opt-in fold turns the fail-loud into a
+      // bounded success. Not gated by the fold opt-in — a safety net that is opt-in is not a safety net.
+      assertPromptPayloadByteLimit({
+        artifactName: "SourceObservationDirective",
+        systemPrompt: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
+        userPayload: directiveUserPayload,
+        byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+      });
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -12704,22 +12732,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         artifactName: "SourceObservationDirective",
         maxTokens: 2400,
         systemPrompt: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
-        userPayload: {
-          intent: input.intent,
-          target_material_profile: input.targetMaterialProfile,
-          available_observation_ids: availableObservationIds,
-          selection_limit: SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT,
-          source_scout_pack: sourceScoutPackPromptPayload({
-            sourceScoutPack: input.sourceScoutPack,
-            sourceScoutPackValidation: input.sourceScoutPackValidation,
-            sourceScoutPackRef: input.sourceScoutPackRef,
-            sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
-          }),
-          source_observations: projectObservationsForPrompt(input.sourceObservations, {
-            observationIds: availableObservationIds,
-            contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
-          }),
-        },
+        userPayload: directiveUserPayload,
       });
       const byId = new Map(
         cappedObservations.map((observation) => [
@@ -13025,6 +13038,25 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeSourceAdmissionSelection(input) {
+      const admissionUserPayload = {
+        intent: input.intent,
+        target_material_profile:
+          compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+        admitted_outlines: admittedOutlinesForPrompt(input.sourceInventory),
+        admission_budget: {
+          file_limit: input.admissionFileLimit,
+          must_select_at_least: input.admissionFloor,
+        },
+      };
+      // Always-on total-size safety net (design 20260723 §7, Alt-5b): the admitted-outline catalog
+      // scales with the admitted file count — the second count-scaling dispatch surface. Same codex
+      // stdin ceiling as the directive, so the same byte budget guards it. Byte-identical below budget.
+      assertPromptPayloadByteLimit({
+        artifactName: "SourceAdmissionSelection",
+        systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
+        userPayload: admissionUserPayload,
+        byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+      });
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -13032,16 +13064,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         artifactName: "SourceAdmissionSelection",
         maxTokens: 2000,
         systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
-        userPayload: {
-          intent: input.intent,
-          target_material_profile:
-            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
-          admitted_outlines: admittedOutlinesForPrompt(input.sourceInventory),
-          admission_budget: {
-            file_limit: input.admissionFileLimit,
-            must_select_at_least: input.admissionFloor,
-          },
-        },
+        userPayload: admissionUserPayload,
       });
       const frontierRefs = records(raw.frontier_refs ?? [], "frontier_refs")
         .map((frontier, index) => {

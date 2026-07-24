@@ -42,12 +42,25 @@ export const SOURCE_BREADTH_FOLD_LEVELS: readonly BreadthFoldLevel[] = [
 ];
 
 /**
- * Byte budget for the source-observation-directive prompt payload. PRELIMINARY — set below codex's
- * effective stdin limit (measured rejection at 1,349,907 bytes; codex-internal ceiling ~1,048,576, no
- * literal in src). Pinned empirically against the installed codex CLI when the guard is wired (PR-2,
- * done-when DW-2c). Conservative so the guard only refuses payloads codex would also reject.
+ * The codex worker's stdin input ceiling, in UTF-8 bytes: 1 MiB (2^20). Established by the value bench,
+ * which observed a real codex rejection at 1,349,907 bytes against this limit (no literal in src — it is
+ * codex-CLI-internal). A live-CLI binary-search probe could confirm the exact boundary (design 20260723
+ * DW-2c); deferred because the guard budget below sits safely under it either way.
  */
-export const SOURCE_OBSERVATION_DIRECTIVE_PROMPT_BYTE_BUDGET = 1_000_000;
+export const CODEX_PROMPT_STDIN_BYTE_LIMIT = 1_048_576;
+
+/**
+ * Byte budget for a source-observation SELECTION prompt payload — shared by both count-scaling dispatch
+ * surfaces (source-observation-directive AND source-admission-selection), which hit the same codex worker
+ * stdin ceiling. Set a margin BELOW the ceiling because the measured payload (systemPrompt + userPrompt)
+ * is not the whole dispatch: callCodexCli joins them with a "\n\n---\n\n" separator and codex adds its own
+ * framing, so the guard must fire slightly before the raw ceiling. The margin (~8 KiB) keeps the guard
+ * conservative — it only ever refuses payloads codex would ALSO reject (so every currently-succeeding run
+ * stays byte-identical), while the narrow over-refusal band (codex-accepts-but-guard-refuses) fails loud
+ * with an actionable remedy (enable source_breadth_fold) rather than a codex opaque exit. Tightenable via
+ * the DW-2c probe.
+ */
+export const SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET = CODEX_PROMPT_STDIN_BYTE_LIMIT - 8_192;
 
 /**
  * Per-observation code_structure_inventory ceiling (chars) for the inventory_skeleton rung. PRELIMINARY /
