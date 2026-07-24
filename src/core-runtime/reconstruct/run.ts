@@ -1450,6 +1450,35 @@ function promptPayloadCharCount(systemPrompt: string, userPayload: unknown): num
   return systemPrompt.length + JSON.stringify(userPayload, null, 2).length;
 }
 
+/**
+ * Byte twin of {@link assertPromptPayloadCharLimit} (design 20260723 §3.4). The codex worker rejects
+ * on stdin BYTES, not chars (llm-caller.ts writes `combinedPrompt` unconditionally), so a char count
+ * under a limit does NOT guarantee the UTF-8 byte payload is under codex's ceiling for multi-byte
+ * source (e.g. Korean documents). This measures the exact serialized dispatch payload in UTF-8 bytes.
+ * INERT until wired to a dispatch surface (PR-2). Mirrors the byte-cap precedent at
+ * SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP.
+ */
+export function promptPayloadByteCount(systemPrompt: string, userPayload: unknown): number {
+  return (
+    Buffer.byteLength(systemPrompt, "utf8") +
+    Buffer.byteLength(JSON.stringify(userPayload, null, 2), "utf8")
+  );
+}
+
+export function assertPromptPayloadByteLimit(args: {
+  artifactName: string;
+  systemPrompt: string;
+  userPayload: unknown;
+  byteLimit: number;
+}): void {
+  const totalBytes = promptPayloadByteCount(args.systemPrompt, args.userPayload);
+  if (totalBytes > args.byteLimit) {
+    throw new Error(
+      `${args.artifactName} compact prompt exceeds deterministic prompt budget: ${totalBytes} > ${args.byteLimit} bytes. Split or reduce the runtime projection before dispatch.`,
+    );
+  }
+}
+
 async function sha256File(filePath: string): Promise<string> {
   return crypto.createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
 }
@@ -10348,6 +10377,14 @@ interface ObservationPromptPayloadOptions {
   contentExcerptCharLimit?: number;
   includeStructuralData?: boolean;
   /**
+   * Breadth-fold (design 20260723) inventory-skeleton rung: per-observation ceiling (chars) for the
+   * projected `code_structure_inventory`, threaded to `projectCodeInventoryForPrompt`. When omitted the
+   * projector's own default (CODE_STRUCTURE_INVENTORY_PROMPT_CHAR_BUDGET = 40_000) applies — byte-
+   * identical for every current caller. A tighter budget demotes per-file inventory DETAIL only; the
+   * observation set and every observation_id stay projected (breadth preserved).
+   */
+  codeInventoryCharBudget?: number;
+  /**
    * Seed-authoring opt-in: a document observation may project its whole captured prose
    * (instead of `contentExcerptCharLimit`) so purpose/candidate/seed authoring sees the
    * document tail. Set only by seed-authoring callers — NOT by post-seed aggregate
@@ -10575,6 +10612,7 @@ function compactStructuralDataForPrompt(
   expandDocument: boolean,
   documentExcerptCharBudget: number | undefined,
   sourceRef: string | null | undefined,
+  codeInventoryCharBudget?: number | undefined,
 ): Record<string, unknown> {
   const compacted: Record<string, unknown> = { ...structuralData };
 
@@ -10606,7 +10644,12 @@ function compactStructuralDataForPrompt(
   // inventory, and the semantic-map stage folds from the artifact, never from this projection.
   const codeInventory = compacted.code_structure_inventory;
   if (codeInventory !== null && typeof codeInventory === "object" && !Array.isArray(codeInventory)) {
-    const projection = projectCodeInventoryForPrompt(codeInventory as CodeStructureInventory);
+    // codeInventoryCharBudget undefined → projector uses its 40_000 default (byte-identical). A
+    // tighter budget (breadth-fold inventory-skeleton rung) demotes hierarchy→imports→spans DETAIL.
+    const projection = projectCodeInventoryForPrompt(
+      codeInventory as CodeStructureInventory,
+      codeInventoryCharBudget,
+    );
     compacted.code_structure_inventory = projection.inventory;
     if (projection.truncated) {
       compacted.code_structure_inventory_projection_truncated = true;
@@ -10779,6 +10822,7 @@ export function observationPromptPayload(
           expandDocument,
           documentExcerptCharBudgetForProjection,
           observation.source_ref,
+          options.codeInventoryCharBudget,
         );
         payload.structural_data = compacted;
         // An expanded text document whose excerpt the budget actually sliced — the
