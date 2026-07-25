@@ -310,6 +310,7 @@ import {
   type BreadthFoldDisclosure,
   type BreadthFoldLevel,
   foldObservationsToBudget,
+  projectBreadthFoldTailRung,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
 } from "./source-breadth-fold.js";
@@ -10591,7 +10592,13 @@ function admittedOutlinesForPrompt(
       };
       // Coarsest rung: drop BOTH variable-size fields (the measured ~1.2 KB of the ~1.36 KB per-unit
       // projection), leaving the anchor. The LM selects on path/kind/size alone at this rung.
-      if (level === "one_line") return anchor;
+      //
+      // `summary_anchor`/`anchor` are the DIRECTIVE surface's tail rungs (PR-4b), where they drop
+      // `location` and `summary`. This surface has neither field — its `one_line` IS already the anchor
+      // shape — so all three rungs coincide here. Handled EXPLICITLY rather than by falling through:
+      // an unhandled coarse rung would reach the `full`-shaped return below and project MORE detail at a
+      // COARSER rung, silently inverting the ladder's non-increasing invariant on this surface.
+      if (level === "one_line" || level === "summary_anchor" || level === "anchor") return anchor;
       const excerpt = unit.outline.outline_excerpt;
       const folded = level === "inventory_skeleton";
       return {
@@ -12798,6 +12805,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // is today's exact projection — the byte-identical hinge; the fold reaches a coarser rung only
       // under overflow.
       const projectCatalogAtFoldLevel = (level: BreadthFoldLevel): unknown[] => {
+        // Tail rungs (PR-4b) are DERIVED from the `one_line` rows by dropping keys — never rebuilt by a
+        // parallel row-builder. A strict key subset of the same rows, in the same order, with the same
+        // values, is smaller than its parent on EVERY corpus, so the ladder's non-increasing invariant
+        // holds structurally instead of corpus-contingently. `location` goes first: it is byte-identical
+        // to `source_ref` on every whole-file observation (100% of the measured corpus) yet costs ~142
+        // B/row, while `summary` costs ~55 B/row and carries the selection signal.
+        if (level === "summary_anchor" || level === "anchor") {
+          return projectBreadthFoldTailRung(projectCatalogAtFoldLevel("one_line"), level);
+        }
         const options: ObservationPromptPayloadOptions =
           level === "one_line"
             ? { observationIds: availableObservationIds, includeStructuralData: false }

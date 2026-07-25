@@ -16,17 +16,21 @@
  * hashes, source-safety authority, the zero-observation gate) is preserved by construction.
  *
  * It never throws for a content reason (mirrors projectCodeInventoryForPrompt's pure/total contract): when
- * no rung fits (extreme scale — the available-observation-id index itself exceeds budget, i.e. the
- * multi-repo axis), it returns the coarsest rung with `disclosure.over_budget = true`, and the caller's
- * always-on byte guard turns that into an honest fail-loud before dispatch.
+ * no rung fits (extreme scale — the NAVIGATION IDENTITY alone exceeds budget: ids plus the per-row
+ * absolute-path text that survives every rung, the multi-repo axis), it returns the coarsest rung with
+ * `disclosure.over_budget = true`, and the caller's always-on byte guard turns that into an honest
+ * fail-loud before dispatch.
  *
  * WIRED on BOTH count-scaling dispatch surfaces, behind the one opt-in
  * `reconstruct.execution.source_breadth_fold` (absent/off = today's flat projection, byte-identical):
  * the source-observation-directive's candidate catalog (PR-3) and the admission-selection's
- * admitted-outline catalog (PR-4). The budget constant additionally backs the always-on byte guard on
+ * admitted-outline catalog (PR-4a). The budget constant additionally backs the always-on byte guard on
  * both (PR-2), which stays ungated so an over_budget fold still fails loud pre-dispatch. Measured over
  * the real Stage-2 corpus, admission binds FIRST (~1.36 KB/unit → overflow at ~750 admitted files, vs
- * the directive's ~0.49 KB/observation → ~2,000); folding admission moves its ceiling to ~4,200.
+ * the directive's ~0.49 KB/observation → ~2,000); folding admission moves its ceiling to ~4,200, and the
+ * PR-4b tail rungs move the directive's from 2,007 to 3,445 — so the DIRECTIVE is now the first-binding
+ * surface. Beyond that band the per-row absolute-path text dominates (relative-path projection is the
+ * measured next lever, not collapsing ids: design 20260723 §3.3 correction).
  */
 
 /**
@@ -37,14 +41,75 @@
  *   inventory_skeleton → same, with a tighter codeInventoryCharBudget (hierarchy→imports→spans demotion)
  *   one_line           → includeStructuralData:false → {observation_id, target_material_kind, source_ref,
  *                        location, summary} — the always-present semantic anchor, no spans/imports/excerpt
+ *   summary_anchor     → one_line − `location` (PR-4b)
+ *   anchor             → summary_anchor − `summary` (PR-4b): {observation_id, target_material_kind,
+ *                        source_ref} — navigation identity only, the last rung before fail-loud
+ *
+ * The tail rungs are STRICT KEY SUBSETS of `one_line`, each of the next: one_line ⊃ summary_anchor ⊃
+ * anchor, same rows, same order, same values. That is what makes the ladder's non-increasing invariant
+ * (design DW-1f) STRUCTURAL rather than corpus-contingent — a rung built by a parallel row-builder could
+ * measure larger than its parent on some corpus, which is exactly why the design's original
+ * directory-rollup rung was rejected (measured 353.5 B/unit vs 302 for the rung above it at one file per
+ * directory: a floor that is not always a floor).
+ *
+ * Field ORDER within the tail is measured, not guessed. On the real corpus `location` is byte-identical
+ * to `source_ref` on 100% of rows (whole-file observations; region decomposition is default-off) yet
+ * costs 142 B/row, while `summary` costs 55 B/row and is the LM's actual selection signal — the value
+ * bench found `one_line` matching `full` at the same-rung noise floor while carrying only ref+summary
+ * semantics. So the redundant-and-expensive field goes first and the informative-and-cheap field goes
+ * last. Under region decomposition `location` stops being redundant (it becomes a short `L<a>-<b>` token,
+ * the only thing distinguishing siblings of one file) but also stops being expensive; dropping it at
+ * `summary_anchor` costs region NAVIGATION granularity at that rung, which is acceptable because the
+ * catalog is navigation-only (ids are what get selected; evidence refs are minted from the STORED
+ * observations) and because the alternative in this band is a hard dispatch failure.
  */
-export type BreadthFoldLevel = "full" | "inventory_skeleton" | "one_line";
+export type BreadthFoldLevel =
+  | "full"
+  | "inventory_skeleton"
+  | "one_line"
+  | "summary_anchor"
+  | "anchor";
 
 export const SOURCE_BREADTH_FOLD_LEVELS: readonly BreadthFoldLevel[] = [
   "full",
   "inventory_skeleton",
   "one_line",
+  "summary_anchor",
+  "anchor",
 ];
+
+/** The rungs BELOW `one_line`, which are derived from its rows rather than re-projected (PR-4b). */
+export type BreadthFoldTailLevel = Extract<BreadthFoldLevel, "summary_anchor" | "anchor">;
+
+/**
+ * Keys each tail rung KEEPS, as strict descending subsets of the `one_line` row. Declared here (not at
+ * the call site) so the subset relation that makes DW-1f structural is stated once, in the module that
+ * owns the ladder, and is directly assertable.
+ */
+export const SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS: Readonly<
+  Record<BreadthFoldTailLevel, readonly string[]>
+> = {
+  summary_anchor: ["observation_id", "target_material_kind", "source_ref", "summary"],
+  anchor: ["observation_id", "target_material_kind", "source_ref"],
+};
+
+/**
+ * Project `one_line` rows down to a tail rung by DROPPING KEYS — never by rebuilding rows. Pure, total,
+ * order-preserving, value-preserving: the result is the same rows with a subset of their keys, so it is
+ * smaller than its input on every corpus (the structural basis of the ladder's non-increasing invariant).
+ * Absent keys are skipped rather than emitted as null, so a row that never carried `summary` projects
+ * identically at both tail rungs instead of gaining a key on the way down.
+ */
+export function projectBreadthFoldTailRung(
+  oneLineRows: readonly unknown[],
+  level: BreadthFoldTailLevel,
+): unknown[] {
+  const keep = SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS[level];
+  return oneLineRows.map((row) => {
+    const record = row as Record<string, unknown>;
+    return Object.fromEntries(keep.filter((key) => key in record).map((key) => [key, record[key]]));
+  });
+}
 
 /**
  * The codex worker's stdin input ceiling, in UTF-8 bytes: 1 MiB (2^20). Established by the value bench,
