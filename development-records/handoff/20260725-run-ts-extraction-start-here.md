@@ -1,6 +1,9 @@
-# run.ts 개념별 파일 추출 start-here (2026-07-25, /clear 후 재개)
+# run.ts 개념별 파일 추출 start-here — **1차 통과 기록** (2026-07-25)
 
-> **다음 작업 = run.ts(21,576줄) 개념별 파일 추출.** owner 승인 범위는 **순수 이동(로직 무변경)** 이며, 거대 함수 분해는 **명시적으로 기각**됐다(§1.1). 재개 시 pwd/branch/HEAD 재검증, 코드 인용은 심볼로 재확인(**라인 번호는 힌트일 뿐 스테일**).
+> **이 문서는 1차 통과의 기록이다. 재개 진입점은 [20260726-run-ts-extraction-2nd-pass-start-here.md](20260726-run-ts-extraction-2nd-pass-start-here.md)** (2차 통과).
+> 아래 §0.2의 계획 정정 5건과 §3.2의 검증 3층은 2차에서도 그대로 유효하다.
+
+> **작업 = run.ts(21,576줄) 개념별 파일 추출.** owner 승인 범위는 **순수 이동(로직 무변경)** 이며, 거대 함수 분해는 **명시적으로 기각**됐다(§1.1). 재개 시 pwd/branch/HEAD 재검증, 코드 인용은 심볼로 재확인(**라인 번호는 힌트일 뿐 스테일**).
 
 ## 0. 상태 핀 (재개 전 확인)
 
@@ -35,6 +38,7 @@ npx tsx scripts/run-extraction-identity.mts  # PASS (MOVED 302 / STAYED 90 / 나
 3. **`directive-author` 하나로 받지 않았다.** 195선언/7,665줄을 dump 모듈로 두는 건 concept economy 위반이라, 같은 커터로 bottom-up 8모듈로 나눴다(§0.1 `da65652` 커밋 메시지에 모듈별 규모).
 4. **테스트 import는 tsc가 못 잡는다.** `tsconfig.json`이 테스트를 제외하므로, 이동한 심볼을 참조하던 테스트는 tsc green인 채로 vitest에서만 터진다. 매 배치마다 vitest를 돌려야 한다(4회 연속 같은 유형으로 재현).
 5. **`run.ts` 소스 텍스트를 스캔하는 게이트·테스트가 표면 이동을 못 따라간다.** 5차에서 4종(`check:ts-scripts`·`check:spec-defaults`·`check:prompt-projection-parity`·`check:final-output-sections-parity`)과 telemetry 커버리지 가드 1종이 걸렸다. 파서를 다중 파일/다중 import 블록으로 일반화하고, **일반화 후 negative control로 여전히 FAIL하는지 확인**해야 한다(공허 통과 방지).
+6. **정정 5의 더 위험한 변종 — 게이트가 실패하지 **않으면서** 커버리지를 잃는다.** 2026-07-26 발견: `check:graceful-signal-rethrow`(G11)가 run.ts 한 파일만 스캔하는데, 1차 추출로 **27개 catch 중 16개가 모듈로 빠져나갔는데도 green**이었다(run.ts에 11개가 남아 "0개면 실패" 가드가 발화하지 않음). 코드는 정상이었지만 게이트가 지키던 표면이 줄었다. `RUN_SURFACE_REFS` 목록 + **파일별 비어있음 가드**로 수정하고 negative control 2종 확인(2차 문서 §2). **표면이 쪼개진 뒤에는 "게이트가 green이다"가 "게이트가 여전히 같은 것을 지킨다"를 뜻하지 않는다.**
 
 ## 1. 직전까지 (무엇이 끝났나)
 
@@ -126,18 +130,13 @@ top-level 선언 **392개가 전부 단일 SCC**다. "함께 움직여야만 하
 - 커밋 전 `git add`는 **경로 명시**. **`git add -A` 금지**(owner 지시).
 - main에 직접 커밋 금지. 브랜치에서 작업.
 
-## 4. owner 결정 대기 — 죽은 코드
+## 4. 죽은 코드 — **백로그로 이관됨** (2026-07-26)
 
-`deterministicOntologySeedTimeoutRecovery`(**559줄**)가 `src/` 전체에서 **선언 줄에만 등장**한다. 여기에만 딸린 `runtimeOntologyHandoffScaffold`(166), `seedPlacementForDisposition`(49), `selectedSourcePurposeCandidateForSeed`, `dispositionEvidenceRefs`, `seedSlug`, `titleFromId`, `uniqueRuntimeSeedId` 등이 연쇄로 죽어 **약 830줄**이다. `countBy`, `enumChoices`도 선언만 있다.
+`deterministicOntologySeedTimeoutRecovery` 외 11심볼(**842줄**, 실측 재계산치)의 처분은 이 작업의 범위 밖이며 owner 결정 대기 항목이다. 조사 내용·선택지·권장 기본값은 백로그 기록이 소유한다:
 
-**그냥 지우면 안 되는 이유**(조사 완료):
-- 도입 커밋 `0f2d036`(2026-06-04) **시점에 이미 참조 수 1**이었다. 즉 **처음부터 배선된 적이 없다** — 나중에 쓰이다 안 쓰이게 된 게 아니다.
-- 같은 시기 설계 기록 `development-records/plans/20260613-reconstruct-opt-phase1-baseline-findings.md`가 **timeout recovery가 16개 유닛 중 3개뿐**인 것을 갭으로 지목한다.
-- 즉 이건 "쓸모없어진 코드"가 아니라 **원하던 기능인데 배선이 빠진 것**일 가능성이 높다.
+→ **[tracking/20260726-reconstruct-timeout-recovery-unwired-backlog.md](../tracking/20260726-reconstruct-timeout-recovery-unwired-backlog.md)**
 
-**owner에게 물을 것**: 삭제(죽은 무게 제거) vs 배선(설계가 지적한 갭을 메움) vs 보류(현상 유지하고 리팩토링만). 답 나오기 전엔 **건드리지 않고 그대로 옮긴다**.
-
-`createDirectCallReconstructConfirmationProvider`(192줄)는 "도달 불가" 버킷에 있지만 **export되어 API 계층이 쓴다**. 죽은 코드가 아니다 — 계획기의 root 집합에 없을 뿐이다. 혼동 금지.
+추출 작업 중에는 **건드리지 않고 그대로 옮긴다**(권장 기본값 = 보류).
 
 ## 5. 도구
 

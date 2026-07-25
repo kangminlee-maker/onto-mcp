@@ -26,17 +26,31 @@ const TOP_N = VERBOSE ? Number.MAX_SAFE_INTEGER : 12;
  * run(orchestrator)는 "옮기지 않고 남는 것"을 재는 대조군이므로 항상 마지막에 둔다.
  */
 const MODULES: Record<string, readonly string[]> = {
-  "graceful-terminal": [
-    "isZeroObservationGracefulTerminalEligible",
-    "GracefulTerminalSignal",
-    "isGracefulTerminalSignal",
-    "SEED_READINESS_TERMINAL_ROUTE",
+  "semantic-map-resume": [
+    "buildSemanticMapResumeValidationArtifact",
+    "prepareSemanticMapResumeContext",
   ],
-  "leaf-read-stage": ["runSpreadsheetLeafReadStage"],
-  "value-read-stage": ["runMaturationValueReadStage"],
-  "semantic-map-stage": ["runSemanticMapStage"],
-  "run-manifest": ["createRunManifest"],
-  "directive-author": ["createDirectCallReconstructDirectiveAuthor"],
+  "final-output-assembly": [
+    "finalOutputProvenanceSectionBindings",
+    "appendFinalOutputUnresolvedRevisionSection",
+    "appendFinalOutputDocumentProjectionTruncationSection",
+    "appendFinalOutputWorkbookInventoryProjectionTruncationSection",
+    "appendFinalOutputCodeInventoryProjectionTruncationSection",
+    "appendFinalOutputProvenanceFooter",
+    "appendFinalOutputProvenanceBindingsSection",
+    "appendFinalOutputAnswerabilitySection",
+    "appendFinalOutputClaimProjectionSection",
+    "appendFinalOutputArtifactTruthSection",
+  ],
+  "source-admission-selection-stage": [
+    "runSourceAdmissionSelectionStage",
+    "observeAcceptedFrontierRefs",
+    "validateSourceFrontier",
+  ],
+  "authored-artifact-reuse": [
+    "authoredArtifactReuseMatch",
+    "sourceObservationsReuseSha256",
+  ],
   "run(orchestrator)": ["runReconstruct"],
 };
 

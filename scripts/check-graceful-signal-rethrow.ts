@@ -5,7 +5,8 @@
  * that assembles the honest blocked/limited terminal. Any intermediate catch that SWALLOWS or WRAPS
  * the error (a degrade, a retry, a telemetry sink) would absorb the signal and turn an honest
  * terminal into a crash or a degraded result. To keep that impossible as new sites are added, this
- * guard inventories EVERY catch clause in run.ts and requires each one to either:
+ * guard inventories EVERY catch clause on the run surface (RUN_SURFACE_REFS) and requires each one
+ * to either:
  *   - be a provably-unconditional-direct-rethrow (`catch (e) { throw e; }`, no branches), OR
  *   - make its FIRST statement `if (isGracefulTerminalSignal(<e>)) throw <e>;` (rethrow guard) or
  *     `if (isGracefulTerminalSignal(<e>)) return …;` (the run-level handler).
@@ -25,7 +26,24 @@ const PROJECT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const RUN_TS = path.join(PROJECT_ROOT, "src/core-runtime/reconstruct/run.ts");
+/**
+ * The run-level terminal surface. runReconstruct's catch chain used to sit entirely in run.ts; the
+ * run.ts concept extraction (2026-07-25) moved 16 of its 27 catch clauses into modules, so the
+ * guard scans run.ts PLUS every module that took catch clauses out of it — a catch that moves must
+ * stay covered, and a single-file scan would have kept passing over a silently shrinking subject
+ * set. Modules that predate the extraction (run-control-validation.ts, materialize-preparation.ts,
+ * record.ts, …) were never in this guard's scope and stay out of it; adding them is a scope
+ * decision, not a retarget.
+ */
+const RUN_SURFACE_REFS = [
+  "src/core-runtime/reconstruct/run.ts",
+  "src/core-runtime/reconstruct/authoring-llm-call.ts",
+  "src/core-runtime/reconstruct/direct-call-directive-author.ts",
+  "src/core-runtime/reconstruct/leaf-read-stage.ts",
+  "src/core-runtime/reconstruct/semantic-map-authoring.ts",
+  "src/core-runtime/reconstruct/semantic-map-stage.ts",
+  "src/core-runtime/reconstruct/value-read-stage.ts",
+];
 const LEAF_READER_TS = path.join(
   PROJECT_ROOT,
   "src/core-runtime/reconstruct/leaf-reader.ts",
@@ -35,14 +53,26 @@ const LLM_FAILURE_GUARD_FN = "readReconstructLlmDispatchFailureError";
 
 type Status = "guarded" | "handler" | "exempt-rethrow" | "VIOLATION";
 interface Finding {
+  /** repo-relative path of the scanned file — findings now span several modules. */
+  file: string;
   line: number;
   varName: string;
   status: Status;
   detail: string;
 }
 
-const source = fs.readFileSync(RUN_TS, "utf8");
-const sf = ts.createSourceFile(RUN_TS, source, ts.ScriptTarget.Latest, true);
+const runSurfaceSources = RUN_SURFACE_REFS.map((ref) => {
+  const full = path.join(PROJECT_ROOT, ref);
+  return {
+    ref,
+    sf: ts.createSourceFile(
+      full,
+      fs.readFileSync(full, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+    ),
+  };
+});
 
 const HANDLER_FN = "assembleGracefulTerminal";
 
@@ -373,7 +403,8 @@ const findings: Finding[] = [];
 let runCatchCount = 0;
 let runHandlerCount = 0;
 
-function visit(node: ts.Node): void {
+function visitRunSurface(node: ts.Node, sf: ts.SourceFile, file: string): void {
+  const visit = (node: ts.Node): void => {
   if (ts.isCatchClause(node)) {
     runCatchCount += 1;
     const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
@@ -383,6 +414,7 @@ function visit(node: ts.Node): void {
     const stmts = node.block.statements;
     if (!varName) {
       findings.push({
+        file,
         line,
         varName: "(unbound)",
         status: "VIOLATION",
@@ -390,6 +422,7 @@ function visit(node: ts.Node): void {
       });
     } else if (stmts.length === 1 && stmts[0] && isBareRethrow(stmts[0], varName)) {
       findings.push({
+        file,
         line,
         varName,
         status: "exempt-rethrow",
@@ -401,6 +434,7 @@ function visit(node: ts.Node): void {
       if (kind === "guard") {
         if (!isNamedGuardRethrow(stmts[1], varName, LLM_FAILURE_GUARD_FN)) {
           findings.push({
+            file,
             line,
             varName,
             status: "VIOLATION",
@@ -409,6 +443,7 @@ function visit(node: ts.Node): void {
           });
         } else {
           findings.push({
+            file,
             line,
             varName,
             status: "guarded",
@@ -418,6 +453,7 @@ function visit(node: ts.Node): void {
       } else if (kind === "handler") {
         if (!isRunTypedFailureHandler(stmts, varName)) {
           findings.push({
+            file,
             line,
             varName,
             status: "VIOLATION",
@@ -427,6 +463,7 @@ function visit(node: ts.Node): void {
         } else {
           runHandlerCount += 1;
           findings.push({
+            file,
             line,
             varName,
             status: "handler",
@@ -436,6 +473,7 @@ function visit(node: ts.Node): void {
         }
       } else {
         findings.push({
+          file,
           line,
           varName,
           status: "VIOLATION",
@@ -444,10 +482,12 @@ function visit(node: ts.Node): void {
       }
     }
   }
-  ts.forEachChild(node, visit);
+    ts.forEachChild(node, visit);
+  };
+  visit(node);
 }
 
-visit(sf);
+for (const { ref, sf } of runSurfaceSources) visitRunSurface(sf, sf, ref);
 
 const leafSource = fs.readFileSync(LEAF_READER_TS, "utf8");
 const leafSf = ts.createSourceFile(
@@ -502,6 +542,7 @@ function visitLeaf(node: ts.Node): void {
       )
     ) {
       findings.push({
+        file: "src/core-runtime/reconstruct/leaf-reader.ts",
         line,
         varName,
         status: "guarded",
@@ -509,6 +550,7 @@ function visitLeaf(node: ts.Node): void {
       });
     } else {
       findings.push({
+        file: "src/core-runtime/reconstruct/leaf-reader.ts",
         line,
         varName: varName ?? "(unbound)",
         status: "VIOLATION",
@@ -525,23 +567,41 @@ console.log(
   `check-graceful-signal-rethrow: ${findings.length} guarded catch clause(s) across reconstruct terminal paths`,
 );
 for (const f of findings) {
-  console.log(`  L${f.line} catch(${f.varName}): ${f.status} — ${f.detail}`);
+  console.log(
+    `  ${path.basename(f.file)}:L${f.line} catch(${f.varName}): ${f.status} — ${f.detail}`,
+  );
 }
 
 if (findings.length === 0) {
   console.error(
-    "\nERROR: no catch clauses found in run.ts — the guard subject set is empty (a vacuous pass proves nothing).",
+    "\nERROR: no catch clauses found on the run surface — the guard subject set is empty (a vacuous pass proves nothing).",
   );
   process.exit(1);
 }
 
 if (runCatchCount === 0) {
-  console.error("\nERROR: run.ts catch subject set is empty.");
+  console.error("\nERROR: run surface catch subject set is empty.");
+  process.exit(1);
+}
+/**
+ * Per-file non-emptiness. A module listed in RUN_SURFACE_REFS is listed BECAUSE it holds catch
+ * clauses that used to be in run.ts; if it stops holding any, either the code moved again (the
+ * list must follow it) or the guard is silently covering less than it claims. Fail loud rather
+ * than let the subject set erode the way the single-file scan did.
+ */
+const emptySurfaceRefs = runSurfaceSources
+  .filter(({ ref }) => !findings.some((f) => f.file === ref))
+  .map(({ ref }) => ref);
+if (emptySurfaceRefs.length > 0) {
+  console.error(
+    `\nERROR: declared run-surface file(s) hold no catch clause — the guard's subject set shrank ` +
+      `without failing. Follow the moved code or drop the entry:\n  ${emptySurfaceRefs.join("\n  ")}`,
+  );
   process.exit(1);
 }
 if (runHandlerCount !== 1) {
   console.error(
-    `\nERROR: run.ts must contain exactly one graceful terminal handler catch; observed ${runHandlerCount}.`,
+    `\nERROR: the run surface must contain exactly one graceful terminal handler catch; observed ${runHandlerCount}.`,
   );
   process.exit(1);
 }
@@ -555,7 +615,7 @@ if (leafProviderCatchCount !== 1) {
 const violations = findings.filter((f) => f.status === "VIOLATION");
 if (violations.length > 0) {
   console.error(
-    `\n${violations.length} VIOLATION(s): every non-trivial catch in run.ts must rethrow a graceful terminal signal at the top ` +
+    `\n${violations.length} VIOLATION(s): every non-trivial catch on the run surface must rethrow a graceful terminal signal at the top ` +
       `(\`if (${GUARD_FN}(e)) throw e;\`) so it cannot be swallowed. See design §16.4 (N5').`,
   );
   process.exit(1);
