@@ -310,6 +310,7 @@ import {
   type BreadthFoldDisclosure,
   type BreadthFoldLevel,
   foldObservationsToBudget,
+  projectBreadthFoldTailRung,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
 } from "./source-breadth-fold.js";
@@ -10520,8 +10521,8 @@ const ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER = 0.04;
 // Breadth-fold rung-2 tightening for the admission catalog (design 20260723 §7, admission surface).
 // One factor scales BOTH per-unit skeleton budgets above, so the `inventory_skeleton` rung stays a
 // demotion OF the existing budgets rather than a second, independently-drifting pair of constants.
-// PRELIMINARY / tunable — the ≤-budget GUARANTEE lives in the coarsest rung (`one_line`, which drops
-// the skeleton and the excerpt outright) plus the always-on byte guard, never in this value.
+// PRELIMINARY / tunable — the ≤-budget GUARANTEE lives in the coarsest rungs (`one_line` and below,
+// which drop the skeleton and the excerpt outright) plus the always-on byte guard, never in this value.
 const ADMISSION_OUTLINE_FOLD_SKELETON_SCALE = 0.2;
 const ADMISSION_OUTLINE_FOLD_EXCERPT_CHAR_LIMIT = 160;
 
@@ -10591,7 +10592,13 @@ function admittedOutlinesForPrompt(
       };
       // Coarsest rung: drop BOTH variable-size fields (the measured ~1.2 KB of the ~1.36 KB per-unit
       // projection), leaving the anchor. The LM selects on path/kind/size alone at this rung.
-      if (level === "one_line") return anchor;
+      //
+      // `summary_anchor`/`anchor` are the DIRECTIVE surface's tail rungs (PR-4b), where they drop
+      // `location` and `summary`. This surface has neither field — its `one_line` IS already the anchor
+      // shape — so all three rungs coincide here. Handled EXPLICITLY rather than by falling through:
+      // an unhandled coarse rung would reach the `full`-shaped return below and project MORE detail at a
+      // COARSER rung, silently inverting the ladder's non-increasing invariant on this surface.
+      if (level === "one_line" || level === "summary_anchor" || level === "anchor") return anchor;
       const excerpt = unit.outline.outline_excerpt;
       const folded = level === "inventory_skeleton";
       return {
@@ -12328,13 +12335,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * source-observation-directive projects its pre-selection candidate catalog flat (today's full
    * projection) and the always-on byte guard fails loud on overflow — byte-identical with PR-2.
    * Explicit true makes writeSourceObservationDirective fold the catalog to the finest detail rung
-   * that fits the byte budget (full → inventory_skeleton → one_line) BEFORE the guard, turning a
-   * large-corpus overflow into a bounded dispatch success. Projection-only for the OBSERVATION layer —
-   * no observation is minted or mutated, so the source-observation reuse key and per-observation delta
-   * hashes never rotate (DW-3d). It DOES change the authored directive's detail rung on an overflowing
-   * catalog, so it is exposed as `sourceBreadthFold` and folded into the DIRECTIVE resume reuse key
-   * (authoredArtifactReuseMatch) — a resume across a flag change regenerates rather than silently
-   * reusing the other rung's selection (silent-stale guard; same treatment as documentExcerptProjectionBudget).
+   * that fits the byte budget (full → inventory_skeleton → one_line → summary_anchor → anchor) BEFORE
+   * the guard, turning a large-corpus overflow into a bounded dispatch success. Projection-only for
+   * the OBSERVATION layer — no observation is minted or mutated, so the source-observation reuse key
+   * and per-observation delta hashes never rotate (DW-3d). It DOES change the authored directive's
+   * detail rung on an overflowing catalog, so it is exposed as `sourceBreadthFold` and folded into
+   * the DIRECTIVE resume reuse key (authoredArtifactReuseMatch) — a resume across a flag change
+   * regenerates rather than silently reusing the other rung's selection (silent-stale guard; same
+   * treatment as documentExcerptProjectionBudget).
    */
   sourceBreadthFold?: boolean;
   /**
@@ -12798,6 +12806,17 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // is today's exact projection — the byte-identical hinge; the fold reaches a coarser rung only
       // under overflow.
       const projectCatalogAtFoldLevel = (level: BreadthFoldLevel): unknown[] => {
+        // Tail rungs (PR-4b) are DERIVED from the `one_line` rows by dropping keys — never rebuilt by a
+        // parallel row-builder. A per-row strict key subset, in the same order, with the same values, is
+        // never larger than its parent on ANY corpus, so the ladder's non-increasing invariant holds
+        // structurally instead of corpus-contingently. `location` goes first WHERE IT IS REDUNDANT with
+        // `source_ref` (every whole-file observation — 100% of the measured corpus — where it costs ~142
+        // B/row to repeat the path); on region rows it is the only thing telling siblings of one file
+        // apart, so it survives. `summary` costs ~55 B/row and carries the selection signal, so it goes
+        // last.
+        if (level === "summary_anchor" || level === "anchor") {
+          return projectBreadthFoldTailRung(projectCatalogAtFoldLevel("one_line"), level);
+        }
         const options: ObservationPromptPayloadOptions =
           level === "one_line"
             ? { observationIds: availableObservationIds, includeStructuralData: false }
