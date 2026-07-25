@@ -73,8 +73,9 @@ throw assertPromptPayloadByteLimit(...)
   - `available_observation_ids`는 payload의 **6.2%**뿐이고, **그것만** 투영하면 **≈31,049 파일**까지 안 터진다.
   - 실제로 먼저 묶는 것은 **per-row 절대경로 텍스트**다 — 446 B 행 중 ~285 B, 그나마 `source_ref`와 `location`이 whole-file 관찰에서 사실상 중복. 이것이 **≈2,020 파일**에서 바인딩 = id 한계보다 **14× 먼저**.
   - ⇒ collapse(=id를 숨김)와 그것이 요구하는 zoom 채널은 **측정된 병목이 아니다**. id를 하나도 숨기지 않고 per-row 텍스트만 줄여도 사다리는 크게 더 내려간다(one_line 2,018 → 상대경로 3,279 → −location 3,968 → −summary 5,173).
+    - **주의 (2026-07-25)**: 위 "상대경로 3,279"를 실행 후보로 인용하지 않는다. 이 코퍼스 root가 99자 temp 경로라 상대화 이득이 부풀었다 — root를 realistic한 30자로 두면 이득이 **~1.48× → ~1.11×**로 줄고, 멀티레포 축은 공유 root를 더 짧게 만들어 0에 수렴한다. 값이 있는 것은 **키를 떨구는 파생 rung**이지 상대화가 아니다.
   - 또한 `directory_rollup`은 **디렉터리 군집도 의존**이라 사다리 불변식(DW-1f, 단조 비증가)을 floor로서 만족하지 않는다.
-    - **정정 (2026-07-25, 적대 판정이 기저 혼합을 적발)**: 초판이 쓴 "353.5 vs 바로 윗 rung 302 B/unit"은 **기저가 섞였다** — 353.5는 1파일/디렉터리(`coarse-rung-candidates.mts`), 301.6은 8파일/디렉터리(`rollup-rung-headroom.mts`)에서 나온 수치이고 상대화 방식도 다르다. **단일 기저(1파일/디렉터리)로 재서술**: rollup 353.5 B/unit는 `one_line`(452.2)보다 **작고**, `anchor` rung(157.3)보다 **크다**. 즉 rollup은 PR-4b 이전 사다리에 대해 비단조였던 적이 없고, **자기 밑에 놓일 rung들에 대해서만** 크다 — floor 자격이 없다는 결론은 유지되지만 근거가 다르다.
+    - **정정 (2026-07-25, 적대 판정이 기저 혼합을 적발)**: 초판이 쓴 "353.5 vs 바로 윗 rung 302 B/unit"은 **기저가 섞였다** — 353.5는 1파일/디렉터리(`coarse-rung-candidates.mts`), 301.6은 8파일/디렉터리(`rollup-rung-headroom.mts`)에서 나온 수치이고 상대화 방식도 다르다. **단일 기저(1파일/디렉터리)로 재서술**: rollup 353.5 B/unit는 `one_line`(452.2)보다 **작고**, 그 아래 파생 rung(157.3)보다 **크다**. 즉 rollup은 기존 사다리에 대해 비단조였던 적이 없고, **자기 밑에 놓일 rung들에 대해서만** 크다 — floor 자격이 없다는 결론은 유지되지만 근거가 다르다.
     - 결정적 근거는 **불변식의 성격**이다: 군집도 1→8파일/디렉터리에서 rollup은 353.5 → 251.2 B/unit로 **29% 이동**(코퍼스 의존)하는 반면 파생 rung은 157.3 → 156.4로 **0.6%**(구성적). floor는 코퍼스에 따라 흔들리면 안 된다.
   - 결론 보류: 어느 대안으로 갈지는 §12 PR-4 항목에 기록한다. 위 수치 자체는 대안 선택과 무관하게 성립한다.
 - ~~**극단규모 후속 rung(PR-4·directory-topology rollup)** = B 초안: set-tier의 **export된 primitives**(`pathComponentsOf` comprehension-set-tier.ts:240·`commonPrefixLength` :248·`validateMemberPaths` :258) 재사용해 디렉터리 트리(bottom-up `descendant_file_count`), `renderOverview`(:406) candidate cascade mirror, **최대 subtree부터 collapse**, terminal **root-digest(O(K)·구성으로 ≤budget)**. collapse된 구성원은 selectable에서 빠지고 **zoom(§5)로만 도달**. → 어떤 topology도 구조적 ≤budget. (MVP엔 불필요: 실측 문제는 one_line으로 해소.)~~
@@ -199,14 +200,16 @@ Stage 1/2 규율: 순수 모듈 byte-identical → 배선 → opt-in flip·autho
   → **실측 완료 (2026-07-25, 하니스 `scripts/breadth-fold-selection-quality-bench.mts`)**. 공통 기반 문제(rung은 오버플로우에서만 도달하므로 "큰 코퍼스를 full vs one_line"은 **존재할 수 없는 비교**)를 투영의 **per-row 순수성**으로 해소: 큰 코퍼스에서 포착한 coarse 행을 부분집합 id로 필터하면 그 부분집합이 그 rung에서 냈을 카탈로그와 byte-동일. **가정하지 않고 검사한다** — 같은 rung을 서로 다른 복제배수로 2회 포착해 S의 행이 byte-동일함을 확인(×2/×3, ×5/×8 PASS). 제품 표면 추가 0(실 author에 `llmCall` 래퍼로 카탈로그 슬롯만 교체 — 나머지 전 바이트·응답 파싱·id 검증은 프로덕션 코드).
   선택은 확률적이라 단일 표본은 arm 효과와 실행간 분산을 구별 못 한다 → **참조 rung을 2회 dispatch해 노이즈 바닥을 세운다**. 실 seat(`openai/gpt-5.6-sol`), 실 48파일 S:
 
-  | arm | dispatch | input tok | 선택 | Jaccard vs full |
-  |---|---|---|---|---|
-  | `full` | 1,028,392 B | 257,428 | 15 | 1.000 (참조) |
-  | `full` 반복 = **노이즈 바닥** | 1,028,392 B | 257,428 | 14 | **0.813** |
-  | `inventory_skeleton` | 285,358 B | 71,670 | 16 | 0.824 |
-  | `one_line` | 54,770 B | 14,023 | 16 | 0.824 |
+  | arm | dispatch | input tok | 선택 | Jaccard vs full | recall | precision | top-5 일치 |
+  |---|---|---|---|---|---|---|---|
+  | `full` | 1,028,392 B | 257,428 | 15 | 1.000 (참조) | — | — | — |
+  | `full` 반복 = **노이즈 바닥** | 1,028,392 B | 257,428 | 14 | **0.813** | .867 | .929 | 5/5 |
+  | `inventory_skeleton` | 285,358 B | 71,670 | 16 | 0.824 | .933 | .875 | 5/5 |
+  | `one_line` | 54,770 B | 14,023 | 16 | 0.824 | .933 | .875 | **4/5** |
 
-  **두 coarse arm 모두 동일-rung 노이즈 바닥과 같거나 그 위** — 이 워크로드에서 coarse rung의 선택품질 열화는 **분산보다 작아 검출되지 않는다**. 부수 발견: `one_line`은 카탈로그를 45× 줄이면서 **input 토큰 18× 절감**(257k→14k) — fold는 오버플로우 구조뿐 아니라 비용 축에서도 값이 있다. **한계(정직)**: arm당 N=1(참조만 2), 단일 코퍼스·단일 intent·단일 seat, `full`을 정답으로 간주. 작은 효과는 해상 불가 — 주장은 "열화 없음"이 아니라 "큰 노이즈 바닥 대비 큰 효과 아님". 증거 `.onto/temp/breadth-fold-selection-quality/selection-quality.json`.
+  **판정 = 두 coarse arm 모두 동일-rung 노이즈 바닥과 구별 불가** — 이 워크로드에서 coarse rung의 선택품질 열화는 **분산보다 작아 검출되지 않는다**. ("바닥과 같거나 그 위"는 방어 불가라 철회: coarse는 바닥보다 recall이 높고 **precision은 낮으며**(더 많이 고른다: 16 vs 14) jaccard는 그 둘을 합산해 사실상 동률 — 축마다 부호가 다르다.)
+  `one_line`의 **top-5 4/5는 coarse arm이 바닥 아래로 떨어지는 유일한 컬럼**이라 표에 남긴다. 다만 무엇을 재는 컬럼인지가 중요하다: `selected_observations`는 프롬프트 계약상 **집합**이고(run.ts:11704), 런타임은 중복 제거된 id 리스트로 정규화하며(`selectedObservationIds` run.ts:11298) **순서를 rank로 읽는 소비자가 없다**(선택 집합 top-N 절단 코드 없음) → 이 컬럼은 계약이 정의하지 않는 **방출 순서**를 잰다. 결정적으로 **두 coarse arm은 완전히 같은 16개를 골랐다**(집합 동일·순서만 다름) — 같은 집합이 순서 때문에 5/5와 4/5로 갈리므로 이 컬럼의 차이는 구성상 선택품질 차이일 수 없다. 실제 차이도 탈락이 아니라 재배열이다: `one_line`은 참조 12위를 2위로 올리고 참조 5위를 7위로 내렸을 뿐 **그 항목은 여전히 선택 집합 안에 있다**. 그래서 결론을 뒤집지 않되, 한 칸 차이를 무해함의 증거로도 쓰지 않는다.
+  부수 발견: `one_line`은 카탈로그를 45× 줄이면서 **input 토큰 18× 절감**(257k→14k) — fold는 오버플로우 구조뿐 아니라 비용 축에서도 값이 있다. **한계(정직)**: arm당 N=1(참조만 2), 단일 코퍼스·단일 intent·단일 seat, `full`을 정답으로 간주. 바닥도 1회 표본이라 분산의 폭 자체를 모른다. 작은 효과는 해상 불가 — 주장은 "열화 없음"이 아니라 "큰 노이즈 바닥 대비 큰 효과 아님". 증거 `development-records/benchmark/breadth-fold-selection-quality/`(JSON + 실행 로그; input token은 런타임 `[model-call]` 줄에만 있어 로그를 함께 커밋).
 - **예산 상수 실측 pinning**: §3.4·DW-2c. packet의 1,349,907은 char/byte 실측치·codex 내부 한도는 probe 확정.
 - **competency 가드 char latent 갭(별개)**: 기존 `promptPayloadCharCount` char 기반이라 다바이트 competency 프롬프트도 이론상 under-count. 이 설계 범위 밖(directive/admission 가드만 byte)·후속 정정 후보로 기록.
 - ~~**admission-outline fold 유보**: MVP는 admission dispatch에 **가드만**(fold는 directive 우선·outline 이미 얇음 600자/파일). admission이 실 대형 코퍼스서 초과하면 같은 모듈 확장(§5 한 헬퍼).~~ → **정정 (2026-07-25, 실측이 전제 반증)**: "outline 이미 얇음"이 틀렸다. 실 Stage-2 인벤토리 실측 = **unit당 ~1.36 KB**(source_ref 123 B + scalar 56 B + `outline_excerpt` 462 B + `structure_skeleton_digest` ~720 B — 600자 예산은 digest **하나**의 상한이지 unit 전체가 아님). directive는 observation당 ~0.49 KB → **admission이 ~750파일에서 먼저 터지고 directive는 ~2,000까지 버틴다**. 유보 해제하고 같은 모듈·같은 키로 확장(§12 PR-4a).
