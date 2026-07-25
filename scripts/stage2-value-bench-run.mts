@@ -10,7 +10,8 @@
  * seat. The ONLY variable is the opt-in overlay. The harness snapshots each arm's fully-resolved
  * reconstruct.execution config and asserts they are byte-identical except source_admission_selection.
  *
- * Hard guards (§9.6): both runs record_stage==completed; OFF admitted==0 ∧ ON admitted>0; corpus
+ * Hard guards (§9.6): both runs record_stage==completed; OFF admitted==0 ∧ ON admitted>0; ON's
+ * selection is not floor-only (llm_selected>0 — else MEASUREMENT-INVALID, not a failure); corpus
  * manifest sha drift throws; cost computed by one pure function applied identically to both arms.
  *
  * Usage (from repo root):
@@ -70,7 +71,15 @@ const SEED_SUBSTANTIVE_KEYS = [
 // Note: settings resolve from ~/.onto/settings.json (seats) + this per-arm project overlay; the repo
 // .onto/settings.json is NOT read here (resolveSettingsChain ignores its first arg), so the code
 // opt-ins must be set explicitly rather than inherited from the repo.
-const CODE_OPTINS = { code_structure_inventory: true, code_structure_layout: true };
+// source_breadth_fold is set EXPLICITLY here for the same reason as the code opt-ins: the repo
+// .onto/settings.json (where it is live-ON) is not read by this harness. Without it both arms run
+// fold-OFF and the OFF arm dies on the 1.35MB directive overflow — the very failure fold closed.
+// Identical on both arms, so configsMatchExceptOptIn (which strips only the admission key) holds.
+const CODE_OPTINS = {
+  code_structure_inventory: true,
+  code_structure_layout: true,
+  source_breadth_fold: true,
+};
 const ARMS = [
   { arm: "off", overlay: { ...CODE_OPTINS } as Record<string, unknown> },
   { arm: "on", overlay: { ...CODE_OPTINS, source_admission_selection: true } },
@@ -256,6 +265,33 @@ async function runArm(args: {
   );
   const roundIds = new Set(observationsDoc.observations.map((o) => String(o.round_id ?? "")));
 
+  // §9.6 validity: separate a genuine LM selection from a floor-manufactured one. The floor stamps
+  // a structural marker (frontier_ref_id "admission_floor_N", run.ts:11250) and REWRITES this
+  // artifact when it fires, so the post-run file carries the split deterministically — no runtime
+  // instrumentation needed. SOURCE_ADMISSION_SELECTION_FLOOR guarantees accepted>=1 by
+  // construction, so "the ON arm produced a selection" is NOT evidence that admission selected
+  // anything. An ON arm carried entirely by the floor is MEASUREMENT-INVALID, not a failure: it
+  // exercises none of admission's selection, so its seed must not be judged against OFF.
+  let llmSelectedCount: number | null = null;
+  let floorPromotedCount: number | null = null;
+  if (args.arm === "on") {
+    const selectionDoc = parseYaml(
+      await fs.readFile(path.join(sessionRoot, "source-admission-selection.yaml"), "utf8"),
+    ) as { frontier_refs?: AnyRec[] };
+    const selectionRefs = selectionDoc.frontier_refs ?? [];
+    floorPromotedCount = selectionRefs.filter((r) =>
+      String(r.frontier_ref_id ?? "").startsWith("admission_floor_")
+    ).length;
+    llmSelectedCount = selectionRefs.length - floorPromotedCount;
+    if (llmSelectedCount <= 0) {
+      throw new Error(
+        `ON arm MEASUREMENT-INVALID: ${selectionRefs.length} frontier ref(s), all floor-promoted ` +
+          `(llm_selected=0). The runtime floor guarantees >=1 by construction, so this run proves ` +
+          `nothing about admission's selection. Re-run; do not judge this pair.`,
+      );
+    }
+  }
+
   // Persist the seed + normalized (blind) projection for the judging phase.
   await fs.copyFile(path.join(sessionRoot, "ontology-seed.yaml"), path.join(args.benchRoot, `seed-${args.arm}.yaml`));
   await fs.writeFile(
@@ -271,6 +307,8 @@ async function runArm(args: {
     admitted_count: admittedCount,
     final_deep_file_count: deepRefs.size,
     admission_deep_file_count: admissionBatchDeep.size,
+    admission_llm_selected_count: llmSelectedCount,
+    admission_floor_promoted_count: floorPromotedCount,
     round_ids: [...roundIds].sort(),
     round_count: roundIds.size,
     total_observations: observationsDoc.observations.length,
@@ -374,6 +412,9 @@ async function run(): Promise<void> {
       wall_ms: { off: off.wall_ms, on: on.wall_ms },
       round_count: { off: off.round_count, on: on.round_count },
       admission_deep_file_count_on: on.admission_deep_file_count,
+      // §9.6 validity — a floor-only ON arm is measurement-invalid (guarded in runArm).
+      admission_llm_selected_count_on: on.admission_llm_selected_count,
+      admission_floor_promoted_count_on: on.admission_floor_promoted_count,
     },
     arms: { off, on },
     seeds: {
