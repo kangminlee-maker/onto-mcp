@@ -69,6 +69,12 @@ for level in [inventory_skeleton, one_line]:
 throw assertPromptPayloadByteLimit(...)
 ```
 - **보장 근거**: 사전-dispatch payload를 **dispatch가 쓰는 바로 그 측정 함수**로 잰다("잰 것에 맞으면 보낸 것에 맞음", 구성). 사다리 단조 감소 → 맞는 가장 세밀한 rung 채택. 실측 59파일은 inventory_skeleton(59×~4.3k≈254k ≪ 예산)에서 **전 59파일 top-level 구조와 함께 보임**.
+- **정정 (2026-07-25, 실측이 §3.3 전제를 반증)** — 위 의사코드 주석의 "극단 N: **id-리스트 자체 초과**"는 **틀렸다**. 실 코퍼스를 N=2000까지 복제해 **가드가 쓰는 그 byte 함수**로 잰 결과(probe `.onto/temp/source-breadth-fold-promotion/`):
+  - `available_observation_ids`는 payload의 **6.2%**뿐이고, **그것만** 투영하면 **≈31,049 파일**까지 안 터진다.
+  - 실제로 먼저 묶는 것은 **per-row 절대경로 텍스트**다 — 446 B 행 중 ~285 B, 그나마 `source_ref`와 `location`이 whole-file 관찰에서 사실상 중복. 이것이 **≈2,020 파일**에서 바인딩 = id 한계보다 **14× 먼저**.
+  - ⇒ collapse(=id를 숨김)와 그것이 요구하는 zoom 채널은 **측정된 병목이 아니다**. id를 하나도 숨기지 않고 per-row 텍스트만 줄여도 사다리는 크게 더 내려간다(one_line 2,018 → 상대경로 3,279 → −location 3,968 → −summary 5,173).
+  - 또한 `directory_rollup`은 **디렉터리 군집도 의존**이라 사다리 불변식(DW-1f, 단조 비증가)을 만족하지 않는다: 1파일/디렉터리에서 353.5 B/unit로 **바로 윗 rung(302 B/unit)보다 크게** 측정된다. 군집도가 낮은 코퍼스에서 floor가 될 수 없다.
+  - 결론 보류: 어느 대안으로 갈지는 §12 PR-4 항목에 기록한다. 위 수치 자체는 대안 선택과 무관하게 성립한다.
 - **극단규모 후속 rung(PR-4·directory-topology rollup)** = B 초안: set-tier의 **export된 primitives**(`pathComponentsOf` comprehension-set-tier.ts:240·`commonPrefixLength` :248·`validateMemberPaths` :258) 재사용해 디렉터리 트리(bottom-up `descendant_file_count`), `renderOverview`(:406) candidate cascade mirror, **최대 subtree부터 collapse**, terminal **root-digest(O(K)·구성으로 ≤budget)**. collapse된 구성원은 selectable에서 빠지고 **zoom(§5)로만 도달**. → 어떤 topology도 구조적 ≤budget. (MVP엔 불필요: 실측 문제는 one_line으로 해소.)
 
 ### §3.4 D1 — byte 단위 (실코드 확증된 divergence 해소)
@@ -176,6 +182,19 @@ Stage 1/2 규율: 순수 모듈 byte-identical → 배선 → opt-in flip·autho
 ## §9. 리스크·미결·경계
 
 - **선택 품질(coarse rung)**: coarse rung에서 LLM은 full inventory보다 적은 detail로 선택. = **깊이 축소(zoom으로 회복)**이지 정확성 파손 아님·권위는 실 deep span. **비-게이팅**·별도 value-bench 후속(오버플로우를 발견한 그 벤치)로 측정. fold를 "똑똑하게"(per-node adaptive detail) 만들지 않음 — 전역 사다리로 결정성·유한 rung 유지.
+  → **실측 완료 (2026-07-25, 하니스 `scripts/breadth-fold-selection-quality-bench.mts`)**. 공통 기반 문제(rung은 오버플로우에서만 도달하므로 "큰 코퍼스를 full vs one_line"은 **존재할 수 없는 비교**)를 투영의 **per-row 순수성**으로 해소: 큰 코퍼스에서 포착한 coarse 행을 부분집합 id로 필터하면 그 부분집합이 그 rung에서 냈을 카탈로그와 byte-동일. **가정하지 않고 검사한다** — 같은 rung을 서로 다른 복제배수로 2회 포착해 S의 행이 byte-동일함을 확인(×2/×3, ×5/×8 PASS). 제품 표면 추가 0(실 author에 `llmCall` 래퍼로 카탈로그 슬롯만 교체 — 나머지 전 바이트·응답 파싱·id 검증은 프로덕션 코드).
+  선택은 확률적이라 단일 표본은 arm 효과와 실행간 분산을 구별 못 한다 → **참조 rung을 2회 dispatch해 노이즈 바닥을 세운다**. 실 seat(`openai/gpt-5.6-sol`), 실 48파일 S:
+
+  | arm | dispatch | input tok | 선택 | Jaccard vs full | recall | precision | top-5 일치 |
+  |---|---|---|---|---|---|---|---|
+  | `full` | 1,028,392 B | 257,428 | 15 | 1.000 (참조) | — | — | — |
+  | `full` 반복 = **노이즈 바닥** | 1,028,392 B | 257,428 | 14 | **0.813** | .867 | .929 | 5/5 |
+  | `inventory_skeleton` | 285,358 B | 71,670 | 16 | 0.824 | .933 | .875 | 5/5 |
+  | `one_line` | 54,770 B | 14,023 | 16 | 0.824 | .933 | .875 | **4/5** |
+
+  **판정 = 두 coarse arm 모두 동일-rung 노이즈 바닥과 구별 불가** — 이 워크로드에서 coarse rung의 선택품질 열화는 **분산보다 작아 검출되지 않는다**. ("바닥과 같거나 그 위"는 방어 불가라 철회: coarse는 바닥보다 recall이 높고 **precision은 낮으며**(더 많이 고른다: 16 vs 14) jaccard는 그 둘을 합산해 사실상 동률 — 축마다 부호가 다르다.)
+  `one_line`의 **top-5 4/5는 coarse arm이 바닥 아래로 떨어지는 유일한 컬럼**이라 표에 남긴다. 다만 무엇을 재는 컬럼인지가 중요하다: `selected_observations`는 프롬프트 계약상 **집합**이고(run.ts:11704), 런타임은 중복 제거된 id 리스트로 정규화하며(`selectedObservationIds` run.ts:11298) **순서를 rank로 읽는 소비자가 없다**(선택 집합 top-N 절단 코드 없음) → 이 컬럼은 계약이 정의하지 않는 **방출 순서**를 잰다. 결정적으로 **두 coarse arm은 완전히 같은 16개를 골랐다**(집합 동일·순서만 다름) — 같은 집합이 순서 때문에 5/5와 4/5로 갈리므로 이 컬럼의 차이는 구성상 선택품질 차이일 수 없다. 실제 차이도 탈락이 아니라 재배열이다: `one_line`은 참조 12위를 2위로 올리고 참조 5위를 7위로 내렸을 뿐 **그 항목은 여전히 선택 집합 안에 있다**. 그래서 결론을 뒤집지 않되, 한 칸 차이를 무해함의 증거로도 쓰지 않는다.
+  부수 발견: `one_line`은 카탈로그를 45× 줄이면서 **input 토큰 18× 절감**(257k→14k) — fold는 오버플로우 구조뿐 아니라 비용 축에서도 값이 있다. **한계(정직)**: arm당 N=1(참조만 2), 단일 코퍼스·단일 intent·단일 seat, `full`을 정답으로 간주. 바닥도 1회 표본이라 분산의 폭 자체를 모른다. 작은 효과는 해상 불가 — 주장은 "열화 없음"이 아니라 "큰 노이즈 바닥 대비 큰 효과 아님". 증거 `development-records/benchmark/breadth-fold-selection-quality/`(JSON + 실행 로그; input token은 런타임 `[model-call]` 줄에만 있어 로그를 함께 커밋).
 - **예산 상수 실측 pinning**: §3.4·DW-2c. packet의 1,349,907은 char/byte 실측치·codex 내부 한도는 probe 확정.
 - **competency 가드 char latent 갭(별개)**: 기존 `promptPayloadCharCount` char 기반이라 다바이트 competency 프롬프트도 이론상 under-count. 이 설계 범위 밖(directive/admission 가드만 byte)·후속 정정 후보로 기록.
 - ~~**admission-outline fold 유보**: MVP는 admission dispatch에 **가드만**(fold는 directive 우선·outline 이미 얇음 600자/파일). admission이 실 대형 코퍼스서 초과하면 같은 모듈 확장(§5 한 헬퍼).~~ → **정정 (2026-07-25, 실측이 전제 반증)**: "outline 이미 얇음"이 틀렸다. 실 Stage-2 인벤토리 실측 = **unit당 ~1.36 KB**(source_ref 123 B + scalar 56 B + `outline_excerpt` 462 B + `structure_skeleton_digest` ~720 B — 600자 예산은 digest **하나**의 상한이지 unit 전체가 아님). directive는 observation당 ~0.49 KB → **admission이 ~750파일에서 먼저 터지고 directive는 ~2,000까지 버틴다**. 유보 해제하고 같은 모듈·같은 키로 확장(§12 PR-4a).
@@ -224,3 +243,6 @@ owner 승인 시 → **PR-1(순수 fold 모듈 + byte 가드)** 착수. §9 owne
 - 구현(신규 키 0·신규 아티팩트 0): `admittedOutlinesForPrompt(inventory, level)` rung 파라미터 추가 — `full`(오늘 그대로) / `inventory_skeleton`(skeleton 예산 ×0.2 = code 120자·workbook multiplier 0.008 + excerpt 160자 절단) / `one_line`(excerpt·digest **양쪽 드롭**, anchor `{source_ref,kind,size,line_count}`만). `writeSourceAdmissionSelection`이 ON이면 `foldObservationsToBudget` 호출→always-on 가드는 **fold 뒤** backstop 유지. payload는 단일 빌더로 조립(key 순서 = 측정==dispatch, off byte-parity 보증). R2 공개는 admission 아티팩트에 free-text 채널이 없어 **run-scoped sink**(`sourceBreadthFoldDisclosures`, `documentExcerptProjectionTruncations` 전례)→`runReconstruct`가 `appendRuntimeStatusEventSync`로 durable 기록.
 - **검증**: tsc0·전체 스위트 회귀0·신규 단위 4(ON 2500유닛 오버플로우→fold dispatch·2500 전부 offered·sink 공개·frontier_ref 실 파싱·인벤토리 불변 / OFF 대조 fail-loud+sink 빈 / ON one_line조차 초과(긴 경로 3000)→가드 backstop / ON+적합 **byte-identical hinge**+비-vacuity(digest 실재 확인)). **실 코퍼스 결정론 replay PASS**(Stage-2 ON 인벤토리 59유닛): [A] 실 59유닛 ON===OFF **byte-for-byte**(88,986 B·59행 전부 실 skeleton digest 보유=비공허) / [B] 부정대조 실 유닛 1000복제 OFF → **1,378,540 B > budget** 사전 fail-loud(llm 0회) / [C] 동일 코퍼스 ON → **885,433 B ≤ budget**, rung `inventory_skeleton`, 1000 ref 전부 offered, 인벤토리 불변.
 - **효과(측정)**: admission 천장 **~750 → ~4,200파일**(N=1000 skeleton 879 KB / N=2000·3000 one_line 475·707 KB / N=5000 1,172,706 B throw). 두 표면 모두 fold된 뒤의 first-binding = admission one_line ~4,200 vs directive one_line ~2,000 → **이제 directive가 먼저 묶인다**(다음 병목 이동 확인).
+- **적대 교차검증(신선 frontier 렌즈·8 가설 전수 공격)**: **MATERIAL 0**. 결정적 기여 = **주 세션 검증의 실제 공백을 메움** — replay arm A는 ON vs OFF를 *둘 다 커밋-이후* 코드로 비교해 "커밋이 OFF 경로를 바꾸지 않았다"를 증명하지 못했다. 리뷰어가 origin/main의 `admittedOutlinesForPrompt`+digest를 **축자 복제**한 probe로 실 59유닛에서 `admitted_outlines` **76,863 B 양측 byte-identical** 확인(주 세션이 재실행해 독립 확인). CI는 **full vitest suite green**(리뷰어가 1회 재현불가 flake 보고·6회 재실행 18/18·CI 전수 green으로 덮임).
+- **MINOR 4(무변경 판정·근거 기록)**: (1) admission system prompt(run.ts:11752)가 "모든 행에 excerpt+skeleton"을 약속하지만 `one_line`에선 두 키 부재 — LM-guidance drift만이고 LM이 축자 복사해야 할 `source_ref`는 전 rung 생존·선택은 프롬프트가 아니라 인벤토리와 대조 검증된다. **고치지 않는 이유**: 시스템 프롬프트는 측정·dispatch payload의 일부라 문구를 바꾸면 **OFF byte-identity가 깨진다**(rung별 조건부 프롬프트는 `measure`에 level을 넣어야 해 모듈 시그니처 변경). 비용>편익으로 유보. (2) `excerpt.slice(0,160)`(run.ts:10598)가 surrogate pair를 쪼갤 수 있으나 `JSON.stringify`가 lone surrogate를 `\uXXXX`로 이스케이프 → 최악 2 B 증가; 사다리는 rung마다 **실측**하고 가드가 dispatch payload를 재측정하므로 단조성 가정에 의존하지 않는다(최악=중간 rung 건너뜀, 초과 dispatch 불가). (3) 공개 sink의 append 에러 침묵(runtime-stream-observation.ts:115) = "관찰은 실행에 영향 주지 않는다"는 기존 status-event 의미론·디스크 장애 한정. (4) `over_budget` 경로에서 공개가 push된 뒤 가드가 throw해 그 항목은 drain되지 않음 — 침묵 아님(throw된 byte 에러가 그 run의 loud 기록)·다음 run 시작 splice로 정리.
+- **착지**: **PR #256 머지(main `0493f2a`)**. 신규 settings 키 0이므로 추가 발행 게이트 없음 — 같은 키 `source_breadth_fold`가 #256 포함 발행본부터 두 표면을 함께 구동한다(#255 본문에 반영).

@@ -1,0 +1,122 @@
+{
+  "subset_size": 48,
+  "intent": "Reconstruct the conversational API surface of this SDK: how chat completions, responses, realtime sessions, and conversations relate — messages, roles, tool and function calls, streaming, and their parameters and result shapes.",
+  "seat": "openai/gpt-5.6-sol",
+  "arms": [
+    {
+      "rung": "full",
+      "bytes": 936624
+    },
+    {
+      "rung": "inventory_skeleton",
+      "bytes": 238534
+    },
+    {
+      "rung": "one_line",
+      "bytes": 20750
+    }
+  ],
+  "report": [
+    {
+      "rung": "full",
+      "dispatched_bytes": 1028392,
+      "selected": 15,
+      "overlap_with_full": 15,
+      "jaccard": 1,
+      "top5_overlap": 5,
+      "ids": [
+        "obs_5e9f4401c84694df",
+        "obs_fad17c11aeff640c",
+        "obs_f84256637734334b",
+        "obs_7582d29aae276c9d",
+        "obs_bf428455dec70d79",
+        "obs_125322e3ef6eee88",
+        "obs_6bf4167880582784",
+        "obs_22571ac9adf5f20b",
+        "obs_e4c6b520ff1046ed",
+        "obs_d5f4a79f43323a9c",
+        "obs_ae577fc73a604870",
+        "obs_dd7a59413e0d9ac2",
+        "obs_2f1dd2a9987c693f",
+        "obs_de646ba3ad9e4023",
+        "obs_c03090a083b3f9d0"
+      ]
+    },
+    {
+      "rung": "full (repeat — noise floor)",
+      "dispatched_bytes": 1028392,
+      "selected": 14,
+      "overlap_with_full": 13,
+      "jaccard": 0.813,
+      "top5_overlap": 5,
+      "ids": [
+        "obs_5e9f4401c84694df",
+        "obs_fad17c11aeff640c",
+        "obs_f84256637734334b",
+        "obs_7582d29aae276c9d",
+        "obs_bf428455dec70d79",
+        "obs_125322e3ef6eee88",
+        "obs_6bf4167880582784",
+        "obs_22571ac9adf5f20b",
+        "obs_dd7a59413e0d9ac2",
+        "obs_d5f4a79f43323a9c",
+        "obs_ae577fc73a604870",
+        "obs_b2ddba8eebb00535",
+        "obs_de646ba3ad9e4023",
+        "obs_e4c6b520ff1046ed"
+      ]
+    },
+    {
+      "rung": "inventory_skeleton",
+      "dispatched_bytes": 285358,
+      "selected": 16,
+      "overlap_with_full": 14,
+      "jaccard": 0.824,
+      "top5_overlap": 5,
+      "ids": [
+        "obs_5e9f4401c84694df",
+        "obs_fad17c11aeff640c",
+        "obs_f84256637734334b",
+        "obs_7582d29aae276c9d",
+        "obs_bf428455dec70d79",
+        "obs_d5f4a79f43323a9c",
+        "obs_ae577fc73a604870",
+        "obs_e4c6b520ff1046ed",
+        "obs_22571ac9adf5f20b",
+        "obs_6bf4167880582784",
+        "obs_dd7a59413e0d9ac2",
+        "obs_125322e3ef6eee88",
+        "obs_2f1dd2a9987c693f",
+        "obs_de646ba3ad9e4023",
+        "obs_b2ddba8eebb00535",
+        "obs_94714caf9a15c089"
+      ]
+    },
+    {
+      "rung": "one_line",
+      "dispatched_bytes": 54770,
+      "selected": 16,
+      "overlap_with_full": 14,
+      "jaccard": 0.824,
+      "top5_overlap": 4,
+      "ids": [
+        "obs_5e9f4401c84694df",
+        "obs_dd7a59413e0d9ac2",
+        "obs_f84256637734334b",
+        "obs_7582d29aae276c9d",
+        "obs_fad17c11aeff640c",
+        "obs_125322e3ef6eee88",
+        "obs_bf428455dec70d79",
+        "obs_22571ac9adf5f20b",
+        "obs_6bf4167880582784",
+        "obs_d5f4a79f43323a9c",
+        "obs_94714caf9a15c089",
+        "obs_ae577fc73a604870",
+        "obs_b2ddba8eebb00535",
+        "obs_de646ba3ad9e4023",
+        "obs_2f1dd2a9987c693f",
+        "obs_e4c6b520ff1046ed"
+      ]
+    }
+  ]
+}
