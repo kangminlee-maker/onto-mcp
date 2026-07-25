@@ -15,6 +15,11 @@ import type {
   ReconstructSourceObservationsArtifact,
   ReconstructStageId,
 } from "./artifact-types.js";
+import type {
+  ReconstructRecordArtifactRefs,
+  ReconstructTargetMaterialProfileArtifact,
+} from "./artifact-types.js";
+import type { ReconstructContractRegistry } from "./contract-registry.js";
 
 /**
  * Graceful-terminal control signal (Slice 3, design §16.1). NOT an Error subclass — the run-level
@@ -109,4 +114,39 @@ export function isZeroObservationGracefulTerminalEligible(args: {
     (attempted !== undefined && unit.scan_status === "admitted" &&
       !attempted.has(path.resolve(unit.ref)))
   );
+}
+
+/**
+ * The inside-`try` context a graceful terminal needs that is NOT visible at the run-level catch
+ * (design §16.4/§16.5). The throwing site populates a hoisted binding before it throws; the catch
+ * hands it to assembleGracefulTerminal. `reachedArtifactRefs` are the artifacts written before the
+ * halt (existence-checked before use); contractRegistry + targetMaterialProfile let the assembly
+ * rebuild the governing snapshot the manifest validator re-derives.
+ */
+export interface GracefulTerminalAssemblyContext {
+  reachedArtifactRefs: Partial<ReconstructRecordArtifactRefs>;
+  contractRegistry: ReconstructContractRegistry;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+}
+
+/**
+ * The deterministic, runtime-authored final output for a graceful terminal (design §16.5-2). It
+ * restates only runtime diagnostics (disposition, terminal stage, the reason the throwing site
+ * built) — never out-of-authority source values — so it is an honest "why this stopped" statement,
+ * not a fabricated reconstruction.
+ */
+export function buildGracefulTerminalFinalOutput(signal: GracefulTerminalSignal): string {
+  const dispositionLabel = signal.disposition === "blocked" ? "Blocked" : "Limited";
+  // No level-2 subheadings: the graceful terminal is a standalone deterministic statement, not a
+  // normal final-output section (those headings are registry-owned; see check-final-output-sections-parity).
+  return [
+    `# Reconstruct ${dispositionLabel} Terminal`,
+    "",
+    `This reconstruct run stopped early with a **${signal.disposition}** disposition at the \`${signal.terminalStepId}\` stage.`,
+    "",
+    "The run did not reach semantic authoring, so no ontology seed, claims, or competency questions were produced.",
+    "",
+    `**Reason:** ${signal.reason}`,
+    "",
+  ].join("\n");
 }

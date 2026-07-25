@@ -111,6 +111,7 @@ import {
   workbookInventoryDataLayerCaps,
   workbookInventoryValueTileConfig,
 } from "./workbook-inventory-reuse-inputs.js";
+import type { SemanticMapDispatchAccountingEntry } from "../llm/sealed-dispatch-capability.js";
 
 /**
  * W1 (wiring design 20260702 §15.2): the semantic-map author capability is a PAIR — synthesize +
@@ -1554,5 +1555,71 @@ function emptySemanticMapColumnRow(
     adversarial_refuted: 0,
     synthesize_calls: 0,
     verify_calls: 0,
+  };
+}
+
+/** First MEASURED defaults (real-LLM cut design 20260703 §3; previous 200/100 PRELIMINARY values
+ *  self-disabled the stage on real workbooks via the X5 all-or-nothing observation gate): the
+ *  reference 461-column workbook needs EXACTLY 1,699 produced-node dispatches (probe via the real
+ *  buildColumnLeaves→reduce→classifyFrontier), so 2400 carries ~41% drift margin; verify 1000 ≈ 4×
+ *  the ~230 expected unanchored verifications. Every value folds into the stage fingerprint
+ *  (re-tuning rotates the seed reuse key) — the DEFAULT-config pin test makes that rotation a
+ *  conscious decision (§10.F4). */
+export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
+  leaf_count: 8,
+  fanin: 2,
+  over_context_budget: 2,
+  max_synthesize_calls: 2400,
+  max_verify_calls: 1000,
+  max_nodes: 60,
+  max_disclosure: 30,
+};
+
+export function deriveSemanticMapFallbackPriorDispatchSpend(args: {
+  primaryCensus: ReconstructSemanticMapCensus;
+  incompleteItemIds: readonly string[];
+  accountingEntries: readonly SemanticMapDispatchAccountingEntry[];
+  sealedOperations: { synthesize: boolean; verify: boolean };
+}): { synthesize: number; verify: number } {
+  const incompleteSet = new Set(args.incompleteItemIds);
+  const incompleteOuterSpend = args.primaryCensus.by_observation
+    .filter((row) => incompleteSet.has(row.observation_id))
+    .flatMap((row) => row.columns)
+    .reduce(
+      (sum, column) => ({
+        synthesize: sum.synthesize + column.synthesize_calls,
+        verify: sum.verify + column.verify_calls,
+      }),
+      { synthesize: 0, verify: 0 },
+    );
+  const primaryAccountingRequests = (
+    operation: "semantic_map_synthesize" | "semantic_map_verify",
+  ): number =>
+    args.accountingEntries.filter(
+      (entry) =>
+        entry.execution_source === "primary" && entry.operation === operation,
+    ).reduce(
+      (sum, entry) => sum + entry.actual_adapter_request_count,
+      0,
+    );
+  return {
+    synthesize:
+      incompleteOuterSpend.synthesize +
+      (args.sealedOperations.synthesize
+        ? Math.max(
+            0,
+            primaryAccountingRequests("semantic_map_synthesize") -
+              args.primaryCensus.synthesize_calls_total,
+          )
+        : args.primaryCensus.breaker_retry_synthesize_calls ?? 0),
+    verify:
+      incompleteOuterSpend.verify +
+      (args.sealedOperations.verify
+        ? Math.max(
+            0,
+            primaryAccountingRequests("semantic_map_verify") -
+              args.primaryCensus.verify_calls_total,
+          )
+        : args.primaryCensus.breaker_retry_verify_calls ?? 0),
   };
 }

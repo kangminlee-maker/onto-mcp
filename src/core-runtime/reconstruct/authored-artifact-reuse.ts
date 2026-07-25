@@ -35,6 +35,9 @@ import {
   workbookInventoryDataLayerCaps,
   workbookInventoryValueTileConfig,
 } from "./workbook-inventory-reuse-inputs.js";
+import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { isRecord, isoNow, sha256File } from "./run-primitives.js";
+import { exists, readYamlDocument, readYamlDocumentIfPresent } from "./semantic-map-resume.js";
 
 export interface AuthoredArtifactReuseMatch {
   session_id: string;
@@ -377,4 +380,118 @@ export function authoredArtifactReuseMatch(args: {
   // (spine_claims / confidence_by_claim / …) into the reuse match (the self-gating circularity).
   assertGatingKeyExcludesInEpochOutput("authoredArtifactReuseMatch", match);
   return match;
+}
+
+interface AuthoredArtifactReuseProvenance {
+  schema_version: "1";
+  artifact_name: string;
+  artifact_ref: string;
+  artifact_sha256: string;
+  created_at: string;
+  reuse_match_hash: string;
+  reuse_match: AuthoredArtifactReuseMatch;
+}
+
+function authoredArtifactProvenancePath(filePath: string): string {
+  return `${filePath}.reuse-provenance.yaml`;
+}
+
+function assertCurrentReuseProvenance(
+  provenance: AuthoredArtifactReuseProvenance,
+  provenancePath: string,
+): void {
+  const record = provenance as unknown as Record<string, unknown>;
+  if ("compatibility_hash" in record || "compatibility" in record) {
+    throw new Error(
+      `${provenancePath} uses retired compatibility fields; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
+    );
+  }
+  if (
+    typeof provenance.reuse_match_hash !== "string" ||
+    !isRecord(provenance.reuse_match)
+  ) {
+    throw new Error(
+      `${provenancePath} is missing reuse_match_hash or reuse_match; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
+    );
+  }
+}
+
+function reuseMatchHash(reuseMatch: AuthoredArtifactReuseMatch): string {
+  return sha256Text(stableJson(reuseMatch));
+}
+
+export async function writeFreshAuthoredYamlDocument<T>(
+  filePath: string,
+  artifactName: string,
+  create: () => Promise<T>,
+  options: {
+    reuseExisting?: boolean;
+    reuseMatch?: AuthoredArtifactReuseMatch;
+  } = {},
+): Promise<T> {
+  const currentReuseMatchHash = options.reuseMatch
+    ? reuseMatchHash(options.reuseMatch)
+    : null;
+  if (await exists(filePath)) {
+    if (options.reuseExisting) {
+      const provenancePath = authoredArtifactProvenancePath(filePath);
+      const provenance =
+        await readYamlDocumentIfPresent<AuthoredArtifactReuseProvenance>(
+          provenancePath,
+        );
+      if (!provenance) {
+        throw new Error(
+          `${artifactName} already exists at ${filePath}, but ${provenancePath} is missing; explicit resume cannot prove the authored artifact reuse match.`,
+        );
+      }
+      assertCurrentReuseProvenance(provenance, provenancePath);
+      if (
+        currentReuseMatchHash &&
+        provenance.reuse_match_hash !== currentReuseMatchHash
+      ) {
+        throw new Error(
+          `${artifactName} resume provenance mismatch at ${provenancePath}; existing authored artifact was produced for reuse_match_hash=${provenance.reuse_match_hash}, current reuse_match_hash=${currentReuseMatchHash}.`,
+        );
+      }
+      const currentArtifactSha256 = await sha256File(filePath);
+      if (provenance.artifact_sha256 !== currentArtifactSha256) {
+        throw new Error(
+          `${artifactName} artifact hash mismatch at ${filePath}; expected ${provenance.artifact_sha256}, got ${currentArtifactSha256}.`,
+        );
+      }
+      return readYamlDocument<T>(filePath);
+    }
+    throw new Error(
+      `${artifactName} already exists at ${filePath}; explicit resume or supersession is required before rewriting authored semantic artifacts.`,
+    );
+  }
+  const created = await create();
+  await writeYamlDocument(filePath, created);
+  if (options.reuseMatch && currentReuseMatchHash) {
+    await writeAuthoredArtifactReuseProvenance({
+      filePath,
+      artifactName,
+      reuseMatch: options.reuseMatch,
+      reuseMatchHash: currentReuseMatchHash,
+    });
+  }
+  return created;
+}
+
+export async function writeAuthoredArtifactReuseProvenance(args: {
+  filePath: string;
+  artifactName: string;
+  reuseMatch: AuthoredArtifactReuseMatch;
+  reuseMatchHash?: string | null;
+}): Promise<void> {
+  await writeYamlDocument(authoredArtifactProvenancePath(args.filePath), {
+    schema_version: "1",
+    artifact_name: args.artifactName,
+    artifact_ref: args.filePath,
+    artifact_sha256: await sha256File(args.filePath),
+    created_at: isoNow(),
+    reuse_match_hash:
+      args.reuseMatchHash ?? reuseMatchHash(args.reuseMatch),
+    reuse_match: args.reuseMatch,
+  } satisfies AuthoredArtifactReuseProvenance);
 }

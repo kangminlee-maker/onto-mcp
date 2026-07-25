@@ -53,7 +53,6 @@ import type {
 import {
   SemanticMapDispatchAccounting,
   type ResolvedLlmDispatchCapability,
-  type SemanticMapDispatchAccountingEntry,
 } from "../llm/sealed-dispatch-capability.js";
 import {
   type StructuredDispatchFailureEvidence,
@@ -101,7 +100,6 @@ import {
   writeSourcePurposeCandidatesValidationArtifact,
 } from "./purpose-authority-validation.js";
 import {
-  sourceSafetyRowIdForObservation,
   writeSourceSafetyLedgerArtifact,
   writeSourceSafetyLedgerValidationArtifact,
 } from "./source-safety-validation.js";
@@ -179,7 +177,6 @@ import {
 } from "./maturation-validation.js";
 import {
   loadReconstructContractRegistry,
-  type ReconstructContractRegistry,
 } from "./contract-registry.js";
 import { buildReconstructRunGoverningSnapshot } from "./governing-snapshot.js";
 import {
@@ -201,12 +198,8 @@ import {
 // W1/W2 (wiring design 20260702 §15.1/§3): the semantic-map capability seat + W2 stage reuse the
 // module's canonical shapes and single-source builders (no live runReconstruct call site until W3).
 import {
-  classifyFrontier,
   semanticMapGateLogicSha256,
 } from "./comprehension-semantic-map.js";
-import {
-  buildColumnLeaves,
-} from "./comprehension-reduce.js";
 // Step 6 (multi-artifact design 20260718 DD6/DD7/DD9): the code artifact's L2 realization — the
 // stage routes code-kind observations through these; the spreadsheet surfaces above are untouched.
 import type { CodeStructureInventory } from "../code-structure-observer.js";
@@ -241,7 +234,7 @@ import type {
   ReconstructDirectiveAuthor,
   ReconstructOntologySeedAuthorInput,
 } from "./directive-author-contract.js";
-import { isRecord, isoNow, sha256Text, stableJson } from "./run-primitives.js";
+import { isoNow, sha256Text, stableJson } from "./run-primitives.js";
 import { runSpreadsheetLeafReadStage } from "./leaf-read-stage.js";
 import { runMaturationValueReadStage } from "./value-read-stage.js";
 import {
@@ -253,7 +246,6 @@ import {
 } from "./semantic-map-stage.js";
 import type {
   SemanticMapPreImageBase,
-  SemanticMapStageConfig,
   SemanticMapStageResult,
 } from "./semantic-map-stage.js";
 import type { ReconstructConfirmationProvider } from "./confirmation-provider-contract.js";
@@ -307,11 +299,21 @@ import {
   semanticMapResumeValidationPath,
   semanticMapSidecarPath,
 } from "./semantic-map-resume.js";
-import { sha256File } from "./run-primitives.js";
 import { codeAuthoringPromptContractSha256 } from "./authoring-llm-call.js";
 import { reconstructContractRegistryPathFromProfilesRoot } from "./contract-registry.js";
 import { competencyQuestionsRepairDirectives } from "./post-seed-validation.js";
 import { ontologySeedRepairSections } from "./ontology-seed-validation.js";
+import {
+  DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  deriveSemanticMapFallbackPriorDispatchSpend,
+} from "./semantic-map-stage.js";
+import {
+  writeAuthoredArtifactReuseProvenance,
+  writeFreshAuthoredYamlDocument,
+} from "./authored-artifact-reuse.js";
+import { readLensPrompt, sourceObservationsForPrompt } from "./authoring-prompt-payloads.js";
+import { buildGracefulTerminalFinalOutput } from "./graceful-terminal.js";
+import type { GracefulTerminalAssemblyContext } from "./graceful-terminal.js";
 
 export interface RunReconstructParams {
   projectRoot: string;
@@ -393,16 +395,6 @@ export interface ReconstructDispatchFallbackRuntime {
   };
 }
 
-interface AuthoredArtifactReuseProvenance {
-  schema_version: "1";
-  artifact_name: string;
-  artifact_ref: string;
-  artifact_sha256: string;
-  created_at: string;
-  reuse_match_hash: string;
-  reuse_match: AuthoredArtifactReuseMatch;
-}
-
 export interface ReconstructRunResult {
   sessionId: string;
   sessionRoot: string;
@@ -428,41 +420,6 @@ export interface ReconstructRunResult {
    */
   metrics?: ReconstructMetricsArtifact;
   stopDecision?: ReconstructStopDecisionArtifact;
-}
-
-/**
- * The inside-`try` context a graceful terminal needs that is NOT visible at the run-level catch
- * (design §16.4/§16.5). The throwing site populates a hoisted binding before it throws; the catch
- * hands it to assembleGracefulTerminal. `reachedArtifactRefs` are the artifacts written before the
- * halt (existence-checked before use); contractRegistry + targetMaterialProfile let the assembly
- * rebuild the governing snapshot the manifest validator re-derives.
- */
-interface GracefulTerminalAssemblyContext {
-  reachedArtifactRefs: Partial<ReconstructRecordArtifactRefs>;
-  contractRegistry: ReconstructContractRegistry;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-}
-
-/**
- * The deterministic, runtime-authored final output for a graceful terminal (design §16.5-2). It
- * restates only runtime diagnostics (disposition, terminal stage, the reason the throwing site
- * built) — never out-of-authority source values — so it is an honest "why this stopped" statement,
- * not a fabricated reconstruction.
- */
-function buildGracefulTerminalFinalOutput(signal: GracefulTerminalSignal): string {
-  const dispositionLabel = signal.disposition === "blocked" ? "Blocked" : "Limited";
-  // No level-2 subheadings: the graceful terminal is a standalone deterministic statement, not a
-  // normal final-output section (those headings are registry-owned; see check-final-output-sections-parity).
-  return [
-    `# Reconstruct ${dispositionLabel} Terminal`,
-    "",
-    `This reconstruct run stopped early with a **${signal.disposition}** disposition at the \`${signal.terminalStepId}\` stage.`,
-    "",
-    "The run did not reach semantic authoring, so no ontology seed, claims, or competency questions were produced.",
-    "",
-    `**Reason:** ${signal.reason}`,
-    "",
-  ].join("\n");
 }
 
 async function writeSourceObservationLineageIndexArtifact(args: {
@@ -513,34 +470,6 @@ async function readTextIfPresent(filePath: string): Promise<string | null> {
   }
 }
 
-function authoredArtifactProvenancePath(filePath: string): string {
-  return `${filePath}.reuse-provenance.yaml`;
-}
-
-function assertCurrentReuseProvenance(
-  provenance: AuthoredArtifactReuseProvenance,
-  provenancePath: string,
-): void {
-  const record = provenance as unknown as Record<string, unknown>;
-  if ("compatibility_hash" in record || "compatibility" in record) {
-    throw new Error(
-      `${provenancePath} uses retired compatibility fields; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
-    );
-  }
-  if (
-    typeof provenance.reuse_match_hash !== "string" ||
-    !isRecord(provenance.reuse_match)
-  ) {
-    throw new Error(
-      `${provenancePath} is missing reuse_match_hash or reuse_match; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
-    );
-  }
-}
-
-function reuseMatchHash(reuseMatch: AuthoredArtifactReuseMatch): string {
-  return sha256Text(stableJson(reuseMatch));
-}
-
 // ── semantic_map stage (Layer-2 wiring design 20260702 §2/§3/§6 · W2) ─────────────────────────────
 //
 // The W2 machinery: per seed observation, build the deterministic reduce trees from the FULL
@@ -559,23 +488,6 @@ const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
 // Over-context gate LOGIC digest: tautological function-source hash (semanticMapGateLogicSha256,
 // leaf-reader precedent) — the earlier hand-bumped literal was a silent-stale seed on any predicate
 // edit whose author forgot the bump (ultracode audit F, 2-lens convergence with design §13.4).
-
-/** First MEASURED defaults (real-LLM cut design 20260703 §3; previous 200/100 PRELIMINARY values
- *  self-disabled the stage on real workbooks via the X5 all-or-nothing observation gate): the
- *  reference 461-column workbook needs EXACTLY 1,699 produced-node dispatches (probe via the real
- *  buildColumnLeaves→reduce→classifyFrontier), so 2400 carries ~41% drift margin; verify 1000 ≈ 4×
- *  the ~230 expected unanchored verifications. Every value folds into the stage fingerprint
- *  (re-tuning rotates the seed reuse key) — the DEFAULT-config pin test makes that rotation a
- *  conscious decision (§10.F4). */
-export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
-  leaf_count: 8,
-  fanin: 2,
-  over_context_budget: 2,
-  max_synthesize_calls: 2400,
-  max_verify_calls: 1000,
-  max_nodes: 60,
-  max_disclosure: 30,
-};
 
 /** Project the already-materialized target-material census + source observations down to the pure
  *  {@link EnvironmentContextProfileInput} the profile assembler consumes (Stage 0). Deterministic
@@ -693,55 +605,6 @@ export function projectEnvironmentContextProfileInput(args: {
 // them rotates code reuse keys (old code sidecars fail closed on fingerprint mismatch) while every
 // spreadsheet key stays byte-identical.
 
-export function deriveSemanticMapFallbackPriorDispatchSpend(args: {
-  primaryCensus: ReconstructSemanticMapCensus;
-  incompleteItemIds: readonly string[];
-  accountingEntries: readonly SemanticMapDispatchAccountingEntry[];
-  sealedOperations: { synthesize: boolean; verify: boolean };
-}): { synthesize: number; verify: number } {
-  const incompleteSet = new Set(args.incompleteItemIds);
-  const incompleteOuterSpend = args.primaryCensus.by_observation
-    .filter((row) => incompleteSet.has(row.observation_id))
-    .flatMap((row) => row.columns)
-    .reduce(
-      (sum, column) => ({
-        synthesize: sum.synthesize + column.synthesize_calls,
-        verify: sum.verify + column.verify_calls,
-      }),
-      { synthesize: 0, verify: 0 },
-    );
-  const primaryAccountingRequests = (
-    operation: "semantic_map_synthesize" | "semantic_map_verify",
-  ): number =>
-    args.accountingEntries.filter(
-      (entry) =>
-        entry.execution_source === "primary" && entry.operation === operation,
-    ).reduce(
-      (sum, entry) => sum + entry.actual_adapter_request_count,
-      0,
-    );
-  return {
-    synthesize:
-      incompleteOuterSpend.synthesize +
-      (args.sealedOperations.synthesize
-        ? Math.max(
-            0,
-            primaryAccountingRequests("semantic_map_synthesize") -
-              args.primaryCensus.synthesize_calls_total,
-          )
-        : args.primaryCensus.breaker_retry_synthesize_calls ?? 0),
-    verify:
-      incompleteOuterSpend.verify +
-      (args.sealedOperations.verify
-        ? Math.max(
-            0,
-            primaryAccountingRequests("semantic_map_verify") -
-              args.primaryCensus.verify_calls_total,
-          )
-        : args.primaryCensus.breaker_retry_verify_calls ?? 0),
-  };
-}
-
 function annotateDispatchFallbackCensus(args: {
   census: ReconstructSemanticMapCensus;
   runtime: ReconstructDispatchFallbackRuntime;
@@ -854,82 +717,6 @@ function annotateDispatchFallbackCensus(args: {
       args.census.verify_model_identity,
     args.runtime.fallback.verify.public_descriptor.descriptor_id,
   ]);
-}
-
-async function writeFreshAuthoredYamlDocument<T>(
-  filePath: string,
-  artifactName: string,
-  create: () => Promise<T>,
-  options: {
-    reuseExisting?: boolean;
-    reuseMatch?: AuthoredArtifactReuseMatch;
-  } = {},
-): Promise<T> {
-  const currentReuseMatchHash = options.reuseMatch
-    ? reuseMatchHash(options.reuseMatch)
-    : null;
-  if (await exists(filePath)) {
-    if (options.reuseExisting) {
-      const provenancePath = authoredArtifactProvenancePath(filePath);
-      const provenance =
-        await readYamlDocumentIfPresent<AuthoredArtifactReuseProvenance>(
-          provenancePath,
-        );
-      if (!provenance) {
-        throw new Error(
-          `${artifactName} already exists at ${filePath}, but ${provenancePath} is missing; explicit resume cannot prove the authored artifact reuse match.`,
-        );
-      }
-      assertCurrentReuseProvenance(provenance, provenancePath);
-      if (
-        currentReuseMatchHash &&
-        provenance.reuse_match_hash !== currentReuseMatchHash
-      ) {
-        throw new Error(
-          `${artifactName} resume provenance mismatch at ${provenancePath}; existing authored artifact was produced for reuse_match_hash=${provenance.reuse_match_hash}, current reuse_match_hash=${currentReuseMatchHash}.`,
-        );
-      }
-      const currentArtifactSha256 = await sha256File(filePath);
-      if (provenance.artifact_sha256 !== currentArtifactSha256) {
-        throw new Error(
-          `${artifactName} artifact hash mismatch at ${filePath}; expected ${provenance.artifact_sha256}, got ${currentArtifactSha256}.`,
-        );
-      }
-      return readYamlDocument<T>(filePath);
-    }
-    throw new Error(
-      `${artifactName} already exists at ${filePath}; explicit resume or supersession is required before rewriting authored semantic artifacts.`,
-    );
-  }
-  const created = await create();
-  await writeYamlDocument(filePath, created);
-  if (options.reuseMatch && currentReuseMatchHash) {
-    await writeAuthoredArtifactReuseProvenance({
-      filePath,
-      artifactName,
-      reuseMatch: options.reuseMatch,
-      reuseMatchHash: currentReuseMatchHash,
-    });
-  }
-  return created;
-}
-
-async function writeAuthoredArtifactReuseProvenance(args: {
-  filePath: string;
-  artifactName: string;
-  reuseMatch: AuthoredArtifactReuseMatch;
-  reuseMatchHash?: string | null;
-}): Promise<void> {
-  await writeYamlDocument(authoredArtifactProvenancePath(args.filePath), {
-    schema_version: "1",
-    artifact_name: args.artifactName,
-    artifact_ref: args.filePath,
-    artifact_sha256: await sha256File(args.filePath),
-    created_at: isoNow(),
-    reuse_match_hash:
-      args.reuseMatchHash ?? reuseMatchHash(args.reuseMatch),
-    reuse_match: args.reuseMatch,
-  } satisfies AuthoredArtifactReuseProvenance);
 }
 
 function answerabilitySummary(
@@ -2189,46 +1976,6 @@ if (SOURCE_ADMISSION_SELECTION_FLOOR > SOURCE_ADMISSION_DEEP_FILE_LIMIT) {
       "floor by the post-floor budget cap.",
   );
 }
-function promptContextSourceSafetyRowsByObservationId(
-  sourceObservations: ReconstructSourceObservationsArtifact,
-  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact,
-): Map<string, ReconstructSourceSafetyLedgerArtifact["safety_rows"][number]> {
-  const rowsById = new Map(sourceSafetyLedger.safety_rows.map((row) => [
-    row.safety_row_id,
-    row,
-  ]));
-  return new Map(sourceObservations.observations.flatMap((observation) => {
-    const row = rowsById.get(sourceSafetyRowIdForObservation(
-      observation,
-      "prompt_context",
-    ));
-    return row ? [[observation.observation_id, row] as const] : [];
-  }));
-}
-
-function sourceObservationsForPrompt(args: {
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact;
-}): ReconstructSourceObservationsArtifact {
-  const rowsByObservationId = promptContextSourceSafetyRowsByObservationId(
-    args.sourceObservations,
-    args.sourceSafetyLedger,
-  );
-  return {
-    ...args.sourceObservations,
-    observations: args.sourceObservations.observations.flatMap((observation) => {
-      const row = rowsByObservationId.get(observation.observation_id);
-      // Admit a source into the seed prompt only when its prompt-context visibility
-      // tier is consumption_allowed; any other tier (no_prompt_use / no_replay_use /
-      // internal_only) or a missing row withholds it (fail-closed governance).
-      if (row?.visibility_tier === "consumption_allowed") {
-        return [observation];
-      }
-      return [];
-    }),
-  };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Authoring prompt-template contract (DET-1 / CG-1)
 //
@@ -2274,14 +2021,6 @@ function sourceObservationsForPrompt(args: {
 // source_ref_mismatch (리뷰 ct-F2). This sha folds into the CODE observation fingerprint only;
 // code fingerprints reach the seed reuse key through the aggregate fingerprint, so rotation
 // coverage is complete (DD6). Concept split 근거: fingerprint 격리라는 런타임 동작 차이.
-
-async function readLensPrompt(args: {
-  profilesRoot: string;
-  lensId: string;
-}): Promise<string> {
-  const ontoRoot = path.resolve(args.profilesRoot, "..", "..", "..");
-  return fs.readFile(path.join(ontoRoot, "roles", `${args.lensId}.md`), "utf8");
-}
 
 const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;
 

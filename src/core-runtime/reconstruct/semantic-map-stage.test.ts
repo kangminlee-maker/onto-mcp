@@ -4,10 +4,6 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import {
-  DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-  deriveSemanticMapFallbackPriorDispatchSpend,
-} from "./run.js";
 import { prepareSemanticMapResumeContext } from "./semantic-map-resume.js";
 import {
   authoringPromptContractSha256,
@@ -31,6 +27,8 @@ import {
   buildSemanticMapBridgeCallbacks,
   CODE_SEMANTIC_MAP_MAX_NODES,
   CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
+  DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
   resolveSemanticMapCapability,
   resolveSemanticMapKinds,

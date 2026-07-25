@@ -204,7 +204,11 @@ const spans: Span[] = movedStmts
     start: spanStart(stmt),
     declStart: stmt.getStart(src),
     end: stmt.getEnd(),
-    exported: (ts.getCombinedModifierFlags(stmt as ts.Declaration) & ts.ModifierFlags.Export) !== 0,
+    // stmtByName에 담기는 문장은 namesOf가 이름을 뽑아낸 선언문뿐이다(함수·클래스·인터페이스·
+    // 타입 별칭·enum·변수문). ts.Statement는 Declaration의 브랜드를 갖지 않으므로 직접 캐스팅이
+    // 막힌다 — 좁히는 조건이 namesOf 쪽에 있어 여기서 재검사할 수 없다.
+    exported:
+      (ts.getCombinedModifierFlags(stmt as unknown as ts.Declaration) & ts.ModifierFlags.Export) !== 0,
   }))
   .sort((a, b) => a.start - b.start);
 
@@ -260,7 +264,19 @@ interface DestFacts {
   readonly selfImportLocals: Set<string>;
 }
 const RUN_SPECIFIER = "./run.js";
+/** 목적지 모듈을 run.ts가 가리킬 때 쓰는 specifier — self-resolution 판정에 쓴다. */
+const DEST_SELF_SPECIFIER = `./${path.basename(DEST).replace(/\.ts$/, ".js")}`;
 let destFacts: DestFacts | undefined;
+/**
+ * 그 이름이 목적지 안에서 **자기 선언으로 해결되는가**. run.ts가 목적지 모듈에서 별칭 없이
+ * named import해 온 이름이고 목적지가 그것을 선언하고 있으면 같은 심볼이므로 import가 필요 없다.
+ * 별칭(`A as B`)은 목적지에 B가 없으므로 제외한다 — 이름을 바꿔주는 일은 이 도구가 하지 않는다.
+ */
+const resolvesInDestItself = (local: string): boolean => {
+  const mine = importBindings.get(local);
+  return mine !== undefined && mine.kind === "named" && mine.specifier === DEST_SELF_SPECIFIER &&
+    mine.propertyName === local && (destFacts?.declaredNames.has(local) ?? false);
+};
 if (APPEND) {
   const destText0 = fs.readFileSync(DEST, "utf8");
   const destSrc = ts.createSourceFile(DEST, destText0, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
@@ -292,13 +308,16 @@ if (APPEND) {
     process.exit(1);
   }
   // 옮길 코드가 참조하는 이름이 목적지에서 **다른 것**을 가리키면 조용히 의미가 바뀐다.
+  // 예외: run.ts가 바로 그 목적지 모듈에서 별칭 없이 import해 왔고 목적지가 그 이름을 스스로
+  // 선언한다면 **같은 심볼**이다 — 의미 변경이 아니라 import가 불필요해지는 경우다.
   const shadowed = neededImports.filter((local) => {
     const mine = importBindings.get(local) as ImportBinding;
     const theirs = destFacts?.imports.get(local);
     if (theirs !== undefined) {
       return theirs.specifier !== mine.specifier || theirs.propertyName !== mine.propertyName;
     }
-    return declaredNames.has(local);
+    if (!declaredNames.has(local)) return false;
+    return !resolvesInDestItself(local);
   }).sort();
   if (shadowed.length > 0) {
     console.error("!! BLOCKER — 옮길 코드가 쓰는 이름이 목적지에서 다른 것을 가리킨다 (조용한 의미 변경):");
@@ -315,15 +334,21 @@ if (APPEND) {
   }
 }
 
-/** append 모드에서 목적지가 이미 동일하게 import하는 것은 다시 쓰지 않는다. */
+/**
+ * append 모드에서 다시 쓰지 않는 것: (1) 목적지가 이미 동일하게 import하는 이름,
+ * (2) 목적지가 스스로 선언해서 그 안에서 해결되는 이름(self-resolution).
+ */
 const importsToRender = destFacts === undefined
   ? neededImports
-  : neededImports.filter((local) => !destFacts?.imports.has(local));
+  : neededImports.filter((local) => !destFacts?.imports.has(local) && !resolvesInDestItself(local));
 if (destFacts !== undefined) {
+  const selfResolved = neededImports.filter((local) => resolvesInDestItself(local));
   console.log(
-    `목적지 재사용: import ${neededImports.length - importsToRender.length}개 재사용 · ` +
-      `${importsToRender.length}개 신규 · 자기참조 된 run.js import ${destFacts.selfImportLocals.size}개 제거`,
+    `목적지 재사용: import ${neededImports.length - importsToRender.length - selfResolved.length}개 재사용 · ` +
+      `자기선언 해결 ${selfResolved.length}개 · ${importsToRender.length}개 신규 · ` +
+      `자기참조 된 run.js import ${destFacts.selfImportLocals.size}개 제거`,
   );
+  if (selfResolved.length > 0) console.log(`             자기선언: ${selfResolved.join(", ")}`);
 }
 
 const bySpecifier = new Map<string, { value: string[]; type: string[]; ns: string[]; def: string[] }>();

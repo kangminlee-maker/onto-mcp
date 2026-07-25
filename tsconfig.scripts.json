@@ -47,7 +47,9 @@
     "scripts/generate-linguist-tables.ts",
     "scripts/check-linguist-drift.ts",
     "scripts/run-split-plan.mts",
-    "scripts/run-extraction-identity.mts"
+    "scripts/run-extraction-identity.mts",
+    "scripts/run-extract-symbols.mts",
+    "scripts/run-dead-import-clean.mts"
   ],
   "exclude": []
 }

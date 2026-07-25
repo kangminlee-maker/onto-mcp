@@ -96,6 +96,9 @@ import type { SemanticMapAnyProjection } from "./semantic-map-projection.js";
 import type { BreadthFoldLevel } from "./source-breadth-fold.js";
 import { regionCoverageKeys, regionKey } from "./source-observations.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
+import fs from "node:fs/promises";
+import type { ReconstructSourceSafetyLedgerArtifact } from "./artifact-types.js";
+import { sourceSafetyRowIdForObservation } from "./source-safety-validation.js";
 
 // Cheap runaway guard on how many cited observations are projected before size-bounding
 // (the derived per-batch evidence reserve is the real bound; this only caps projection work).
@@ -2453,3 +2456,51 @@ export const LEAF_READ_MAX_TOKENS = 2048;
 
 /** Max tokens for each bounded value-read JSON (a short location-pick / judgment object). */
 export const VALUE_READ_MAX_TOKENS = 2048;
+
+function promptContextSourceSafetyRowsByObservationId(
+  sourceObservations: ReconstructSourceObservationsArtifact,
+  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact,
+): Map<string, ReconstructSourceSafetyLedgerArtifact["safety_rows"][number]> {
+  const rowsById = new Map(sourceSafetyLedger.safety_rows.map((row) => [
+    row.safety_row_id,
+    row,
+  ]));
+  return new Map(sourceObservations.observations.flatMap((observation) => {
+    const row = rowsById.get(sourceSafetyRowIdForObservation(
+      observation,
+      "prompt_context",
+    ));
+    return row ? [[observation.observation_id, row] as const] : [];
+  }));
+}
+
+export function sourceObservationsForPrompt(args: {
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact;
+}): ReconstructSourceObservationsArtifact {
+  const rowsByObservationId = promptContextSourceSafetyRowsByObservationId(
+    args.sourceObservations,
+    args.sourceSafetyLedger,
+  );
+  return {
+    ...args.sourceObservations,
+    observations: args.sourceObservations.observations.flatMap((observation) => {
+      const row = rowsByObservationId.get(observation.observation_id);
+      // Admit a source into the seed prompt only when its prompt-context visibility
+      // tier is consumption_allowed; any other tier (no_prompt_use / no_replay_use /
+      // internal_only) or a missing row withholds it (fail-closed governance).
+      if (row?.visibility_tier === "consumption_allowed") {
+        return [observation];
+      }
+      return [];
+    }),
+  };
+}
+
+export async function readLensPrompt(args: {
+  profilesRoot: string;
+  lensId: string;
+}): Promise<string> {
+  const ontoRoot = path.resolve(args.profilesRoot, "..", "..", "..");
+  return fs.readFile(path.join(ontoRoot, "roles", `${args.lensId}.md`), "utf8");
+}
