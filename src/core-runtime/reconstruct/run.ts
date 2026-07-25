@@ -307,6 +307,12 @@ import {
   type ReconstructSourceObservation,
 } from "./source-observations.js";
 import {
+  type BreadthFoldLevel,
+  foldObservationsToBudget,
+  SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
+  SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+} from "./source-breadth-fold.js";
+import {
   COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
   COMPREHENSION_ARTIFACT_CONTRACT_VERSION,
   buildLlmComprehensionArtifact,
@@ -465,6 +471,14 @@ export interface ReconstructDirectiveAuthor {
    * static FLOOR).
    */
   readonly documentExcerptProjectionBudget?: number;
+  /**
+   * Projection-layer breadth-fold opt-in (design 20260723 §8 PR-3), folded into the resume reuse key
+   * like documentExcerptProjectionBudget: when ON and the candidate catalog overflows, the directive
+   * authors a COARSER-detail selection prompt, so resuming under a different flag value must regenerate
+   * rather than silently reuse a directive authored at the other detail rung. Absent/false = today's
+   * flat projection. The flag reaches the reuse key only through this field.
+   */
+  readonly sourceBreadthFold?: boolean;
   /**
    * Run-scoped sink (deduped by observation) of documents whose captured excerpt a
    * seed prompt's projection budget sliced. Populated during authoring; read by
@@ -1236,6 +1250,10 @@ interface AuthoredArtifactReuseMatch {
   // a different semantic-author model/window, or a fall back to the FLOOR — must
   // invalidate reuse even when the captured observations are byte-identical.
   document_excerpt_projection_budget: number;
+  // Projection-layer breadth fold (design 20260723 §8 PR-3): enabling/disabling it can change the
+  // authored directive's detail rung on an overflowing candidate catalog, so — like the projection
+  // budget above — it invalidates reuse even when the captured observations are byte-identical.
+  source_breadth_fold: boolean;
   // P1-C2-A (R2/R8): the order-independent aggregate of the per-observation leaf-read
   // llm_touch_fingerprints (ⓐ+ⓑ). Folding the fingerprint VALUE — never the leaf-read OUTPUT —
   // rotates the seed key when the leaf-reader model/prompt or a low-confidence region changes, so a
@@ -1448,6 +1466,35 @@ function assertPromptPayloadCharLimit(args: {
 
 function promptPayloadCharCount(systemPrompt: string, userPayload: unknown): number {
   return systemPrompt.length + JSON.stringify(userPayload, null, 2).length;
+}
+
+/**
+ * Byte twin of {@link assertPromptPayloadCharLimit} (design 20260723 §3.4). The codex worker rejects
+ * on stdin BYTES, not chars (llm-caller.ts writes `combinedPrompt` unconditionally), so a char count
+ * under a limit does NOT guarantee the UTF-8 byte payload is under codex's ceiling for multi-byte
+ * source (e.g. Korean documents). This measures the exact serialized dispatch payload in UTF-8 bytes.
+ * INERT until wired to a dispatch surface (PR-2). Mirrors the byte-cap precedent at
+ * SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP.
+ */
+export function promptPayloadByteCount(systemPrompt: string, userPayload: unknown): number {
+  return (
+    Buffer.byteLength(systemPrompt, "utf8") +
+    Buffer.byteLength(JSON.stringify(userPayload, null, 2), "utf8")
+  );
+}
+
+export function assertPromptPayloadByteLimit(args: {
+  artifactName: string;
+  systemPrompt: string;
+  userPayload: unknown;
+  byteLimit: number;
+}): void {
+  const totalBytes = promptPayloadByteCount(args.systemPrompt, args.userPayload);
+  if (totalBytes > args.byteLimit) {
+    throw new Error(
+      `${args.artifactName} compact prompt exceeds deterministic prompt budget: ${totalBytes} > ${args.byteLimit} bytes. Split or reduce the runtime projection before dispatch.`,
+    );
+  }
 }
 
 async function sha256File(filePath: string): Promise<string> {
@@ -1965,6 +2012,12 @@ function authoredArtifactReuseMatch(args: {
     document_excerpt_projection_budget:
       args.directiveAuthor.documentExcerptProjectionBudget ??
         DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+    // Projection-layer breadth fold (design 20260723 §8 PR-3): a directive-prompt projection knob, so
+    // it belongs in the reuse key alongside document_excerpt_projection_budget — enabling/disabling it
+    // can change the authored directive's detail rung on an overflowing catalog, and a resume across a
+    // flag change must regenerate rather than silently reuse the other rung's selection. Always-present
+    // boolean (over-rotates every key ONCE at upgrade — the documented safe direction).
+    source_breadth_fold: args.directiveAuthor.sourceBreadthFold === true,
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
     // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —
@@ -10348,6 +10401,14 @@ interface ObservationPromptPayloadOptions {
   contentExcerptCharLimit?: number;
   includeStructuralData?: boolean;
   /**
+   * Breadth-fold (design 20260723) inventory-skeleton rung: per-observation ceiling (chars) for the
+   * projected `code_structure_inventory`, threaded to `projectCodeInventoryForPrompt`. When omitted the
+   * projector's own default (CODE_STRUCTURE_INVENTORY_PROMPT_CHAR_BUDGET = 40_000) applies — byte-
+   * identical for every current caller. A tighter budget demotes per-file inventory DETAIL only; the
+   * observation set and every observation_id stay projected (breadth preserved).
+   */
+  codeInventoryCharBudget?: number;
+  /**
    * Seed-authoring opt-in: a document observation may project its whole captured prose
    * (instead of `contentExcerptCharLimit`) so purpose/candidate/seed authoring sees the
    * document tail. Set only by seed-authoring callers — NOT by post-seed aggregate
@@ -10575,6 +10636,7 @@ function compactStructuralDataForPrompt(
   expandDocument: boolean,
   documentExcerptCharBudget: number | undefined,
   sourceRef: string | null | undefined,
+  codeInventoryCharBudget?: number | undefined,
 ): Record<string, unknown> {
   const compacted: Record<string, unknown> = { ...structuralData };
 
@@ -10606,7 +10668,12 @@ function compactStructuralDataForPrompt(
   // inventory, and the semantic-map stage folds from the artifact, never from this projection.
   const codeInventory = compacted.code_structure_inventory;
   if (codeInventory !== null && typeof codeInventory === "object" && !Array.isArray(codeInventory)) {
-    const projection = projectCodeInventoryForPrompt(codeInventory as CodeStructureInventory);
+    // codeInventoryCharBudget undefined → projector uses its 40_000 default (byte-identical). A
+    // tighter budget (breadth-fold inventory-skeleton rung) demotes hierarchy→imports→spans DETAIL.
+    const projection = projectCodeInventoryForPrompt(
+      codeInventory as CodeStructureInventory,
+      codeInventoryCharBudget,
+    );
     compacted.code_structure_inventory = projection.inventory;
     if (projection.truncated) {
       compacted.code_structure_inventory_projection_truncated = true;
@@ -10779,6 +10846,7 @@ export function observationPromptPayload(
           expandDocument,
           documentExcerptCharBudgetForProjection,
           observation.source_ref,
+          options.codeInventoryCharBudget,
         );
         payload.structural_data = compacted;
         // An expanded text document whose excerpt the budget actually sliced — the
@@ -12217,6 +12285,21 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    */
   enableSemanticMapAuthoring?: boolean;
   /**
+   * Projection-layer breadth-fold opt-in (design 20260723-deterministic-recursive-observation §8
+   * PR-3), resolved from reconstruct.execution.source_breadth_fold. Default undefined/false = the
+   * source-observation-directive projects its pre-selection candidate catalog flat (today's full
+   * projection) and the always-on byte guard fails loud on overflow — byte-identical with PR-2.
+   * Explicit true makes writeSourceObservationDirective fold the catalog to the finest detail rung
+   * that fits the byte budget (full → inventory_skeleton → one_line) BEFORE the guard, turning a
+   * large-corpus overflow into a bounded dispatch success. Projection-only for the OBSERVATION layer —
+   * no observation is minted or mutated, so the source-observation reuse key and per-observation delta
+   * hashes never rotate (DW-3d). It DOES change the authored directive's detail rung on an overflowing
+   * catalog, so it is exposed as `sourceBreadthFold` and folded into the DIRECTIVE resume reuse key
+   * (authoredArtifactReuseMatch) — a resume across a flag change regenerates rather than silently
+   * reusing the other rung's selection (silent-stale guard; same treatment as documentExcerptProjectionBudget).
+   */
+  sourceBreadthFold?: boolean;
+  /**
    * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
    * (observation replace + seed payload) — absolute code node_ref.file paths label as
    * path.relative(projectRoot, file); artifact truth stays absolute. Absent = v1 absolute
@@ -12474,6 +12557,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       : {}),
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
+    sourceBreadthFold: args.sourceBreadthFold === true,
     documentExcerptProjectionTruncations,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
@@ -12653,6 +12737,74 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const availableObservationIds = cappedObservations.map(
         (observation) => observation.observation_id,
       );
+      const directiveUserPayloadBase = {
+        intent: input.intent,
+        target_material_profile: input.targetMaterialProfile,
+        available_observation_ids: availableObservationIds,
+        selection_limit: SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT,
+        source_scout_pack: sourceScoutPackPromptPayload({
+          sourceScoutPack: input.sourceScoutPack,
+          sourceScoutPackValidation: input.sourceScoutPackValidation,
+          sourceScoutPackRef: input.sourceScoutPackRef,
+          sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
+        }),
+      };
+      // Detail rungs for the candidate-catalog projection (design 20260723 §3.2). Every rung projects
+      // ALL availableObservationIds — the breadth invariant: only per-observation DETAIL is demoted,
+      // never a file, so the selecting LLM can still pick any id at every rung. `full` (the else branch)
+      // is today's exact projection — the byte-identical hinge; the fold reaches a coarser rung only
+      // under overflow.
+      const projectCatalogAtFoldLevel = (level: BreadthFoldLevel): unknown[] => {
+        const options: ObservationPromptPayloadOptions =
+          level === "one_line"
+            ? { observationIds: availableObservationIds, includeStructuralData: false }
+            : level === "inventory_skeleton"
+              ? {
+                  observationIds: availableObservationIds,
+                  contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
+                  codeInventoryCharBudget: SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
+                }
+              : {
+                  observationIds: availableObservationIds,
+                  contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
+                };
+        return projectObservationsForPrompt(input.sourceObservations, options) as unknown[];
+      };
+      // PR-3 opt-in fold: when enabled, project the finest rung whose FULL dispatch payload fits the
+      // byte budget instead of the flat `full` projection. Off (default) takes the `full` rung directly
+      // — byte-identical with PR-2. When `full` fits, the fold returns the `full` projection unchanged,
+      // so on-with-a-fitting-corpus is byte-identical too (the always-on guard below then no-ops); a
+      // coarser rung is reached only when `full` would overflow.
+      const breadthFold =
+        args.sourceBreadthFold === true
+          ? foldObservationsToBudget({
+              budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+              catalogObservationCount: availableObservationIds.length,
+              projectAtLevel: projectCatalogAtFoldLevel,
+              measure: (projection) =>
+                promptPayloadByteCount(SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT, {
+                  ...directiveUserPayloadBase,
+                  source_observations: projection,
+                }),
+            })
+          : null;
+      const directiveUserPayload = {
+        ...directiveUserPayloadBase,
+        source_observations: breadthFold
+          ? breadthFold.projection
+          : projectCatalogAtFoldLevel("full"),
+      };
+      // Always-on total-size safety net (design 20260723 §7 Alt-4c): the directive projects the
+      // pre-selection candidate catalog, whose file-count axis is unbounded — a large corpus overflows
+      // the codex worker stdin limit. Refuse pre-dispatch with an actionable error instead of codex's
+      // opaque nonzero-exit. Byte-identical below budget; PR-3's opt-in fold turns the fail-loud into a
+      // bounded success. Not gated by the fold opt-in — a safety net that is opt-in is not a safety net.
+      assertPromptPayloadByteLimit({
+        artifactName: "SourceObservationDirective",
+        systemPrompt: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
+        userPayload: directiveUserPayload,
+        byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+      });
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -12660,22 +12812,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         artifactName: "SourceObservationDirective",
         maxTokens: 2400,
         systemPrompt: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
-        userPayload: {
-          intent: input.intent,
-          target_material_profile: input.targetMaterialProfile,
-          available_observation_ids: availableObservationIds,
-          selection_limit: SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT,
-          source_scout_pack: sourceScoutPackPromptPayload({
-            sourceScoutPack: input.sourceScoutPack,
-            sourceScoutPackValidation: input.sourceScoutPackValidation,
-            sourceScoutPackRef: input.sourceScoutPackRef,
-            sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
-          }),
-          source_observations: projectObservationsForPrompt(input.sourceObservations, {
-            observationIds: availableObservationIds,
-            contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
-          }),
-        },
+        userPayload: directiveUserPayload,
       });
       const byId = new Map(
         cappedObservations.map((observation) => [
@@ -12724,6 +12861,16 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         selectedById.set(observationId, selectedObservation);
       }
       const openQuestions = stringArray(raw.open_questions, "open_questions");
+      // R2 no-silent-truncation disclosure (design 20260723 §8): when the fold demoted per-observation
+      // detail to fit the byte budget, record it on the SAME runtime-disclosure channel as the
+      // selection-overflow note below so the reduced-detail selection stays auditable. `full` = no
+      // demotion → no note (byte-parity intact); an over_budget fold cannot reach here — the always-on
+      // guard threw before dispatch.
+      if (breadthFold && breadthFold.disclosure.fold_level !== "full") {
+        openQuestions.push(
+          `Runtime folded the source-observation candidate catalog to '${breadthFold.disclosure.fold_level}' detail (${breadthFold.disclosure.catalog_observation_count} observations, ${breadthFold.disclosure.measured_prompt_bytes}/${breadthFold.disclosure.prompt_byte_budget} bytes) so the whole catalog fit the dispatch budget; every observation stayed selectable at reduced per-observation detail.`,
+        );
+      }
       if (selected.length > SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT) {
         const overflowCount =
           selected.length - SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT;
@@ -12981,6 +13128,25 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeSourceAdmissionSelection(input) {
+      const admissionUserPayload = {
+        intent: input.intent,
+        target_material_profile:
+          compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+        admitted_outlines: admittedOutlinesForPrompt(input.sourceInventory),
+        admission_budget: {
+          file_limit: input.admissionFileLimit,
+          must_select_at_least: input.admissionFloor,
+        },
+      };
+      // Always-on total-size safety net (design 20260723 §7, Alt-5b): the admitted-outline catalog
+      // scales with the admitted file count — the second count-scaling dispatch surface. Same codex
+      // stdin ceiling as the directive, so the same byte budget guards it. Byte-identical below budget.
+      assertPromptPayloadByteLimit({
+        artifactName: "SourceAdmissionSelection",
+        systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
+        userPayload: admissionUserPayload,
+        byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+      });
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -12988,16 +13154,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         artifactName: "SourceAdmissionSelection",
         maxTokens: 2000,
         systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
-        userPayload: {
-          intent: input.intent,
-          target_material_profile:
-            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
-          admitted_outlines: admittedOutlinesForPrompt(input.sourceInventory),
-          admission_budget: {
-            file_limit: input.admissionFileLimit,
-            must_select_at_least: input.admissionFloor,
-          },
-        },
+        userPayload: admissionUserPayload,
       });
       const frontierRefs = records(raw.frontier_refs ?? [], "frontier_refs")
         .map((frontier, index) => {
