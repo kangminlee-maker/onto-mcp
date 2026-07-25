@@ -50,6 +50,8 @@
     "scripts/run-extraction-identity.mts",
     "scripts/run-extract-symbols.mts",
     "scripts/run-dead-import-clean.mts",
+    "scripts/run-block-identity.mts",
+    "scripts/run-reconstruct-equivalence.mts",
     "scripts/unwired-code-scan.mts"
   ],
   "exclude": []
