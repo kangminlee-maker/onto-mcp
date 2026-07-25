@@ -172,12 +172,28 @@ for (const [label, roots] of Object.entries(MODULES)) {
   closures.set(label, closureOf(roots.filter((r) => decls.has(r))));
 }
 
-// 배정: 도달 가능한 모듈이 1개면 그 모듈, 2개 이상이면 공용 기반, 0개면 잔류/죽은 코드.
-// 단 root 자신은 언제나 자기 모듈 소유다(오케스트레이터 폐포에 포함되더라도).
+// 배정: 도달 가능한 **추출 대상** 모듈이 1개면 그 모듈, 2개 이상이면 공용 기반,
+// 0개면 잔류(오케스트레이터만 도달) 또는 죽은 코드.
+//
+// 오케스트레이터는 소유권 카운트에서 뺀다. run.ts는 원래 모든 것을 참조하므로 이걸
+// 소유자로 세면 "그 스테이지 전용 타입인데 run도 이름을 부른다"는 이유만으로 전부
+// 공용 기반에 몰린다(예: LeafReadCensus — 실제 사용처는 leaf-read 단 1곳). 그렇게
+// 부푼 공용 기반은 스테이지보다 먼저 나가야 하는 선행 조건이 되어 추출 순서를 뒤집는다.
+// run.ts가 옮겨간 심볼을 되가져오는 건 순환이 아니다 — 스테이지 모듈은 run.ts를
+// import하지 않는다.
+//
+// 이 규칙이 순환을 만들지 않는 근거: 공용 S가 스테이지 전용 L에 의존하면 S에 닿는 모든
+// root가 L에도 닿으므로 L 역시 2개 이상에서 도달 = 공용이 된다. 즉 공용 집합은 의존
+// 방향으로 닫혀 있고, 스테이지 모듈은 자기 심볼과 공용 기반에만 의존한다.
+const ORCHESTRATOR = "run(orchestrator)";
 const home = new Map<string, string>();
 for (const name of decls.keys()) {
-  const owners = [...closures.entries()].filter(([, set]) => set.has(name)).map(([label]) => label);
-  home.set(name, owners.length === 0 ? "(도달 불가)" : owners.length === 1 ? (owners[0] as string) : "shared-base");
+  const owners = [...closures.entries()]
+    .filter(([label, set]) => label !== ORCHESTRATOR && set.has(name))
+    .map(([label]) => label);
+  if (owners.length === 1) home.set(name, owners[0] as string);
+  else if (owners.length > 1) home.set(name, "shared-base");
+  else home.set(name, closures.get(ORCHESTRATOR)?.has(name) === true ? ORCHESTRATOR : "(도달 불가)");
 }
 for (const [label, roots] of Object.entries(MODULES)) {
   for (const r of roots) if (decls.has(r)) home.set(r, label);

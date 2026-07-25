@@ -295,6 +295,17 @@ for (const s of spans) {
 }
 out += full.slice(cursor);
 
+/**
+ * 타입 전용 선언은 `import type`으로 되가져와야 한다. value 형태로 쓰면 (1) repo 관례에
+ * 어긋나고 (2) 이 파일의 import 색인이 다음 추출에서 그 심볼을 value로 오인해, 잘못된
+ * 형태가 이어지는 추출마다 전파된다. interface·type alias만 타입 전용이다 — class·enum은
+ * 값이기도 하다.
+ */
+const isTypeOnlyDecl = (name: string): boolean => {
+  const stmt = stmtByName.get(name);
+  return stmt !== undefined && (ts.isInterfaceDeclaration(stmt) || ts.isTypeAliasDeclaration(stmt));
+};
+
 const destRel = `./${path.basename(DEST).replace(/\.ts$/, ".js")}`;
 if (runNeedsBack.length > 0) {
   const lastImport = [...src.statements].filter(ts.isImportDeclaration).pop();
@@ -302,7 +313,13 @@ if (runNeedsBack.length > 0) {
   const anchor = full.slice(0, lastImport.getEnd());
   const idx = out.indexOf(anchor);
   if (idx !== 0) throw new Error("import 블록이 이동으로 훼손됐다 — 중단");
-  out = `${anchor}\nimport { ${runNeedsBack.join(", ")} } from "${destRel}";${out.slice(anchor.length)}`;
+  const backTypes = runNeedsBack.filter(isTypeOnlyDecl);
+  const backValues = runNeedsBack.filter((n) => !isTypeOnlyDecl(n));
+  const backLines = [
+    ...(backValues.length > 0 ? [renderNamed("", backValues, destRel)] : []),
+    ...(backTypes.length > 0 ? [renderNamed("type ", backTypes, destRel)] : []),
+  ];
+  out = `${anchor}\n${backLines.join("\n")}${out.slice(anchor.length)}`;
 }
 
 console.log(`\nrun.ts    : ${full.split("\n").length}줄 → ${out.split("\n").length}줄`);

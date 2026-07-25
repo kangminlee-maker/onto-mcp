@@ -48,12 +48,9 @@ import {
   createDirectCallReconstructDirectiveAuthor,
   MAX_PROJECTED_REGIONS_PER_FILE,
   observationPromptPayload,
-  recomputeCodeInventoryProjectionTruncations,
-  recomputeWorkbookInventoryProjectionTruncations,
   sourceObservationsReuseSha256,
   assessmentEvidenceObservationIds,
   runReconstruct,
-  singleDocumentProjectionTruncation,
   stopDecisionAllowedDecisions,
   boundEvidenceBySerializedSize,
   deriveCompetencyAssessmentEvidenceReserveChars,
@@ -69,8 +66,13 @@ import {
   SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
   SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
 } from "./run.js";
-import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
+import {
+  recomputeCodeInventoryProjectionTruncations,
+  recomputeWorkbookInventoryProjectionTruncations,
+  singleDocumentProjectionTruncation,
+} from "./projection-truncation.js";
+import type { DocumentExcerptProjectionTruncation } from "./projection-truncation.js";
 import { reconstructTerminalStatus } from "./record.js";
 import {
   ontologySeedClaimProjections,

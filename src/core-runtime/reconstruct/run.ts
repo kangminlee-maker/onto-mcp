@@ -424,264 +424,42 @@ import {
   unitIdForAuthoredArtifactName,
   type ReconstructExecutionTelemetryCollector,
 } from "./execution-telemetry.js";
-import { GracefulTerminalSignal, SEED_READINESS_TERMINAL_ROUTE, isGracefulTerminalSignal, isZeroObservationGracefulTerminalEligible } from "./graceful-terminal.js";
-
-// Maturation value-read cut (design §13.3/§13.5). Stage-internal types for the value-read
-// capability: a deterministic trigger builds candidates (limitation-backed material rows whose
-// value-dependent limitations could be cleared by reading authorized runtime-target cells), the
-// author (LLM) picks locations within the allowed set, the runtime reads the cells, and the
-// author judges whether each limitation is satisfied. The author returns discharge entries; the
-// stage runner builds the artifact + census and governance-validates them. Authors without the
-// capability (baseline harness) leave the matrix unchanged (default-off, leaf_read precedent).
-export interface ReconstructValueReadCandidate {
-  baseline_row_id: string;
-  matrix_row_id: string;
-  // The value-dependent limitation(s) on this row a value-read could clear.
-  limitation_refs: string[];
-  // The authorized runtime-target source observation whose cells may be read.
-  observation_id: string;
-  // The canonical authorization ref the discharge must cite (observation_id × material_claim).
-  value_evidence_authorization_ref: string;
-  // Allowed read locations enumerated from the source inventory (the LLM picks within this set).
-  allowed_locations: ReconstructValueReadScope[];
-}
-
-export interface ReconstructValueReadStageInput {
-  candidates: ReconstructValueReadCandidate[];
-  // Runtime-only resolver (design §15.4): observation_id → resolved ABSOLUTE source path. The author
-  // reads cells through the runtime keyed by observation_id; this map NEVER reaches a callJsonAuthor
-  // payload, so authorized filesystem paths stay out of every LLM prompt (issue-007/016, F4/F5).
-  sourceRefByObservationId: Record<string, string>;
-}
-
-export interface ReconstructValueReadStageOutput {
-  discharges: ReconstructMaturationValueDischargeEntry[];
-  // Honest count of candidates whose read or judgment FAILED (LLM error / unreadable source / empty
-  // read), so the census records `failed > 0` instead of the old hard-coded 0 (design §15.4, issue-014).
-  // Optional — a fixture executor that never fails may omit it (treated as 0).
-  failed_count?: number;
-}
-
-export interface ReconstructDirectiveAuthor {
-  readonly authorId: string;
-  readonly owner: "host_llm";
-  /** Runtime-owned execution telemetry recorded by this author's LLM calls. */
-  readonly executionTelemetry?: ReconstructExecutionTelemetryCollector;
-  /**
-   * Seed-stage document projection budget (chars) the orchestrator derived from
-   * the active seat's model window. The author applies it to single-document
-   * seed prompts. Absent on authors created without a budget (defaults to the
-   * static FLOOR).
-   */
-  readonly documentExcerptProjectionBudget?: number;
-  /**
-   * Projection-layer breadth-fold opt-in (design 20260723 §8 PR-3/PR-4), folded into the resume reuse
-   * key like documentExcerptProjectionBudget: when ON and a selection catalog overflows, that prompt is
-   * authored at a COARSER detail rung, so resuming under a different flag value must regenerate rather
-   * than silently reuse an artifact authored at the other rung. One flag drives BOTH count-scaling
-   * surfaces (source-observation-directive, admission-selection). Absent/false = today's flat
-   * projection. The flag reaches the reuse key only through this field.
-   */
-  readonly sourceBreadthFold?: boolean;
-  /**
-   * Run-scoped sink (deduped by observation) of documents whose captured excerpt a
-   * seed prompt's projection budget sliced. Populated during authoring; read by
-   * runReconstruct after authoring to record the truncation durably and surface it.
-   * runReconstruct clears it per run (like executionTelemetry).
-   */
-  readonly documentExcerptProjectionTruncations?: DocumentExcerptProjectionTruncation[];
-  /**
-   * Run-scoped sink (mirroring documentExcerptProjectionTruncations) of breadth-fold demotions on the
-   * ADMISSION-selection surface. The directive surface discloses its fold in-artifact on
-   * `open_questions`; the admission-selection artifact (a source-frontier) has no free-text channel,
-   * so its disclosure lands here and runReconstruct records it durably as a runtime status event —
-   * a demoted rung is never silent (R2). Empty unless the fold actually demoted a rung.
-   */
-  readonly sourceBreadthFoldDisclosures?: BreadthFoldDisclosure[];
-  /**
-   * Canonical authoring-model identity ("<provider>/<model_id>") folded into the
-   * resume reuse key (DET-1/CG-2). Resuming under a DIFFERENT authoring model must
-   * regenerate authored artifacts rather than silently reuse the prior model's
-   * output; the model identity reaches the reuse key only through this field
-   * (the realization tag is the literal "direct_call" and carries no model info).
-   * "unspecified" when the author was built without a resolved model config.
-   */
-  readonly reuseModelIdentity?: string;
-  /**
-   * Canonical answer-support JUDGE model identity ("<provider>/<model_id>") folded
-   * into the resume reuse key (DET-1/CG-1 gate). The judge is an opt-in
-   * semantic-independence lever that may run under a DIFFERENT model than the author
-   * (judgeLlmConfig); answer-support-judgment is a reuse-eligible authored artifact,
-   * so without this a resume under a swapped judge model silently reuses the prior
-   * judge's verdict. Defaults to the author identity when no judge override.
-   */
-  readonly reuseJudgeModelIdentity?: string;
-  /**
-   * Effective semantic-map SYNTHESIZE model identity when a per-call reasoning-effort
-   * override is active ("<provider>/<model_id>@synthesize_effort=<effort>"). Folded into
-   * the semantic-map stage fingerprint (reduce_reader_model_identity) so the override
-   * rotates the stage reuse key instead of silently reusing the other effort's map
-   * (silent-stale guard, CG-2 lineage). Absent = no override = base reuseModelIdentity.
-   */
-  readonly semanticMapSynthesizeModelIdentity?: string;
-  /** Runtime-only dispatch context for sealed semantic-map accounting. */
-  setSemanticMapDispatchContext?(
-    observationId: string,
-    source: "primary" | "fallback",
-  ): void;
-  /** Runtime-owned identity shared by every physical attempt of one node/verify dispatch. */
-  setSemanticMapLogicalDispatchId?(logicalDispatchId: string): void;
-  /**
-   * P1-C2-A leaf-read: read a PROVISIONAL label for a low-confidence (unstructured) spreadsheet
-   * region (§3.2). Optional — an author without it leaves low-confidence regions to the
-   * deterministic companion (no divergence). The implementation runs the FIRST LLM-touch; the run
-   * keys its reuse on the llm_touch_fingerprint, never on this output.
-   */
-  readLeafLabels?(evidence: LeafReadRegionEvidence): Promise<LeafReadOutcome>;
-  /**
-   * Maturation value-read cut (design §13.3). The SECOND LLM-touch: read authorized
-   * runtime-target cell values to judge whether a baseline row's value-dependent limitation is
-   * satisfied, returning value-discharge entries. Optional — an author without it leaves
-   * limitation-backed rows unchanged (default-off, leaf_read precedent). The direct-call author
-   * implements it via two callJsonAuthor calls (location selection, then judgment) with a bounded
-   * cell read between them; the run recomputes the discharge every run (no fingerprint reuse).
-   */
-  readValueDischarge?(
-    input: ReconstructValueReadStageInput,
-  ): Promise<ReconstructValueReadStageOutput>;
-  /**
-   * kind 광고 (multi-artifact design 20260718 DD7, optional): the semantic-map artifact kinds this
-   * author's capability pair supports. ABSENT = ["spreadsheet"] — not a code default but the
-   * EXPLICIT reading of the pre-advertisement contract (what a non-advertising author actually
-   * supports), so legacy authors keep byte-identical behavior. Consulted only by the stage's kind
-   * routing (유효 kind = settings 옵트인 ∩ 이 광고); a non-advertised kind's input can never reach
-   * this author — the stage routing is the sole supplier.
-   */
-  readonly supportedSemanticMapKinds?: readonly TargetMaterialKind[];
-  /**
-   * Layer-2 semantic-map stage (wiring design 20260702 §15.1): synthesize ONE reduce-tree node's
-   * semantic judgment from bounded deterministic facts + child summaries. Non-authoritative /
-   * provisional; the module enforces the source-safe envelope (assertSynthesisInputBounded /
-   * assertCodeSynthesisInputBounded). The parameter is a per-artifact union (DD7): the spreadsheet
-   * variant's shape is UNCHANGED (no discriminator added); the code variant carries
-   * target_material_kind:"code" and reaches only authors advertising the code kind.
-   * Optional — an author without the PAIR leaves the stage skipped (default-off;
-   * resolveSemanticMapCapability owns the pair rule).
-   */
-  synthesizeSemanticMapNode?(
-    input: SemanticSynthesisInput | CodeSemanticSynthesisInput,
-  ): Promise<SemanticSynthesisOutput | CodeSemanticSynthesisOutput>;
-  /**
-   * Independent adversarial re-check of ONE unanchored semantic boundary (design N3: ALL unanchored
-   * are re-verified — the only check where structure is blind). A distinct prompt (and optionally a
-   * distinct model) from synthesize in production. Optional — paired with synthesizeSemanticMapNode.
-   * Per-artifact union parameter (DD7) — same routing guarantee as synthesize.
-   */
-  verifySemanticMapBoundary?(
-    input: SemanticBoundaryVerifyInput | CodeSemanticBoundaryVerifyInput,
-  ): Promise<SemanticBoundaryVerification>;
-  /**
-   * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
-   * so this author renders them as a NON-AUTHORITATIVE hint in every observation prompt. Set once by
-   * runReconstruct after the leaf-read stage; the labels reach the prompt TEXT only, never the
-   * observation artifact or the reuse key. Optional — a no-op author simply omits it.
-   */
-  setLeafReadProvisionalLabels?(labels: ReadonlyMap<string, readonly string[]>): void;
-  /**
-   * P1-C2-B′ §2.2 Step E: provide the honest "not examined (capped)" census (observation_id →
-   * "colN (name)" strings) so this author renders it as an explicit NON-AUTHORITATIVE census in every
-   * observation prompt. Set once by runReconstruct after the leaf-read stage; prompt TEXT only.
-   */
-  setLeafReadCappedColumns?(capped: ReadonlyMap<string, readonly string[]>): void;
-  /**
-   * W4 (wiring design 20260702 §4): provide the semantic-map stage's per-observation seed
-   * projections so this author (a) replaces the flat provisional labels with the hierarchical
-   * render in non-seed observation prompts, and (b) adds the dedicated `semantic_map` field to the
-   * seed-authoring userPayload. Prompt/payload TEXT only — never the reuse key (the stage
-   * fingerprint is folded separately). Set once by runReconstruct after the semantic_map stage.
-   */
-  setSemanticMapProjection?(byObservation: ReadonlyMap<string, SemanticMapAnyProjection>): void;
-  /** Phase 1b (deterministic set tier): provide the bounded set overview render so the seed
-   *  userPayload carries the dedicated `code_set_tier` field. Payload TEXT only — the reuse key
-   *  folds the set fingerprint separately (FD13). Set once by runReconstruct when the set-tier
-   *  assembly completes; never called when the opt-in is off or the set is not complete. */
-  setCodeSetTierOverview?(overview: unknown): void;
-  writeSourceObservationDirective(
-    input: ReconstructSourceObservationDirectiveAuthorInput,
-  ): Promise<ReconstructSourceObservationDirectiveArtifact>;
-  writeLensJudgment(
-    input: ReconstructLensJudgmentAuthorInput,
-  ): Promise<ReconstructLensJudgmentArtifact>;
-  writeExplorationSynthesis(
-    input: ReconstructExplorationSynthesisAuthorInput,
-  ): Promise<ReconstructExplorationSynthesisArtifact>;
-  writeSourceFrontier(
-    input: ReconstructSourceFrontierAuthorInput,
-  ): Promise<ReconstructSourceFrontierArtifact>;
-  /**
-   * Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §4, PR-2b):
-   * the admission-selection round-0 stage. Runs on the SAME `semantic_author` seat as every other
-   * author method (INV-MODEL-1 — no new actor/model) but under a DEDICATED system prompt (NOT
-   * sourceFrontierSystemPrompt, which is exploration-synthesis-shaped and unsuited to a round-0
-   * outline-only decision). Reuses `ReconstructSourceFrontierArtifact` as the return shape so the
-   * caller can validate it with the EXISTING `validateSourceFrontier` verbatim (no new artifact
-   * type). The author sees ONLY the bounded outline catalog `input` carries — never whole-file
-   * content — and proposes which admitted files are worth a deep observation; the runtime clamps
-   * the proposal to the inter-file budget and applies the floor policy (design §6/§7).
-   */
-  writeSourceAdmissionSelection(
-    input: ReconstructSourceAdmissionSelectionAuthorInput,
-  ): Promise<ReconstructSourceFrontierArtifact>;
-  writeSourcePurposeCandidates(
-    input: ReconstructSourcePurposeCandidatesAuthorInput,
-  ): Promise<ReconstructSourcePurposeCandidatesArtifact>;
-  writeCandidateInventory(
-    input: ReconstructCandidateInventoryAuthorInput,
-  ): Promise<ReconstructCandidateInventoryArtifact>;
-  writeCandidateDisposition(
-    input: ReconstructCandidateDispositionAuthorInput,
-  ): Promise<ReconstructCandidateDispositionArtifact>;
-  writeOntologySeed(
-    input: ReconstructOntologySeedAuthorInput,
-  ): Promise<ReconstructOntologySeedArtifact>;
-  writeClaimRealizationMap(
-    input: ReconstructClaimRealizationAuthorInput,
-  ): Promise<ReconstructClaimRealizationMapArtifact>;
-  writeCompetencyQuestions(
-    input: ReconstructCompetencyQuestionAuthorInput,
-  ): Promise<ReconstructCompetencyQuestionsArtifact>;
-  writeCompetencyQuestionAssessment(
-    input: ReconstructCompetencyQuestionAssessmentAuthorInput,
-  ): Promise<ReconstructCompetencyQuestionAssessmentArtifact>;
-  writeFailureClassification(
-    input: ReconstructFailureClassificationAuthorInput,
-  ): Promise<ReconstructFailureClassificationArtifact>;
-  writeRevisionProposal(
-    input: ReconstructRevisionProposalAuthorInput,
-  ): Promise<ReconstructRevisionProposalArtifact>;
-  writeStopDecision(
-    input: ReconstructStopDecisionAuthorInput,
-  ): Promise<ReconstructStopDecisionArtifact>;
-  writeMaturationQuestionFrontier(
-    input: ReconstructMaturationQuestionFrontierAuthorInput,
-  ): Promise<ReconstructMaturationQuestionFrontierArtifact>;
-  writeMaturationClosureFrontier(
-    input: ReconstructMaturationClosureFrontierAuthorInput,
-  ): Promise<ReconstructMaturationClosureFrontierArtifact>;
-  writeAnswerSupportLedger(
-    input: ReconstructAnswerSupportLedgerAuthorInput,
-  ): Promise<ReconstructAnswerSupportLedgerArtifact>;
-  writeAnswerSupportJudgment(
-    input: ReconstructAnswerSupportJudgmentAuthorInput,
-  ): Promise<ReconstructAnswerSupportJudgmentArtifact>;
-  writeMaturationAnswerClaims(
-    input: ReconstructMaturationAnswerClaimsAuthorInput,
-  ): Promise<ReconstructMaturationAnswerClaimsArtifact>;
-  writeOntologyExpansion(
-    input: ReconstructOntologyExpansionAuthorInput,
-  ): Promise<ReconstructOntologyExpansionArtifact>;
-  writeFinalOutput(input: ReconstructFinalOutputAuthorInput): Promise<string>;
-}
+import {
+  GracefulTerminalSignal,
+  SEED_READINESS_TERMINAL_ROUTE,
+  isGracefulTerminalSignal,
+  isZeroObservationGracefulTerminalEligible,
+} from "./graceful-terminal.js";
+import {
+  CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  SEMANTIC_MAP_ROUTABLE_KINDS,
+} from "./semantic-map-projection.js";
+import type {
+  SemanticMapAnyProjection,
+  SemanticMapArtifactKind,
+} from "./semantic-map-projection.js";
+import {
+  allObservationsAreRegionsOfOneFile,
+  isFullExcerptProjectionEligible,
+  recomputeCodeInventoryProjectionTruncations,
+  recomputeWorkbookInventoryProjectionTruncations,
+  singleDocumentProjectionTruncation,
+} from "./projection-truncation.js";
+import type {
+  CodeInventoryProjectionTruncation,
+  DocumentExcerptProjectionTruncation,
+  WorkbookInventoryProjectionTruncation,
+} from "./projection-truncation.js";
+import type {
+  ReconstructCompetencyQuestionAssessmentAuthorInput,
+  ReconstructCompetencyQuestionAuthorInput,
+  ReconstructDirectiveAuthor,
+  ReconstructFinalOutputAuthorInput,
+  ReconstructOntologySeedAuthorInput,
+  ReconstructSourceFrontierAuthorInput,
+  ReconstructValueReadCandidate,
+} from "./directive-author-contract.js";
 
 /**
  * W1 (wiring design 20260702 §15.2): the semantic-map author capability is a PAIR — synthesize +
@@ -706,10 +484,6 @@ export function resolveSemanticMapCapability(
   }
   return hasSynthesize ? "present" : "absent";
 }
-
-/** The semantic-map artifact kinds the stage can route in Phase 1 (multi-artifact design DD7). */
-export const SEMANTIC_MAP_ROUTABLE_KINDS = ["spreadsheet", "code"] as const;
-export type SemanticMapArtifactKind = (typeof SEMANTIC_MAP_ROUTABLE_KINDS)[number];
 
 /**
  * kind 광고 해석 (DD7): capability pair 부재 → [] (stage skip). 광고 부재 = ["spreadsheet"] —
@@ -755,170 +529,6 @@ export interface ReconstructConfirmationProvider {
   ): Promise<ReconstructSeedConfirmationArtifact>;
 }
 
-export interface ReconstructSourceObservationDirectiveAuthorInput {
-  sessionId: string;
-  intent: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceScoutPack?: ReconstructSourceScoutPackArtifact | null;
-  sourceScoutPackValidation?: ReconstructSourceScoutPackValidationArtifact | null;
-  sourceScoutPackRef?: string | null;
-  sourceScoutPackValidationRef?: string | null;
-}
-
-export interface ReconstructLensJudgmentAuthorInput {
-  sessionId: string;
-  intent: string;
-  roundId: string;
-  lensId: string;
-  lensPrompt: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationDirective: ReconstructSourceObservationDirectiveArtifact;
-  sourceObservationDirectiveRef: string;
-}
-
-export interface ReconstructExplorationSynthesisAuthorInput {
-  sessionId: string;
-  intent: string;
-  roundId: string;
-  lensJudgments: ReconstructLensJudgmentArtifact[];
-  lensJudgmentIndexRef: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsRef: string;
-}
-
-export interface ReconstructSourceFrontierAuthorInput {
-  sessionId: string;
-  intent: string;
-  roundId: string;
-  maxExplorationRounds: number;
-  isFinalExplorationRound: boolean;
-  sourceScoutPack?: ReconstructSourceScoutPackArtifact | null;
-  sourceScoutPackValidation?: ReconstructSourceScoutPackValidationArtifact | null;
-  sourceScoutPackRef?: string | null;
-  sourceScoutPackValidationRef?: string | null;
-  explorationSynthesis: ReconstructExplorationSynthesisArtifact;
-  explorationSynthesisRef: string;
-  sourceInventory: ReconstructSourceInventoryArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-/**
- * Core Stage 2 inter-document breadth (design §4.3, PR-2b): the raw materials for the
- * admission-selection round-0 stage. `sourceInventory` carries the full inventory (including
- * every `"admitted"` unit's `outline`); the author implementation is responsible for projecting
- * it down to the bounded `admitted_outlines` catalog the LM actually sees (never whole-file
- * content, design §4.3) — the same "author owns prompt shaping, runtime owns the artifact" split
- * every other author-input type in this file follows.
- */
-export interface ReconstructSourceAdmissionSelectionAuthorInput {
-  sessionId: string;
-  intent: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceInventory: ReconstructSourceInventoryArtifact;
-  /** Advisory (design §4.3): the runtime enforces the actual budget after validation
-   *  (capAdmissionSelectionAcceptedRefs) regardless of what the author proposes. */
-  admissionFileLimit: number;
-  /** Advisory floor disclosure; the runtime enforces it via applyAdmissionSelectionFloorPolicy
-   *  even when the author proposes fewer (or zero) files. */
-  admissionFloor: number;
-}
-
-export interface ReconstructCandidateInventoryAuthorInput {
-  sessionId: string;
-  intent: string;
-  sourceScoutPack?: ReconstructSourceScoutPackArtifact | null;
-  sourceScoutPackValidation?: ReconstructSourceScoutPackValidationArtifact | null;
-  sourceScoutPackRef?: string | null;
-  sourceScoutPackValidationRef?: string | null;
-  sourcePurposeCandidates: ReconstructSourcePurposeCandidatesArtifact;
-  sourcePurposeCandidatesValidation:
-    ReconstructSourcePurposeCandidatesValidationArtifact;
-  purposeConfirmationValidation:
-    ReconstructPurposeConfirmationValidationArtifact;
-  materialAdmissionLedger: ReconstructMaterialAdmissionLedgerArtifact;
-  materialAdmissionLedgerRef: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsRef: string;
-  sourceObservationDirective: ReconstructSourceObservationDirectiveArtifact;
-  lensJudgmentIndex: ReconstructLensJudgmentIndexArtifact;
-  explorationSynthesis: ReconstructExplorationSynthesisArtifact;
-  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
-  contractRegistry: ReconstructContractRegistry;
-}
-
-export interface ReconstructCandidateDispositionAuthorInput {
-  sessionId: string;
-  intent: string;
-  sourcePurposeCandidatesValidation:
-    ReconstructSourcePurposeCandidatesValidationArtifact;
-  materialAdmissionLedger: ReconstructMaterialAdmissionLedgerArtifact;
-  materialAdmissionLedgerRef: string;
-  candidateInventory: ReconstructCandidateInventoryArtifact;
-  candidateInventoryRef: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  contractRegistry: ReconstructContractRegistry;
-}
-
-export interface ReconstructOntologySeedAuthorInput {
-  sessionId: string;
-  intent: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourcePurposeCandidates: ReconstructSourcePurposeCandidatesArtifact;
-  sourcePurposeCandidatesRef: string;
-  sourcePurposeCandidatesValidation:
-    ReconstructSourcePurposeCandidatesValidationArtifact;
-  sourcePurposeCandidatesValidationRef: string;
-  purposeConfirmation: ReconstructPurposeConfirmationArtifact;
-  purposeConfirmationRef: string;
-  purposeConfirmationValidation:
-    ReconstructPurposeConfirmationValidationArtifact;
-  purposeConfirmationValidationRef: string;
-  materialAdmissionLedger: ReconstructMaterialAdmissionLedgerArtifact;
-  materialAdmissionLedgerRef: string;
-  candidateInventory: ReconstructCandidateInventoryArtifact;
-  candidateInventoryRef: string;
-  candidateDisposition: ReconstructCandidateDispositionArtifact;
-  candidateDispositionRef: string;
-  seedAuthoringReadiness: ReconstructSeedAuthoringReadinessArtifact;
-  seedAuthoringReadinessRef: string;
-  seedAuthoringReadinessValidation:
-    ReconstructSeedAuthoringReadinessValidationArtifact;
-  seedAuthoringReadinessValidationRef: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsRef: string;
-  /** Core Stage 2 inter-document breadth (design §9): the seed-stage source-inventory read the
-   *  deferred-telemetry projection (deferredSourceRefPromptSummary) needs — an admitted-but-not-
-   *  promoted unit is invisible to sourceObservations alone. */
-  sourceInventory: ReconstructSourceInventoryArtifact;
-  contractRegistry: ReconstructContractRegistry;
-  repairAttempt?: {
-    attempt_id: string;
-    repair_sections: string[];
-    previous_ontology_seed: ReconstructOntologySeedArtifact;
-    previous_ontology_seed_validation:
-      ReconstructOntologySeedValidationArtifact;
-    previous_ontology_seed_validation_ref: string;
-  };
-}
-
-export interface ReconstructSourcePurposeCandidatesAuthorInput {
-  sessionId: string;
-  intent: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceScoutPack?: ReconstructSourceScoutPackArtifact | null;
-  sourceScoutPackValidation?: ReconstructSourceScoutPackValidationArtifact | null;
-  sourceScoutPackRef?: string | null;
-  sourceScoutPackValidationRef?: string | null;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsRef: string;
-  sourceObservationDirective: ReconstructSourceObservationDirectiveArtifact;
-  lensJudgmentIndex: ReconstructLensJudgmentIndexArtifact;
-  explorationSynthesis: ReconstructExplorationSynthesisArtifact;
-  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
-  contractRegistry: ReconstructContractRegistry;
-}
-
 export interface ReconstructPurposeConfirmationInput {
   sessionId: string;
   sourcePurposeCandidates: ReconstructSourcePurposeCandidatesArtifact;
@@ -934,201 +544,6 @@ export interface ReconstructSeedConfirmationInput {
   ontologySeedRef: string;
   ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   ontologySeedValidationRef: string;
-}
-
-export interface ReconstructClaimRealizationAuthorInput {
-  sessionId: string;
-  ontologySeed: ReconstructOntologySeedArtifact;
-  ontologySeedRef: string;
-  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructCompetencyQuestionAuthorInput {
-  sessionId: string;
-  ontologySeed: ReconstructOntologySeedArtifact;
-  ontologySeedRef: string;
-  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
-  seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
-  seedConfirmationValidationRef: string;
-  claimRealizationMap: ReconstructClaimRealizationMapArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsRef: string;
-  contractRegistry: ReconstructContractRegistry;
-  governingSnapshot: ReconstructRunGoverningSnapshot;
-  repairAttempt?: {
-    attempt_id: string;
-    repair_directives: string[];
-    previous_competency_questions: ReconstructCompetencyQuestionsArtifact;
-    previous_competency_questions_validation:
-      ReconstructCompetencyQuestionsValidationArtifact;
-    previous_competency_questions_validation_ref: string;
-  };
-}
-
-export interface ReconstructCompetencyQuestionAssessmentAuthorInput {
-  sessionId: string;
-  competencyQuestions: ReconstructCompetencyQuestionsArtifact;
-  competencyQuestionsRef: string;
-  competencyQuestionsValidation: ReconstructCompetencyQuestionsValidationArtifact;
-  competencyQuestionsValidationRef: string;
-  claimRealizationMap: ReconstructClaimRealizationMapArtifact;
-  // Source observations so the assessor can read the cited evidence bodies (not
-  // just observation-id labels) when judging answer_status.
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructFailureClassificationAuthorInput {
-  sessionId: string;
-  competencyQuestionAssessment: ReconstructCompetencyQuestionAssessmentArtifact;
-  competencyQuestionAssessmentRef: string;
-  competencyQuestionAssessmentValidation:
-    ReconstructCompetencyQuestionAssessmentValidationArtifact;
-  seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
-}
-
-export interface ReconstructRevisionProposalAuthorInput {
-  sessionId: string;
-  failureClassification: ReconstructFailureClassificationArtifact;
-  failureClassificationRef: string;
-  failureClassificationValidation: ReconstructFailureClassificationValidationArtifact;
-  ontologySeed: ReconstructOntologySeedArtifact;
-}
-
-export interface ReconstructStopDecisionAuthorInput {
-  sessionId: string;
-  intent: string;
-  metrics: ReconstructMetricsArtifact;
-  metricsRef: string;
-  failureClassification: ReconstructFailureClassificationArtifact;
-  revisionProposal: ReconstructRevisionProposalArtifact;
-}
-
-export interface ReconstructMaturationQuestionFrontierAuthorInput {
-  sessionId: string;
-  maturationBaseline: ReconstructMaturationBaselineArtifact;
-  maturationBaselineRef: string;
-  maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
-  maturationBaselineValidationRef: string;
-  actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
-  actionabilityMatrixRef: string;
-  actionabilityMatrixValidation: ReconstructActionabilityMatrixValidationArtifact;
-  actionabilityMatrixValidationRef: string;
-}
-
-export interface ReconstructMaturationClosureFrontierAuthorInput {
-  sessionId: string;
-  roundId: string;
-  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
-  maturationQuestionFrontierRef: string;
-  maturationQuestionFrontierValidation:
-    ReconstructMaturationQuestionFrontierValidationArtifact;
-  sourceInventory: ReconstructSourceInventoryArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructAnswerSupportLedgerAuthorInput {
-  sessionId: string;
-  roundId: string;
-  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
-  maturationQuestionFrontierRef: string;
-  maturationQuestionFrontierValidation:
-    ReconstructMaturationQuestionFrontierValidationArtifact;
-  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
-  maturationClosureFrontierValidation:
-    ReconstructMaturationClosureFrontierValidationArtifact;
-  maturationAuthorityResponse: ReconstructMaturationAuthorityResponseArtifact;
-  maturationAuthorityResponseValidation:
-    ReconstructMaturationAuthorityResponseValidationArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructAnswerSupportJudgmentAuthorInput {
-  sessionId: string;
-  roundId: string;
-  answerSupportLedger: ReconstructAnswerSupportLedgerArtifact;
-  answerSupportLedgerRef: string;
-  answerSupportLedgerValidation: ReconstructAnswerSupportLedgerValidationArtifact;
-  answerSupportLedgerValidationRef: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructMaturationAnswerClaimsAuthorInput {
-  sessionId: string;
-  roundId: string;
-  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
-  maturationQuestionFrontierValidation:
-    ReconstructMaturationQuestionFrontierValidationArtifact;
-  answerSupportLedger: ReconstructAnswerSupportLedgerArtifact;
-  answerSupportLedgerValidation: ReconstructAnswerSupportLedgerValidationArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructOntologyExpansionAuthorInput {
-  sessionId: string;
-  answerClaims: ReconstructMaturationAnswerClaimsArtifact;
-  answerClaimsRef: string;
-  answerClaimsValidation: ReconstructMaturationAnswerClaimsValidationArtifact;
-  ontologySeed: ReconstructOntologySeedArtifact;
-  ontologySeedRef: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructFinalOutputAuthorInput {
-  sessionId: string;
-  intent: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  candidateInventory: ReconstructCandidateInventoryArtifact;
-  candidateDisposition: ReconstructCandidateDispositionArtifact;
-  candidateDispositionValidation: ReconstructCandidateDispositionValidationArtifact;
-  ontologySeed: ReconstructOntologySeedArtifact;
-  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
-  claimRealizationMap: ReconstructClaimRealizationMapArtifact;
-  claimRealizationMapValidation: ReconstructClaimRealizationMapValidationArtifact;
-  seedConfirmation: ReconstructSeedConfirmationArtifact;
-  seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
-  competencyQuestions: ReconstructCompetencyQuestionsArtifact;
-  competencyQuestionsValidation: ReconstructCompetencyQuestionsValidationArtifact;
-  competencyQuestionAssessment: ReconstructCompetencyQuestionAssessmentArtifact;
-  competencyQuestionAssessmentValidation:
-    ReconstructCompetencyQuestionAssessmentValidationArtifact;
-  failureClassification: ReconstructFailureClassificationArtifact;
-  failureClassificationValidation: ReconstructFailureClassificationValidationArtifact;
-  revisionProposal: ReconstructRevisionProposalArtifact;
-  revisionProposalValidation: ReconstructRevisionProposalValidationArtifact;
-  metrics: ReconstructMetricsArtifact;
-  stopDecision: ReconstructStopDecisionArtifact;
-  preHandoffRunManifestValidation: ReconstructRunManifestValidationArtifact;
-  handoffDecisionValidation: ReconstructHandoffDecisionValidationArtifact;
-  claimProjection: ReconstructClaimProjectionArtifact;
-  claimProjectionValidation: ReconstructClaimProjectionValidationArtifact;
-  maturationBaseline: ReconstructMaturationBaselineArtifact;
-  maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
-  actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
-  actionabilityMatrixValidation: ReconstructActionabilityMatrixValidationArtifact;
-  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
-  maturationQuestionFrontierValidation:
-    ReconstructMaturationQuestionFrontierValidationArtifact;
-  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
-  maturationClosureFrontierValidation:
-    ReconstructMaturationClosureFrontierValidationArtifact;
-  answerSupportLedger: ReconstructAnswerSupportLedgerArtifact;
-  answerSupportLedgerValidation: ReconstructAnswerSupportLedgerValidationArtifact;
-  maturationAnswerClaims: ReconstructMaturationAnswerClaimsArtifact;
-  maturationAnswerClaimsValidation:
-    ReconstructMaturationAnswerClaimsValidationArtifact;
-  ontologyExpansion: ReconstructOntologyExpansionArtifact;
-  ontologyExpansionValidation: ReconstructOntologyExpansionValidationArtifact;
-  maturationContinuationDecision:
-    ReconstructMaturationContinuationDecisionArtifact;
-  maturationContinuationDecisionValidation:
-    ReconstructMaturationContinuationDecisionValidationArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  artifactRefs: ReconstructRecordArtifactRefs;
-  reconstructRecordPath: string;
-  reconstructRunManifestPath: string;
-  reconstructRunManifest: ReconstructRunManifestArtifact;
-  record: ReconstructRecordArtifact;
 }
 
 export interface RunReconstructParams {
@@ -2670,27 +2085,11 @@ export function projectCodeSemanticMapSynthesisOutput(raw: Record<string, unknow
   return { semantic_summary: summary, boundaries };
 }
 
-/** ⚠️ PRELIMINARY prompt-render budget (chars) for one SPREADSHEET observation's semantic-map
- *  render. Changing it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_
- *  VERSION with it (X9). CODE renders use the per-kind constant below (DD10 — never this one). */
-export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
-
 // ── DD10 (§10 v2.1) CODE-only projection/render knobs — 회전 격리 (리뷰 inv M1/gh M-1) ────────────
 // The three values below are 선핀 (재평정 게이트 1항: v2 렌더 생성·열람 전에 사전 등록 커밋에
 // 그대로 복사·핀); they fold by VALUE into semanticMapCodeObservationFingerprint ONLY, so tuning
 // them rotates code reuse keys (old code sidecars fail closed on fingerprint mismatch) while every
 // spreadsheet key stays byte-identical.
-
-/** DD10: CODE render budget — 40,000 chars ≈ 65 admitted nodes on the N=1 target (spreadsheet
- *  4,000 불변; the v1 shared budget admitted 4/109 nodes on the live N=1 — 기아).
- *  ⚠️ CORRECTED 2026-07-19 (§10 addendum 개정 v2.2): the pinned 12,000 realized the design's stated
- *  "40~60 nodes" intent from a per-node cost estimate of ~81 chars (relative-label savings only),
- *  but the no-spend ablation measured ~850 chars/node (region label + up to a 600-char summary +
- *  boundaries + JSON indentation), so 12,000 admitted only 12 nodes — below the reevaluation
- *  validity floor (admit ≥30). Empirical budget→admit curve (ablation): 24,000→30, 40,000→65,
- *  64,000→109(no truncation). Owner decision 2026-07-19: 40,000 (design's 40~60-node intent,
- *  faithfully realized). The value folds by VALUE into semanticMapCodeObservationFingerprint. */
-export const CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 40_000;
 
 /** DD10: CODE projection display cap (1a single-file headroom; spreadsheet stage-config 60 불변).
  *  Applied at the projection call — the stage config's shared max_nodes never caps code. */
@@ -2999,10 +2398,6 @@ class SemanticMapVerifyCapExceeded extends Error {
     super(`semantic-map stage: verify-call cap ${cap} exceeded at ${key} (X7 incremental — column fails closed to the flat path).`);
   }
 }
-
-/** Step 6 (DD9): the per-observation projection union — spreadsheet or code, discriminated by the
- *  node_ref shape (and, on artifact rows, by the sidecar's target_material_kind). */
-export type SemanticMapAnyProjection = SemanticSeedProjection | CodeSemanticSeedProjection;
 
 export interface SemanticMapStageResult {
   /** Merged per-observation projection — ONLY observations that passed the X5 all-columns gate. */
@@ -10239,114 +9634,6 @@ function deterministicOntologySeedTimeoutRecovery(args: {
   };
 }
 
-/** A single document whose captured excerpt the seed-stage projection budget
- * sliced — its tail did not reach seed authoring. Detected at projection time (so
- * it reflects the actually-projected observation: selection-filtered and
- * source-safety redaction applied), deduped by the author, then recorded durably
- * and surfaced by runReconstruct. Exported for the regression test. */
-export interface DocumentExcerptProjectionTruncation {
-  observation_id: string;
-  source_ref: string;
-  // The bounded observation's material kind (code is now full-excerpt eligible too),
-  // so the runtime event and final-output section name the right material instead of
-  // always saying "document".
-  target_material_kind: string;
-  captured_chars: number;
-  projection_budget_chars: number;
-}
-
-/** Sibling of DocumentExcerptProjectionTruncation for spreadsheets (P6): which
- *  inventory sections the seed-stage prompt projection bounded, and by how much. */
-export interface WorkbookInventoryProjectionTruncation {
-  observation_id: string;
-  source_ref: string;
-  sections: WorkbookInventorySectionTruncation[];
-}
-
-/**
- * Deterministically recompute which observations had their workbook inventory bounded
- * by the seed-stage prompt projection. Unlike the document excerpt projection — whose
- * truncation depends on the prompt-time single-document expand opt-in, so it needs a
- * per-call-site sink — the inventory projection is applied UNCONDITIONALLY
- * (compactStructuralDataForPrompt) and is a pure function of the inventory
- * (projectInventoryForPrompt). It is therefore fully recoverable from the persisted
- * observations, so no call-site sink is needed (and none can be missed — the C-recon
- * F1 trap). The selector here MIRRORS the projection site exactly: any observation
- * carrying a workbook_inventory OBJECT (no kind gate — only the spreadsheet observer
- * produces one, but matching the projection avoids a "bounded-but-unrecorded"
- * divergence). The persisted inventory stays full; this records only that the seed-stage
- * PROMPT saw a bounded view, so replay/audit is honest about it. Exported for the test.
- */
-export function recomputeWorkbookInventoryProjectionTruncations(
-  observations: readonly ReconstructSourceObservation[],
-): WorkbookInventoryProjectionTruncation[] {
-  const truncations: WorkbookInventoryProjectionTruncation[] = [];
-  for (const observation of observations) {
-    const inventory = observation.structural_data.workbook_inventory;
-    if (
-      inventory === null ||
-      typeof inventory !== "object" ||
-      Array.isArray(inventory)
-    ) {
-      continue;
-    }
-    const projection = projectInventoryForPrompt(
-      inventory as WorkbookStructuralInventory,
-      undefined,
-      { includeValueTiles: true }, // P1-C1 #5: reconstruct prompts include the bounded value tile
-    );
-    if (projection.truncated) {
-      truncations.push({
-        observation_id: observation.observation_id,
-        source_ref: observation.source_ref,
-        sections: projection.sections,
-      });
-    }
-  }
-  return truncations;
-}
-
-/** P6 code twin: durable record that the seed-stage PROMPT saw a bounded code inventory. */
-export interface CodeInventoryProjectionTruncation {
-  observation_id: string;
-  source_ref: string;
-  sections: CodeInventoryPromptProjectionResult["sections"];
-}
-
-/**
- * Code twin of recomputeWorkbookInventoryProjectionTruncations: the code inventory prompt
- * projection is applied UNCONDITIONALLY (compactStructuralDataForPrompt) and is a pure
- * function of the inventory (projectCodeInventoryForPrompt), so the bounded observations are
- * fully recoverable from the persisted observations — no per-call-site sink, nothing to miss
- * on any path or on resume. The selector MIRRORS the projection site exactly: any observation
- * carrying a code_structure_inventory OBJECT (no kind gate — only the code observer produces
- * one, but matching the projection avoids a "bounded-but-unrecorded" divergence).
- */
-export function recomputeCodeInventoryProjectionTruncations(
-  observations: readonly ReconstructSourceObservation[],
-): CodeInventoryProjectionTruncation[] {
-  const truncations: CodeInventoryProjectionTruncation[] = [];
-  for (const observation of observations) {
-    const inventory = observation.structural_data.code_structure_inventory;
-    if (
-      inventory === null ||
-      typeof inventory !== "object" ||
-      Array.isArray(inventory)
-    ) {
-      continue;
-    }
-    const projection = projectCodeInventoryForPrompt(inventory as CodeStructureInventory);
-    if (projection.truncated) {
-      truncations.push({
-        observation_id: observation.observation_id,
-        source_ref: observation.source_ref,
-        sections: projection.sections,
-      });
-    }
-  }
-  return truncations;
-}
-
 interface ObservationPromptPayloadOptions {
   observationIds?: readonly string[];
   contentExcerptCharLimit?: number;
@@ -10562,40 +9849,6 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-/**
- * Full-document excerpt expansion: a document observation projects its whole captured
- * prose instead of the bounded budget, so purpose/candidate/seed authoring reads the
- * document tail (goals, milestones) where actor/object evidence for seed-authoring
- * readiness lives. It is granted only when `expandDocument` holds, which the caller
- * (`observationPromptPayload`) computes as BOTH:
- *   - a seed-authoring prompt opted in (`expandSingleDocumentExcerpt`) — post-seed
- *     aggregate/validation prompts (claim realization, competency questions) and the
- *     bounded post-seed/directive catalogs do NOT opt in, even though several share the
- *     same numeric budget; and
- *   - the prompt projects a SINGLE observation — a multi-document bundle or a mixed
- *     directory (both already-accepted inputs) would otherwise multiply the bounded
- *     catalog into a context-overflowing prompt; and
- *   - the observation's content_excerpt holds the whole source text
- *     (`isFullExcerptProjectionEligible`: a text-readable document .md/.txt/.adoc,
- *     or code captured as text) — a binary document (.pdf/.docx) captured only the
- *     small structural sample, and spreadsheet/database carry a structural inventory
- *     rather than raw text, so those keep the bounded excerpt.
- * Multi-document / over-window budget-aware selection is deferred (see
- * development-records/design/20260616-large-input-observation).
- */
-function isFullExcerptProjectionEligible(
-  targetMaterialKind: string | undefined,
-  sourceRef: string | null | undefined,
-): boolean {
-  // Single shared whole-capture predicate (M3a): the capture owner
-  // (materialize-preparation) and this seed-stage projection consult the SAME ref-based
-  // eligibility, so a bounded capture can never sit under a whole-projection budget (which
-  // would silently author the seed from a partial file). Source-language code (allowlisted
-  // extension OR build-language basename) and text-readable documents earn the whole excerpt;
-  // config/data code files, binary documents, and structural-inventory kinds stay bounded.
-  return isFullExcerptCaptureEligible(targetMaterialKind, sourceRef);
-}
-
 function effectiveContentExcerptCharLimit(
   baseLimit: number | undefined,
   targetMaterialKind: string | undefined,
@@ -10688,37 +9941,6 @@ function compactStructuralDataForPrompt(
 // document expansion gate); not part of the product surface.
 /** Bounded cap on provisional leaf-read labels rendered into one observation's prompt (Step E). */
 const MAX_PROVISIONAL_LABELS_PER_OBSERVATION = 64;
-
-/**
- * Design §7 (whole-document-projection generalization, PR-1b-3): true when every observation in
- * `observations` is a REGION of the SAME file — same `source_ref`, each carrying a distinct
- * `location` and a numeric `region_line_start`/`region_line_end` (the additive fields
- * `expandSourceObservationIntoRegions` stamps on a region observation — materialize-preparation.ts
- * — never present on a whole-file observation). A decomposed document projected as N region
- * observations qualifies for whole-document expansion exactly like a single whole-file observation
- * does under the existing `observations.length <= 1` gate: both are "one document's worth". A
- * multi-FILE bundle (mixed directory, several distinct documents) never qualifies (different
- * `source_ref`), so it keeps today's bounded per-observation excerpt unchanged.
- */
-function allObservationsAreRegionsOfOneFile(
-  observations: readonly ReconstructSourceObservation[],
-): boolean {
-  if (observations.length <= 1) return false;
-  const sourceRef = observations[0]!.source_ref;
-  const locations = new Set<string>();
-  for (const observation of observations) {
-    if (observation.source_ref !== sourceRef) return false;
-    if (
-      typeof observation.structural_data.region_line_start !== "number" ||
-      typeof observation.structural_data.region_line_end !== "number"
-    ) {
-      return false;
-    }
-    if (locations.has(observation.location)) return false;
-    locations.add(observation.location);
-  }
-  return true;
-}
 
 /** Rank tier for `capProjectedRegionsPerFile`'s within-file sort — declaration/heading regions
  *  (structurally significant, design §8) outrank body regions and role-less (whole-file)
@@ -10924,74 +10146,6 @@ export function observationPromptPayload(
       }
       return payload;
     });
-}
-
-/**
- * One observation's resume-fallback truncation record, or `[]` when the observation is not
- * full-excerpt-projection-eligible or its captured excerpt fits `budget`. Shared by both branches
- * of `singleDocumentProjectionTruncation` below so the single-observation and per-region cases
- * apply the identical eligibility + slicing rule.
- */
-function singleObservationProjectionTruncation(
-  observation: ReconstructSourceObservation,
-  budget: number,
-): DocumentExcerptProjectionTruncation[] {
-  // Mirror the fresh-run eligibility (text-readable document OR source-language code, by ref
-  // so build-language basenames count) so a resumed run records code truncation provenance
-  // too — a document-only check silently dropped the event for a large single code file.
-  if (
-    !isFullExcerptProjectionEligible(
-      observation.target_material_kind,
-      observation.source_ref,
-    )
-  ) {
-    return [];
-  }
-  const excerpt = observation.structural_data.content_excerpt;
-  if (typeof excerpt !== "string" || excerpt.length <= budget) return [];
-  return [
-    {
-      observation_id: observation.observation_id,
-      source_ref: observation.source_ref,
-      target_material_kind: observation.target_material_kind,
-      captured_chars: excerpt.length,
-      projection_budget_chars: budget,
-    },
-  ];
-}
-
-/**
- * Resume fallback for the projection-truncation record. On
- * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
- * author's truncation sink are skipped, so it is empty even though the reused
- * artifacts may have been authored from a budget-sliced prompt. This recomputes
- * the unambiguous SINGLE-document case from the already-projected observations
- * (`promptSourceObservations` — source-safety redaction already applied, so a
- * redacted document has no `content_excerpt` and is correctly not reported) and
- * the budget — UNCHANGED, so still byte-identical for an unsplit resume.
- *
- * Design §7 (PR-1b-3): a decomposed document's seed-stage snapshot holds N region
- * observations of the SAME file (`allObservationsAreRegionsOfOneFile`), the exact set the live
- * path (`observationPromptPayload`) also recognizes as "one document's worth" and budgets at
- * floor(budget/count) per region (mirrored here so a resumed run reports the SAME per-region
- * truncations a fresh run would have recorded). A genuine multi-FILE bundle (mixed directory,
- * several distinct documents) still recomputes nothing — deferred, same as before this PR;
- * the primary large-input scenario is a single document (whole-file or fully split into regions).
- * Exported for the regression test.
- */
-export function singleDocumentProjectionTruncation(
-  promptSourceObservations: ReconstructSourceObservationsArtifact,
-  budget: number,
-): DocumentExcerptProjectionTruncation[] {
-  const observations = promptSourceObservations.observations;
-  if (observations.length === 1) {
-    return singleObservationProjectionTruncation(observations[0]!, budget);
-  }
-  if (!allObservationsAreRegionsOfOneFile(observations)) return [];
-  const perRegionBudget = Math.floor(budget / observations.length);
-  return observations.flatMap((observation) =>
-    singleObservationProjectionTruncation(observation, perRegionBudget)
-  );
 }
 
 function sourceScoutPackPromptPayload(args: {

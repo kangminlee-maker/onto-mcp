@@ -10,10 +10,8 @@ import {
   CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
   CODE_SEMANTIC_MAP_MAX_NODES,
   CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
-  CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
   codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
   semanticMapRenderCharBudget,
   deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
@@ -29,6 +27,10 @@ import {
   type ReconstructDirectiveAuthor,
   type SemanticMapStageConfig,
 } from "./run.js";
+import {
+  CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+} from "./semantic-map-projection.js";
 import {
   DispatchBreakerTrippedError,
   dispatchIncompleteArtifactPath,
