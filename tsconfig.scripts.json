@@ -46,7 +46,8 @@
     "scripts/stage2-value-bench-run.mts",
     "scripts/generate-linguist-tables.ts",
     "scripts/check-linguist-drift.ts",
-    "scripts/run-split-plan.mts"
+    "scripts/run-split-plan.mts",
+    "scripts/run-extraction-identity.mts"
   ],
   "exclude": []
 }
