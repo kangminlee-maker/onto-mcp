@@ -214,6 +214,8 @@
       "code_structure_inventory": true,
       "code_structure_layout": true,
       "environment_context_profile": true,
+      "environment_context_profile_content": true,
+      "source_breadth_fold": true,
       "dispatch_breaker": {
         "enabled": true
       },
