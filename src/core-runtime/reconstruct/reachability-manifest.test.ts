@@ -20,11 +20,13 @@ import { validateReconstructRunManifest } from "./terminal-validation.js";
 import {
   artifactRefsWithDefaults,
   buildSourceObservationLineageCensus,
-  createRunManifest,
-  type ReconstructConfirmationProvider,
-  type ReconstructDirectiveAuthor,
-  type ReconstructGracefulTerminalManifestInput,
 } from "./run.js";
+import type { ReconstructConfirmationProvider } from "./confirmation-provider-contract.js";
+import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
+import {
+  createRunManifest,
+  type ReconstructGracefulTerminalManifestInput,
+} from "./run-manifest.js";
 import type {
   ReconstructRecordArtifactRefs,
   ReconstructRunGoverningSnapshot,

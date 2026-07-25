@@ -6,27 +6,29 @@ import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   authoringPromptContractSha256,
-  buildSemanticMapBridgeCallbacks,
   CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
-  CODE_SEMANTIC_MAP_MAX_NODES,
-  CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
   codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   semanticMapRenderCharBudget,
   deriveSemanticMapFallbackPriorDispatchSpend,
-  mergeSemanticSeedProjections,
   observationPromptPayload,
   prepareSemanticMapResumeContext,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
   renderSemanticMapProjection,
+  SEMANTIC_MAP_PROMPT_NOTE,
+  SEMANTIC_MAP_SEED_PROMPT_NOTE,
+} from "./run.js";
+import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
+import {
+  buildSemanticMapBridgeCallbacks,
+  CODE_SEMANTIC_MAP_MAX_NODES,
+  CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
+  mergeSemanticSeedProjections,
   resolveSemanticMapCapability,
   resolveSemanticMapKinds,
   runSemanticMapStage,
-  SEMANTIC_MAP_PROMPT_NOTE,
-  SEMANTIC_MAP_SEED_PROMPT_NOTE,
-  type ReconstructDirectiveAuthor,
   type SemanticMapStageConfig,
-} from "./run.js";
+} from "./semantic-map-stage.js";
 import {
   CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
   SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
