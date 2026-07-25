@@ -42,6 +42,7 @@
     "scripts/effort-bench-judge-invariance.ts",
     "scripts/effort-bench-run-admission.ts",
     "scripts/effort-bench-pilot-report.ts",
+    "scripts/breadth-fold-selection-quality-bench.mts",
     "scripts/generate-linguist-tables.ts",
     "scripts/check-linguist-drift.ts"
   ],
