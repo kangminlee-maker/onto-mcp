@@ -6,9 +6,9 @@ import { parse as parseYaml } from "yaml";
 import {
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
-  runSpreadsheetLeafReadStage,
-  type ReconstructDirectiveAuthor,
 } from "./run.js";
+import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
+import { runSpreadsheetLeafReadStage } from "./leaf-read-stage.js";
 import { readStructureLeaf } from "./leaf-reader.js";
 import { callReconstructMockLlm } from "./mock-llm-realization.js";
 
