@@ -162,12 +162,12 @@ Stage 1/2 규율: 순수 모듈 byte-identical → 배선 → opt-in flip·autho
 - **DW-2c(실측 상수 pinning)**: codex 실 stdin 한도를 **설치된 codex 바이너리 probe로 확증**·상수를 그 아래로.
 
 **PR-3 — opt-in flip `source_breadth_fold`(default-OFF·flip)**
-`RECONSTRUCT_EXECUTION_SCALAR_KEYS`에 키 추가→reconstruct-api→run params→두 표면 초과 branch에서 fold 호출.
+`RECONSTRUCT_EXECUTION_SCALAR_KEYS`에 키 추가→reconstruct-api→directive-author 생성 인자→**directive 표면**(`writeSourceObservationDirective`) 초과 branch에서 fold 호출. **범위 정정(2026-07-24, 구현 시)**: MVP는 §9대로 **directive 한 표면만** fold(admission은 always-on 가드만·outline 이미 얇음·fold 후속). 이전 초안의 "두 표면 fold"·DW-3e의 `admitted_outlines` 슬롯 언급은 §9 유보와 모순이라 아래처럼 directive-only로 확정(handoff 20260724 frozen spec 일치).
 - **DW-3a(OFF byte-identical·diff)**: 키 부재 시 두 표면 PR-2와 byte-identical(fold branch 미도달)·openai-node OFF에서 여전히 fail-loud.
 - **DW-3b(오버플로우가 이제 맞음·헤드라인 대조)**: 키 ON·openai-node 59파일 replay에서 directive payload가 cap 아래·**dispatch 성공(실 dispatch·mock 아님)**·`level∈{skeleton,one_line}`·`catalog_observation_count===59`·LLM 선택 id 전부 resolve(unknown 0).
 - **DW-3c(provenance 온전·대조)**: 폴드 라운드의 전 selectable id가 실 저장 observation_id·선택에서 저작된 seed가 `readEvidenceRefs` unknown/mismatch **0**. *실패 시* fold 노드 id가 evidence_ref에 출현.
 - **DW-3d(불변식 no-op·결정적 대조)**: 같은 코퍼스 OFF vs ON에서 **reuse 키·각 관찰 delta 해시 byte-identical**(fold가 저장 관찰 미접촉 증명·I4/I5). *실패 시* 해시 회전.
-- **DW-3e(격리)**: OFF→ON flip이 `source_observations`/`admitted_outlines` 슬롯만 diff.
+- **DW-3e(격리)**: OFF→ON flip이 directive payload의 `source_observations` 슬롯만 diff(admission fold 미구현이라 `admitted_outlines` 불변; admission은 §9대로 가드-only 후속).
 - **적대 교차검증(PR-3 머지 전)**: 신선 이종 렌즈가 DW-3a/3d 재실행·OFF byte-identity·ON 해시 불변 재확인(fold가 관찰/authority 층 누수면 실패할 두 대조군). 이종=owner 터미널 `! codex exec`(codex 비대화형) 또는 신선 Opus.
 
 **PR-4(후속) — directory-topology rollup rung + zoom loop**
@@ -212,3 +212,9 @@ owner 승인 시 → **PR-1(순수 fold 모듈 + byte 가드)** 착수. §9 owne
 - **DW-2c 처리(정직)**: live codex probe 생략(proportionality)·1 MiB ceiling은 벤치 관측(reject 1,349,907>1,048,576)으로 확립·budget < ceiling이라 **가드는 codex-거절만 거부**(안전 방향, under-protection 없음)·좁은 over-refusal 밴드(~8KiB)는 fail-loud+remedy(fold 활성화). probe로 tighten 가능(후속).
 - **검증**: tsc0·전체 **3667(baseline 3651+16·회귀0)**=DW-2a byte-identical(가드 예산이하 no-op·payload 추출은 순수 refactor 필드동일). **신규 DW-2b 2**(directive 40파일×40k≈1.6M / admission 2500유닛≈1.3M → 각 사전 throw `/exceeds deterministic prompt budget: \d+ > \d+ bytes/`·**llmCalls===0**=dispatch 미도달). **독립 SWEEP 4체크 PASS**(byte-identity·가드가 실 dispatch payload 사전측정·31 callJsonAuthor 중 2 표면만 변경·budget<ceiling·비-vacuity).
 - **다음=PR-3**(opt-in `source_breadth_fold` flip: 초과 branch에서 fold 호출·OFF byte-identical + ON openai-node 59파일 dispatch 성공 + reuse/delta 해시 OFF==ON 대조군 DW-3d·적대 교차검증 게이트).
+
+**PR-3 완료·검증 (branch `feat/source-breadth-fold`, opt-in flip·미푸시)**: owner PR-3 착수 승인(handoff 20260724 frozen spec).
+- 구현: opt-in 키 `source_breadth_fold`(settings-chain·default OFF, type/zod/normalize/merge 자동파생)→`reconstruct-api` 두 팩토리 호출부(primary·fallback)에서 `sourceBreadthFold` 생성인자로(=`enableSemanticMapAuthoring` 전례·author-레벨 투영 knob이라 run params 불경유). `writeSourceObservationDirective`에서 ON이면 `projectCatalogAtFoldLevel`(full→inventory_skeleton→one_line rung)로 `foldObservationsToBudget` 호출→`directiveUserPayload.source_observations` 슬롯만 fold 결과로 대체(always-on 가드는 fold **뒤** backstop). fold 강등 시 open_questions에 R2 공개(dispatch payload 아님=DW-3e). **directive 한 표면만**(admission은 §9대로 가드-only·후속). one_line rung=`includeStructuralData:false`(anchor 5필드).
+- **검증**: tsc0·전체 스위트 **3671(baseline 3667+4·회귀0)**=DW-3a OFF byte-identical(기존 골든 전수 green). 신규 PR-3 단위 4(ON 40파일 오버플로우→fold dispatch·전 id selectable·공개·선택 resolve·관찰 불변 / OFF 대조 fail-loud / ON+적합 byte-identical hinge / ON one_line조차 초과→가드 backstop). **DW-3b 결정론 replay PASS**(실 value-bench 59파일 아티팩트 `stage2-value-bench-2026-07-22T17-45-58-944Z/off/`: OFF flat=1,349,903 bytes>budget throw / ON fold→inventory_skeleton **353,488 bytes≤budget**·59 전부 selectable·공개·선택 resolve·관찰 byte-identical) **+ --live 실 codex dispatch**(gpt-5.6-sol OAuth·`input_tokens~=88374`=folded payload 실 수용·19 selections 0 unknown id). 하니스 `scripts/source-breadth-fold-replay-dw3b.mts`(미커밋)·evidence `.onto/temp/source-breadth-fold-dw3b/`.
+- **적대 교차검증(신선 Opus frontier·7 falsifiable 체크)**: dispatch/provenance/결정성 **안전결함 0**. 반영: **M1**(admission fold 미배선)=§8/§9 문서 **내부 불일치**로 판정(코드는 handoff directive-only 정합·admission fail-loud 유지)→§8 PR-3·DW-3e를 directive-only로 정정(위). **Check6**(reuse-match 논증 불건전·ON→OFF resume stale-reuse)=실코드 확증(fingerprint가 플래그 미포함)→**플래그를 `authoredArtifactReuseMatch`에 fold**(`sourceBreadthFold` author property 노출+`document_excerpt_projection_budget` 전례·always-present bool·1회 회전)+주석 정정. MINOR: 가드 에러 remedy 주석 정정·one_line backstop 테스트 추가. MINOR(coarse rung in-prompt 안내 부재)=§9/DW-3e 의도(비-게이팅·open_questions 공개)로 무변경.
+- **미푸시**(로컬 브랜치 누적). push/PR·실사용 승격은 owner 승인 후(Stage 1/2 전례·repo settings 키 부재=default OFF=머지 byte-identical).

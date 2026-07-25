@@ -1213,6 +1213,12 @@ export function createOntoReconstructCoreApi(
       // PR — no code branches on it yet (PR-2b wires the admission-selection stage).
       const sourceAdmissionSelection =
         settings.reconstruct?.execution?.source_admission_selection === true;
+      // Deterministic recursive observation — projection-layer breadth fold (design 20260723 §8 PR-3):
+      // an author-level projection knob (the fold lives entirely inside writeSourceObservationDirective),
+      // so it is passed as a directive-author construction arg — like enableSemanticMapAuthoring — rather
+      // than threaded through the run params. Absent = off, byte-identical.
+      const sourceBreadthFold =
+        settings.reconstruct?.execution?.source_breadth_fold === true;
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1437,6 +1443,8 @@ export function createOntoReconstructCoreApi(
             llmConfig: fallbackLlmConfig,
             // DD10: the fallback author renders the same surfaces — same label root.
             projectRoot,
+            // PR-3: the fallback directive author folds identically (same author-level projection knob).
+            ...(sourceBreadthFold ? { sourceBreadthFold: true } : {}),
             semanticMapSynthesizeLlmConfig: fallbackLlmConfig,
             enableSemanticMapAuthoring: true,
             semanticMapDispatchCapabilities: {
@@ -1526,6 +1534,8 @@ export function createOntoReconstructCoreApi(
           llmConfig: semanticAuthorLlmConfig,
           // DD10: render-label root for code semantic-map surfaces (라벨만 상대화 — artifact 절대경로 유지).
           projectRoot,
+          // PR-3: projection-layer breadth fold (design 20260723 §8) — author-level knob, off = byte-parity.
+          ...(sourceBreadthFold ? { sourceBreadthFold: true } : {}),
           ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
           // Production opt-in + per-role synthesize override (design §5.5/§5.2)
           // from the single wiring seam. Opt-in absent/false = pair not

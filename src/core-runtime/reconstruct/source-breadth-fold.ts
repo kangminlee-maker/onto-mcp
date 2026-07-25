@@ -20,8 +20,9 @@
  * multi-repo axis), it returns the coarsest rung with `disclosure.over_budget = true`, and the caller's
  * always-on byte guard turns that into an honest fail-loud before dispatch.
  *
- * INERT until wired (PR-2 always-on guard; PR-3 opt-in `source_breadth_fold`). Nothing in the pipeline
- * calls this module yet.
+ * WIRED: the budget constant backs the always-on byte guard on both count-scaling dispatch surfaces
+ * (PR-2), and `foldObservationsToBudget` runs in the source-observation-directive behind the opt-in
+ * `reconstruct.execution.source_breadth_fold` (PR-3) — absent/off = today's flat projection, byte-identical.
  */
 
 /**
@@ -57,7 +58,9 @@ export const CODEX_PROMPT_STDIN_BYTE_LIMIT = 1_048_576;
  * framing, so the guard must fire slightly before the raw ceiling. The margin (~8 KiB) keeps the guard
  * conservative — it only ever refuses payloads codex would ALSO reject (so every currently-succeeding run
  * stays byte-identical), while the narrow over-refusal band (codex-accepts-but-guard-refuses) fails loud
- * with an actionable remedy (enable source_breadth_fold) rather than a codex opaque exit. Tightenable via
+ * with a deterministic budget error rather than a codex opaque exit. The generic error text says "split
+ * or reduce the projection"; for the DIRECTIVE surface the operator's concrete remedy is to enable
+ * source_breadth_fold (this module's fold), which the directive runs BEFORE the guard. Tightenable via
  * the DW-2c probe.
  */
 export const SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET = CODEX_PROMPT_STDIN_BYTE_LIMIT - 8_192;
