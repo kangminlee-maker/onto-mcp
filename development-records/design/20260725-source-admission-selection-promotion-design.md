@@ -180,6 +180,11 @@ floor 는 이미 구조적 표식을 찍는다 (`run.ts:11250` `admission_floor_
 파일 소실, D-B 는 스프레드시트). ⇒ **벤치의 선행조건으로 걸지 않는다.**
 승격 안 할 수도 있는 기능을 위해 먼저 일하지 않기 위함. 단 **flip 전에는 필수**.
 
+> **[2026-07-25 해소 — 구현 완료]** 두 결함 모두 브랜치
+> `fix/admission-selection-preflight-defects` 커밋 `60ab4a7` 로 착지했다. 아래 원안
+> 두 블록은 **각각 처방이 틀렸고** 실코드 재검증으로 교정됐다. 원문은 기록으로 남기되
+> 각 블록 끝의 정정을 SSOT로 읽는다. 전체 3689 tests green, OFF 경로 동작 불변.
+
 ### D-A — floor 승격 TOCTOU ⇒ hard crash
 
 **판정: terminal 판정부에서 수정** (`isZeroObservationGracefulTerminalEligible`,
@@ -205,6 +210,33 @@ floor 는 이미 구조적 표식을 찍는다 (`run.ts:11250` `admission_floor_
 - 검증: 선택 직후 승격 유닛을 소실시키고 **throw 가 아니라 graceful `blocked`** 임을
   단언하는 재현 테스트. admitted ≥2 전제를 만족시켜야 함(공허 통과 방지).
 
+**[2026-07-25 정정 — 처방 교체]** 위 "`"admitted"` 를 허용" 은 **공허 함정**이었다.
+그대로 구현하면 zero-observation 하에서 admitted 유닛이 전부 무조건 통과해
+**gate 가 admission ON 에서 항상 graceful** 이 되고, N-elig 대조(지원되지만 빈
+타깃은 crash)가 파괴된다. 실제 결함 상태는 하나뿐이다 — **시도 집합이 전부 소실 +
+deferred admitted 잔존**.
+
+- 실제 술어: optional `attemptedSourceRefs`(accepted ∩ file-limit cap =
+  `run.ts` 의 `frontierBySourceRef` 키)를 stage 반환값에 추가하고, **시도되지 않은**
+  admitted 유닛만 자격에서 면제한다. 인자 부재 시 admission 이전 규칙과 동일.
+- 근거: 설계 §16.2 의 자격 의미는 "planned인데 미관측 unit 0" = *관찰하려던 것 중
+  미해결 없음*이지 "코퍼스에 관찰 가능한 것이 전무"가 아니다. §16.2(2026-07-01)는
+  admission(07-22)보다 앞서 **자발적 deferred 상태를 표현할 술어가 없었다** — 시도
+  집합으로의 확장은 원의도의 재정의가 아니라 충실한 확장이다.
+- 대안 B(`skipped_refs` OR 절) 기각: producer 버그/desync 서명을 조용한 graceful 로
+  바꾸면서 얻는 것이 없다.
+- **저자 오류 기록**: 실행 중 나는 "OFF 경로도 같은 결함"이라 주장했으나 **틀렸다**.
+  `observeInventoryUnitDeep` 이 소실 유닛을 `skipped` 로 강등하고
+  (`materialize-preparation.ts:1007-1024`) OFF(`:1284-1288`)·ON(`run.ts:16187-16188`)
+  양쪽이 이를 채택하므로 OFF 전체소실은 **이미 graceful**이다 — 위 원문이 옳았고
+  내가 내 문서와 모순됐다. 원인: `run.ts:5744-5746` 의 **stale 주석**("inventory 는
+  재관찰 전에 만들어진다")을 권위로 읽고 producer 를 확인하지 않음. 그 주석도 같은
+  커밋에서 정정했다.
+- 부수: `deferred_admitted_refs` 를 zero-observation 진단에 비-0 일 때만 덧붙여
+  blocked terminal 이 "못 읽은 것"과 "일부러 남긴 것"을 구분한다.
+- 검증: 동일 inventory 에서 `attemptedSourceRefs` **유무만** 갈리는 OFF-parity 대조로
+  공허 통과 배제 + N-elig 대조 2건(시도했으나 미해결 = desync, stray planned).
+
 ### D-B — value-read 미인가
 
 **판정: 중복 사전필터 삭제** (`run.ts:5344`, `maturation-validation.ts:2595`).
@@ -224,6 +256,27 @@ floor 는 이미 구조적 표식을 찍는다 (`run.ts:11250` `admission_floor_
   `consumption_allowed` 가 아님 ⇒ 여전히 거부. **단 이는 추론이므로 테스트로 증명한다.**
 - 방향은 under-authorization(누출 아님)이나 **조용한** 품질 구멍이라 fail-loud
   규율에 어긋난다.
+
+**[2026-07-25 정정 — 처방 교체]** "사전필터 삭제" 는 **틀렸다**. 삭제하면 `material_claim`
+행이 **명시적 authorization(basis B)만으로도** `consumption_allowed` 가 되는 비-타깃
+스프레드시트까지 value-read 가 통과한다 — 문서화된 의도를 넘어서는 **확장**이며,
+"off-path 동등성" 추론(비-타깃 ∧ 비-admitted ⇒ 거부)이 basis B 를 빠뜨렸다.
+
+- 실제 처방: **additive 술어**. 기존 증명 1(`is_runtime_target_source`)을 **그대로 두고**
+  증명 2를 OR 로 더한다 — `material_claim` 행의
+  `authorization_scope_ref === "runtime_target_ref_read_scope"`. 오늘 통과하는 것은
+  하나도 실패로 바뀌지 않는다.
+- "`runtimeTargetProven` 채택은 구성 불가" 도 정정: 추출·export 가 필요 없다.
+  **권위가 이미 근거를 발행한다** — `source-safety-validation.ts:278-282` 가
+  `authorization_scope_ref` 로 basis 를 기록하고, `runtimeInternalConsumption`
+  (`:157-161`)이 `material_claim` 을 **제외**하므로 material_claim 행에서
+  `"runtime_target_ref_read_scope"` ⟺ `runtimeTargetProven ∧ ¬explicitlyAuthorized`.
+  ⇒ 위양성 없음. 신규 배선·신규 개념 0.
+- 잔여(문서화): 두 증명을 **동시에** 가진 원본은 ternary 가 explicit scope 를 기록해
+  증명 2가 놓친다 — flag 로도 잡히지 않던 케이스라 **수정 전보다 나빠지지 않는다**.
+- 검증(반증 가능성 실증): 술어를 구형으로 되돌리면 positive 2건이 정확히 FAIL 하고
+  **negative control 2건(basis B 비-타깃)은 양쪽 모두 PASS** — 결함이 닫혔고 확장은
+  없음을 각각 독립적으로 고정.
 
 ## 6. 공개된 타당성 한계
 
@@ -325,3 +378,25 @@ D-A 클래스의 실사용 재발.
   양쪽에 그대로 전파**되므로, 수렴한 결론이라도 계기 실재성은 별도로 실코드 확인해야 한다.
   이번에 4개 필드명(`provider_tokens_total`·`final_deep_file_count`·
   `distinctDeepObservedRefs`·정규화 seed)을 같은 방식으로 재확인했고 전부 실재했다.
+
+### 10.1 결함 트랙 구현 provenance (2026-07-25)
+
+- **SpawnGate: Escalation FRONTIER spawn** — D-A 에서 처방 두 개(시도-집합 술어 vs
+  `skipped_refs` OR)가 지속되어 블라인드 패킷(증거·제약·루브릭·중립 대안, 하우스 답
+  미포함)으로 판정 위임. **사전 기록한 변경 조건**: "OFF 경로에도 같은 클래스가
+  존재한다"는 내 전제가 무너지면 B 를 철회한다.
+- **disposition**: 조건이 **발동**했다. 판정은 OFF 클래스가 실재하지 않음을
+  producer(`materialize-preparation.ts:1007-1024`)로 보이며 내 전제를 뒤집었고, 나는
+  그 주장을 판정을 신뢰하지 않고 **독립 재확인한 뒤** B 를 철회하고 A(+시도집합
+  refinement)를 채택했다. 판정이 스스로 건 번복 조건(§16.2 가 graceful 을 "코퍼스에
+  관찰 가능한 것이 전무"로 정의하면 A 도 기각)은 **미발동** — §16.2 의 의미 주석이
+  "planned인데 미관측 unit 0"이므로 시도-집합 해석을 지지한다.
+- **SpawnGate: Parallelism WORKHORSE spawn** — D-B 는 스펙이 동결돼 있어 별도
+  워크호스에 위임. 반환물은 자기보고를 신뢰하지 않고 **주 세션이 diff 를 직접 검토**해
+  두 안전성을 확인했다: (1) `safetyRowsById` 는 ledger 부재 시 빈 Map 이므로 hoist
+  후에도 flag-only 로 정확히 이전 동작, (2) `sourceSafetyRowIdForObservation` 은 순수
+  문자열 결합이라 무조건 호출이 throw 를 유발하지 않는다. 이어 **술어를 구형으로
+  되돌려 테스트가 실제로 FAIL 하는지**까지 실행해 공허 통과를 배제했다.
+- **주 세션 자체 오류 4번째**: §5 D-A 정정에 기록한 stale-주석 신뢰 오류. 이 문서가
+  이미 옳게 적어둔 사실("전체 소실은 정상 처리")과 **내 실행 중 주장이 모순**했는데도
+  문서를 재대조하지 않았다.
