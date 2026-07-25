@@ -44,11 +44,13 @@ import type {
   ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
 import {
-  sourceObservationsReuseSha256,
   runReconstruct,
   appendFinalOutputUnresolvedRevisionSection,
-  reuseMatchArtifactHash,
 } from "./run.js";
+import {
+  reuseMatchArtifactHash,
+  sourceObservationsReuseSha256,
+} from "./authored-artifact-reuse.js";
 import {
   authoringPromptContractSha256,
   AUTHORING_PROMPT_CONTRACT_VERSION,
