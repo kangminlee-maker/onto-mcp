@@ -263,12 +263,6 @@ import type {
   ReconstructSemanticAuthorRealization,
 } from "./run-manifest.js";
 import {
-  CODE_SEMANTIC_MAP_PROMPT_NOTE,
-  CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
-  CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
-  CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
-} from "./authoring-system-prompts.js";
-import {
   authoringPromptContractSha256,
 } from "./authoring-llm-call.js";
 import {
@@ -313,6 +307,11 @@ import {
   semanticMapResumeValidationPath,
   semanticMapSidecarPath,
 } from "./semantic-map-resume.js";
+import { sha256File } from "./run-primitives.js";
+import { codeAuthoringPromptContractSha256 } from "./authoring-llm-call.js";
+import { reconstructContractRegistryPathFromProfilesRoot } from "./contract-registry.js";
+import { competencyQuestionsRepairDirectives } from "./post-seed-validation.js";
+import { ontologySeedRepairSections } from "./ontology-seed-validation.js";
 
 export interface RunReconstructParams {
   projectRoot: string;
@@ -466,10 +465,6 @@ function buildGracefulTerminalFinalOutput(signal: GracefulTerminalSignal): strin
   ].join("\n");
 }
 
-async function sha256File(filePath: string): Promise<string> {
-  return crypto.createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
-}
-
 async function writeSourceObservationLineageIndexArtifact(args: {
   sessionId: string;
   rows: Array<{
@@ -505,66 +500,6 @@ async function writeSourceObservationLineageIndexArtifact(args: {
   };
   await writeYamlDocument(args.outputPath, artifact);
   return artifact;
-}
-
-function ontologySeedRepairSections(
-  validation: ReconstructOntologySeedValidationArtifact,
-): string[] {
-  const text = validation.violations.map((violation) =>
-    `${violation.code} ${violation.message} ${violation.subject_id ?? ""}`
-      .toLowerCase()
-  ).join("\n");
-  const sections: string[] = [];
-  if (/\b(concept|association|conceptual)\b/.test(text)) {
-    sections.push("conceptual_frame");
-  }
-  if (/\b(semantic|object|property|value_type|constraint)\b/.test(text)) {
-    sections.push("semantic_layer");
-  }
-  if (/\b(kinetic|action|workflow|parameter|precondition|postcondition)\b/.test(text)) {
-    sections.push("kinetic_layer");
-  }
-  if (/\b(dynamic|actor|role|permission|policy|state|transition|guard)\b/.test(text)) {
-    sections.push("dynamic_layer");
-  }
-  if (/\b(data|binding|read_model|writeback|source_binding)\b/.test(text)) {
-    sections.push("data_binding_layer");
-  }
-  if (/\b(handoff|limitation|readiness|unsupported_question)\b/.test(text)) {
-    sections.push("ontology_handoff");
-  }
-  if (/\b(validation|coverage|question_authority)\b/.test(text)) {
-    sections.push("validation_layer");
-  }
-  return sections.length > 0
-    ? [...new Set(sections)]
-    : ["cross_section_reference_closure"];
-}
-
-/**
- * Repair directives for a failed competency-questions validation, mirroring
- * {@link ontologySeedRepairSections}: each directive is a concrete, human-
- * readable instruction the re-author must satisfy. Missing-coverage violations
- * (the dominant author-owned failure — uncovered modeling concerns, coverage
- * axes, eligible claims, or domain competencies) are surfaced first so the
- * repair pass biases toward closing coverage; remaining violations follow. The
- * violation message already names the kind and the offending id, so it is the
- * directive verbatim. Deduped; a non-empty fallback guarantees the repair pass
- * always receives actionable context.
- */
-export function competencyQuestionsRepairDirectives(
-  validation: ReconstructCompetencyQuestionsValidationArtifact,
-): string[] {
-  const coverage: string[] = [];
-  const other: string[] = [];
-  for (const violation of validation.violations) {
-    (violation.code === "missing_required_coverage" ? coverage : other)
-      .push(violation.message);
-  }
-  const directives = [...new Set([...coverage, ...other])];
-  return directives.length > 0
-    ? directives
-    : ["Ensure every required coverage axis, modeling concern, eligible claim, and admitted domain competency is covered by at least one competency question."];
 }
 
 async function readTextIfPresent(filePath: string): Promise<string | null> {
@@ -2340,42 +2275,12 @@ function sourceObservationsForPrompt(args: {
 // code fingerprints reach the seed reuse key through the aggregate fingerprint, so rotation
 // coverage is complete (DD6). Concept split 근거: fingerprint 격리라는 런타임 동작 차이.
 
-export const CODE_AUTHORING_PROMPT_CONTRACT_VERSION =
-  "reconstruct_code_authoring_prompt_contract:v1";
-
-export const CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
-  code_semantic_map_synthesize: CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
-  code_semantic_map_verify: CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
-  code_observation_semantic_map_note: CODE_SEMANTIC_MAP_PROMPT_NOTE,
-  code_ontology_seed_semantic_map_note: CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
-};
-
-/** sha256 of the code authoring prompt contract (DD6) — folded into the CODE observation
- *  fingerprint (semanticMapCodeObservationFingerprint) so editing any code prompt/note rotates
- *  code reuse keys tautologically while spreadsheet fingerprints stay untouched. Parameterized
- *  only for the edit-sensitivity test (CG-1 pattern); the fold always calls it with no argument. */
-export function codeAuthoringPromptContractSha256(
-  contract: Record<string, string> = CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
-): string {
-  return sha256Text(stableJson({
-    contract_version: CODE_AUTHORING_PROMPT_CONTRACT_VERSION,
-    templates: contract,
-  }));
-}
-
 async function readLensPrompt(args: {
   profilesRoot: string;
   lensId: string;
 }): Promise<string> {
   const ontoRoot = path.resolve(args.profilesRoot, "..", "..", "..");
   return fs.readFile(path.join(ontoRoot, "roles", `${args.lensId}.md`), "utf8");
-}
-
-function reconstructContractRegistryPathFromProfilesRoot(profilesRoot: string): string {
-  return path.join(
-    path.dirname(path.resolve(profilesRoot)),
-    "reconstruct-contract-registry.yaml",
-  );
 }
 
 const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;

@@ -2325,3 +2325,37 @@ export async function writeOntologySeedValidationArtifact(args: {
   await writeYamlDocument(args.outputPath, validation);
   return validation;
 }
+
+export function ontologySeedRepairSections(
+  validation: ReconstructOntologySeedValidationArtifact,
+): string[] {
+  const text = validation.violations.map((violation) =>
+    `${violation.code} ${violation.message} ${violation.subject_id ?? ""}`
+      .toLowerCase()
+  ).join("\n");
+  const sections: string[] = [];
+  if (/\b(concept|association|conceptual)\b/.test(text)) {
+    sections.push("conceptual_frame");
+  }
+  if (/\b(semantic|object|property|value_type|constraint)\b/.test(text)) {
+    sections.push("semantic_layer");
+  }
+  if (/\b(kinetic|action|workflow|parameter|precondition|postcondition)\b/.test(text)) {
+    sections.push("kinetic_layer");
+  }
+  if (/\b(dynamic|actor|role|permission|policy|state|transition|guard)\b/.test(text)) {
+    sections.push("dynamic_layer");
+  }
+  if (/\b(data|binding|read_model|writeback|source_binding)\b/.test(text)) {
+    sections.push("data_binding_layer");
+  }
+  if (/\b(handoff|limitation|readiness|unsupported_question)\b/.test(text)) {
+    sections.push("ontology_handoff");
+  }
+  if (/\b(validation|coverage|question_authority)\b/.test(text)) {
+    sections.push("validation_layer");
+  }
+  return sections.length > 0
+    ? [...new Set(sections)]
+    : ["cross_section_reference_closure"];
+}

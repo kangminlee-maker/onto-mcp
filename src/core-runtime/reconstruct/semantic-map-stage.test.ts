@@ -5,14 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
-  CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
-  codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   deriveSemanticMapFallbackPriorDispatchSpend,
 } from "./run.js";
 import { prepareSemanticMapResumeContext } from "./semantic-map-resume.js";
 import {
   authoringPromptContractSha256,
+  CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+  codeAuthoringPromptContractSha256,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
 } from "./authoring-llm-call.js";
 import {

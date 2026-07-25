@@ -13,8 +13,15 @@
  *
  * 기본은 dry-run(보고만). `--apply`가 있어야 파일을 쓴다.
  *
+ * `--append`는 **이미 있는 모듈**에 덧붙인다. concept economy 때문에 필요하다: 옮길 심볼이
+ * 이미 존재하는 개념에 속하면(예: `CODE_*` 프롬프트 계약 3종은 `authoring-llm-call.ts`가
+ * 소유한 `AUTHORING_PROMPT_CONTRACT_VERSION`·`RECONSTRUCT_AUTHORING_PROMPT_CONTRACT`·
+ * `authoringPromptContractSha256`의 code 변종 쌍이다) 옆에 근접 중복 모듈을 새로 만드는 것이
+ * 아니라 그 모듈로 들어가야 한다. append 모드도 본문은 슬라이스로만 옮기므로 바이트 동일성은
+ * 그대로 보장되고, 목적지가 이미 가진 import는 재사용하며 이름 충돌은 FAIL한다.
+ *
  * 실행:
- *   npx tsx scripts/run-extract-symbols.mts --to <dest.ts> --symbols A,B,C [--apply]
+ *   npx tsx scripts/run-extract-symbols.mts --to <dest.ts> --symbols A,B,C [--apply] [--append]
  */
 import ts from "typescript";
 import fs from "node:fs";
@@ -28,11 +35,16 @@ const flag = (name: string): string | undefined => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const APPLY = argv.includes("--apply");
+const APPEND = argv.includes("--append");
 const DEST = flag("--to");
 const SYMBOLS = (flag("--symbols") ?? "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
 
 if (DEST === undefined || SYMBOLS.length === 0) {
-  console.error("사용법: --to <dest.ts> --symbols A,B,C [--apply]");
+  console.error("사용법: --to <dest.ts> --symbols A,B,C [--apply] [--append]");
+  process.exit(2);
+}
+if (APPEND && !fs.existsSync(DEST)) {
+  console.error(`!! --append인데 목적지가 없다: ${DEST} — 신규 생성은 --append 없이.`);
   process.exit(2);
 }
 
@@ -75,35 +87,39 @@ interface ImportBinding {
   readonly isType: boolean;
   readonly kind: "named" | "default" | "namespace";
 }
-const importBindings = new Map<string, ImportBinding>();
-for (const stmt of src.statements) {
-  if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
-  const specifier = stmt.moduleSpecifier.text;
-  const clause = stmt.importClause;
-  if (!clause) continue;
-  const declIsType = clause.isTypeOnly;
-  if (clause.name) {
-    importBindings.set(clause.name.text, {
-      specifier, propertyName: clause.name.text, isType: declIsType, kind: "default",
-    });
-  }
-  const bindings = clause.namedBindings;
-  if (bindings && ts.isNamespaceImport(bindings)) {
-    importBindings.set(bindings.name.text, {
-      specifier, propertyName: bindings.name.text, isType: declIsType, kind: "namespace",
-    });
-  }
-  if (bindings && ts.isNamedImports(bindings)) {
-    for (const el of bindings.elements) {
-      importBindings.set(el.name.text, {
-        specifier,
-        propertyName: (el.propertyName ?? el.name).text,
-        isType: declIsType || el.isTypeOnly,
-        kind: "named",
+function collectImportBindings(sf: ts.SourceFile): Map<string, ImportBinding> {
+  const out = new Map<string, ImportBinding>();
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    const specifier = stmt.moduleSpecifier.text;
+    const clause = stmt.importClause;
+    if (!clause) continue;
+    const declIsType = clause.isTypeOnly;
+    if (clause.name) {
+      out.set(clause.name.text, {
+        specifier, propertyName: clause.name.text, isType: declIsType, kind: "default",
       });
     }
+    const bindings = clause.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      out.set(bindings.name.text, {
+        specifier, propertyName: bindings.name.text, isType: declIsType, kind: "namespace",
+      });
+    }
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const el of bindings.elements) {
+        out.set(el.name.text, {
+          specifier,
+          propertyName: (el.propertyName ?? el.name).text,
+          isType: declIsType || el.isTypeOnly,
+          kind: "named",
+        });
+      }
+    }
   }
+  return out;
 }
+const importBindings = collectImportBindings(src);
 
 // --------------------------------------------------------- 참조 위치 판별
 
@@ -231,8 +247,87 @@ if (runNeedsBack.length > 0) console.log(`             ${runNeedsBack.join(", ")
 const mustExport = (s: Span): boolean =>
   s.exported || namesOf(s.stmt).some((n) => runNeedsBack.includes(n));
 
+/**
+ * append 모드의 목적지 사실관계. 목적지가 이미 가진 import는 재사용하고(같은 specifier +
+ * 같은 원본 이름일 때만), 이름이 다른 것에 묶여 있으면 조용히 잘못 해석되지 않도록 FAIL한다.
+ * 목적지가 run.js에서 가져오던 심볼이 이제 자기 것이 되면 그 import는 자기 참조가 되므로 걷어낸다.
+ */
+interface DestFacts {
+  readonly text: string;
+  readonly declaredNames: Set<string>;
+  readonly imports: Map<string, ImportBinding>;
+  readonly lastImportEnd: number;
+  readonly selfImportLocals: Set<string>;
+}
+const RUN_SPECIFIER = "./run.js";
+let destFacts: DestFacts | undefined;
+if (APPEND) {
+  const destText0 = fs.readFileSync(DEST, "utf8");
+  const destSrc = ts.createSourceFile(DEST, destText0, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
+  const declaredNames = new Set<string>();
+  for (const stmt of destSrc.statements) for (const n of namesOf(stmt)) declaredNames.add(n);
+  const destImports = collectImportBindings(destSrc);
+  const destLastImport = [...destSrc.statements].filter(ts.isImportDeclaration).pop();
+  if (!destLastImport) {
+    console.error(`!! 목적지에 import 문이 없다: ${DEST} — 삽입 지점을 정할 수 없다.`);
+    process.exit(1);
+  }
+  const selfImportLocals = new Set(
+    [...destImports.entries()]
+      .filter(([, b]) => b.specifier === RUN_SPECIFIER && movedNames.has(b.propertyName))
+      .map(([local]) => local),
+  );
+  destFacts = {
+    text: destText0,
+    declaredNames,
+    imports: destImports,
+    lastImportEnd: destLastImport.getEnd(),
+    selfImportLocals,
+  };
+
+  const nameCollisions = [...movedNames].filter((n) => declaredNames.has(n)).sort();
+  if (nameCollisions.length > 0) {
+    console.error(`!! BLOCKER — 목적지에 같은 이름의 top-level 선언이 이미 있다: ${nameCollisions.join(", ")}`);
+    console.error("   덧붙이면 재선언 충돌이다. 이름을 확인하고 목적지를 바꿔라. 아무것도 쓰지 않았다.");
+    process.exit(1);
+  }
+  // 옮길 코드가 참조하는 이름이 목적지에서 **다른 것**을 가리키면 조용히 의미가 바뀐다.
+  const shadowed = neededImports.filter((local) => {
+    const mine = importBindings.get(local) as ImportBinding;
+    const theirs = destFacts?.imports.get(local);
+    if (theirs !== undefined) {
+      return theirs.specifier !== mine.specifier || theirs.propertyName !== mine.propertyName;
+    }
+    return declaredNames.has(local);
+  }).sort();
+  if (shadowed.length > 0) {
+    console.error("!! BLOCKER — 옮길 코드가 쓰는 이름이 목적지에서 다른 것을 가리킨다 (조용한 의미 변경):");
+    for (const n of shadowed) {
+      const mine = importBindings.get(n) as ImportBinding;
+      const theirs = destFacts?.imports.get(n);
+      console.error(
+        `     ${n}: run.ts=${mine.propertyName}@${mine.specifier} / 목적지=` +
+          (theirs ? `${theirs.propertyName}@${theirs.specifier}` : "지역 선언"),
+      );
+    }
+    console.error("\n   해소: 목적지를 바꾸거나 그 심볼도 함께 옮겨라. 아무것도 쓰지 않았다.");
+    process.exit(1);
+  }
+}
+
+/** append 모드에서 목적지가 이미 동일하게 import하는 것은 다시 쓰지 않는다. */
+const importsToRender = destFacts === undefined
+  ? neededImports
+  : neededImports.filter((local) => !destFacts?.imports.has(local));
+if (destFacts !== undefined) {
+  console.log(
+    `목적지 재사용: import ${neededImports.length - importsToRender.length}개 재사용 · ` +
+      `${importsToRender.length}개 신규 · 자기참조 된 run.js import ${destFacts.selfImportLocals.size}개 제거`,
+  );
+}
+
 const bySpecifier = new Map<string, { value: string[]; type: string[]; ns: string[]; def: string[] }>();
-for (const local of neededImports) {
+for (const local of importsToRender) {
   const b = importBindings.get(local) as ImportBinding;
   const bucket = bySpecifier.get(b.specifier) ??
     { value: [] as string[], type: [] as string[], ns: [] as string[], def: [] as string[] };
@@ -273,7 +368,48 @@ const bodies = spans.map((s) => {
   return `${text.slice(0, offset)}export ${text.slice(offset)}`;
 });
 
-const destText = `${importLines.join("\n")}\n\n${bodies.join("\n\n")}\n`;
+/** 자기 것이 된 심볼의 run.js import specifier를 목적지에서 걷어낸다(줄/선언 단위 삭제). */
+function stripSelfImports(text: string, locals: ReadonlySet<string>): string {
+  if (locals.size === 0) return text;
+  const sf = ts.createSourceFile(DEST as string, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
+  const lines = text.split("\n");
+  const drop = new Set<number>();
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    if (stmt.moduleSpecifier.text !== RUN_SPECIFIER) continue;
+    const named = stmt.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    const doomed = named.elements.filter((e) => locals.has(e.name.text));
+    if (doomed.length === 0) continue;
+    if (doomed.length === named.elements.length) {
+      const a = sf.getLineAndCharacterOfPosition(stmt.getStart(sf)).line;
+      const b = sf.getLineAndCharacterOfPosition(stmt.getEnd()).line;
+      for (let i = a; i <= b; i += 1) drop.add(i);
+      continue;
+    }
+    for (const e of doomed) {
+      const a = sf.getLineAndCharacterOfPosition(e.getStart(sf)).line;
+      const b = sf.getLineAndCharacterOfPosition(e.getEnd()).line;
+      if (a !== b || (lines[a] as string).trim().replace(/,$/, "") !== e.getText(sf).trim()) {
+        throw new Error(`목적지의 run.js import specifier가 줄 단독이 아니다: ${e.name.text}`);
+      }
+      drop.add(a);
+    }
+  }
+  return lines.filter((_, i) => !drop.has(i)).join("\n");
+}
+
+let destText: string;
+if (destFacts === undefined) {
+  destText = `${importLines.join("\n")}\n\n${bodies.join("\n\n")}\n`;
+} else {
+  // 신규 import는 목적지의 마지막 import 뒤에 붙이고, 본문은 파일 끝에 덧붙인다.
+  const head = destFacts.text.slice(0, destFacts.lastImportEnd);
+  const tail = destFacts.text.slice(destFacts.lastImportEnd);
+  const withImports = importLines.length > 0 ? `${head}\n${importLines.join("\n")}${tail}` : `${head}${tail}`;
+  const cleaned = stripSelfImports(withImports, destFacts.selfImportLocals);
+  destText = `${cleaned.replace(/\n*$/, "")}\n\n${bodies.join("\n\n")}\n`;
+}
 
 // ------------------------------------------------------------ run.ts 수정
 
@@ -323,17 +459,23 @@ if (runNeedsBack.length > 0) {
 }
 
 console.log(`\nrun.ts    : ${full.split("\n").length}줄 → ${out.split("\n").length}줄`);
-console.log(`${DEST} : ${destText.split("\n").length}줄`);
+console.log(
+  `${DEST} : ${
+    destFacts === undefined
+      ? `${destText.split("\n").length}줄`
+      : `${destFacts.text.split("\n").length}줄 → ${destText.split("\n").length}줄 (append)`
+  }`,
+);
 
 if (!APPLY) {
   console.log("\n(dry-run — 아무것도 쓰지 않았다. 적용하려면 --apply)");
-  console.log("\n--- 목적지 import 블록 미리보기 ---");
-  console.log(importLines.join("\n"));
+  console.log(`\n--- 목적지 ${destFacts === undefined ? "import 블록" : "신규 import"} 미리보기 ---`);
+  console.log(importLines.length > 0 ? importLines.join("\n") : "(신규 import 없음 — 목적지가 전부 갖고 있다)");
   process.exit(0);
 }
 
-if (fs.existsSync(DEST)) {
-  console.error(`!! 목적지가 이미 있다: ${DEST} — 덮어쓰지 않는다.`);
+if (!APPEND && fs.existsSync(DEST)) {
+  console.error(`!! 목적지가 이미 있다: ${DEST} — 덮어쓰지 않는다. 덧붙이려면 --append.`);
   process.exit(1);
 }
 fs.writeFileSync(DEST, destText, "utf8");

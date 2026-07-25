@@ -123,6 +123,11 @@ interface Inputs {
   readonly currentFiles: ReadonlyMap<string, string>;
   /** base ref에 존재하던 파일 경로 집합. 여기 없는 파일 = 이번 추출로 생긴 신규 파일. */
   readonly baseFilePaths: ReadonlySet<string>;
+  /**
+   * append 목적지(base에 이미 있던 모듈) → **base 시점에 그 파일이 갖고 있던** 선언 이름들.
+   * 색인에서 제외해 이 추출과 무관한 동명이인이 DUPLICATE 오탐이 되지 않게 한다.
+   */
+  readonly appendDestBaseDeclNames: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 interface Report {
@@ -140,7 +145,12 @@ function analyze(input: Inputs): Report {
   // 현재 워킹트리 전체의 선언 색인 — 이름당 여러 사이트가 나올 수 있다.
   const sites = new Map<string, Site[]>();
   for (const [file, text] of input.currentFiles) {
+    // append 목적지는 base에 이미 있던 모듈이다. 그 모듈이 **원래부터** 갖고 있던 선언은
+    // 이 추출과 무관하므로 색인에서 뺀다. 넣으면 run.ts 잔류 심볼과 동명인 파일-로컬
+    // 헬퍼가 DUPLICATE 오탐이 된다(Inputs.currentFiles 주석의 그 위험).
+    const preExisting = input.appendDestBaseDeclNames.get(file);
     for (const decl of declarationsOf(file, text)) {
+      if (preExisting?.has(decl.name)) continue;
       const bucket = sites.get(decl.name);
       if (bucket) bucket.push({ file, decl });
       else sites.set(decl.name, [{ file, decl }]);
@@ -207,7 +217,25 @@ const BASE_REF = flag("--base") ?? "origin/main";
 const git = (...args: string[]): string =>
   execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 
-/** run.ts + base ref에 없던 신규 파일. 근거는 Inputs.currentFiles 주석 참조. */
+/**
+ * base ref에 **이미 있던** 모듈 중, 3차 추출이 심볼을 덧붙인 곳(커터 `--append`).
+ *
+ * concept economy 때문에 필요하다: 옮길 심볼이 이미 존재하는 개념에 속하면 옆에 근접 중복
+ * 모듈을 만들지 않고 그 모듈로 들어간다. 그러면 신규-파일 기준 범위로는 검사기가 그 선언을
+ * 찾지 못해 MISSING으로 뜬다(= 이 목록이 없으면 정직하게 실패한다).
+ *
+ * **열거를 유지하고 전체 스캔으로 바꾸지 말 것** — Inputs.currentFiles 주석의 이유대로
+ * src/ 전체를 훑으면 파일-로컬 동명이인(`isoNow`·`isRecord`·`stableJson` …) 때문에 추출 전
+ * 상태에서 이미 DUPLICATE 20건이 뜬다. 여기 적은 파일마다 "이동해온 선언이 실제로 있는가"를
+ * 아래에서 검사하므로, 코드가 또 움직이면 목록을 따라가라고 소리내어 실패한다.
+ */
+const APPEND_DEST_REFS = [
+  "src/core-runtime/reconstruct/contract-registry.ts",
+  "src/core-runtime/reconstruct/ontology-seed-validation.ts",
+  "src/core-runtime/reconstruct/post-seed-validation.ts",
+];
+
+/** run.ts + base ref에 없던 신규 파일 + APPEND_DEST_REFS. 근거는 Inputs.currentFiles 주석 참조. */
 function collectScopeFiles(baseFilePaths: ReadonlySet<string>): Map<string, string> {
   const out = new Map<string, string>();
   const walk = (dir: string): void => {
@@ -220,6 +248,10 @@ function collectScopeFiles(baseFilePaths: ReadonlySet<string>): Map<string, stri
     }
   };
   walk(SCAN_ROOT);
+  for (const ref of APPEND_DEST_REFS) {
+    if (!fs.existsSync(ref)) throw new Error(`APPEND_DEST_REFS에 없는 파일: ${ref}`);
+    out.set(ref, fs.readFileSync(ref, "utf8"));
+  }
   if (!fs.existsSync(RUN_TS)) throw new Error(`대상 파일 없음: ${RUN_TS} (repo 루트에서 실행하라)`);
   out.set(RUN_TS, fs.readFileSync(RUN_TS, "utf8"));
   return out;
@@ -242,9 +274,14 @@ function selfTest(): number {
   interface Case {
     readonly label: string;
     readonly files: Map<string, string>;
+    /** base ref에 있던 파일 집합. 생략하면 run.ts만. */
+    readonly baseFiles?: ReadonlySet<string>;
+    /** append 목적지 → base 시점 선언 이름. 생략하면 없음. */
+    readonly appendBase?: ReadonlyMap<string, ReadonlySet<string>>;
     readonly expect: (r: Report) => boolean;
   }
   const dest = "src/core-runtime/reconstruct/moved.ts";
+  const appendDest = "src/core-runtime/reconstruct/already-existing.ts";
   const cases: Case[] = [
     {
       label: "이동 + export 추가 → MOVED (허용된 유일한 변경)",
@@ -281,11 +318,39 @@ function selfTest(): number {
       files: new Map([[RUN_TS, "const kept = 1;\n"], [dest, `export ${BODY}\n\nexport const invented = 9;\n`]]),
       expect: (r) => r.added.length === 1 && r.added[0]?.name === "invented",
     },
+    {
+      // append 목적지의 base 시점 선언을 제외하지 않으면 동명이인이 DUPLICATE 오탐이 된다.
+      label: "append 목적지의 base 선언은 색인 제외 → 동명이인이 DUPLICATE가 되지 않는다",
+      files: new Map([[RUN_TS, `${BODY}\n\nconst kept = 1;\n`], [appendDest, "const helper = 0;\n"]]),
+      baseFiles: new Set([RUN_TS, appendDest]),
+      appendBase: new Map([[appendDest, new Set(["helper"])]]),
+      expect: (r) => r.counts.DUPLICATE === 0 && r.counts.STAYED === 2,
+    },
+    {
+      label: "append 목적지로 덧붙여진 선언은 MOVED로 잡힌다",
+      files: new Map([[RUN_TS, "const kept = 1;\n"], [appendDest, `const own = 0;\n\nexport ${BODY}\n`]]),
+      baseFiles: new Set([RUN_TS, appendDest]),
+      appendBase: new Map([[appendDest, new Set(["own"])]]),
+      expect: (r) => r.counts.MOVED === 1 && r.counts.MISSING === 0 && r.added.length === 0,
+    },
+    {
+      // 제외가 지나쳐 append로 온 선언까지 가리면 증명이 뚫린다 — base에 있었다고 잘못 적으면 MISSING.
+      label: "append 목적지 base 목록을 과하게 적으면 MISSING (제외가 만능이 아님을 고정)",
+      files: new Map([[RUN_TS, "const kept = 1;\n"], [appendDest, `export ${BODY}\n`]]),
+      baseFiles: new Set([RUN_TS, appendDest]),
+      appendBase: new Map([[appendDest, new Set(["helper"])]]),
+      expect: (r) => r.counts.MISSING === 1 && r.counts.MOVED === 0,
+    },
   ];
 
   let failed = 0;
   for (const c of cases) {
-    const report = analyze({ baseRunText: baseRun, currentFiles: c.files, baseFilePaths: baseFiles });
+    const report = analyze({
+      baseRunText: baseRun,
+      currentFiles: c.files,
+      baseFilePaths: c.baseFiles ?? baseFiles,
+      appendDestBaseDeclNames: c.appendBase ?? new Map(),
+    });
     const ok = c.expect(report);
     if (!ok) failed += 1;
     console.log(`  ${ok ? "PASS" : "FAIL"}  ${c.label}`);
@@ -305,7 +370,35 @@ const baseFilePaths = new Set(
   git("ls-tree", "-r", "--name-only", BASE_REF).split("\n").filter((l) => l.length > 0),
 );
 const currentFiles = collectScopeFiles(baseFilePaths);
-const report = analyze({ baseRunText, currentFiles, baseFilePaths });
+const appendDestBaseDeclNames = new Map<string, ReadonlySet<string>>();
+for (const ref of APPEND_DEST_REFS) {
+  if (!baseFilePaths.has(ref)) {
+    throw new Error(`APPEND_DEST_REFS 항목이 base ref에 없다(=신규 파일이므로 목록에서 빼라): ${ref}`);
+  }
+  const names = new Set(declarationsOf(ref, git("show", `${BASE_REF}:${ref}`)).map((d) => d.name));
+  if (names.size === 0) throw new Error(`base 시점 선언을 하나도 못 읽었다: ${ref}`);
+  appendDestBaseDeclNames.set(ref, names);
+}
+const report = analyze({ baseRunText, currentFiles, baseFilePaths, appendDestBaseDeclNames });
+
+/**
+ * 항목별 침식 가드. APPEND_DEST_REFS에 적힌 파일은 이번 추출로 선언을 **받았기 때문에** 적혀
+ * 있다. 하나도 받지 않았다면 코드가 또 움직였거나(목록이 뒤처짐) 목록이 틀린 것이다. 2차에서
+ * 게이트가 green인 채 커버리지를 잃은 것과 같은 유형이므로 조용히 넘기지 않는다.
+ */
+const landedByFile = new Map<string, number>();
+for (const f of report.findings) {
+  if (f.verdict !== "MOVED") continue;
+  for (const s of f.sites) landedByFile.set(s, (landedByFile.get(s) ?? 0) + 1);
+}
+const barrenAppendDests = APPEND_DEST_REFS.filter((ref) => (landedByFile.get(ref) ?? 0) === 0);
+if (barrenAppendDests.length > 0) {
+  console.error(
+    "!! APPEND_DEST_REFS에 적혀 있는데 이동해온 선언이 0개인 파일 — 목록이 코드를 따라가지 못했다:\n  " +
+      barrenAppendDests.join("\n  "),
+  );
+  process.exit(1);
+}
 
 const sha = (s: string): string =>
   execFileSync("shasum", ["-a", "256"], { input: s, encoding: "utf8" }).slice(0, 12);

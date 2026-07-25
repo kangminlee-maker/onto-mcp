@@ -1356,3 +1356,10 @@ export async function validateSourceProfileDefinitionHashes(args: {
     }),
   );
 }
+
+export function reconstructContractRegistryPathFromProfilesRoot(profilesRoot: string): string {
+  return path.join(
+    path.dirname(path.resolve(profilesRoot)),
+    "reconstruct-contract-registry.yaml",
+  );
+}

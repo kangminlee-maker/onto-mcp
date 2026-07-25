@@ -9,6 +9,7 @@
  * Nothing new should import from here — declare your own, as the neighbouring modules do.
  */
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 
 export function isoNow(): string {
   return new Date().toISOString();
@@ -32,4 +33,8 @@ export function stableJson(value: unknown): string {
 
 export function sha256Text(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+export async function sha256File(filePath: string): Promise<string> {
+  return crypto.createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
 }

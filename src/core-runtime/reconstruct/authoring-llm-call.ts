@@ -64,6 +64,12 @@ import {
 import type { ReconstructLlmCallKind } from "./llm-dispatch-failure.js";
 import { RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS } from "./output-budget.js";
 import { sha256Text, stableJson } from "./run-primitives.js";
+import {
+  CODE_SEMANTIC_MAP_PROMPT_NOTE,
+  CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
+  CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+  CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
+} from "./authoring-system-prompts.js";
 
 export type ReconstructLlmCall = (
   systemPrompt: string,
@@ -494,6 +500,29 @@ export function authoringPromptContractSha256(
 ): string {
   return sha256Text(stableJson({
     contract_version: AUTHORING_PROMPT_CONTRACT_VERSION,
+    templates: contract,
+  }));
+}
+
+export const CODE_AUTHORING_PROMPT_CONTRACT_VERSION =
+  "reconstruct_code_authoring_prompt_contract:v1";
+
+export const CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
+  code_semantic_map_synthesize: CODE_SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+  code_semantic_map_verify: CODE_SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
+  code_observation_semantic_map_note: CODE_SEMANTIC_MAP_PROMPT_NOTE,
+  code_ontology_seed_semantic_map_note: CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
+};
+
+/** sha256 of the code authoring prompt contract (DD6) — folded into the CODE observation
+ *  fingerprint (semanticMapCodeObservationFingerprint) so editing any code prompt/note rotates
+ *  code reuse keys tautologically while spreadsheet fingerprints stay untouched. Parameterized
+ *  only for the edit-sensitivity test (CG-1 pattern); the fold always calls it with no argument. */
+export function codeAuthoringPromptContractSha256(
+  contract: Record<string, string> = CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+): string {
+  return sha256Text(stableJson({
+    contract_version: CODE_AUTHORING_PROMPT_CONTRACT_VERSION,
     templates: contract,
   }));
 }
