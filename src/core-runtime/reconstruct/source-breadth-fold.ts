@@ -20,9 +20,13 @@
  * multi-repo axis), it returns the coarsest rung with `disclosure.over_budget = true`, and the caller's
  * always-on byte guard turns that into an honest fail-loud before dispatch.
  *
- * WIRED: the budget constant backs the always-on byte guard on both count-scaling dispatch surfaces
- * (PR-2), and `foldObservationsToBudget` runs in the source-observation-directive behind the opt-in
- * `reconstruct.execution.source_breadth_fold` (PR-3) — absent/off = today's flat projection, byte-identical.
+ * WIRED on BOTH count-scaling dispatch surfaces, behind the one opt-in
+ * `reconstruct.execution.source_breadth_fold` (absent/off = today's flat projection, byte-identical):
+ * the source-observation-directive's candidate catalog (PR-3) and the admission-selection's
+ * admitted-outline catalog (PR-4). The budget constant additionally backs the always-on byte guard on
+ * both (PR-2), which stays ungated so an over_budget fold still fails loud pre-dispatch. Measured over
+ * the real Stage-2 corpus, admission binds FIRST (~1.36 KB/unit → overflow at ~750 admitted files, vs
+ * the directive's ~0.49 KB/observation → ~2,000); folding admission moves its ceiling to ~4,200.
  */
 
 /**

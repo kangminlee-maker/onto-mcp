@@ -540,12 +540,14 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // = off — every planned unit is deep-observed exactly as today, byte-identical.
   "source_admission_selection",
   // Deterministic recursive observation — projection-layer breadth fold opt-in (design
-  // 20260723-deterministic-recursive-observation §8 PR-3). When true AND the source-observation-
-  // directive's pre-selection candidate catalog would overflow the codex worker stdin byte budget
-  // (a large multi-file corpus), the directive projects the FINEST detail rung that fits
-  // (full → inventory_skeleton → one_line) instead of the flat full projection — every observation
-  // stays selectable at reduced per-observation DETAIL, so an overflow becomes a bounded dispatch
-  // success instead of the always-on byte guard's honest fail-loud. Projection-only: mints/mutates
+  // 20260723-deterministic-recursive-observation §8 PR-3/PR-4). When true AND one of the two
+  // count-scaling selection catalogs would overflow the codex worker stdin byte budget (a large
+  // multi-file corpus) — the source-observation-directive's pre-selection candidate catalog, or the
+  // admission-selection's admitted-outline catalog — that prompt projects the FINEST detail rung that
+  // fits (full → inventory_skeleton → one_line) instead of the flat full projection — every
+  // observation/unit stays selectable at reduced per-item DETAIL, so an overflow becomes a bounded
+  // dispatch success instead of the always-on byte guard's honest fail-loud. One key covers both
+  // surfaces: they share the ceiling, the ladder, and the failure. Projection-only: mints/mutates
   // NO observations, so every provenance/determinism invariant is preserved (the source-observation
   // reuse key and per-observation delta hashes are byte-identical off vs on). When the catalog fits
   // the budget the fold reproduces today's full projection byte-for-byte. Absent = off — the flat

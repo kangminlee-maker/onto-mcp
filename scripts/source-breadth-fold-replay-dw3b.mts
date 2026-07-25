@@ -14,8 +14,9 @@
  * folded ON payload to the REAL semantic_author seat (one codex dispatch) and confirm the real worker
  * accepts it and returns resolvable selections — the DW-3b "real dispatch" arm (metered OAuth).
  *
- * Spec: design 20260723-deterministic-recursive-observation §8 PR-3 DW-3b. Not committed by default —
- * a verification harness, sibling to scripts/value-read-ab-replay.mts.
+ * Spec: design 20260723-deterministic-recursive-observation §8 PR-3 DW-3b. A verification harness,
+ * sibling to scripts/value-read-ab-replay.mts and scripts/source-breadth-fold-admission-replay.mts
+ * (the same replay for the admission surface).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
