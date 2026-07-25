@@ -42,6 +42,7 @@ const RUN_SURFACE_REFS = [
   "src/core-runtime/reconstruct/environment-context-profile-stage.ts",
   "src/core-runtime/reconstruct/leaf-read-stage.ts",
   "src/core-runtime/reconstruct/semantic-map-authoring.ts",
+  "src/core-runtime/reconstruct/semantic-map-dispatch-fallback-stage.ts",
   "src/core-runtime/reconstruct/semantic-map-resume.ts",
   "src/core-runtime/reconstruct/semantic-map-stage.ts",
   "src/core-runtime/reconstruct/value-read-stage.ts",

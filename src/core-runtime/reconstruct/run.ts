@@ -10,8 +10,6 @@ import type {
   ReconstructExplorationSynthesisArtifact,
   ReconstructLensJudgmentArtifact,
   ReconstructLensJudgmentIndexArtifact,
-  ReconstructSemanticMapCensus,
-  ReconstructSemanticMapSidecar,
   ReconstructRecordArtifactRefs,
   ReconstructSourcePurposeCandidatesArtifact,
   ReconstructSourceObservationLineageIndexValidationArtifact,
@@ -27,17 +25,7 @@ import type {
   ReconstructTargetMaterialProfileArtifact,
 } from "./artifact-types.js";
 import {
-  type ResolvedLlmDispatchCapability,
-} from "../llm/sealed-dispatch-capability.js";
-import {
-  type StructuredDispatchFailureEvidence,
-} from "../llm/structured-dispatch-error.js";
-import {
-  DispatchBreakerTrippedError,
   dispatchIncompleteArtifactPath,
-  isDispatchIncompleteArtifact,
-  type DispatchBreakerPolicy,
-  type DispatchIncompleteArtifact,
 } from "../llm/dispatch-breaker.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
@@ -99,13 +87,7 @@ import {
 } from "./llm-dispatch-failure.js";
 import {
   assertDispatchFallbackSessionAdmission,
-  assertDispatchFallbackTerminalArtifactContracts,
-  assertDispatchFallbackAttemptOwner,
-  publishDispatchFallbackActivation,
-  publishDispatchFallbackOutcome,
   projectDispatchFallbackRecordBlock,
-  securePublishDispatchFallbackYaml,
-  type DispatchFallbackActivation,
   type DispatchFallbackOutcome,
 } from "./dispatch-fallback-artifacts.js";
 import {
@@ -188,13 +170,10 @@ import { runMaturationValueReadStage } from "./value-read-stage.js";
 import {
   resolveSemanticMapCapability,
   resolveSemanticMapKinds,
-  runSemanticMapStage,
   semanticMapCodeObservationFingerprint,
-  semanticMapEligibleObservations,
 } from "./semantic-map-stage.js";
 import type {
   SemanticMapPreImageBase,
-  SemanticMapStageResult,
 } from "./semantic-map-stage.js";
 import { createRunManifest } from "./run-manifest.js";
 import {
@@ -237,17 +216,15 @@ import {
   prepareSemanticMapResumeContext,
   readYamlDocument,
   readYamlDocumentIfPresent,
-  semanticMapCensusPath,
   semanticMapResumeValidationPath,
-  semanticMapSidecarPath,
 } from "./semantic-map-resume.js";
 import { codeAuthoringPromptContractSha256 } from "./authoring-llm-call.js";
 import { reconstructContractRegistryPathFromProfilesRoot } from "./contract-registry.js";
 import { competencyQuestionsRepairDirectives } from "./post-seed-validation.js";
 import { repairInvalidOntologySeed } from "./ontology-seed-repair-stage.js";
+import { runSemanticMapStageWithDispatchFallback } from "./semantic-map-dispatch-fallback-stage.js";
 import {
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-  deriveSemanticMapFallbackPriorDispatchSpend,
 } from "./semantic-map-stage.js";
 import {
   writeAuthoredArtifactReuseProvenance,
@@ -271,7 +248,6 @@ import {
 } from "./source-observation-lineage.js";
 import { calculateMetrics } from "./run-metrics.js";
 import type {
-  ReconstructDispatchFallbackRuntime,
   ReconstructRunResult,
   RunReconstructParams,
 } from "./run-contract.js";
@@ -319,120 +295,6 @@ const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
 // 그대로 복사·핀); they fold by VALUE into semanticMapCodeObservationFingerprint ONLY, so tuning
 // them rotates code reuse keys (old code sidecars fail closed on fingerprint mismatch) while every
 // spreadsheet key stays byte-identical.
-
-function annotateDispatchFallbackCensus(args: {
-  census: ReconstructSemanticMapCensus;
-  runtime: ReconstructDispatchFallbackRuntime;
-  primaryCensus: ReconstructSemanticMapCensus;
-}): void {
-  const entries = args.runtime.accounting.entries();
-  args.census.dispatch_execution_profiles = {
-    primary: {
-      synthesize_descriptor_id:
-        args.runtime.primary.synthesize?.public_descriptor.descriptor_id ?? null,
-      verify_descriptor_id:
-        args.runtime.primary.verify?.public_descriptor.descriptor_id ?? null,
-    },
-    fallback: {
-      synthesize_descriptor_id:
-        args.runtime.fallback.synthesize.public_descriptor.descriptor_id,
-      verify_descriptor_id:
-        args.runtime.fallback.verify.public_descriptor.descriptor_id,
-    },
-  };
-  const fallbackEntries = entries.filter(
-    (entry) => entry.execution_source === "fallback",
-  );
-  const count = (
-    operation: "semantic_map_synthesize" | "semantic_map_verify",
-    projection: "logical" | "requests",
-  ): number =>
-    fallbackEntries
-      .filter((entry) => entry.operation === operation)
-      .reduce(
-        (sum, entry) =>
-          sum +
-          (projection === "logical"
-            ? 1
-            : entry.actual_adapter_request_count),
-        0,
-      );
-  args.census.fallback_synthesize_logical_calls = count(
-    "semantic_map_synthesize",
-    "logical",
-  );
-  args.census.fallback_verify_logical_calls = count(
-    "semantic_map_verify",
-    "logical",
-  );
-  args.census.fallback_synthesize_adapter_requests = count(
-    "semantic_map_synthesize",
-    "requests",
-  );
-  args.census.fallback_verify_adapter_requests = count(
-    "semantic_map_verify",
-    "requests",
-  );
-  for (const row of args.census.by_observation) {
-    const rowEntries = entries.filter(
-      (entry) => entry.observation_id === row.observation_id,
-    );
-    const fallback = rowEntries.filter(
-      (entry) => entry.execution_source === "fallback",
-    );
-    const primary = rowEntries.filter(
-      (entry) => entry.execution_source === "primary",
-    );
-    const primaryCensusRow = args.primaryCensus.by_observation.find(
-      (candidate) => candidate.observation_id === row.observation_id,
-    );
-    const primaryLogicalCalls = (
-      operation: "synthesize" | "verify",
-    ): number =>
-      primaryCensusRow?.columns.reduce(
-        (sum, column) =>
-          sum +
-          (operation === "synthesize"
-            ? column.synthesize_calls
-            : column.verify_calls),
-        0,
-      ) ?? 0;
-    row.dispatch_execution_source =
-      fallback.length > 0 ? "fallback" : primary.length > 0 ? "primary" : null;
-    row.discarded_primary_synthesize_logical_calls =
-      fallback.length > 0
-        ? primaryLogicalCalls("synthesize")
-        : 0;
-    row.discarded_primary_verify_logical_calls =
-      fallback.length > 0
-        ? primaryLogicalCalls("verify")
-        : 0;
-    row.primary_synthesize_adapter_requests = primary
-      .filter((entry) => entry.operation === "semantic_map_synthesize")
-      .reduce((sum, entry) => sum + entry.actual_adapter_request_count, 0);
-    row.primary_verify_adapter_requests = primary
-      .filter((entry) => entry.operation === "semantic_map_verify")
-      .reduce((sum, entry) => sum + entry.actual_adapter_request_count, 0);
-  }
-  const mixedIdentity = (
-    descriptorIds: readonly string[],
-  ): string => {
-    const distinct = [...new Set(descriptorIds)].sort();
-    return distinct.length === 1
-      ? distinct[0]!
-      : `mixed:${sha256Text(stableJson(distinct))}`;
-  };
-  args.census.synthesize_model_identity = mixedIdentity([
-    args.runtime.primary.synthesize?.public_descriptor.descriptor_id ??
-      args.census.synthesize_model_identity,
-    args.runtime.fallback.synthesize.public_descriptor.descriptor_id,
-  ]);
-  args.census.verify_model_identity = mixedIdentity([
-    args.runtime.primary.verify?.public_descriptor.descriptor_id ??
-      args.census.verify_model_identity,
-    args.runtime.fallback.verify.public_descriptor.descriptor_id,
-  ]);
-}
 
 function countBy<T extends string>(
   values: readonly T[],
@@ -2042,498 +1904,24 @@ export async function runReconstruct(
     outcome: DispatchFallbackOutcome | null;
     integrity: { path: string; sha256: string } | null;
   } = { outcome: null, integrity: null };
-  let semanticMapStage: SemanticMapStageResult;
-  try {
-    semanticMapStage = await runSemanticMapStage({
-      sourceObservations,
-      directiveAuthor,
-      sessionRoot,
-      config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-      ...(params.dispatchBreaker !== undefined
-        ? { dispatchBreaker: params.dispatchBreaker }
-        : {}),
-      preImageBase: semanticMapPreImageBase,
-      codeKindOptIn: params.semanticMapCode === true,
-      codePreImageBase: semanticMapCodePreImageBase,
-      verifyModelIdentity: semanticMapVerifyModelIdentity,
-      recoveryContext: semanticMapRecoveryContext,
-      executionSource: "primary",
-      captureStructuredContributors:
-        params.dispatchFallback?.enabled === true &&
-        params.dispatchFallbackRuntime !== undefined,
-    });
-  } catch (error) {
-    if (isGracefulTerminalSignal(error)) throw error;
-    if (readReconstructLlmDispatchFailureError(error)) throw error;
-    const fallbackSettings = params.dispatchFallback;
-    const fallbackRuntime = params.dispatchFallbackRuntime;
-    if (
-      !(error instanceof DispatchBreakerTrippedError) ||
-      fallbackSettings?.enabled !== true ||
-      !fallbackRuntime ||
-      params.resumeMode === "reuse_existing_authored_artifacts" ||
-      error.trip.failure_class !== "rate_limit"
-    ) {
-      throw error;
-    }
-
-    const primaryCapabilities = [
-      fallbackRuntime.primary.synthesize,
-      fallbackRuntime.primary.verify,
-    ].filter(
-      (capability): capability is ResolvedLlmDispatchCapability =>
-        capability !== undefined,
-    );
-    const structuredContributors = error.structuredContributors ?? [];
-    const firstContributor = structuredContributors[0];
-    const failingCapability = firstContributor
-      ? primaryCapabilities.find(
-          (capability) =>
-            capability.public_descriptor.descriptor_id ===
-              firstContributor.descriptor_id &&
-            capability.capability_instance_id ===
-              firstContributor.capability_instance_id,
-        )
-      : undefined;
-    if (
-      !firstContributor ||
-      !failingCapability ||
-      structuredContributors.length <
-        error.trip.threshold ||
-      structuredContributors.some(
-        (contributor) =>
-          contributor.failure_class !== "rate_limit" ||
-          contributor.descriptor_id !== firstContributor.descriptor_id ||
-          contributor.capability_instance_id !==
-            firstContributor.capability_instance_id ||
-          contributor.actual_adapter_request_count < 1,
-      )
-    ) {
-      throw error;
-    }
-    if (
-      failingCapability.public_descriptor.model_provider ===
-      fallbackRuntime.fallback.synthesize.public_descriptor.model_provider
-    ) {
-      throw error;
-    }
-
-    const currentRunControl = await readYamlDocument<
-      import("./artifact-types.js").ReconstructRunControlArtifact
-    >(runControlPath);
-    const ownerLock = currentRunControl.lock_rows.find(
-      (row) =>
-        row.lock_scope === "session_root" &&
-        row.owner_attempt_id === runControlState.attemptId &&
-        row.lock_status === "held",
-    );
-    if (!ownerLock) {
-      throw new Error("dispatch fallback activation requires the originating held session lock.");
-    }
-    assertDispatchFallbackAttemptOwner({
-      runControl: currentRunControl,
-      attemptId: runControlState.attemptId,
-      lockTokenHash: ownerLock.lock_token_hash,
-      requireInitial: true,
-    });
-    const realSessionRoot = await fs.realpath(sessionRoot);
-    const realAllowedRoots = await Promise.all(
-      filesystemAllowedRoots.map((allowedRoot) => fs.realpath(allowedRoot)),
-    );
-    const sessionContained = realAllowedRoots.some((allowedRoot) => {
-      const relative = path.relative(allowedRoot, realSessionRoot);
-      return relative === "" ||
-        (!relative.startsWith(`..${path.sep}`) && relative !== ".." &&
-          !path.isAbsolute(relative));
-    });
-    if (!sessionContained) {
-      throw new Error(
-        `dispatch fallback session root is outside filesystem_allowed_roots: ${sessionRoot}`,
-      );
-    }
-
-    const dispatchPath = dispatchIncompleteArtifactPath(sessionRoot);
-    const primaryPartition = await readYamlDocument<DispatchIncompleteArtifact>(
-      dispatchPath,
-    );
-    const primaryCensusSnapshot =
-      await readYamlDocument<ReconstructSemanticMapCensus>(
-        semanticMapCensusPath(sessionRoot),
-      );
-    if (
-      !isDispatchIncompleteArtifact(primaryPartition) ||
-      primaryPartition.pipeline !== "reconstruct" ||
-      primaryPartition.batch_label !== "semantic-map" ||
-      !primaryPartition.breaker.tripped
-    ) {
-      throw new Error("dispatch fallback activation requires a valid tripped semantic-map partition.");
-    }
-    const plannedIds = semanticMapEligibleObservations(sourceObservations, semanticMapCodeEligible).map(
-      (observation) => observation.observation_id,
-    );
-    const deadLetterIds = primaryPartition.dead_letter.map(
-      (entry) => entry.item_id,
-    );
-    const accountingEntries = fallbackRuntime.accounting.entries();
-    const priorDispatchSpend = deriveSemanticMapFallbackPriorDispatchSpend({
-      primaryCensus: primaryCensusSnapshot,
-      incompleteItemIds: primaryPartition.incomplete_item_ids,
-      accountingEntries,
-      sealedOperations: {
-        synthesize: fallbackRuntime.primary.synthesize !== undefined,
-        verify: fallbackRuntime.primary.verify !== undefined,
-      },
-    });
-    const partitionUnion = [
-      ...primaryPartition.completed_item_ids,
-      ...deadLetterIds,
-      ...primaryPartition.incomplete_item_ids,
-    ];
-    if (
-      new Set(partitionUnion).size !== partitionUnion.length ||
-      new Set(partitionUnion).size !== plannedIds.length ||
-      plannedIds.some((id) => !partitionUnion.includes(id))
-    ) {
-      throw new Error("dispatch fallback activation partition does not exactly cover planned observations.");
-    }
-
-    const exactRecoveryContext = await prepareSemanticMapResumeContext({
-      sessionId,
-      sessionRoot,
-      attemptId: runControlState.attemptId,
-      sourceObservations,
-      resumeMode: "reuse_existing_authored_artifacts",
-      ...(params.dispatchBreaker
-        ? { dispatchBreaker: params.dispatchBreaker }
-        : {}),
-      semanticMapCapabilityPresent: true,
-      preImageBase: semanticMapPreImageBase,
-      // Retained rows were produced by the PRIMARY run — re-derive with the primary bases.
-      codeEligible: semanticMapCodeEligible,
-      codePreImageBase: semanticMapCodePreImageBase,
-      verifyModelIdentity: semanticMapVerifyModelIdentity,
-      config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-      labelRoot: projectRoot,
-    });
-    if (
-      !exactRecoveryContext ||
-      stableJson(exactRecoveryContext.incompleteItemIds.slice().sort()) !==
-        stableJson(primaryPartition.incomplete_item_ids.slice().sort())
-    ) {
-      throw new Error("dispatch fallback exact recovery context does not match the activation partition.");
-    }
-
-    const activationContributors = structuredContributors.map(
-      (contributor) => {
-        const accounting = accountingEntries.find(
-          (entry) =>
-            entry.logical_dispatch_id === contributor.logical_dispatch_id,
-        );
-        if (
-          !accounting ||
-          accounting.execution_source !== "primary" ||
-          accounting.descriptor_id !== contributor.descriptor_id ||
-          accounting.capability_instance_id !==
-            contributor.capability_instance_id ||
-          accounting.failure_class !== "rate_limit"
-        ) {
-          throw new Error(
-            `dispatch fallback contributor ${contributor.logical_dispatch_id} is absent from primary accounting.`,
-          );
-        }
-        return {
-          ...structuredClone(contributor),
-          actual_adapter_request_count:
-            accounting.actual_adapter_request_count,
-          observation_id: accounting.observation_id,
-          operation: accounting.operation,
-        };
-      },
-    );
-    const activation: DispatchFallbackActivation = {
-      schema_version: "dispatch-fallback-activation/v1",
-      session_id: sessionId,
-      created_at: isoNow(),
-      owner_attempt_id: runControlState.attemptId,
-      owner_lock_token_hash: ownerLock.lock_token_hash,
-      trigger: {
-        failure_class: "rate_limit",
-        systemic_failure_threshold:
-          error.trip.threshold,
-        contributors: activationContributors,
-      },
-      primary_descriptor: failingCapability.public_descriptor,
-      primary_capability_instance_id:
-        failingCapability.capability_instance_id,
-      fallback_descriptors: {
-        synthesize: fallbackRuntime.fallback.synthesize.public_descriptor,
-        verify: fallbackRuntime.fallback.verify.public_descriptor,
-      },
-      partition: {
-        planned: plannedIds,
-        completed: [...primaryPartition.completed_item_ids],
-        dead_letter: deadLetterIds,
-        incomplete: [...primaryPartition.incomplete_item_ids],
-      },
-      route_relation: "cross_provider",
-    };
-    const activationIntegrity = await publishDispatchFallbackActivation(
-      sessionRoot,
-      activation,
-    );
-    const activationCheckpoint = await recordReconstructRunControlTransactions({
-      runControlPath,
-      validationOutputPath: runControlValidationPath,
-      attemptId: runControlState.attemptId,
-      artifactRefs: [activationIntegrity.path],
-      expectedSessionId: sessionId,
-      expectedSessionRoot: sessionRoot,
-      expectedCommittedArtifactRefs: [activationIntegrity.path],
-    });
-    assertRuntimeValidationValid({
-      artifactName: "dispatch-fallback-activation-checkpoint",
-      artifactRef: runControlValidationPath,
-      validation: activationCheckpoint.validation,
-    });
-    const assertActivationOwnerCheckpoint = (
-      runControl: import("./artifact-types.js").ReconstructRunControlArtifact,
-    ): void => {
-      assertDispatchFallbackAttemptOwner({
-        runControl,
-        attemptId: runControlState.attemptId,
-        lockTokenHash: ownerLock.lock_token_hash,
-        requireInitial: true,
-      });
-      const transaction = runControl.write_transactions.find(
-        (row) =>
-          path.resolve(row.artifact_ref) ===
-            path.resolve(activationIntegrity.path) &&
-          row.owner_attempt_id === runControlState.attemptId &&
-          row.transaction_status === "committed",
-      );
-      if (transaction?.committed_hash !== activationIntegrity.sha256) {
-        throw new Error(
-          "dispatch fallback activation checkpoint is missing the expected committed ref/hash.",
-        );
-      }
-    };
-    assertActivationOwnerCheckpoint(activationCheckpoint.runControl);
-
-    const fallbackPreImageBase: SemanticMapPreImageBase = {
-      ...semanticMapPreImageBase,
-      reduce_reader_model_identity:
-        fallbackRuntime.fallback.synthesize.public_descriptor.descriptor_id,
-    };
-    // Step 6 (DD6): the fallback CODE base — same identity substitution over the code base.
-    const fallbackCodePreImageBase: SemanticMapPreImageBase = {
-      ...semanticMapCodePreImageBase,
-      reduce_reader_model_identity:
-        fallbackRuntime.fallback.synthesize.public_descriptor.descriptor_id,
-    };
-    const fallbackBreaker: DispatchBreakerPolicy = {
-      ...params.dispatchBreaker!,
-      enabled: true,
-      systemic_threshold: fallbackSettings.systemic_failure_threshold,
-      per_call_max_attempts:
-        fallbackSettings.per_dispatch_max_provider_attempts,
-    };
-
-    const publishTerminalFallback = async (
-      status: "completed" | "halted",
-      terminalFailure: StructuredDispatchFailureEvidence | null,
-    ): Promise<{ path: string; sha256: string }> => {
-      const finalPartition = await readYamlDocument<DispatchIncompleteArtifact>(
-        dispatchPath,
-      );
-      const finalCensus = await readYamlDocument<ReconstructSemanticMapCensus>(
-        semanticMapCensusPath(sessionRoot),
-      );
-      const finalSidecar = await readYamlDocument<ReconstructSemanticMapSidecar>(
-        semanticMapSidecarPath(sessionRoot),
-      );
-      annotateDispatchFallbackCensus({
-        census: finalCensus,
-        runtime: fallbackRuntime,
-        primaryCensus: primaryCensusSnapshot,
-      });
-      assertDispatchFallbackTerminalArtifactContracts({
-        partition: finalPartition,
-        census: finalCensus,
-        sidecar: finalSidecar,
-      });
-      const [partitionIntegrity, censusIntegrity, sidecarIntegrity] =
-        await Promise.all([
-          securePublishDispatchFallbackYaml({
-            sessionRoot,
-            relativePath: "dispatch-incomplete.yaml",
-            value: finalPartition,
-          }),
-          securePublishDispatchFallbackYaml({
-            sessionRoot,
-            relativePath: "comprehension/semantic-map-census.yaml",
-            value: finalCensus,
-          }),
-          securePublishDispatchFallbackYaml({
-            sessionRoot,
-            relativePath: "comprehension/semantic-map.yaml",
-            value: finalSidecar,
-          }),
-        ]);
-      const targetSet = new Set(activation.partition.incomplete);
-      const finalCompleted = finalPartition.completed_item_ids.filter((id) =>
-        targetSet.has(id)
-      ).length;
-      const finalDeadLetter = finalPartition.dead_letter.filter((entry) =>
-        targetSet.has(entry.item_id)
-      ).length;
-      const finalIncomplete = finalPartition.incomplete_item_ids.filter((id) =>
-        targetSet.has(id)
-      ).length;
-      const fallbackEntries = fallbackRuntime.accounting
-        .entries()
-        .filter((entry) => entry.execution_source === "fallback");
-      const countFallback = (
-        operation: "semantic_map_synthesize" | "semantic_map_verify",
-        requests: boolean,
-      ): number =>
-        fallbackEntries
-          .filter((entry) => entry.operation === operation)
-          .reduce(
-            (sum, entry) =>
-              sum + (requests ? entry.actual_adapter_request_count : 1),
-            0,
-          );
-      const outcome: DispatchFallbackOutcome = {
-        schema_version: "dispatch-fallback-outcome/v1",
-        session_id: sessionId,
-        created_at: isoNow(),
-        owner_attempt_id: runControlState.attemptId,
-        activation: {
-          ref: activationIntegrity.path,
-          sha256: activationIntegrity.sha256,
-        },
-        status,
-        partition: {
-          target_count: targetSet.size,
-          completed_count: finalCompleted,
-          dead_letter_count: finalDeadLetter,
-          incomplete_count: finalIncomplete,
-        },
-        dispatch_counts: {
-          synthesize_logical: countFallback(
-            "semantic_map_synthesize",
-            false,
-          ),
-          verify_logical: countFallback("semantic_map_verify", false),
-          synthesize_adapter_requests: countFallback(
-            "semantic_map_synthesize",
-            true,
-          ),
-          verify_adapter_requests: countFallback(
-            "semantic_map_verify",
-            true,
-          ),
-        },
-        final_artifacts: {
-          dispatch_incomplete: {
-            ref: partitionIntegrity.path,
-            sha256: partitionIntegrity.sha256,
-          },
-          semantic_map_census: {
-            ref: censusIntegrity.path,
-            sha256: censusIntegrity.sha256,
-          },
-          semantic_map: {
-            ref: sidecarIntegrity.path,
-            sha256: sidecarIntegrity.sha256,
-          },
-        },
-        terminal_failure: terminalFailure,
-      };
-      const outcomeIntegrity = await publishDispatchFallbackOutcome(
-        sessionRoot,
-        outcome,
-      );
-      const terminalCheckpoint = await recordReconstructRunControlTransactions({
-        runControlPath,
-        validationOutputPath: runControlValidationPath,
-        attemptId: runControlState.attemptId,
-        artifactRefs: [
-          activationIntegrity.path,
-          partitionIntegrity.path,
-          censusIntegrity.path,
-          sidecarIntegrity.path,
-          outcomeIntegrity.path,
-        ],
-        expectedSessionId: sessionId,
-        expectedSessionRoot: sessionRoot,
-        expectedCommittedArtifactRefs: [
-          activationIntegrity.path,
-          partitionIntegrity.path,
-          censusIntegrity.path,
-          sidecarIntegrity.path,
-          outcomeIntegrity.path,
-        ],
-      });
-      assertRuntimeValidationValid({
-        artifactName: "dispatch-fallback-outcome-checkpoint",
-        artifactRef: runControlValidationPath,
-        validation: terminalCheckpoint.validation,
-      });
-      dispatchFallbackCompletion.outcome = outcome;
-      dispatchFallbackCompletion.integrity = outcomeIntegrity;
-      return outcomeIntegrity;
-    };
-
-    try {
-      assertActivationOwnerCheckpoint(
-        await readYamlDocument<
-          import("./artifact-types.js").ReconstructRunControlArtifact
-        >(runControlPath),
-      );
-      semanticMapStage = await runSemanticMapStage({
-        sourceObservations,
-        directiveAuthor: fallbackRuntime.fallback.directiveAuthor,
-        sessionRoot,
-        config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-        dispatchBreaker: fallbackBreaker,
-        preImageBase: fallbackPreImageBase,
-        codeKindOptIn: params.semanticMapCode === true,
-        codePreImageBase: fallbackCodePreImageBase,
-        verifyModelIdentity:
-          fallbackRuntime.fallback.verify.public_descriptor.descriptor_id,
-        recoveryContext: exactRecoveryContext,
-        executionSource: "fallback",
-        priorDispatchSpend,
-        captureStructuredContributors: true,
-      });
-      await publishTerminalFallback("completed", null);
-    } catch (fallbackError) {
-      if (isGracefulTerminalSignal(fallbackError)) throw fallbackError;
-      if (readReconstructLlmDispatchFailureError(fallbackError)) throw fallbackError;
-      if (!(fallbackError instanceof DispatchBreakerTrippedError)) {
-        throw fallbackError;
-      }
-      const fallbackStructuredContributors =
-        fallbackError.structuredContributors ?? [];
-      const terminalFailure = fallbackStructuredContributors[0] ?? null;
-      if (!terminalFailure || terminalFailure.failure_class === null) {
-        throw fallbackError;
-      }
-      const haltedOutcomeIntegrity = await publishTerminalFallback(
-        "halted",
-        terminalFailure,
-      );
-      throw new DispatchBreakerTrippedError(
-        fallbackError.trip,
-        dispatchPath,
-        {
-          structuredContributors: fallbackStructuredContributors,
-          fallbackOutcomePath: haltedOutcomeIntegrity.path,
-        },
-      );
-    }
-  }
+  const semanticMapStage = await runSemanticMapStageWithDispatchFallback({
+    directiveAuthor,
+    dispatchFallbackCompletion,
+    filesystemAllowedRoots,
+    params,
+    projectRoot,
+    runControlPath,
+    runControlState,
+    runControlValidationPath,
+    semanticMapCodeEligible,
+    semanticMapCodePreImageBase,
+    semanticMapPreImageBase,
+    semanticMapRecoveryContext,
+    semanticMapVerifyModelIdentity,
+    sessionId,
+    sessionRoot,
+    sourceObservations,
+  });
   const semanticMapAggregateFingerprint = semanticMapStage.aggregateFingerprint;
   // W4 §4: hand the per-observation projections to the author — (A) the seed userPayload field and
   // (B) the observation-prompt replace both render from this one map (prompt text only; the reuse

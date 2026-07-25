@@ -101,6 +101,22 @@ const EXTRACTIONS: readonly Extraction[] = [
       "let { ontologySeed, ontologySeedValidation } = args;",
     destBodySuffix: "return { ontologySeed, ontologySeedValidation };",
   },
+  {
+    label: "semantic-map 스테이지 + dispatch fallback 복구 (입력 17 / 바깥 let 1개 대입)",
+    baseStartLine: 2051,
+    baseEndLine: 2541,
+    expectStartsWith: "try {",
+    destFile: "src/core-runtime/reconstruct/semantic-map-dispatch-fallback-stage.ts",
+    destFunction: "runSemanticMapStageWithDispatchFallback",
+    destBodyPrefix:
+      "const { directiveAuthor, dispatchFallbackCompletion, filesystemAllowedRoots, params, " +
+      "projectRoot, runControlPath, runControlState, runControlValidationPath, " +
+      "semanticMapCodeEligible, semanticMapCodePreImageBase, semanticMapPreImageBase, " +
+      "semanticMapRecoveryContext, semanticMapVerifyModelIdentity, sessionId, sessionRoot, " +
+      "sourceObservations } = args;\n" +
+      "let semanticMapStage: SemanticMapStageResult;",
+    destBodySuffix: "return semanticMapStage;",
+  },
 ];
 
 // ---------------------------------------------------------------- 순수 핵심부

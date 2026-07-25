@@ -253,7 +253,11 @@ const DECOMPOSED_DECLARATIONS = ["runReconstruct"];
  *   2) 여기 적힌 이름이 블록 검사기의 `destFunction`으로 **선언돼 있지 않으면** FAIL. 즉 블록
  *      증명 없이 ADDED 면제를 받는 경로가 없다.
  */
-const DECOMPOSITION_WRAPPERS = ["emitEnvironmentContextProfile", "repairInvalidOntologySeed"];
+const DECOMPOSITION_WRAPPERS = [
+  "emitEnvironmentContextProfile",
+  "repairInvalidOntologySeed",
+  "runSemanticMapStageWithDispatchFallback",
+];
 const BLOCK_IDENTITY_SCRIPT = "scripts/run-block-identity.mts";
 
 const APPEND_DEST_REFS = [
