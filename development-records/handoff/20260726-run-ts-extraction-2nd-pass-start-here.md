@@ -161,6 +161,8 @@ buildSemanticMapResumeValidationArtifact,prepareSemanticMapResumeContext,backupS
 
 ## 7. 게이트 베이스라인 (2026-07-26 실측 — 2차 착수 전 상태)
 
+> **정정(2026-07-26, 2차 완료 시 실측):** 아래 "16 green, 1 FP"는 **미스카운트**다. 실측은 **15 green + 2 rc=1**이며, `check:invariant-drift`가 G7을 감싸 실행하므로 둘이 함께 rc=1이 되어 15+2=17이 맞다(이 절 본문도 그 사실을 아래에서 인정하고 있다). 2차 커밋 메시지 4건이 이 표기를 물려받았다 — 개수만 틀렸고 근본 원인 서술은 정확하다. 최종 기록은 [20260726-run-ts-extraction-2nd-pass-complete.md](20260726-run-ts-extraction-2nd-pass-complete.md) §3.
+
 `check:*` **17종 중 16 green, 1 known false positive.**
 
 `check:supported-models`(G7)가 **gitignore된 세션 잔해** 때문에 로컬에서만 실패한다:
