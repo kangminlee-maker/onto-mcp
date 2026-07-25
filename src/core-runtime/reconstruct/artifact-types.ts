@@ -7,6 +7,8 @@ import type { ReconstructSourceObservation } from "./source-observations.js";
 import type { SemanticSeedProjection } from "./comprehension-semantic-map.js";
 import type { CodeSemanticSeedProjection } from "./comprehension-semantic-map-code.js";
 import type { EnvironmentContextProfileResult } from "./environment-context-profile.js";
+import type { CodeStructureInventory } from "../code-structure-observer.js";
+import type { WorkbookStructuralInventory } from "../spreadsheet-structure-observer.js";
 
 export interface ReconstructSelectedSourceProfileRef {
   profile_id: string;
@@ -348,12 +350,38 @@ export interface ReconstructRegistryVerificationEvidenceValidationArtifact {
 
 export interface ReconstructSourceInventoryUnit {
   ref: string;
+  // Stage 1 source-region-decomposition (design 20260722 §5/§9): region anchor
+  // within ref. Absent everywhere in this PR (buildInventoryUnits stays one unit
+  // per file; PR-1b-2 emits one unit per region) — additive-absent.
+  location?: string;
   exists: boolean;
   target_material_kind: TargetMaterialKind;
   inventory_unit: string;
   profile_ref: string | null;
-  scan_status: "planned" | "skipped";
+  // Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §2):
+  // "admitted" = outline captured, deep observation not (yet) taken — distinct from the
+  // INVOLUNTARY "skipped" (ref unobservable). deferred/promoted are DERIVED from admitted ∪
+  // deep-observed regionKeys, never stored (single state axis). No producer sets "admitted"
+  // in this PR (PR-2b introduces admission mode) — additive, byte-identical off.
+  scan_status: "planned" | "skipped" | "admitted";
   skip_reason: string | null;
+  // Core Stage 2 (design §3): lightweight outline captured for an "admitted" unit —
+  // whole-file provenance (content_sha256/char_count/line_count/size_bytes), a small BOUNDED
+  // head excerpt (navigation/selection signal, not a whole-capture), and the kind-specific
+  // deterministic structure skeleton (exactly one of the two below, matching
+  // target_material_kind). Absent for every "planned"/"skipped" unit and absent everywhere in
+  // this PR (no producer populates it yet — unit-tested in isolation only) — additive-absent,
+  // byte-identical off.
+  outline?: {
+    content_sha256: string;
+    char_count: number;
+    line_count: number;
+    size_bytes: number;
+    outline_excerpt: string | null;
+    outline_excerpt_truncated: boolean;
+    code_structure_inventory?: CodeStructureInventory;
+    workbook_inventory?: WorkbookStructuralInventory;
+  };
 }
 
 export interface ReconstructSourceInventoryArtifact {
@@ -370,6 +398,9 @@ export interface ReconstructSourceInventoryArtifact {
 export interface ReconstructInitialSourceFrontierRef {
   frontier_ref_id: string;
   source_ref: string;
+  // Stage 1 source-region-decomposition (design 20260722 §5/§9): region anchor
+  // within source_ref. Absent everywhere in this PR — additive-absent.
+  location?: string;
   target_material_kind: TargetMaterialKind;
   inventory_unit: string;
   profile_ref: string | null;
@@ -1534,6 +1565,11 @@ export interface ReconstructSourceFrontierArtifact {
   frontier_refs: Array<{
     frontier_ref_id: string;
     source_ref: string;
+    // Stage 1 source-region-decomposition (design 20260722 §5/§9): region anchor
+    // within source_ref. Absent everywhere in this PR (no producer sets it yet;
+    // PR-1b-2 populates it) — additive-absent so today's byte-for-byte output is
+    // unchanged.
+    location?: string;
     rationale: string;
     priority: "high" | "medium" | "low";
   }>;
@@ -2613,7 +2649,10 @@ export interface ReconstructSemanticMapCensusObservation {
    *  observer's reason for the unsupported case).
    *  code_source_excerpt_unavailable (DD6′): the frontier-source admission guard failed — the
    *  whole-capture excerpt is absent, sha-mismatched against the inventory, or truncated, so v2
-   *  envelopes cannot slice trustworthy source (skip_detail names which precondition failed). */
+   *  envelopes cannot slice trustworthy source (skip_detail names which precondition failed).
+   *  code_layout_tier_not_applicable (design 20260721 §6-2): the inventory is grammar-free ROUGH
+   *  layout evidence (extraction_tier "layout"), explicitly NOT fed to the LLM semantic-map stage —
+   *  rough structure must never be mistaken for precise tree-sitter structure. */
   skip_reason:
     | "no_workbook_inventory"
     | "no_value_tiles"
@@ -2621,6 +2660,7 @@ export interface ReconstructSemanticMapCensusObservation {
     | "no_code_inventory"
     | "code_extraction_unsupported"
     | "code_source_excerpt_unavailable"
+    | "code_layout_tier_not_applicable"
     | null;
   /** Present for deterministic_phase_failed (contained error) and code_extraction_unsupported
    *  (observer reason). */

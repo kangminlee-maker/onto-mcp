@@ -21,7 +21,11 @@ import type {
   ReconstructSourceSafetyLedgerArtifact,
   ReconstructSourceSafetyLedgerValidationArtifact,
 } from "./artifact-types.js";
-import type { ReconstructSourceObservation } from "./source-observations.js";
+import {
+  regionCoverageKeys,
+  regionKey,
+  type ReconstructSourceObservation,
+} from "./source-observations.js";
 import { sourceSafetyRowIdForObservation } from "./source-safety-validation.js";
 import { assertObligation } from "./obligation-assertion.js";
 
@@ -37,7 +41,9 @@ interface NormalizedFrontierForDelta {
   roundId: string;
   validationStatus: "valid" | "invalid";
   acceptedRefIds: string[];
-  rowsById: Map<string, { sourceRef: string }>;
+  // location: Stage 1 source-region-decomposition (design 20260722 §5 A6) region
+  // anchor for this frontier row. Additive-absent — see the two branches below.
+  rowsById: Map<string, { sourceRef: string; location?: string }>;
 }
 
 function isoNow(): string {
@@ -130,14 +136,24 @@ function samePathRef(
   return path.resolve(left) === path.resolve(right);
 }
 
+// A4 (design §5): each observation is registered under BOTH coverage forms
+// (regionCoverageKeys) — the file-level key (`regionKey(source_ref)`, what a
+// location-less 1a lookup uses — byte-identical to the prior bare
+// `path.resolve(source_ref)` key) and the precise region key
+// (`regionKey(source_ref, location)`, what a location-aware PR-1b-2 lookup
+// will use). This is what stops a second observation of the SAME file at a
+// DIFFERENT region from colliding/last-winning here once regions land.
 function observationsBySourceRef(
   observations: ReconstructSourceObservationsArtifact,
 ): Map<string, ReconstructSourceObservation> {
   assertArrayField(observations.observations, "source-observations", "observations");
-  return new Map(observations.observations.map((observation) => [
-    path.resolve(observation.source_ref),
-    observation,
-  ]));
+  const map = new Map<string, ReconstructSourceObservation>();
+  for (const observation of observations.observations) {
+    for (const key of regionCoverageKeys(observation.source_ref, observation.location)) {
+      map.set(key, observation);
+    }
+  }
+  return map;
 }
 
 function hasSourceFrontierRows(
@@ -159,6 +175,13 @@ function normalizeFrontierForDelta(args: {
   frontier: SourceObservationDeltaFrontierArtifact;
   frontierValidation: SourceObservationDeltaFrontierValidationArtifact;
   violations?: ReconstructSourceObservationDeltaValidationViolation[];
+  // Stage 1 source-region-decomposition opt-in (design §5 A6, §10 PR-1b-2, INVARIANT-CHANGE): gates
+  // whether the maturation branch below folds request.requested_location. requested_location is a
+  // PRE-EXISTING, always-populated field (unlike frontier.location, which stays additive-absent —
+  // no producer sets it in this PR — so the source_frontier branch's unconditional fold is already
+  // byte-identity-safe) — threading it unconditionally would change delta-row binding for every
+  // maturation closure run, on or off, so this must stay opt-in-gated.
+  sourceRegionDecomposition?: boolean;
 }): NormalizedFrontierForDelta | null {
   if (args.frontierKind === "source_frontier") {
     if (!hasSourceFrontierRows(args.frontier)) {
@@ -182,9 +205,16 @@ function normalizeFrontierForDelta(args: {
       roundId: args.frontier.round_id,
       validationStatus: validation.validation_status,
       acceptedRefIds: [...(validation.accepted_frontier_ref_ids ?? [])],
+      // frontier.location is additive-absent (no producer sets it in this PR — see
+      // artifact-types.ts) so this passthrough is a no-op today; PR-1b-2 populates it.
+      // exactOptionalPropertyTypes forbids `location: undefined` — spread it in only
+      // when present.
       rowsById: new Map(args.frontier.frontier_refs.map((frontier) => [
         frontier.frontier_ref_id,
-        { sourceRef: frontier.source_ref },
+        {
+          sourceRef: frontier.source_ref,
+          ...(frontier.location !== undefined ? { location: frontier.location } : {}),
+        },
       ])),
     };
   }
@@ -210,9 +240,20 @@ function normalizeFrontierForDelta(args: {
     roundId: args.frontier.round_id,
     validationStatus: validation.validation_status,
     acceptedRefIds: [...(validation.accepted_source_request_ids ?? [])],
+    // request.requested_location is threaded into location ONLY when sourceRegionDecomposition is
+    // on (see the field doc comment above) — off keys purely on source_ref, byte-identical to the
+    // prior lookup. On, buildReconstructSourceObservation itself consumes requested_location as the
+    // re-observed observation's anchor (run.ts observeAcceptedMaturationClosureSourceRequests, A3),
+    // so the two sides agree (design §10 PR-1b-2). exactOptionalPropertyTypes forbids `location:
+    // undefined` — spread it in only when present and non-blank.
     rowsById: new Map(args.frontier.source_requests.map((request) => [
       request.source_request_id,
-      { sourceRef: request.requested_source_ref },
+      {
+        sourceRef: request.requested_source_ref,
+        ...(args.sourceRegionDecomposition === true && request.requested_location
+          ? { location: request.requested_location }
+          : {}),
+      },
     ])),
   };
 }
@@ -230,11 +271,13 @@ export function buildSourceObservationDeltaArtifact(args: {
   previousSourceObservationsRef: string;
   nextSourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef: string;
+  sourceRegionDecomposition?: boolean;
 }): ReconstructSourceObservationDeltaArtifact {
   const normalizedFrontier = normalizeFrontierForDelta({
     frontierKind: args.frontierKind,
     frontier: args.frontier,
     frontierValidation: args.frontierValidation,
+    ...(args.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
   });
   if (!normalizedFrontier) {
     throw new Error(
@@ -252,9 +295,14 @@ export function buildSourceObservationDeltaArtifact(args: {
     if (!frontier) {
       throw new Error(`accepted frontier id has no frontier row: ${frontierRefId}`);
     }
-    const resolvedSourceRef = path.resolve(frontier.sourceRef);
-    const observation = nextBySourceRef.get(resolvedSourceRef);
-    if (!observation || previousBySourceRef.has(resolvedSourceRef)) {
+    // A5 (design §5): frontier.location is additive-absent in this PR (see
+    // normalizeFrontierForDelta), so this is the file-level form — byte-
+    // identical to the prior resolve-only lookup key. Once a producer starts
+    // sending a real frontier.location (PR-1b-2), this automatically switches
+    // to the precise region key (see observationsBySourceRef/regionCoverageKeys).
+    const key = regionKey(frontier.sourceRef, frontier.location);
+    const observation = nextBySourceRef.get(key);
+    if (!observation || previousBySourceRef.has(key)) {
       throw new Error(
         `accepted frontier id did not produce a new observation: ${frontierRefId}`,
       );
@@ -306,6 +354,7 @@ export function validateSourceObservationDelta(args: {
   frontier: SourceObservationDeltaFrontierArtifact;
   frontierValidation: SourceObservationDeltaFrontierValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceRegionDecomposition?: boolean;
 }): ReconstructSourceObservationDeltaValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   assertArrayField(args.delta.delta_rows, "source-observation-delta", "delta_rows");
@@ -351,6 +400,7 @@ export function validateSourceObservationDelta(args: {
     frontier: args.frontier,
     frontierValidation: args.frontierValidation,
     violations,
+    ...(args.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
   });
   if (normalizedFrontier && args.delta.round_id !== normalizedFrontier.roundId) {
     violations.push(violation({
@@ -945,6 +995,7 @@ export async function writeSourceObservationDeltaArtifact(args: {
   previousSourceObservationsRef: string;
   sourceObservationsPath: string;
   outputPath: string;
+  sourceRegionDecomposition?: boolean;
 }): Promise<ReconstructSourceObservationDeltaArtifact> {
   const [frontier, frontierValidation, nextSourceObservations] =
     await Promise.all([
@@ -969,6 +1020,7 @@ export async function writeSourceObservationDeltaArtifact(args: {
     previousSourceObservationsRef: args.previousSourceObservationsRef,
     nextSourceObservations,
     sourceObservationsRef: args.sourceObservationsPath,
+    ...(args.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
   });
   await writeYamlDocument(args.outputPath, artifact);
   return artifact;
@@ -980,6 +1032,7 @@ export async function writeSourceObservationDeltaValidationArtifact(args: {
   frontierValidationPath: string;
   sourceObservationsPath: string;
   outputPath: string;
+  sourceRegionDecomposition?: boolean;
 }): Promise<ReconstructSourceObservationDeltaValidationArtifact> {
   const [delta, frontier, frontierValidation, sourceObservations] =
     await Promise.all([
@@ -1000,6 +1053,7 @@ export async function writeSourceObservationDeltaValidationArtifact(args: {
     frontier,
     frontierValidation,
     sourceObservations,
+    ...(args.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;

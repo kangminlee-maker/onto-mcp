@@ -1,0 +1,11 @@
+# The catalog schema
+type Product {
+  id: ID!
+  name: String!
+  price: Int
+}
+
+enum Availability {
+  IN_STOCK
+  SOLD_OUT
+}

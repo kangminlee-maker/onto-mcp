@@ -500,6 +500,14 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // fail-loud structural error (requires_code_structure_inventory), never implicit activation.
   // Absent = off — no set-tier artifact, no observer import capture, byte-identical.
   "semantic_map_code_set_tier",
+  // Grammar-free layout observer opt-in (design 20260721 language-agnostic-structure-parsing §7 /
+  // structure-evidence-framework §6). Extends deterministic code structure capture to tree-sitter
+  // UNSUPPORTED languages (.lua/.hs/.scala/.vue/GraphQL/Proto/Prisma …) via a rough indentation +
+  // bracket layout parser (Tier 1), separate from the precise tree-sitter observer (Tier 2). REQUIRES
+  // code_structure_inventory (or semantic_map_code) — layout=true ∧ capture=false is a fail-loud
+  // structural error (requires_code_structure_inventory). Absent = off — no long-tail classification,
+  // no layout observation, byte-identical.
+  "code_structure_layout",
   // Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0). A
   // deterministic environment/tech-stack profile derived from the EXISTING observation census
   // (basenames/extensions/imports) — NO new filesystem scan, disclosure-only (never touches the
@@ -512,6 +520,39 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // not just existence). Inert unless `environment_context_profile` is also on (nested in its hook).
   // Absent = off — no manifest content is read, the profile is byte-identical to Stage 0.5.
   "environment_context_profile_content",
+  // Stage 1 source-region-decomposition opt-in (design 20260722-source-region-decomposition-stage1
+  // §10 PR-1b-2, INVARIANT-CHANGE). When true, an eligible captured file (kind-aware budget: document
+  // over DOCUMENT_EXCERPT_PROJECTION_FLOOR, code over DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT) is
+  // decomposed at observe time into one observation PER REGION (the deterministic source-region-
+  // segmenter) instead of one whole-file observation, and a maturation-closure source request's
+  // requested_location becomes the re-observed observation's anchor. Self-contained — does not
+  // require code_structure_inventory (a code file with no captured inventory falls back to the
+  // segmenter's blank-line-paragraph strategy). Changes observation identity (dedup/coverage keys
+  // fold `location`) for any file it decomposes — hence INVARIANT-CHANGE. Absent = off — every
+  // observation stays whole-file, byte-identical.
+  "source_region_decomposition",
+  // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+  // §8/§12/§13 PR-2a). When true AND the planned-unit count exceeds
+  // SOURCE_ADMISSION_SELECTION_THRESHOLD, materialize enters admission mode: units get a
+  // lightweight outline instead of unconditional deep observation, and a purpose-driven
+  // selection stage chooses which admitted units are promoted to deep observation
+  // (INVARIANT-CHANGE, wired in PR-2b). UNUSED in this PR — no code branches on it yet. Absent
+  // = off — every planned unit is deep-observed exactly as today, byte-identical.
+  "source_admission_selection",
+  // Deterministic recursive observation — projection-layer breadth fold opt-in (design
+  // 20260723-deterministic-recursive-observation §8 PR-3/PR-4). When true AND one of the two
+  // count-scaling selection catalogs would overflow the codex worker stdin byte budget (a large
+  // multi-file corpus) — the source-observation-directive's pre-selection candidate catalog, or the
+  // admission-selection's admitted-outline catalog — that prompt projects the FINEST detail rung that
+  // fits (full → inventory_skeleton → one_line) instead of the flat full projection — every
+  // observation/unit stays selectable at reduced per-item DETAIL, so an overflow becomes a bounded
+  // dispatch success instead of the always-on byte guard's honest fail-loud. One key covers both
+  // surfaces: they share the ceiling, the ladder, and the failure. Projection-only: mints/mutates
+  // NO observations, so every provenance/determinism invariant is preserved (the source-observation
+  // reuse key and per-observation delta hashes are byte-identical off vs on). When the catalog fits
+  // the budget the fold reproduces today's full projection byte-for-byte. Absent = off — the flat
+  // full projection + the always-on guard exactly as today, byte-identical.
+  "source_breadth_fold",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

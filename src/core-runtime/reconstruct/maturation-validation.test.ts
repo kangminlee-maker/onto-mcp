@@ -2125,6 +2125,92 @@ describe("maturation validation", () => {
     ]);
   });
 
+  it("Stage 1 source-region-decomposition (design §5 A7, §10 PR-1b-2): opt-in ON accepts a NEW region of an already-observed file while rejecting the SAME region; opt-in OFF collapses both to the file-level key (today's behavior, negative-contrast §11)", () => {
+    const { frontier, frontierValidation } = frontierScenario();
+    const existingRegionObservation = {
+      ...sourceObservations(["src/feature.ts"]).observations[0]!,
+      location: "L1-50",
+    };
+    const regionObservations: ReconstructSourceObservationsArtifact = {
+      ...sourceObservations(["src/feature.ts"]),
+      observations: [existingRegionObservation],
+    };
+    const closureFrontier: ReconstructMaturationClosureFrontierArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      question_frontier_ref: "maturation-question-frontier.yaml",
+      source_requests: [
+        {
+          source_request_id: "source-request-same-region",
+          question_refs: ["mq-feature-object"],
+          member_scope_refs: [],
+          member_source_refs: [],
+          cross_material_ref_refs: [],
+          requested_source_ref: "src/feature.ts",
+          requested_location: "L1-50",
+          target_material_kind: "code",
+          expected_evidence_kind: "additional structural evidence",
+          reason: "Repeats an already-observed region.",
+        },
+        {
+          source_request_id: "source-request-new-region",
+          question_refs: ["mq-feature-object"],
+          member_scope_refs: [],
+          member_source_refs: [],
+          cross_material_ref_refs: [],
+          requested_source_ref: "src/feature.ts",
+          requested_location: "L51-100",
+          target_material_kind: "code",
+          expected_evidence_kind: "additional structural evidence",
+          reason: "Requests a new region of a large file.",
+        },
+      ],
+      authority_requests: [],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "test-author",
+      },
+    };
+    const baseArgs = {
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierRef: "maturation-closure-frontier.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      sourceInventory: sourceInventory(["src/feature.ts"]),
+      sourceInventoryRef: "source-inventory.yaml",
+      sourceObservations: regionObservations,
+      sourceObservationsRef: "source-observations.yaml",
+      targetMaterialProfileValidation: validTargetMaterialProfileValidation(),
+    };
+
+    const onValidation = validateMaturationClosureFrontier({
+      ...baseArgs,
+      sourceRegionDecomposition: true,
+    });
+    expect(onValidation.accepted_source_request_ids).toEqual(["source-request-new-region"]);
+    expect(onValidation.rejected_source_requests).toEqual([
+      expect.objectContaining({
+        source_request_id: "source-request-same-region",
+        reason: expect.stringContaining("already_observed_source_ref"),
+      }),
+    ]);
+
+    // opt-in OFF (absent): requested_location is not consulted — BOTH requests collide on the
+    // file-level key, matching today's (pre-Stage-1) behavior byte-for-byte.
+    const offValidation = validateMaturationClosureFrontier(baseArgs);
+    expect(offValidation.accepted_source_request_ids).toEqual([]);
+    expect(
+      offValidation.rejected_source_requests.map((r) => r.source_request_id).sort(),
+    ).toEqual(["source-request-new-region", "source-request-same-region"]);
+    for (const rejected of offValidation.rejected_source_requests) {
+      expect(rejected.reason).toContain("already_observed_source_ref");
+    }
+  });
+
   it("rejects answer support that cites deferred authority responses", () => {
     const { frontier, frontierValidation } = frontierScenario();
     const closureFrontier: ReconstructMaturationClosureFrontierArtifact = {

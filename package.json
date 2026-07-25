@@ -1,6 +1,6 @@
 {
   "name": "onto-mcp",
-  "version": "0.4.15",
+  "version": "0.4.17",
   "description": "MCP server for LLM agents: check an artifact's ontological integrity (the logical consistency of its concepts, authority, and purpose) and derive a domain ontology from real sources, with every structured claim gated by runtime validation.",
   "keywords": [
     "mcp",
@@ -35,6 +35,7 @@
   "files": [
     "bin/",
     "dist/",
+    "vendor/tree-sitter/",
     "scripts/check-retired-root-paths.sh",
     "scripts/onto-runtime-watch.sh",
     "scripts/onto-review-watch.sh",
@@ -71,12 +72,15 @@
     "check:obligation-coverage": "tsx scripts/check-obligation-coverage.ts",
     "check:dispatch-fallback-package-parity": "tsx scripts/check-dispatch-fallback-package-parity.ts",
     "check:graceful-signal-rethrow": "tsx scripts/check-graceful-signal-rethrow.ts",
+    "generate:linguist": "tsx scripts/generate-linguist-tables.ts",
+    "check:linguist-drift": "tsx scripts/check-linguist-drift.ts",
     "test": "npm run test:e2e",
     "test:vitest": "vitest run",
     "test:review:live": "npm run build:ts-core && tsx scripts/review-mcp-live-e2e.ts",
     "test:review:live:cli": "npm run build:ts-core && tsx scripts/review-live-e2e.ts",
     "test:reconstruct:dispatch-fallback:live": "node --env-file=.env --import tsx scripts/reconstruct-dispatch-fallback-live-e2e.mts",
     "test:reconstruct:output-headroom:live": "node --env-file=.env --import tsx scripts/reconstruct-output-headroom-live-e2e.mts",
+    "test:reconstruct:admission:live": "node --import tsx scripts/stage2-admission-live-e2e.mts",
     "benchmark:review:pipeline": "tsx scripts/review-pipeline-benchmark.ts",
     "benchmark:reconstruct:pipeline": "tsx scripts/reconstruct-pipeline-benchmark.ts",
     "calibration:effort:report": "tsx scripts/effort-calibration-report.ts",

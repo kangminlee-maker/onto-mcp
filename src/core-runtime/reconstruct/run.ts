@@ -99,6 +99,7 @@ import type {
   ReconstructSourceFrontierArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceInventoryArtifact,
+  ReconstructSourceInventoryUnit,
   ReconstructSourceObservationsArtifact,
   ReconstructStopDecisionArtifact,
   ReconstructStopDecision,
@@ -144,6 +145,7 @@ import {
   type TargetMaterialKind,
 } from "../target-material-kind.js";
 import {
+  deriveWorkbookInventoryPromptCaps,
   projectInventoryForPrompt,
   readTargetedCellValues,
   type WorkbookInventorySectionTruncation,
@@ -155,6 +157,7 @@ import {
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   isFullExcerptCaptureEligible,
   materializeReconstructPreparationArtifacts,
+  observeInventoryUnitDeep,
   spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
@@ -298,7 +301,18 @@ import {
   ontologySeedClaimProjections,
   ontologySeedExcludedClaimIds,
 } from "./seed-claim-projections.js";
-import type { ReconstructSourceObservation } from "./source-observations.js";
+import {
+  regionCoverageKeys,
+  regionKey,
+  type ReconstructSourceObservation,
+} from "./source-observations.js";
+import {
+  type BreadthFoldDisclosure,
+  type BreadthFoldLevel,
+  foldObservationsToBudget,
+  SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
+  SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+} from "./source-breadth-fold.js";
 import {
   COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
   COMPREHENSION_ARTIFACT_CONTRACT_VERSION,
@@ -459,12 +473,29 @@ export interface ReconstructDirectiveAuthor {
    */
   readonly documentExcerptProjectionBudget?: number;
   /**
+   * Projection-layer breadth-fold opt-in (design 20260723 §8 PR-3/PR-4), folded into the resume reuse
+   * key like documentExcerptProjectionBudget: when ON and a selection catalog overflows, that prompt is
+   * authored at a COARSER detail rung, so resuming under a different flag value must regenerate rather
+   * than silently reuse an artifact authored at the other rung. One flag drives BOTH count-scaling
+   * surfaces (source-observation-directive, admission-selection). Absent/false = today's flat
+   * projection. The flag reaches the reuse key only through this field.
+   */
+  readonly sourceBreadthFold?: boolean;
+  /**
    * Run-scoped sink (deduped by observation) of documents whose captured excerpt a
    * seed prompt's projection budget sliced. Populated during authoring; read by
    * runReconstruct after authoring to record the truncation durably and surface it.
    * runReconstruct clears it per run (like executionTelemetry).
    */
   readonly documentExcerptProjectionTruncations?: DocumentExcerptProjectionTruncation[];
+  /**
+   * Run-scoped sink (mirroring documentExcerptProjectionTruncations) of breadth-fold demotions on the
+   * ADMISSION-selection surface. The directive surface discloses its fold in-artifact on
+   * `open_questions`; the admission-selection artifact (a source-frontier) has no free-text channel,
+   * so its disclosure lands here and runReconstruct records it durably as a runtime status event —
+   * a demoted rung is never silent (R2). Empty unless the fold actually demoted a rung.
+   */
+  readonly sourceBreadthFoldDisclosures?: BreadthFoldDisclosure[];
   /**
    * Canonical authoring-model identity ("<provider>/<model_id>") folded into the
    * resume reuse key (DET-1/CG-2). Resuming under a DIFFERENT authoring model must
@@ -584,6 +615,20 @@ export interface ReconstructDirectiveAuthor {
   ): Promise<ReconstructExplorationSynthesisArtifact>;
   writeSourceFrontier(
     input: ReconstructSourceFrontierAuthorInput,
+  ): Promise<ReconstructSourceFrontierArtifact>;
+  /**
+   * Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §4, PR-2b):
+   * the admission-selection round-0 stage. Runs on the SAME `semantic_author` seat as every other
+   * author method (INV-MODEL-1 — no new actor/model) but under a DEDICATED system prompt (NOT
+   * sourceFrontierSystemPrompt, which is exploration-synthesis-shaped and unsuited to a round-0
+   * outline-only decision). Reuses `ReconstructSourceFrontierArtifact` as the return shape so the
+   * caller can validate it with the EXISTING `validateSourceFrontier` verbatim (no new artifact
+   * type). The author sees ONLY the bounded outline catalog `input` carries — never whole-file
+   * content — and proposes which admitted files are worth a deep observation; the runtime clamps
+   * the proposal to the inter-file budget and applies the floor policy (design §6/§7).
+   */
+  writeSourceAdmissionSelection(
+    input: ReconstructSourceAdmissionSelectionAuthorInput,
   ): Promise<ReconstructSourceFrontierArtifact>;
   writeSourcePurposeCandidates(
     input: ReconstructSourcePurposeCandidatesAuthorInput,
@@ -756,6 +801,27 @@ export interface ReconstructSourceFrontierAuthorInput {
   sourceObservations: ReconstructSourceObservationsArtifact;
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design §4.3, PR-2b): the raw materials for the
+ * admission-selection round-0 stage. `sourceInventory` carries the full inventory (including
+ * every `"admitted"` unit's `outline`); the author implementation is responsible for projecting
+ * it down to the bounded `admitted_outlines` catalog the LM actually sees (never whole-file
+ * content, design §4.3) — the same "author owns prompt shaping, runtime owns the artifact" split
+ * every other author-input type in this file follows.
+ */
+export interface ReconstructSourceAdmissionSelectionAuthorInput {
+  sessionId: string;
+  intent: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  /** Advisory (design §4.3): the runtime enforces the actual budget after validation
+   *  (capAdmissionSelectionAcceptedRefs) regardless of what the author proposes. */
+  admissionFileLimit: number;
+  /** Advisory floor disclosure; the runtime enforces it via applyAdmissionSelectionFloorPolicy
+   *  even when the author proposes fewer (or zero) files. */
+  admissionFloor: number;
+}
+
 export interface ReconstructCandidateInventoryAuthorInput {
   sessionId: string;
   intent: string;
@@ -819,6 +885,10 @@ export interface ReconstructOntologySeedAuthorInput {
   seedAuthoringReadinessValidationRef: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef: string;
+  /** Core Stage 2 inter-document breadth (design §9): the seed-stage source-inventory read the
+   *  deferred-telemetry projection (deferredSourceRefPromptSummary) needs — an admitted-but-not-
+   *  promoted unit is invisible to sourceObservations alone. */
+  sourceInventory: ReconstructSourceInventoryArtifact;
   contractRegistry: ReconstructContractRegistry;
   repairAttempt?: {
     attempt_id: string;
@@ -1092,6 +1162,13 @@ export interface RunReconstructParams {
    *  (enforced fail-loud at the api settings projection). Gates observer import capture and
    *  the post-loop deterministic set assembly. Absent = off. */
   codeSetTier?: boolean;
+  /** Grammar-free layout observer opt-in (design 20260721 §7): set from
+   *  reconstruct.execution.code_structure_layout. Requires codeStructureObservation (enforced
+   *  fail-loud at the api settings projection). Extends deterministic code capture to tree-sitter
+   *  UNSUPPORTED languages: (a) long-tail classification (Linguist unknown-fallback + extensionless
+   *  shebang rung) so .lua/.hs/.vue … reach observation, and (b) the Tier 1 layout observer dispatch.
+   *  Absent = off (byte-identical). */
+  codeStructureLayout?: boolean;
   /** Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0): set
    *  from reconstruct.execution.environment_context_profile. Gates a deterministic, disclosure-only
    *  environment/tech-stack profile derived from the EXISTING observation census (no new fs scan,
@@ -1103,6 +1180,20 @@ export interface RunReconstructParams {
    *  properties. Inert unless environmentContextProfile is also on (nested inside its hook). Absent =
    *  off: no manifest content is read, the profile is byte-identical to Stage 0.5 (side-effect 0). */
   environmentContextProfileContent?: boolean;
+  /** Stage 1 source-region-decomposition opt-in (design 20260722-source-region-decomposition-stage1
+   *  §10 PR-1b-2, INVARIANT-CHANGE): set from reconstruct.execution.source_region_decomposition.
+   *  When true, an eligible captured file is decomposed at observe time into one observation per
+   *  region, and a maturation-closure source request's requested_location becomes a re-observed
+   *  observation's anchor (both the identity/dedup keys AND the observe-time fanout change what
+   *  "already observed" means for that ref — INVARIANT-CHANGE). Self-contained: independent of the
+   *  code opt-ins. Absent = off — every observation stays whole-file, byte-identical. */
+  sourceRegionDecomposition?: boolean;
+  /** Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+   *  §8/§12/§13 PR-2a): set from reconstruct.execution.source_admission_selection. UNUSED in
+   *  this PR — no code branches on it yet (materialize keeps deep-observing every planned unit
+   *  regardless; PR-2b wires the threshold-gated admission-selection stage). Absent = off,
+   *  byte-identical. */
+  sourceAdmissionSelection?: boolean;
 }
 
 export interface ReconstructDispatchFallbackRuntime {
@@ -1169,6 +1260,10 @@ interface AuthoredArtifactReuseMatch {
   // a different semantic-author model/window, or a fall back to the FLOOR — must
   // invalidate reuse even when the captured observations are byte-identical.
   document_excerpt_projection_budget: number;
+  // Projection-layer breadth fold (design 20260723 §8 PR-3): enabling/disabling it can change the
+  // authored directive's detail rung on an overflowing candidate catalog, so — like the projection
+  // budget above — it invalidates reuse even when the captured observations are byte-identical.
+  source_breadth_fold: boolean;
   // P1-C2-A (R2/R8): the order-independent aggregate of the per-observation leaf-read
   // llm_touch_fingerprints (ⓐ+ⓑ). Folding the fingerprint VALUE — never the leaf-read OUTPUT —
   // rotates the seed key when the leaf-reader model/prompt or a low-confidence region changes, so a
@@ -1381,6 +1476,35 @@ function assertPromptPayloadCharLimit(args: {
 
 function promptPayloadCharCount(systemPrompt: string, userPayload: unknown): number {
   return systemPrompt.length + JSON.stringify(userPayload, null, 2).length;
+}
+
+/**
+ * Byte twin of {@link assertPromptPayloadCharLimit} (design 20260723 §3.4). The codex worker rejects
+ * on stdin BYTES, not chars (llm-caller.ts writes `combinedPrompt` unconditionally), so a char count
+ * under a limit does NOT guarantee the UTF-8 byte payload is under codex's ceiling for multi-byte
+ * source (e.g. Korean documents). This measures the exact serialized dispatch payload in UTF-8 bytes.
+ * INERT until wired to a dispatch surface (PR-2). Mirrors the byte-cap precedent at
+ * SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP.
+ */
+export function promptPayloadByteCount(systemPrompt: string, userPayload: unknown): number {
+  return (
+    Buffer.byteLength(systemPrompt, "utf8") +
+    Buffer.byteLength(JSON.stringify(userPayload, null, 2), "utf8")
+  );
+}
+
+export function assertPromptPayloadByteLimit(args: {
+  artifactName: string;
+  systemPrompt: string;
+  userPayload: unknown;
+  byteLimit: number;
+}): void {
+  const totalBytes = promptPayloadByteCount(args.systemPrompt, args.userPayload);
+  if (totalBytes > args.byteLimit) {
+    throw new Error(
+      `${args.artifactName} compact prompt exceeds deterministic prompt budget: ${totalBytes} > ${args.byteLimit} bytes. Split or reduce the runtime projection before dispatch.`,
+    );
+  }
 }
 
 async function sha256File(filePath: string): Promise<string> {
@@ -1703,7 +1827,17 @@ export function sourceObservationsReuseSha256(
       target_material_kind: observation.target_material_kind,
       adapter_id: observation.adapter_id,
       source_ref: path.resolve(observation.source_ref),
-      location: path.resolve(observation.location),
+      // Stage 1 source-region-decomposition (design 20260722 §5 "누락된 지점"/§10 PR-1b-2): folded
+      // RAW, never path.resolve()'d. A real region anchor (e.g. "L128-210") is not a path — resolving
+      // it would silently rewrite it to `${cwd}/L128-210`, making the reuse key CWD-dependent and
+      // non-deterministic across replays (the two-CWD determinism test in this PR's suite proves the
+      // fix). BYTE-IDENTICAL for every whole-file observation: `location` there is always
+      // `detection.ref`, which is ALREADY an absolute, `path.resolve()`-derived string
+      // (materialize-preparation.ts's targetRefs / the re-observation paths' inventory unit refs are
+      // resolved upstream, before any observation is built) — so `path.resolve` on it was always a
+      // no-op. The reuse key rotates ONLY when a real region anchor appears (opt-in on + a decomposed
+      // file), never for an off-path or sub-budget-only run.
+      location: observation.location,
       structural_data: {
         path_kind: observation.structural_data.path_kind ?? null,
         size_bytes: observation.structural_data.size_bytes ?? null,
@@ -1736,6 +1870,26 @@ export function sourceObservationsReuseSha256(
         workbook_inventory_data_layer_caps: workbookInventoryDataLayerCaps(
           observation.structural_data.workbook_inventory,
         ),
+        // Code structure inventory IDENTITY (design 20260721 §9): content_sha256 is a raw-byte hash
+        // and cannot reflect an EXTRACTOR-LOGIC or Linguist-CATALOG change, so an inventory-only run
+        // (capture on, map/set-tier off) could silently reuse a seed authored under stale extractor
+        // logic. Folded EXISTENCE-CONDITIONALLY (never an always-null key) so a spreadsheet-only or
+        // no-capture run's reuse hash is byte-identical — only capture-on runs rotate (the intended,
+        // owner-approved 1-time rotation when this lands; extractor_logic_sha256 already folds the
+        // layout digest + LINGUIST_CATALOG_SHA256).
+        ...(() => {
+          const inv = (observation.structural_data as Record<string, unknown>)
+            .code_structure_inventory as CodeStructureInventory | undefined;
+          return inv
+            ? {
+                code_structure_inventory_identity: {
+                  content_sha256: inv.content_sha256,
+                  extractor_logic_sha256: inv.extractor_logic_sha256,
+                  ...(inv.extraction_tier !== undefined ? { extraction_tier: inv.extraction_tier } : {}),
+                },
+              }
+            : {};
+        })(),
       },
     })),
     skipped_refs: artifact.skipped_refs.map((skipped) => ({
@@ -1868,6 +2022,12 @@ function authoredArtifactReuseMatch(args: {
     document_excerpt_projection_budget:
       args.directiveAuthor.documentExcerptProjectionBudget ??
         DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+    // Projection-layer breadth fold (design 20260723 §8 PR-3): a directive-prompt projection knob, so
+    // it belongs in the reuse key alongside document_excerpt_projection_budget — enabling/disabling it
+    // can change the authored directive's detail rung on an overflowing catalog, and a resume across a
+    // flag change must regenerate rather than silently reuse the other rung's selection. Always-present
+    // boolean (over-rotates every key ONCE at upgrade — the documented safe direction).
+    source_breadth_fold: args.directiveAuthor.sourceBreadthFold === true,
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
     // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —
@@ -2241,6 +2401,10 @@ export const SEED_USER_PAYLOAD_ALLOWED_KEYS: ReadonlySet<string> = new Set([
   "source_observations",
   "observed_source_refs",
   "skipped_source_ref_summary",
+  // Core Stage 2 inter-document breadth (design §9): the prompt-visible mirror of
+  // skipped_source_ref_summary for admitted-but-not-deep-observed files (voluntary defer, not an
+  // involuntary skip) — same disclosure-of-source-depth-limitation rationale.
+  "deferred_source_ref_summary",
   "repair_attempt",
   // Minimal-kernel timeout-recovery seed dispatch (the second seed-authoring surface) carries this
   // extra provenance field; it is a legitimate seed input, so it is in the closed set and the
@@ -2318,7 +2482,12 @@ export function projectEnvironmentContextProfileInput(args: {
     const inv = inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)
       ? (inventory as CodeStructureInventory)
       : null;
-    const capturedImports = inv?.symbol_tiles.imports;
+    // Grammar-free ROUGH layout imports were extracted heuristically (no static parse) — they must
+    // NOT drive import-based framework detection (design 20260721 §6-5): a rough `require "react"`
+    // in a Lua string could otherwise mis-promote `framework:react` (the import signal's "near
+    // certain" class assumes AST extraction). Excluded from BOTH the imports list and
+    // imports_available, exactly as if this member had not captured imports.
+    const capturedImports = inv?.extraction_tier === "layout" ? undefined : inv?.symbol_tiles.imports;
     if (capturedImports !== undefined) importsAvailable = true;
     const contentSha = typeof structural.content_sha256 === "string"
       ? structural.content_sha256
@@ -3053,11 +3222,15 @@ function semanticMapCodeSourceExcerptGuardFailure(
 
 function semanticMapSkipReasonForCurrentObservation(
   observation: SemanticMapObservation,
-): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | "code_source_excerpt_unavailable" | null {
+): "no_workbook_inventory" | "no_value_tiles" | "no_code_inventory" | "code_extraction_unsupported" | "code_source_excerpt_unavailable" | "code_layout_tier_not_applicable" | null {
   if (observation.target_material_kind === "code") {
     const { inventory, unsupportedReason } = semanticMapCodeStructural(observation);
     if (unsupportedReason !== undefined) return "code_extraction_unsupported";
     if (!inventory) return "no_code_inventory";
+    // Grammar-free ROUGH layout evidence is explicitly not sliced into the LLM map stage (§6-2). The
+    // check sits AFTER inventory-presence and BEFORE the excerpt guard so the live and resume paths
+    // agree on the reason even for a >6K non-whole-capture layout file (else source_ref_mismatch).
+    if (inventory.extraction_tier === "layout") return "code_layout_tier_not_applicable";
     return semanticMapCodeSourceExcerptGuardFailure(observation, inventory) === null
       ? null
       : "code_source_excerpt_unavailable";
@@ -3367,7 +3540,8 @@ function buildSemanticMapResumeValidationArtifact(args: {
         row.skip_reason !== "no_value_tiles" &&
         row.skip_reason !== "no_code_inventory" &&
         row.skip_reason !== "code_extraction_unsupported" &&
-        row.skip_reason !== "code_source_excerpt_unavailable"
+        row.skip_reason !== "code_source_excerpt_unavailable" &&
+        row.skip_reason !== "code_layout_tier_not_applicable"
       ) {
         nonReusableRetainedIds.push(id);
         continue;
@@ -4139,6 +4313,13 @@ export async function runSemanticMapStage(args: {
     }
     if (!inventory) {
       recordSkippedObservation(observation.observation_id, "no_code_inventory", undefined, "code");
+      return;
+    }
+    // §6-2: grammar-free ROUGH layout evidence is explicitly NOT fed to the LLM map stage — same
+    // predicate/placement as the resume partition (semanticMapSkipReasonForCurrentObservation) so the
+    // live and resume skip reasons never diverge (DD7 same-predicate discipline).
+    if (inventory.extraction_tier === "layout") {
+      recordSkippedObservation(observation.observation_id, "code_layout_tier_not_applicable", undefined, "code");
       return;
     }
     // DD6′ source admission (리뷰 ct M-1, fail-closed): frontier envelopes slice the
@@ -5587,7 +5768,10 @@ function buildZeroObservationDiagnostic(args: {
   ].join("; ");
 }
 
-function assertSemanticAuthoringHasObservedEvidence(args: {
+// Exported (Core Stage 2 inter-document breadth design 20260722-inter-document-breadth-stage2 §4
+// PR-2b): direct unit testing that the admission-selection stage's floor policy populates
+// `sourceObservations` before this gate would otherwise crash (design §4/§7 gate-ordering).
+export function assertSemanticAuthoringHasObservedEvidence(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceInventory: ReconstructSourceInventoryArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -7852,11 +8036,24 @@ function maturationAnswerSupportPromptCatalog(args: {
   maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
   maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
 }): MaturationAnswerSupportPromptCatalog {
+  // Budget-contention guard (design §8, mirroring writeSourceObservationDirective's identical
+  // capProjectedRegionsPerFile call): applied BEFORE grouping, so a decomposed file's N region
+  // observations sharing one source_ref never all become prioritized ids just because that file is
+  // a closure-prioritized answer-support ref (the normal case — it's the main material). Without
+  // this, a heavily-decomposed prioritized file either starves supplemental observations out of the
+  // ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT slots below, or — past that limit — trips
+  // assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow and crashes the run. A file at or under
+  // MAX_PROJECTED_REGIONS_PER_FILE observations passes through unchanged (no-op), so OFF /
+  // one-observation-per-file corpora are byte-identical.
+  const cappedObservations = capProjectedRegionsPerFile(
+    args.sourceObservations.observations,
+    MAX_PROJECTED_REGIONS_PER_FILE,
+  );
   const observationsBySourceRef = new Map<
     string,
     ReconstructSourceObservationsArtifact["observations"]
   >();
-  for (const observation of args.sourceObservations.observations) {
+  for (const observation of cappedObservations) {
     const observations = observationsBySourceRef.get(observation.source_ref) ??
       [];
     observations.push(observation);
@@ -7872,7 +8069,7 @@ function maturationAnswerSupportPromptCatalog(args: {
     ),
   ];
   const prioritizedObservationIdSet = new Set(prioritizedObservationIds);
-  const supplementalObservationIds = args.sourceObservations.observations
+  const supplementalObservationIds = cappedObservations
     .filter((observation) =>
       !prioritizedObservationIdSet.has(observation.observation_id)
     )
@@ -9064,6 +9261,78 @@ function skippedSourceRefPromptSummary(args: {
   };
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design §2/§9): the DERIVED set of admitted units with no
+ * deep observation yet — never stored (mirrors how promoted/deferred are derived from `admitted`
+ * ∪ deep-observed regionKeys, design §2), so it can never drift from the persisted state. Distinct
+ * from involuntary `skipped_refs` (a ref the runtime could not observe at all): a deferred ref WAS
+ * outlined and remains promotable via a later frontier round (design §5 scenario 2) — "not yet
+ * deep-read", never "dropped". Exported for the partition test (deferred ∪ promoted ∪ skipped =
+ * admitted ∪ planned ∪ skipped, design §9 falsifiability).
+ */
+export function deferredSourceRefs(args: {
+  sourceInventory: Pick<ReconstructSourceInventoryArtifact, "inventory_units">;
+  sourceObservations: Pick<ReconstructSourceObservationsArtifact, "observations">;
+}): Array<{
+  ref: string;
+  target_material_kind: TargetMaterialKind;
+  reason: string;
+  outline_present: boolean;
+}> {
+  const observedKeys = new Set(
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
+    ),
+  );
+  return args.sourceInventory.inventory_units
+    .filter((unit) =>
+      unit.scan_status === "admitted" && !observedKeys.has(regionKey(unit.ref, unit.location))
+    )
+    .map((unit) => ({
+      ref: unit.ref,
+      target_material_kind: unit.target_material_kind,
+      reason:
+        "admitted; outline retained; not selected for deep observation; promotable via a later frontier round",
+      outline_present: unit.outline !== undefined,
+    }));
+}
+
+/** Prompt-visible mirror of {@link skippedSourceRefPromptSummary} (design §9) — seed authoring
+ *  sees which admitted files it never read in depth, an explicit source-depth disclosure distinct
+ *  from the involuntary skip census. Same bounded-sample shape/limit class. */
+function deferredSourceRefPromptSummary(args: {
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): unknown {
+  const deferred = deferredSourceRefs(args);
+  // Off-path byte-identity: with no admitted-but-deferred refs (opt-in off / below threshold /
+  // everything promoted) the deferred disclosure is vacuous — return null so the seed payload
+  // OMITS the key (deferredSourceRefSummaryEntry), keeping the prompt byte-identical to pre-Stage-2.
+  if (deferred.length === 0) return null;
+  return {
+    deferred_ref_count: deferred.length,
+    sample_refs: deferred.slice(0, DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT)
+      .map((entry) => ({
+        source_ref: entry.ref,
+        target_material_kind: entry.target_material_kind,
+        reason: entry.reason,
+      })),
+    sample_limit: DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT,
+  };
+}
+
+/** Conditional seed-payload entry for the deferred disclosure (design §9): present ONLY when there
+ *  are admitted-but-deferred refs, so off-path (Stage 2 inactive) the seed prompt is byte-identical
+ *  to the pre-Stage-2 payload. `deferred_source_ref_summary` is in the closed key allowlist
+ *  (subset guard, not a required-present gate), so omission is safe. */
+function deferredSourceRefSummaryEntry(args: {
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): Record<string, unknown> {
+  const summary = deferredSourceRefPromptSummary(args);
+  return summary !== null ? { deferred_source_ref_summary: summary } : {};
+}
+
 function ontologySeedMaturationHandoffPrompt(
   registry: ReconstructContractRegistry,
 ): string {
@@ -10142,6 +10411,14 @@ interface ObservationPromptPayloadOptions {
   contentExcerptCharLimit?: number;
   includeStructuralData?: boolean;
   /**
+   * Breadth-fold (design 20260723) inventory-skeleton rung: per-observation ceiling (chars) for the
+   * projected `code_structure_inventory`, threaded to `projectCodeInventoryForPrompt`. When omitted the
+   * projector's own default (CODE_STRUCTURE_INVENTORY_PROMPT_CHAR_BUDGET = 40_000) applies — byte-
+   * identical for every current caller. A tighter budget demotes per-file inventory DETAIL only; the
+   * observation set and every observation_id stay projected (breadth preserved).
+   */
+  codeInventoryCharBudget?: number;
+  /**
    * Seed-authoring opt-in: a document observation may project its whole captured prose
    * (instead of `contentExcerptCharLimit`) so purpose/candidate/seed authoring sees the
    * document tail. Set only by seed-authoring callers — NOT by post-seed aggregate
@@ -10192,6 +10469,16 @@ interface ObservationPromptPayloadOptions {
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
 const SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT = 300;
 const SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT = 64;
+// Budget-contention guard (design §8 PR-1b-3, exported + tunable — value not spec-fixed, tune
+// against a real large corpus per design §13): the most region observations of any ONE file the
+// SourceObservationDirective catalog offers the selecting LLM. Bounds a heavily-decomposed file's
+// share of SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT (and, transitively, of
+// ONTOLOGY_SEED_OBSERVATION_LIMIT, since candidate authoring only ever sees the directive's
+// selected set) so it cannot starve a different file's high-value observations out of the
+// catalog. A file at or under the cap, and every whole-file (non-region) observation, is
+// unaffected — off-path / unsplit corpora project byte-identically (capProjectedRegionsPerFile
+// is then a no-op on every group).
+export const MAX_PROJECTED_REGIONS_PER_FILE = 8;
 const SOURCE_SCOUT_PROMPT_SIGNAL_LIMIT = 80;
 const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
@@ -10200,6 +10487,125 @@ const POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT = 500;
 const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
+// Core Stage 2 inter-document breadth (design §6/§7 PR-2b, PRELIMINARY — real-corpus tuning is a
+// named follow-up, PR-2c): the inter-file admission budget — at most this many admitted files are
+// promoted to a deep observation per admission-selection stage run, priority-ranked then stable
+// resolved-source_ref order (capAdmissionSelectionAcceptedRefs). Orthogonal to
+// MAX_PROJECTED_REGIONS_PER_FILE (intra-file): this bounds how many FILES go deep, that bounds how
+// many REGIONS one file contributes once it does — no shared pool (design §6).
+export const SOURCE_ADMISSION_DEEP_FILE_LIMIT = 16;
+// The minimum accepted files the runtime guarantees regardless of what the admission-selection LM
+// proposes (design §7 floor policy) — matches the design's literal admission_budget.
+// must_select_at_least. Semantic authoring must never proceed with zero deep observations while
+// admitted evidence sits unread.
+export const SOURCE_ADMISSION_SELECTION_FLOOR = 1;
+if (SOURCE_ADMISSION_SELECTION_FLOOR > SOURCE_ADMISSION_DEEP_FILE_LIMIT) {
+  throw new Error(
+    "Invalid admission-selection budgets: SOURCE_ADMISSION_SELECTION_FLOOR " +
+      `(${SOURCE_ADMISSION_SELECTION_FLOOR}) must be <= SOURCE_ADMISSION_DEEP_FILE_LIMIT ` +
+      `(${SOURCE_ADMISSION_DEEP_FILE_LIMIT}), or a floor-promoted set could be cut back below the ` +
+      "floor by the post-floor budget cap.",
+  );
+}
+const DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
+// Per-unit skeleton-digest budgets for the admission-selection catalog (design §4.3): dozens of
+// admitted units project into ONE selection prompt, so each unit's skeleton must be bounded far
+// more tightly than the single-observation prompt budgets above (CODE_STRUCTURE_INVENTORY_PROMPT_
+// CHAR_BUDGET / DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS). Reuses the SAME projectors those budgets
+// bound a single inventory with — projectCodeInventoryForPrompt takes a char budget directly;
+// projectInventoryForPrompt takes a caps object, so deriveWorkbookInventoryPromptCaps scales the
+// shared defaults down by this multiplier instead of hand-building a bespoke tight caps object.
+const ADMISSION_OUTLINE_CODE_SKELETON_CHAR_BUDGET = 600;
+const ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER = 0.04;
+// Breadth-fold rung-2 tightening for the admission catalog (design 20260723 §7, admission surface).
+// One factor scales BOTH per-unit skeleton budgets above, so the `inventory_skeleton` rung stays a
+// demotion OF the existing budgets rather than a second, independently-drifting pair of constants.
+// PRELIMINARY / tunable — the ≤-budget GUARANTEE lives in the coarsest rung (`one_line`, which drops
+// the skeleton and the excerpt outright) plus the always-on byte guard, never in this value.
+const ADMISSION_OUTLINE_FOLD_SKELETON_SCALE = 0.2;
+const ADMISSION_OUTLINE_FOLD_EXCERPT_CHAR_LIMIT = 160;
+
+/**
+ * Core Stage 2 inter-document breadth (design §4.3): the per-unit `structure_skeleton_digest` the
+ * admission-selection LM sees — a bounded projection of whichever structure skeleton the outline
+ * captured (exactly one of code_structure_inventory/workbook_inventory is ever present, mirroring
+ * the outline's own "kind별 skeleton" invariant), reusing the SAME projectors the seed/directive
+ * prompts already bound a single inventory with, just at the far tighter per-unit scale this
+ * catalog needs (design §4.3 "기존 projectCodeInventoryForPrompt/projectInventoryForPrompt로
+ * unit별 bounded"). A document/database unit (no skeleton observer yet, design §3) or an outline
+ * whose codeStructureObservation opt-in was off returns null — the LM still sees size/line_count/
+ * outline_excerpt for those.
+ */
+function admissionOutlineSkeletonDigest(
+  outline: NonNullable<ReconstructSourceInventoryUnit["outline"]>,
+  skeletonScale = 1,
+): unknown {
+  if (outline.code_structure_inventory) {
+    return projectCodeInventoryForPrompt(
+      outline.code_structure_inventory,
+      Math.round(ADMISSION_OUTLINE_CODE_SKELETON_CHAR_BUDGET * skeletonScale),
+    ).inventory;
+  }
+  if (outline.workbook_inventory) {
+    return projectInventoryForPrompt(
+      outline.workbook_inventory,
+      deriveWorkbookInventoryPromptCaps(
+        ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER * skeletonScale,
+      ),
+    ).inventory;
+  }
+  return null;
+}
+
+/**
+ * Core Stage 2 inter-document breadth (design §4.3): the bounded, deterministic, stable-sorted
+ * projection of every `"admitted"` unit the admission-selection author sees — NEVER whole-file
+ * content (design §4.3's explicit cost boundary). Stable-sorted by resolved source_ref so the
+ * prompt (and any resume/replay of it) is order-independent of inventory_units' own accidental
+ * ordering.
+ */
+function admittedOutlinesForPrompt(
+  sourceInventory: ReconstructSourceInventoryArtifact,
+  level: BreadthFoldLevel = "full",
+): Array<{
+  source_ref: string;
+  kind: TargetMaterialKind;
+  size: number;
+  line_count: number;
+  outline_excerpt?: string | null;
+  structure_skeleton_digest?: unknown;
+}> {
+  return sourceInventory.inventory_units
+    .filter((unit): unit is ReconstructSourceInventoryUnit & {
+      outline: NonNullable<ReconstructSourceInventoryUnit["outline"]>;
+    } => unit.scan_status === "admitted" && unit.outline !== undefined)
+    .sort((a, b) => path.resolve(a.ref).localeCompare(path.resolve(b.ref)))
+    .map((unit) => {
+      // The always-present per-unit anchor: WHERE it is, WHAT kind, HOW big. Every rung keeps it for
+      // every admitted unit — the breadth invariant (detail is demoted, a unit is never dropped).
+      const anchor = {
+        source_ref: unit.ref,
+        kind: unit.target_material_kind,
+        size: unit.outline.size_bytes,
+        line_count: unit.outline.line_count,
+      };
+      // Coarsest rung: drop BOTH variable-size fields (the measured ~1.2 KB of the ~1.36 KB per-unit
+      // projection), leaving the anchor. The LM selects on path/kind/size alone at this rung.
+      if (level === "one_line") return anchor;
+      const excerpt = unit.outline.outline_excerpt;
+      const folded = level === "inventory_skeleton";
+      return {
+        ...anchor,
+        outline_excerpt: folded && excerpt !== null
+          ? excerpt.slice(0, ADMISSION_OUTLINE_FOLD_EXCERPT_CHAR_LIMIT)
+          : excerpt,
+        structure_skeleton_digest: admissionOutlineSkeletonDigest(
+          unit.outline,
+          folded ? ADMISSION_OUTLINE_FOLD_SKELETON_SCALE : 1,
+        ),
+      };
+    });
+}
 
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -10268,6 +10674,7 @@ function compactStructuralDataForPrompt(
   expandDocument: boolean,
   documentExcerptCharBudget: number | undefined,
   sourceRef: string | null | undefined,
+  codeInventoryCharBudget?: number | undefined,
 ): Record<string, unknown> {
   const compacted: Record<string, unknown> = { ...structuralData };
 
@@ -10299,7 +10706,12 @@ function compactStructuralDataForPrompt(
   // inventory, and the semantic-map stage folds from the artifact, never from this projection.
   const codeInventory = compacted.code_structure_inventory;
   if (codeInventory !== null && typeof codeInventory === "object" && !Array.isArray(codeInventory)) {
-    const projection = projectCodeInventoryForPrompt(codeInventory as CodeStructureInventory);
+    // codeInventoryCharBudget undefined → projector uses its 40_000 default (byte-identical). A
+    // tighter budget (breadth-fold inventory-skeleton rung) demotes hierarchy→imports→spans DETAIL.
+    const projection = projectCodeInventoryForPrompt(
+      codeInventory as CodeStructureInventory,
+      codeInventoryCharBudget,
+    );
     compacted.code_structure_inventory = projection.inventory;
     if (projection.truncated) {
       compacted.code_structure_inventory_projection_truncated = true;
@@ -10330,6 +10742,94 @@ function compactStructuralDataForPrompt(
 /** Bounded cap on provisional leaf-read labels rendered into one observation's prompt (Step E). */
 const MAX_PROVISIONAL_LABELS_PER_OBSERVATION = 64;
 
+/**
+ * Design §7 (whole-document-projection generalization, PR-1b-3): true when every observation in
+ * `observations` is a REGION of the SAME file — same `source_ref`, each carrying a distinct
+ * `location` and a numeric `region_line_start`/`region_line_end` (the additive fields
+ * `expandSourceObservationIntoRegions` stamps on a region observation — materialize-preparation.ts
+ * — never present on a whole-file observation). A decomposed document projected as N region
+ * observations qualifies for whole-document expansion exactly like a single whole-file observation
+ * does under the existing `observations.length <= 1` gate: both are "one document's worth". A
+ * multi-FILE bundle (mixed directory, several distinct documents) never qualifies (different
+ * `source_ref`), so it keeps today's bounded per-observation excerpt unchanged.
+ */
+function allObservationsAreRegionsOfOneFile(
+  observations: readonly ReconstructSourceObservation[],
+): boolean {
+  if (observations.length <= 1) return false;
+  const sourceRef = observations[0]!.source_ref;
+  const locations = new Set<string>();
+  for (const observation of observations) {
+    if (observation.source_ref !== sourceRef) return false;
+    if (
+      typeof observation.structural_data.region_line_start !== "number" ||
+      typeof observation.structural_data.region_line_end !== "number"
+    ) {
+      return false;
+    }
+    if (locations.has(observation.location)) return false;
+    locations.add(observation.location);
+  }
+  return true;
+}
+
+/** Rank tier for `capProjectedRegionsPerFile`'s within-file sort — declaration/heading regions
+ *  (structurally significant, design §8) outrank body regions and role-less (whole-file)
+ *  observations, which only ever appear alone in a group so their tier never actually competes. */
+function projectedRegionRoleTier(observation: ReconstructSourceObservation): number {
+  const role = observation.structural_data.region_role;
+  return role === "declaration" || role === "heading" ? 0 : 1;
+}
+
+/**
+ * Budget-contention guard (design §8 PR-1b-3): caps how many observations of any ONE file survive
+ * into a projection catalog at `maxPerFile`, so a heavily-decomposed file cannot occupy more than
+ * its share of a downstream selection cap (SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT). Within
+ * an over-cap file, declaration/heading regions rank ahead of body regions
+ * (`projectedRegionRoleTier`), then earlier regions (by `region_line_start`) break ties — so
+ * structurally significant regions survive even behind a long low-role tail. A file at or under
+ * the cap passes through UNCHANGED — both membership and relative order — so an off-path/unsplit
+ * corpus (never more than one observation per file) is byte-identical. This is a PROJECTION-ONLY
+ * selection: the full observation set (all region observations) stays in source-observations.yaml
+ * regardless; only what reaches a prompt catalog is bounded.
+ *
+ * Exported (Core Stage 2 inter-document breadth design 20260722-inter-document-breadth-stage2 §6
+ * PR-2b): the admission-selection stage's promoted observations flow into the SAME downstream
+ * catalog this caps — direct testing proves that integration without duplicating the cap logic.
+ */
+export function capProjectedRegionsPerFile(
+  observations: readonly ReconstructSourceObservation[],
+  maxPerFile: number,
+): ReconstructSourceObservation[] {
+  const bySourceRef = new Map<string, ReconstructSourceObservation[]>();
+  for (const observation of observations) {
+    const group = bySourceRef.get(observation.source_ref);
+    if (group) group.push(observation);
+    else bySourceRef.set(observation.source_ref, [observation]);
+  }
+  const keepIds = new Set<string>();
+  for (const group of bySourceRef.values()) {
+    if (group.length <= maxPerFile) {
+      for (const observation of group) keepIds.add(observation.observation_id);
+      continue;
+    }
+    const ranked = [...group].sort((a, b) => {
+      const tierDelta = projectedRegionRoleTier(a) - projectedRegionRoleTier(b);
+      if (tierDelta !== 0) return tierDelta;
+      const startA = a.structural_data.region_line_start;
+      const startB = b.structural_data.region_line_start;
+      return (typeof startA === "number" ? startA : 0) -
+        (typeof startB === "number" ? startB : 0);
+    });
+    for (const observation of ranked.slice(0, maxPerFile)) {
+      keepIds.add(observation.observation_id);
+    }
+  }
+  // Filter (not re-sort) the ORIGINAL array so kept observations keep their original relative
+  // order — the ranking above only decides membership, never display order.
+  return observations.filter((observation) => keepIds.has(observation.observation_id));
+}
+
 export function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
   options: ObservationPromptPayloadOptions = {},
@@ -10346,13 +10846,27 @@ export function observationPromptPayload(
         );
     })()
     : sourceObservations.observations;
-  // Full-document expansion needs the seed-authoring opt-in AND a single projected
-  // observation: a seed-authoring prompt over one document gets the whole document;
-  // multi-document bundles, mixed directories (one document among many observations),
-  // and post-seed/bounded prompts keep the budgeted excerpt (see
-  // effectiveContentExcerptCharLimit).
+  // Full-document expansion needs the seed-authoring opt-in AND either a single projected
+  // observation OR every projected observation being a region of the SAME decomposed file
+  // (design §7 PR-1b-3, allObservationsAreRegionsOfOneFile): a seed-authoring prompt over one
+  // document — whole-file, or fully split into regions — gets the whole document; multi-FILE
+  // bundles, mixed directories (one document among many observations), and post-seed/bounded
+  // prompts keep the budgeted excerpt (see effectiveContentExcerptCharLimit).
+  const isMultiRegionDocumentProjection = allObservationsAreRegionsOfOneFile(observations);
   const expandDocument =
-    options.expandSingleDocumentExcerpt === true && observations.length <= 1;
+    options.expandSingleDocumentExcerpt === true &&
+    (observations.length <= 1 || isMultiRegionDocumentProjection);
+  // Regions of one file SHARE the old single-observation whole-doc budget: each region's slice is
+  // floor(budget/count), so the SUM of every projected region's excerpt never exceeds what a
+  // single whole-file observation would have occupied (design §7 point 2 — no prompt growth). The
+  // single-observation path keeps the RAW options.documentExcerptCharBudget unchanged — byte-
+  // identical for an unsplit document.
+  const documentExcerptCharBudgetForProjection = isMultiRegionDocumentProjection
+    ? Math.floor(
+      (options.documentExcerptCharBudget ?? DOCUMENT_EXCERPT_PROJECTION_FLOOR) /
+        observations.length,
+    )
+    : options.documentExcerptCharBudget;
   return observations
     .map((observation) => {
       const payload: Record<string, unknown> = {
@@ -10368,8 +10882,9 @@ export function observationPromptPayload(
           options.contentExcerptCharLimit,
           observation.target_material_kind,
           expandDocument,
-          options.documentExcerptCharBudget,
+          documentExcerptCharBudgetForProjection,
           observation.source_ref,
+          options.codeInventoryCharBudget,
         );
         payload.structural_data = compacted;
         // An expanded text document whose excerpt the budget actually sliced — the
@@ -10394,7 +10909,7 @@ export function observationPromptPayload(
             captured_chars: typeof captured === "string" ? captured.length : 0,
             projection_budget_chars: typeof limit === "number"
               ? limit
-              : options.documentExcerptCharBudget ??
+              : documentExcerptCharBudgetForProjection ??
                 DOCUMENT_EXCERPT_PROJECTION_FLOOR,
           });
         }
@@ -10465,23 +10980,15 @@ export function observationPromptPayload(
 }
 
 /**
- * Resume fallback for the projection-truncation record. On
- * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
- * author's truncation sink are skipped, so it is empty even though the reused
- * artifacts may have been authored from a budget-sliced prompt. This recomputes
- * the unambiguous SINGLE-document case from the already-projected observations
- * (`promptSourceObservations` — source-safety redaction already applied, so a
- * redacted document has no `content_excerpt` and is correctly not reported) and
- * the budget. A multi-observation run that selected one large document would need
- * the persisted directives to recompute on resume — deferred; the primary
- * large-input scenario is a single document. Exported for the regression test.
+ * One observation's resume-fallback truncation record, or `[]` when the observation is not
+ * full-excerpt-projection-eligible or its captured excerpt fits `budget`. Shared by both branches
+ * of `singleDocumentProjectionTruncation` below so the single-observation and per-region cases
+ * apply the identical eligibility + slicing rule.
  */
-export function singleDocumentProjectionTruncation(
-  promptSourceObservations: ReconstructSourceObservationsArtifact,
+function singleObservationProjectionTruncation(
+  observation: ReconstructSourceObservation,
   budget: number,
 ): DocumentExcerptProjectionTruncation[] {
-  if (promptSourceObservations.observations.length !== 1) return [];
-  const observation = promptSourceObservations.observations[0]!;
   // Mirror the fresh-run eligibility (text-readable document OR source-language code, by ref
   // so build-language basenames count) so a resumed run records code truncation provenance
   // too — a document-only check silently dropped the event for a large single code file.
@@ -10504,6 +11011,40 @@ export function singleDocumentProjectionTruncation(
       projection_budget_chars: budget,
     },
   ];
+}
+
+/**
+ * Resume fallback for the projection-truncation record. On
+ * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
+ * author's truncation sink are skipped, so it is empty even though the reused
+ * artifacts may have been authored from a budget-sliced prompt. This recomputes
+ * the unambiguous SINGLE-document case from the already-projected observations
+ * (`promptSourceObservations` — source-safety redaction already applied, so a
+ * redacted document has no `content_excerpt` and is correctly not reported) and
+ * the budget — UNCHANGED, so still byte-identical for an unsplit resume.
+ *
+ * Design §7 (PR-1b-3): a decomposed document's seed-stage snapshot holds N region
+ * observations of the SAME file (`allObservationsAreRegionsOfOneFile`), the exact set the live
+ * path (`observationPromptPayload`) also recognizes as "one document's worth" and budgets at
+ * floor(budget/count) per region (mirrored here so a resumed run reports the SAME per-region
+ * truncations a fresh run would have recorded). A genuine multi-FILE bundle (mixed directory,
+ * several distinct documents) still recomputes nothing — deferred, same as before this PR;
+ * the primary large-input scenario is a single document (whole-file or fully split into regions).
+ * Exported for the regression test.
+ */
+export function singleDocumentProjectionTruncation(
+  promptSourceObservations: ReconstructSourceObservationsArtifact,
+  budget: number,
+): DocumentExcerptProjectionTruncation[] {
+  const observations = promptSourceObservations.observations;
+  if (observations.length === 1) {
+    return singleObservationProjectionTruncation(observations[0]!, budget);
+  }
+  if (!allObservationsAreRegionsOfOneFile(observations)) return [];
+  const perRegionBudget = Math.floor(budget / observations.length);
+  return observations.flatMap((observation) =>
+    singleObservationProjectionTruncation(observation, perRegionBudget)
+  );
 }
 
 function sourceScoutPackPromptPayload(args: {
@@ -10620,6 +11161,96 @@ function applyFirstFrontierScoutPolicy(args: {
       rationale: candidate.rationale,
       priority: candidate.priority,
     })),
+    no_next_frontier_rationale: null,
+  };
+}
+
+const ADMISSION_SELECTION_PRIORITY_RANK: Record<"high" | "medium" | "low", number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+/**
+ * Core Stage 2 inter-document breadth (design §6 inter-file budget, PR-2b): the runtime-owned
+ * budget clamp over an ALREADY-VALIDATED accepted set. `validateSourceFrontier` only enforces
+ * dedup/inventory-membership (no size cap); this ranks the accepted rows priority-first (high
+ * before medium before low), then by stable resolved source_ref, and slices to `fileLimit` — so
+ * an admission-selection LM that proposes more than the budget still yields a deterministic,
+ * priority-respecting subset rather than an arbitrary one. Pure, exported for direct unit testing.
+ */
+export function capAdmissionSelectionAcceptedRefs(args: {
+  sourceFrontier: ReconstructSourceFrontierArtifact;
+  acceptedFrontierRefIds: string[];
+  fileLimit: number;
+}): string[] {
+  const byId = new Map(
+    args.sourceFrontier.frontier_refs.map((frontier) => [frontier.frontier_ref_id, frontier]),
+  );
+  return args.acceptedFrontierRefIds
+    .flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [{ id, row }] : [];
+    })
+    .sort((a, b) =>
+      ADMISSION_SELECTION_PRIORITY_RANK[a.row.priority] -
+        ADMISSION_SELECTION_PRIORITY_RANK[b.row.priority] ||
+      path.resolve(a.row.source_ref).localeCompare(path.resolve(b.row.source_ref))
+    )
+    .slice(0, args.fileLimit)
+    .map((entry) => entry.id);
+}
+
+/**
+ * Core Stage 2 inter-document breadth (design §7 floor policy, PR-2b): mirrors
+ * {@link applyFirstFrontierScoutPolicy}'s exact shape (append synthetic, runtime-authored
+ * frontier_refs rows; leave a non-empty/already-adequate proposal untouched) but triggers on the
+ * VALIDATED accepted count rather than the raw authored count — an LM proposal that names refs
+ * outside the admitted inventory validates to 0 accepted despite a non-empty `frontier_refs`
+ * array, and that case must ALSO reach the floor (design §7 "LM이 전부 defer"). Candidates are
+ * admitted units not already accepted, stable-sorted by resolved source_ref (deterministic
+ * tiebreak, design §7) — never re-consulting the LM. The disclosure channel is the SAME one the
+ * scout policy uses: a runtime-authored `rationale` string distinguishes a floor-promoted row from
+ * an LM-selected one (design §7 "selection_basis" intent), so no new field/type is needed. Pure —
+ * the caller re-validates the returned frontier (this function never re-validates itself, matching
+ * applyFirstFrontierScoutPolicy's own contract).
+ */
+export function applyAdmissionSelectionFloorPolicy(args: {
+  sourceFrontier: ReconstructSourceFrontierArtifact;
+  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
+  admittedUnits: ReconstructSourceInventoryUnit[];
+  floor: number;
+}): ReconstructSourceFrontierArtifact {
+  const acceptedCount = args.sourceFrontierValidation.accepted_frontier_ref_ids.length;
+  if (acceptedCount >= args.floor) return args.sourceFrontier;
+  const acceptedById = new Set(args.sourceFrontierValidation.accepted_frontier_ref_ids);
+  const alreadyAcceptedRefs = new Set(
+    args.sourceFrontier.frontier_refs
+      .filter((frontier) => acceptedById.has(frontier.frontier_ref_id))
+      .map((frontier) => path.resolve(frontier.source_ref)),
+  );
+  const needed = args.floor - acceptedCount;
+  const candidates = args.admittedUnits
+    .filter((unit) => !alreadyAcceptedRefs.has(path.resolve(unit.ref)))
+    .sort((a, b) => path.resolve(a.ref).localeCompare(path.resolve(b.ref)))
+    .slice(0, needed);
+  if (candidates.length === 0) return args.sourceFrontier;
+  return {
+    ...args.sourceFrontier,
+    frontier_refs: [
+      ...args.sourceFrontier.frontier_refs,
+      ...candidates.map((unit, index) => ({
+        frontier_ref_id: `admission_floor_${index + 1}`,
+        source_ref: unit.ref,
+        rationale:
+          `Runtime admission floor policy: the source-admission-selection author accepted fewer ` +
+          `than ${args.floor} file(s); the runtime deterministically promoted this admitted unit ` +
+          "(selection_basis: runtime_floor) so semantic authoring never proceeds with zero deep " +
+          "observations while admitted evidence sits unread (design 20260722-inter-document-" +
+          "breadth-stage2 §7).",
+        priority: "high" as const,
+      })),
+    ],
     no_next_frontier_rationale: null,
   };
 }
@@ -11110,6 +11741,21 @@ function sourceFrontierSystemPrompt(args: {
     "JSON shape: {\"frontier_refs\":[{\"source_ref\":\"...\",\"rationale\":\"...\",\"priority\":\"high|medium|low\"}],\"no_next_frontier_rationale\":\"... or null\"}",
   ].join("\n");
 }
+
+// Core Stage 2 inter-document breadth (design §4, PR-2b): a DEDICATED admission-selection prompt
+// (not sourceFrontierSystemPrompt, which is exploration-synthesis-shaped and assumes prior-round
+// context this round-0 decision does not have). The author sees only bounded outlines, never
+// whole-file content — the system prompt makes that boundary explicit so the LM does not treat
+// admitted_outlines as if it were reading the files themselves.
+const SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT = [
+  RECONSTRUCT_AUTHORING_BASE_SYSTEM,
+  "Select which admitted source files deserve a deep observation for the declared reconstruct purpose. You see only a bounded OUTLINE per file (size, line_count, a small excerpt, and a bounded structure skeleton) — never the whole file content.",
+  "admission_budget.file_limit is the runtime's hard cap on how many files it will actually deep-observe; it enforces the cap itself regardless of how many you propose, so propose only the files that genuinely matter for the declared purpose, most important first.",
+  "admission_budget.must_select_at_least is the runtime's own floor — it will deterministically promote additional admitted files if you select fewer, so you do not need to pad the selection to avoid an empty result; select as many or as few as the evidence in admitted_outlines actually supports.",
+  "If no admitted file looks relevant, return an empty frontier_refs array and explain why in no_next_frontier_rationale — do not select a file just to select something.",
+  "Copy source_ref verbatim from admitted_outlines. Do not invent, rename, or duplicate source refs, and do not select a source_ref that is not present in admitted_outlines.",
+  "JSON shape: {\"frontier_refs\":[{\"source_ref\":\"...\",\"rationale\":\"...\",\"priority\":\"high|medium|low\"}],\"no_next_frontier_rationale\":\"... or null\"}",
+].join("\n");
 
 const SOURCE_PURPOSE_CANDIDATES_SYSTEM_PROMPT = [
   RECONSTRUCT_AUTHORING_BASE_SYSTEM,
@@ -11677,6 +12323,21 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    */
   enableSemanticMapAuthoring?: boolean;
   /**
+   * Projection-layer breadth-fold opt-in (design 20260723-deterministic-recursive-observation §8
+   * PR-3), resolved from reconstruct.execution.source_breadth_fold. Default undefined/false = the
+   * source-observation-directive projects its pre-selection candidate catalog flat (today's full
+   * projection) and the always-on byte guard fails loud on overflow — byte-identical with PR-2.
+   * Explicit true makes writeSourceObservationDirective fold the catalog to the finest detail rung
+   * that fits the byte budget (full → inventory_skeleton → one_line) BEFORE the guard, turning a
+   * large-corpus overflow into a bounded dispatch success. Projection-only for the OBSERVATION layer —
+   * no observation is minted or mutated, so the source-observation reuse key and per-observation delta
+   * hashes never rotate (DW-3d). It DOES change the authored directive's detail rung on an overflowing
+   * catalog, so it is exposed as `sourceBreadthFold` and folded into the DIRECTIVE resume reuse key
+   * (authoredArtifactReuseMatch) — a resume across a flag change regenerates rather than silently
+   * reusing the other rung's selection (silent-stale guard; same treatment as documentExcerptProjectionBudget).
+   */
+  sourceBreadthFold?: boolean;
+  /**
    * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
    * (observation replace + seed payload) — absolute code node_ref.file paths label as
    * path.relative(projectRoot, file); artifact truth stays absolute. Absent = v1 absolute
@@ -11743,6 +12404,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // it after authoring (and clears it per run, like executionTelemetry).
   const documentExcerptProjectionTruncations: DocumentExcerptProjectionTruncation[] =
     [];
+  // Run-scoped sink for admission-surface breadth-fold demotions (the admission artifact has no
+  // in-artifact free-text channel the directive's open_questions provides). runReconstruct reads it
+  // after the admission stage and clears it per run, exactly like the truncation sink above.
+  const sourceBreadthFoldDisclosures: BreadthFoldDisclosure[] = [];
   const recordDocumentExcerptProjectionTruncation = (
     truncation: DocumentExcerptProjectionTruncation,
   ): void => {
@@ -11934,7 +12599,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       : {}),
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
+    sourceBreadthFold: args.sourceBreadthFold === true,
     documentExcerptProjectionTruncations,
+    sourceBreadthFoldDisclosures,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
     // Effective synthesize identity — consumed by the semantic-map stage's
@@ -12100,9 +12767,87 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
-      const availableObservationIds = input.sourceObservations.observations.map(
+      // Budget-contention guard (design §8 PR-1b-3): cap the CATALOG the selecting LLM sees to at
+      // most MAX_PROJECTED_REGIONS_PER_FILE observations per file BEFORE it is offered — a
+      // structural (not LLM-behavior-dependent) protection, since everything downstream
+      // (writeCandidateInventory etc.) only ever sees the directive's selected_observations. `byId`
+      // below is ALSO scoped to this capped set, so a hallucinated pick of a capped-out id fails
+      // the existing "unknown observation id" check rather than silently admitting it.
+      const cappedObservations = capProjectedRegionsPerFile(
+        input.sourceObservations.observations,
+        MAX_PROJECTED_REGIONS_PER_FILE,
+      );
+      const availableObservationIds = cappedObservations.map(
         (observation) => observation.observation_id,
       );
+      const directiveUserPayloadBase = {
+        intent: input.intent,
+        target_material_profile: input.targetMaterialProfile,
+        available_observation_ids: availableObservationIds,
+        selection_limit: SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT,
+        source_scout_pack: sourceScoutPackPromptPayload({
+          sourceScoutPack: input.sourceScoutPack,
+          sourceScoutPackValidation: input.sourceScoutPackValidation,
+          sourceScoutPackRef: input.sourceScoutPackRef,
+          sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
+        }),
+      };
+      // Detail rungs for the candidate-catalog projection (design 20260723 §3.2). Every rung projects
+      // ALL availableObservationIds — the breadth invariant: only per-observation DETAIL is demoted,
+      // never a file, so the selecting LLM can still pick any id at every rung. `full` (the else branch)
+      // is today's exact projection — the byte-identical hinge; the fold reaches a coarser rung only
+      // under overflow.
+      const projectCatalogAtFoldLevel = (level: BreadthFoldLevel): unknown[] => {
+        const options: ObservationPromptPayloadOptions =
+          level === "one_line"
+            ? { observationIds: availableObservationIds, includeStructuralData: false }
+            : level === "inventory_skeleton"
+              ? {
+                  observationIds: availableObservationIds,
+                  contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
+                  codeInventoryCharBudget: SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
+                }
+              : {
+                  observationIds: availableObservationIds,
+                  contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
+                };
+        return projectObservationsForPrompt(input.sourceObservations, options) as unknown[];
+      };
+      // PR-3 opt-in fold: when enabled, project the finest rung whose FULL dispatch payload fits the
+      // byte budget instead of the flat `full` projection. Off (default) takes the `full` rung directly
+      // — byte-identical with PR-2. When `full` fits, the fold returns the `full` projection unchanged,
+      // so on-with-a-fitting-corpus is byte-identical too (the always-on guard below then no-ops); a
+      // coarser rung is reached only when `full` would overflow.
+      const breadthFold =
+        args.sourceBreadthFold === true
+          ? foldObservationsToBudget({
+              budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+              catalogObservationCount: availableObservationIds.length,
+              projectAtLevel: projectCatalogAtFoldLevel,
+              measure: (projection) =>
+                promptPayloadByteCount(SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT, {
+                  ...directiveUserPayloadBase,
+                  source_observations: projection,
+                }),
+            })
+          : null;
+      const directiveUserPayload = {
+        ...directiveUserPayloadBase,
+        source_observations: breadthFold
+          ? breadthFold.projection
+          : projectCatalogAtFoldLevel("full"),
+      };
+      // Always-on total-size safety net (design 20260723 §7 Alt-4c): the directive projects the
+      // pre-selection candidate catalog, whose file-count axis is unbounded — a large corpus overflows
+      // the codex worker stdin limit. Refuse pre-dispatch with an actionable error instead of codex's
+      // opaque nonzero-exit. Byte-identical below budget; PR-3's opt-in fold turns the fail-loud into a
+      // bounded success. Not gated by the fold opt-in — a safety net that is opt-in is not a safety net.
+      assertPromptPayloadByteLimit({
+        artifactName: "SourceObservationDirective",
+        systemPrompt: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
+        userPayload: directiveUserPayload,
+        byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+      });
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -12110,24 +12855,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         artifactName: "SourceObservationDirective",
         maxTokens: 2400,
         systemPrompt: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
-        userPayload: {
-          intent: input.intent,
-          target_material_profile: input.targetMaterialProfile,
-          available_observation_ids: availableObservationIds,
-          selection_limit: SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT,
-          source_scout_pack: sourceScoutPackPromptPayload({
-            sourceScoutPack: input.sourceScoutPack,
-            sourceScoutPackValidation: input.sourceScoutPackValidation,
-            sourceScoutPackRef: input.sourceScoutPackRef,
-            sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
-          }),
-          source_observations: projectObservationsForPrompt(input.sourceObservations, {
-            contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
-          }),
-        },
+        userPayload: directiveUserPayload,
       });
       const byId = new Map(
-        input.sourceObservations.observations.map((observation) => [
+        cappedObservations.map((observation) => [
           observation.observation_id,
           observation,
         ]),
@@ -12173,6 +12904,16 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         selectedById.set(observationId, selectedObservation);
       }
       const openQuestions = stringArray(raw.open_questions, "open_questions");
+      // R2 no-silent-truncation disclosure (design 20260723 §8): when the fold demoted per-observation
+      // detail to fit the byte budget, record it on the SAME runtime-disclosure channel as the
+      // selection-overflow note below so the reduced-detail selection stays auditable. `full` = no
+      // demotion → no note (byte-parity intact); an over_budget fold cannot reach here — the always-on
+      // guard threw before dispatch.
+      if (breadthFold && breadthFold.disclosure.fold_level !== "full") {
+        openQuestions.push(
+          `Runtime folded the source-observation candidate catalog to '${breadthFold.disclosure.fold_level}' detail (${breadthFold.disclosure.catalog_observation_count} observations, ${breadthFold.disclosure.measured_prompt_bytes}/${breadthFold.disclosure.prompt_byte_budget} bytes) so the whole catalog fit the dispatch budget; every observation stayed selectable at reduced per-observation detail.`,
+        );
+      }
       if (selected.length > SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT) {
         const overflowCount =
           selected.length - SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT;
@@ -12427,6 +13168,104 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         sourceFrontier: authoredSourceFrontier,
         input,
       });
+    },
+
+    async writeSourceAdmissionSelection(input) {
+      const admissionTargetMaterialProfile =
+        compactTargetMaterialProfileForPrompt(input.targetMaterialProfile);
+      // Single builder so the folded, the measured, and the dispatched payloads are the SAME shape in
+      // the SAME key order — JSON.stringify is order-sensitive, so a measured-vs-dispatched key-order
+      // drift would both mis-measure the fold and break off-path byte parity.
+      const buildAdmissionUserPayload = (admittedOutlines: unknown[]) => ({
+        intent: input.intent,
+        target_material_profile: admissionTargetMaterialProfile,
+        admitted_outlines: admittedOutlines,
+        admission_budget: {
+          file_limit: input.admissionFileLimit,
+          must_select_at_least: input.admissionFloor,
+        },
+      });
+      // The admitted-outline catalog is the SECOND count-scaling dispatch surface, and the one that
+      // binds FIRST: measured over the real Stage-2 inventory it projects ~1.36 KB/unit (vs the
+      // directive's ~0.49 KB/observation), so it overflows at ~750 admitted files where the directive
+      // survives to ~2,000. Same ladder, same opt-in key, same breadth invariant — every admitted ref
+      // stays offered at every rung; only per-unit DETAIL is demoted.
+      const projectAdmittedOutlinesAtFoldLevel = (level: BreadthFoldLevel): unknown[] =>
+        admittedOutlinesForPrompt(input.sourceInventory, level);
+      const fullAdmittedOutlines = projectAdmittedOutlinesAtFoldLevel("full");
+      const admissionBreadthFold =
+        args.sourceBreadthFold === true
+          ? foldObservationsToBudget({
+              budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+              catalogObservationCount: fullAdmittedOutlines.length,
+              projectAtLevel: (level) =>
+                level === "full"
+                  ? fullAdmittedOutlines
+                  : projectAdmittedOutlinesAtFoldLevel(level),
+              measure: (projection) =>
+                promptPayloadByteCount(
+                  SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
+                  buildAdmissionUserPayload(projection),
+                ),
+            })
+          : null;
+      const admissionUserPayload = buildAdmissionUserPayload(
+        admissionBreadthFold ? admissionBreadthFold.projection : fullAdmittedOutlines,
+      );
+      // R2 no-silent-truncation disclosure: a demoted rung changes WHAT the admitting LM saw when it
+      // chose which files to deep-observe, so it must be auditable. The admission artifact has no
+      // open_questions channel, so the disclosure goes to the run-scoped sink runReconstruct records
+      // durably. `full` = no demotion → nothing recorded (byte-parity intact).
+      if (admissionBreadthFold && admissionBreadthFold.disclosure.fold_level !== "full") {
+        sourceBreadthFoldDisclosures.push(admissionBreadthFold.disclosure);
+      }
+      // Always-on total-size safety net (design 20260723 §7, Alt-5b): the admitted-outline catalog
+      // scales with the admitted file count — the second count-scaling dispatch surface. Same codex
+      // stdin ceiling as the directive, so the same byte budget guards it. Byte-identical below budget,
+      // and it stays UNGATED behind the fold opt-in — a safety net that is opt-in is not a safety net,
+      // and it is what turns an over_budget fold (nothing fit) into an honest pre-dispatch failure.
+      assertPromptPayloadByteLimit({
+        artifactName: "SourceAdmissionSelection",
+        systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
+        userPayload: admissionUserPayload,
+        byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+      });
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        telemetry,
+        artifactName: "SourceAdmissionSelection",
+        maxTokens: 2000,
+        systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
+        userPayload: admissionUserPayload,
+      });
+      const frontierRefs = records(raw.frontier_refs ?? [], "frontier_refs")
+        .map((frontier, index) => {
+          const priorityValue = stringValue(frontier.priority, `frontier_refs[${index}].priority`);
+          if (priorityValue !== "high" && priorityValue !== "medium" && priorityValue !== "low") {
+            throw new Error(`frontier_refs[${index}].priority is invalid.`);
+          }
+          const priority = priorityValue as "high" | "medium" | "low";
+          return {
+            frontier_ref_id: `admission_${index + 1}`,
+            source_ref: stringValue(frontier.source_ref, `frontier_refs[${index}].source_ref`),
+            rationale: stringValue(frontier.rationale, `frontier_refs[${index}].rationale`),
+            priority,
+          };
+        });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        round_id: "admission",
+        created_at: isoNow(),
+        exploration_synthesis_ref: null,
+        frontier_refs: frontierRefs,
+        no_next_frontier_rationale: optionalString(raw.no_next_frontier_rationale),
+        directive_author: {
+          owner: "host_llm",
+          author_id: authorId,
+        },
+      };
     },
 
     async writeSourcePurposeCandidates(input) {
@@ -12962,6 +13801,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             targetMaterialProfile: input.targetMaterialProfile,
             sourceObservations: input.sourceObservations,
           }),
+          ...deferredSourceRefSummaryEntry({
+            sourceInventory: input.sourceInventory,
+            sourceObservations: input.sourceObservations,
+          }),
           repair_attempt: input.repairAttempt
             ? {
               attempt_id: input.repairAttempt.attempt_id,
@@ -13038,6 +13881,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               ),
               skipped_source_ref_summary: skippedSourceRefPromptSummary({
                 targetMaterialProfile: input.targetMaterialProfile,
+                sourceObservations: input.sourceObservations,
+              }),
+              ...deferredSourceRefSummaryEntry({
+                sourceInventory: input.sourceInventory,
                 sourceObservations: input.sourceObservations,
               }),
               timeout_recovery: {
@@ -15031,7 +15878,10 @@ function reconstructContractRegistryPathFromProfilesRoot(profilesRoot: string): 
   );
 }
 
-function validateSourceFrontier(args: {
+// Exported for direct unit testing (Stage 1 source-region-decomposition design 20260722 §5/§11
+// Bucket A negative-control tests — the highest-value proof this design calls for, exercising the
+// REAL dedup site rather than a mock). Not part of the public reconstruct core API surface.
+export function validateSourceFrontier(args: {
   sessionId: string;
   roundId: string;
   sourceFrontier: ReconstructSourceFrontierArtifact;
@@ -15043,20 +15893,28 @@ function validateSourceFrontier(args: {
   targetMaterialProfileValidation: ReconstructTargetMaterialProfileValidationArtifact;
   targetMaterialProfileValidationRef: string;
 }): ReconstructSourceFrontierValidationArtifact {
+  // A1 (design §5): regionKey-keyed. unit.location/frontier.location are
+  // additive-absent in this PR, so every query key here is `regionKey(ref)`
+  // (no location) — the bare resolved ref, byte-identical to the prior
+  // `path.resolve()` keys. The observation/inventory-unit (authoritative) side
+  // registers under regionCoverageKeys so a location-aware query (PR-1b-2) can
+  // also find it later without changing this PR's behavior.
   const inventoryRefs = new Set(
-    args.sourceInventory.inventory_units.map((unit) => path.resolve(unit.ref)),
+    args.sourceInventory.inventory_units.flatMap((unit) =>
+      regionCoverageKeys(unit.ref, unit.location)
+    ),
   );
   const observedRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const accepted: string[] = [];
   const rejected: ReconstructSourceFrontierValidationArtifact["rejected_frontier_refs"] = [];
   const seen = new Set<string>();
   for (const frontier of args.sourceFrontier.frontier_refs) {
-    const resolved = path.resolve(frontier.source_ref);
-    if (seen.has(resolved)) {
+    const key = regionKey(frontier.source_ref, frontier.location);
+    if (seen.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15064,8 +15922,8 @@ function validateSourceFrontier(args: {
       });
       continue;
     }
-    seen.add(resolved);
-    if (observedRefs.has(resolved)) {
+    seen.add(key);
+    if (observedRefs.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15073,7 +15931,7 @@ function validateSourceFrontier(args: {
       });
       continue;
     }
-    if (!inventoryRefs.has(resolved)) {
+    if (!inventoryRefs.has(key)) {
       rejected.push({
         frontier_ref_id: frontier.frontier_ref_id,
         source_ref: frontier.source_ref,
@@ -15140,9 +15998,199 @@ function validateSourceFrontier(args: {
   };
 }
 
+/**
+ * Core Stage 2 inter-document breadth (design 20260722-inter-document-breadth-stage2 §4-§7/§13
+ * PR-2b, INVARIANT-CHANGE): the admission-selection round-0 stage. Runs ONCE per reconstruct run,
+ * guarded on Stage-2-active — returns `null` (no-op) when no unit is `"admitted"` (opt-in off, or
+ * on but materialize stayed below SOURCE_ADMISSION_SELECTION_THRESHOLD), so the caller can branch
+ * on the return value alone without a separate guard.
+ *
+ * Order (design §6 gate-ordering, §7 floor, §15 is_runtime_target_source split):
+ *   1. author call — the author sees only the bounded `admitted_outlines` catalog, never
+ *      whole-file content (design §4.3).
+ *   2. `validateSourceFrontier` — REUSED VERBATIM (allowlist = admitted units via
+ *      `regionCoverageKeys`; `observedRefs` = ∅ since admission mode leaves
+ *      `source-observations.yaml` empty, design §1).
+ *   3. floor policy (design §7) when the VALIDATED accepted count is under `floor` — re-validates
+ *      afterward so the returned validation is always internally consistent with the returned
+ *      frontier.
+ *   4. inter-file budget cap (design §6, priority-ranked then stable source_ref) over the
+ *      (possibly floor-augmented) accepted set.
+ *   5. promotion via `observeInventoryUnitDeep` with `isRuntimeTargetSource:true` — the SAME
+ *      helper the off-path deep-observe-all loop uses (materialize-preparation.ts), so
+ *      `expandSourceObservationIntoRegions`'s one call site is untouched (an unselected/deferred
+ *      unit never reaches this helper, hence never reaches decomposition either — a call-graph
+ *      property, design §6). NEVER `observeAcceptedFrontierRefs` (below): that path stamps
+ *      `is_runtime_target_source:false` plus a non-null `triggering_frontier_validation_ref` — a
+ *      source-safety authority DOWNGRADE on the user's own runtime-target files that the boundary
+ *      validator (source-observations.ts mutual-exclusion rule) rejects outright (design §5/§15).
+ *
+ * Persists the admission-selection artifact + its validation, and the UPDATED source-inventory /
+ * source-observations, to the paths the caller already owns (`sourceInventoryRef`/
+ * `sourceObservationsRef` — the SAME `preparationRefs.*` paths materialize wrote), so a downstream
+ * reader that re-reads from disk (writeSourceSafetyLedgerArtifact, the round loop's delta writer)
+ * sees the promoted state without the caller doing anything beyond adopting the returned objects.
+ *
+ * A promoted unit's `scan_status` stays `"admitted"` (design §2 — promotion never rewrites status,
+ * it only adds an observation); `deferredSourceRefs` derives which admitted units remain
+ * un-promoted from the returned `sourceObservations`.
+ */
+export async function runSourceAdmissionSelectionStage(args: {
+  sessionId: string;
+  intent: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  targetMaterialProfileValidation: ReconstructTargetMaterialProfileValidationArtifact;
+  targetMaterialProfileValidationRef: string;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceInventoryRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  directiveAuthor: Pick<ReconstructDirectiveAuthor, "writeSourceAdmissionSelection">;
+  admissionSelectionPath: string;
+  admissionSelectionValidationPath: string;
+  fileLimit?: number;
+  floor?: number;
+  sourceRegionDecomposition?: boolean;
+  codeStructureObservation?: boolean;
+  codeSetTierObservation?: boolean;
+  codeStructureLayout?: boolean;
+}): Promise<{
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  admissionSelection: ReconstructSourceFrontierArtifact;
+  admissionSelectionValidation: ReconstructSourceFrontierValidationArtifact;
+} | null> {
+  const admittedUnits = args.sourceInventory.inventory_units.filter(
+    (unit) => unit.scan_status === "admitted",
+  );
+  if (admittedUnits.length === 0) return null;
+  const fileLimit = args.fileLimit ?? SOURCE_ADMISSION_DEEP_FILE_LIMIT;
+  const floor = args.floor ?? SOURCE_ADMISSION_SELECTION_FLOOR;
+
+  const authoredSelection = await args.directiveAuthor.writeSourceAdmissionSelection({
+    sessionId: args.sessionId,
+    intent: args.intent,
+    targetMaterialProfile: args.targetMaterialProfile,
+    sourceInventory: args.sourceInventory,
+    admissionFileLimit: fileLimit,
+    admissionFloor: floor,
+  });
+  await writeYamlDocument(args.admissionSelectionPath, authoredSelection);
+
+  const revalidate = (
+    frontier: ReconstructSourceFrontierArtifact,
+  ): ReconstructSourceFrontierValidationArtifact =>
+    validateSourceFrontier({
+      sessionId: args.sessionId,
+      roundId: "admission",
+      sourceFrontier: frontier,
+      sourceFrontierRef: args.admissionSelectionPath,
+      sourceInventory: args.sourceInventory,
+      sourceInventoryRef: args.sourceInventoryRef,
+      sourceObservations: args.sourceObservations,
+      sourceObservationsRef: args.sourceObservationsRef,
+      targetMaterialProfileValidation: args.targetMaterialProfileValidation,
+      targetMaterialProfileValidationRef: args.targetMaterialProfileValidationRef,
+    });
+
+  let effectiveSelection = authoredSelection;
+  let effectiveValidation = revalidate(effectiveSelection);
+  if (effectiveValidation.accepted_frontier_ref_ids.length < floor) {
+    effectiveSelection = applyAdmissionSelectionFloorPolicy({
+      sourceFrontier: effectiveSelection,
+      sourceFrontierValidation: effectiveValidation,
+      admittedUnits,
+      floor,
+    });
+    effectiveValidation = revalidate(effectiveSelection);
+    await writeYamlDocument(args.admissionSelectionPath, effectiveSelection);
+  }
+  await writeYamlDocument(args.admissionSelectionValidationPath, effectiveValidation);
+  assertRuntimeValidationValid({
+    artifactName: "source-admission-selection",
+    artifactRef: args.admissionSelectionValidationPath,
+    validation: effectiveValidation,
+  });
+
+  const cappedAcceptedIds = new Set(
+    capAdmissionSelectionAcceptedRefs({
+      sourceFrontier: effectiveSelection,
+      acceptedFrontierRefIds: effectiveValidation.accepted_frontier_ref_ids,
+      fileLimit,
+    }),
+  );
+  const frontierBySourceRef = new Map(
+    effectiveSelection.frontier_refs
+      .filter((frontier) => cappedAcceptedIds.has(frontier.frontier_ref_id))
+      .map((frontier) => [path.resolve(frontier.source_ref), frontier] as const),
+  );
+
+  const promotedObservations: ReconstructSourceObservation[] = [];
+  const promotionSkippedRefs: ReconstructSourceObservationsArtifact["skipped_refs"] = [];
+  const nextInventoryUnits: ReconstructSourceInventoryUnit[] = [];
+  for (const unit of args.sourceInventory.inventory_units) {
+    const accepted = unit.scan_status === "admitted"
+      ? frontierBySourceRef.get(path.resolve(unit.ref))
+      : undefined;
+    if (!accepted) {
+      nextInventoryUnits.push(unit);
+      continue;
+    }
+    const detection: TargetMaterialRefDetection = {
+      ref: unit.ref,
+      exists: unit.exists,
+      kind: unit.target_material_kind,
+      confidence: unit.exists ? 0.92 : 0.1,
+      confidence_basis: "source-admission-selection accepted inventory ref",
+    };
+    // §5 scenario 1: materialize's deep-observe helper, isRuntimeTargetSource:true (the split).
+    const deep = await observeInventoryUnitDeep(unit, detection, {
+      isRuntimeTargetSource: true,
+      sourceRegionDecomposition: args.sourceRegionDecomposition === true,
+      ...(args.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+      ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}),
+      ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+      lineage: {
+        roundId: "admission",
+        observationBatchId: "source-observation-batch:admission",
+      },
+    });
+    promotedObservations.push(...deep.observations);
+    nextInventoryUnits.push(...deep.units);
+    if (deep.skippedRef) promotionSkippedRefs.push(deep.skippedRef);
+  }
+
+  const nextSourceInventory: ReconstructSourceInventoryArtifact = {
+    ...args.sourceInventory,
+    inventory_units: nextInventoryUnits,
+  };
+  const nextSourceObservations: ReconstructSourceObservationsArtifact = {
+    ...args.sourceObservations,
+    created_at: isoNow(),
+    observations: [...args.sourceObservations.observations, ...promotedObservations],
+    skipped_refs: [...args.sourceObservations.skipped_refs, ...promotionSkippedRefs],
+    validation_results: [
+      ...new Set([
+        ...args.sourceObservations.validation_results,
+        "source_admission_selection_promoted",
+      ]),
+    ],
+  };
+  await writeYamlDocument(args.sourceInventoryRef, nextSourceInventory);
+  await writeYamlDocument(args.sourceObservationsRef, nextSourceObservations);
+
+  return {
+    sourceInventory: nextSourceInventory,
+    sourceObservations: nextSourceObservations,
+    admissionSelection: effectiveSelection,
+    admissionSelectionValidation: effectiveValidation,
+  };
+}
+
 const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;
 
-async function observeAcceptedFrontierRefs(args: {
+// Exported for direct unit testing — see validateSourceFrontier's export comment above.
+export async function observeAcceptedFrontierRefs(args: {
   sourceFrontier: ReconstructSourceFrontierArtifact;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
   sourceFrontierValidationPath: string;
@@ -15151,10 +16199,14 @@ async function observeAcceptedFrontierRefs(args: {
   sourceObservationsPath: string;
   codeStructureObservation?: boolean;
   codeSetTierObservation?: boolean;
+  codeStructureLayout?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
+  // A2 (design §5): regionKey-keyed coverage set (registered under both the
+  // file-level and precise forms — see regionCoverageKeys). inventoryByRef
+  // stays file-level (one inventory unit per file — unchanged by this PR).
   const observedSourceRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const frontierById = new Map(
@@ -15177,7 +16229,11 @@ async function observeAcceptedFrontierRefs(args: {
       throw new Error(`accepted source frontier id has no source-frontier row: ${frontierRefId}`);
     }
     const resolvedSourceRef = path.resolve(frontier.source_ref);
-    if (observedSourceRefs.has(resolvedSourceRef)) continue;
+    // coverageKey: frontier.location is additive-absent in this PR, so this is
+    // the file-level form (see regionKey's doc comment) — byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(frontier.source_ref, frontier.location);
+    if (observedSourceRefs.has(coverageKey)) continue;
     const inventoryUnit = inventoryByRef.get(resolvedSourceRef);
     if (!inventoryUnit) {
       throw new Error(
@@ -15197,9 +16253,15 @@ async function observeAcceptedFrontierRefs(args: {
       observationBatchId:
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
-    }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}) }
-      : undefined);
+    }, {
+      ...(args.codeStructureObservation === true
+        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
+        : {}),
+      // A2 thread-through (design §5/§10 PR-1b-2): frontier.location is additive-absent — no
+      // producer sets it in this PR (the round-N frontier-authoring prompt has no location field) —
+      // so this spread is a no-op today, unconditionally safe to always evaluate.
+      ...(frontier.location !== undefined ? { locationOverride: frontier.location } : {}),
+    });
     // A null observation (vanished ref) and an unsupported workbook format
     // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
     // un-observable by the current runtime. Site 2 graceful terminal (design site2 §9): this is a
@@ -15223,7 +16285,12 @@ async function observeAcceptedFrontierRefs(args: {
       });
     }
     addedObservations.push(observation);
-    observedSourceRefs.add(resolvedSourceRef);
+    // Register the newly added observation under both coverage forms — same as
+    // the initial Set construction above — so a LATER accepted frontier row for
+    // the same file within this same batch is also correctly recognized.
+    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
+      observedSourceRefs.add(k);
+    }
   }
 
   const nextSourceObservations: ReconstructSourceObservationsArtifact = {
@@ -15234,7 +16301,7 @@ async function observeAcceptedFrontierRefs(args: {
       ...addedObservations,
     ],
     skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
-      !observedSourceRefs.has(path.resolve(skipped.ref))
+      !observedSourceRefs.has(regionKey(skipped.ref))
     ),
     validation_results: [
       ...new Set([
@@ -15247,7 +16314,8 @@ async function observeAcceptedFrontierRefs(args: {
   return nextSourceObservations;
 }
 
-async function observeAcceptedMaturationClosureSourceRequests(args: {
+// Exported for direct unit testing — see validateSourceFrontier's export comment above.
+export async function observeAcceptedMaturationClosureSourceRequests(args: {
   maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
   maturationClosureFrontierValidation:
     ReconstructMaturationClosureFrontierValidationArtifact;
@@ -15257,10 +16325,21 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   sourceObservationsPath: string;
   codeStructureObservation?: boolean;
   codeSetTierObservation?: boolean;
+  codeStructureLayout?: boolean;
+  // Stage 1 source-region-decomposition opt-in (design §5 A3, §10 PR-1b-2, INVARIANT-CHANGE): gates
+  // whether request.requested_location is consulted below. requested_location is a PRE-EXISTING,
+  // always-populated field (unlike frontier.location in A2) — threading it unconditionally would
+  // change accept/reject outcomes for every maturation closure run, on or off, so this must stay
+  // opt-in-gated to hold the off-path byte-identical.
+  sourceRegionDecomposition?: boolean;
 }): Promise<ReconstructSourceObservationsArtifact> {
+  // A3 (design §5): regionKey-keyed coverage set (registered under both the
+  // file-level and precise forms). request.requested_location is a pre-existing
+  // LLM-authored field (not a region anchor); threaded into the query key ONLY when
+  // sourceRegionDecomposition is on (see the field doc comment above) — PR-1b-2.
   const observedSourceRefs = new Set(
-    args.sourceObservations.observations.map((observation) =>
-      path.resolve(observation.source_ref)
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
     ),
   );
   const sourceRequestById = new Map(
@@ -15288,7 +16367,14 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       );
     }
     const resolvedSourceRef = path.resolve(request.requested_source_ref);
-    if (observedSourceRefs.has(resolvedSourceRef)) {
+    // coverageKey: request.requested_location is consulted ONLY when sourceRegionDecomposition is
+    // on (see the field doc comment above) — off is the file-level form, byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(
+      request.requested_source_ref,
+      args.sourceRegionDecomposition === true ? (request.requested_location ?? undefined) : undefined,
+    );
+    if (observedSourceRefs.has(coverageKey)) {
       throw new Error(
         `accepted maturation closure source request was already observed before re-entry: ${request.requested_source_ref}`,
       );
@@ -15312,9 +16398,16 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       observationBatchId:
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
-    }, args.codeStructureObservation === true
-      ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}) }
-      : undefined);
+    }, {
+      ...(args.codeStructureObservation === true
+        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
+        : {}),
+      // A3 thread-through (design §5/§10 PR-1b-2): the re-observed observation's anchor becomes the
+      // maturation-requested location, ONLY when the opt-in is on (matches the coverage key above).
+      ...(args.sourceRegionDecomposition === true && request.requested_location
+        ? { locationOverride: request.requested_location }
+        : {}),
+    });
     // Unsupported workbook formats are un-observable like a vanished ref — no
     // evidence to admit (mirrors the materialize-loop demotion and F1).
     if (!observation || spreadsheetUnsupportedReason(observation)) {
@@ -15323,7 +16416,11 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       );
     }
     addedObservations.push(observation);
-    observedSourceRefs.add(resolvedSourceRef);
+    // Register the newly added observation under both coverage forms — same as
+    // the initial Set construction above.
+    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
+      observedSourceRefs.add(k);
+    }
   }
 
   const nextSourceObservations: ReconstructSourceObservationsArtifact = {
@@ -15334,7 +16431,7 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
       ...addedObservations,
     ],
     skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
-      !observedSourceRefs.has(path.resolve(skipped.ref))
+      !observedSourceRefs.has(regionKey(skipped.ref))
     ),
     validation_results: [
       ...new Set([
@@ -16057,6 +17154,7 @@ export async function runReconstruct(
   // Same run-scoping for the projection-truncation sink (a reused author must not
   // carry a prior run's truncations into this run's durable record/final output).
   directiveAuthor.documentExcerptProjectionTruncations?.splice(0);
+  directiveAuthor.sourceBreadthFoldDisclosures?.splice(0);
   const reuseExistingAuthoredArtifacts =
     params.resumeMode === "reuse_existing_authored_artifacts";
   let currentAuthoredArtifactReuseMatch: AuthoredArtifactReuseMatch | null = null;
@@ -16351,6 +17449,9 @@ export async function runReconstruct(
     filesystemAllowedRoots,
     ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
     ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+    ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+    ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
+    ...(params.sourceAdmissionSelection === true ? { sourceAdmissionSelection: true } : {}),
   });
   const targetMaterialProfile =
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
@@ -16360,7 +17461,10 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructSourceObservationsArtifact>(
       preparationRefs.source_observations,
     );
-  const sourceInventory =
+  // Core Stage 2 inter-document breadth (design §4/§13 PR-2b): `let`, not `const` — the
+  // admission-selection stage below may replace this with a NEW object (promoted units'
+  // observations added) rather than mutate in place, unlike materialize's own in-place style.
+  let sourceInventory =
     await readYamlDocument<ReconstructSourceInventoryArtifact>(
       preparationRefs.source_inventory,
     );
@@ -16389,6 +17493,56 @@ export async function runReconstruct(
     artifactRef: targetMaterialProfileValidationPath,
     validation: targetMaterialProfileValidation,
   });
+  // Core Stage 2 inter-document breadth (design §4/§13 PR-2b, INVARIANT-CHANGE): the
+  // admission-selection stage runs here — AFTER targetMaterialProfileValidation (which does not
+  // depend on observations, so no reorder was needed) and BEFORE both the zero-observation
+  // graceful-terminal check and the hard-throw evidence gate below, so a promoted unit's
+  // observation is already in `sourceObservations` before either gate reads it. No-ops (returns
+  // null, `sourceInventory`/`sourceObservations` untouched) unless Stage 2 actually admitted units
+  // (opt-in on AND materialize crossed SOURCE_ADMISSION_SELECTION_THRESHOLD) — off / below-
+  // threshold runs never reach the guard inside runSourceAdmissionSelectionStage.
+  const admissionSelectionResult = await runSourceAdmissionSelectionStage({
+    sessionId,
+    intent: params.intent,
+    targetMaterialProfile,
+    targetMaterialProfileValidation,
+    targetMaterialProfileValidationRef: targetMaterialProfileValidationPath,
+    sourceInventory,
+    sourceInventoryRef: preparationRefs.source_inventory,
+    sourceObservations,
+    sourceObservationsRef: preparationRefs.source_observations,
+    directiveAuthor,
+    admissionSelectionPath: path.join(sessionRoot, "source-admission-selection.yaml"),
+    admissionSelectionValidationPath: path.join(
+      sessionRoot,
+      "source-admission-selection-validation.yaml",
+    ),
+    ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
+    ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
+    ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+    ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+  });
+  if (admissionSelectionResult) {
+    sourceInventory = admissionSelectionResult.sourceInventory;
+    sourceObservations = admissionSelectionResult.sourceObservations;
+  }
+  // R2 disclosure for the admission surface's breadth fold: record the demoted rung durably right
+  // after the stage that produced it (the source-frontier artifact has no free-text channel of its
+  // own). Empty on every off / fitting run, so nothing is emitted unless detail was actually demoted.
+  for (const disclosure of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+    appendRuntimeStatusEventSync({
+      pipeline: "reconstruct",
+      sessionRoot,
+      sourceLabel: "source-breadth-fold",
+      stageId: "source_admission_selection",
+      message:
+        `Runtime folded the admitted-outline selection catalog to '${disclosure.fold_level}' detail ` +
+        `(${disclosure.catalog_observation_count} admitted units, ` +
+        `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so the whole ` +
+        "catalog fit the dispatch budget; every admitted unit stayed selectable at reduced per-unit " +
+        "detail (outlines retained in full in source-inventory).",
+    });
+  }
   // Site 1 graceful terminal (design §16.2): a zero-observation run whose every planned target was
   // skipped (unsupported/vanished) is a graceful BLOCKED terminal, not a crash. Populate the
   // assembly context the catch-side needs (the inside-`try` pieces it cannot see), then throw the
@@ -16520,14 +17674,23 @@ export async function runReconstruct(
   const refreshSourceSafetyArtifacts = async (options?: {
     sourceObservationLineageIndexValidationPath?: string | null;
   }): Promise<void> => {
+    // Core Stage 2 provenance parity (design 20260723 §9): under the admission opt-in, pass the
+    // source-inventory so the safety ledger grants material-claim provenance to a user runtime-target
+    // file that admission DEFERRED and a later frontier round RECOVERED (stamped is_runtime_target_
+    // source:false by the frontier path). Gated on the opt-in AND self-gated by scan_status:"admitted"
+    // inside the ledger builder — off / normal-mode → omitted → byte-identical to pre-Stage-2.
+    const sourceSafetyInventoryPath =
+      params.sourceAdmissionSelection === true ? preparationRefs.source_inventory : null;
     sourceSafetyLedger = await writeSourceSafetyLedgerArtifact({
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceSafetyLedgerPath,
+      ...(sourceSafetyInventoryPath ? { sourceInventoryPath: sourceSafetyInventoryPath } : {}),
     });
     sourceSafetyLedgerValidation = await writeSourceSafetyLedgerValidationArtifact({
       sourceSafetyLedgerPath,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceSafetyLedgerValidationPath,
+      ...(sourceSafetyInventoryPath ? { sourceInventoryPath: sourceSafetyInventoryPath } : {}),
     });
     assertRuntimeValidationValid({
       artifactName: "source-safety-ledger",
@@ -17645,6 +18808,7 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+      ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
     });
     // Reached this line ⇒ the round observed successfully; drop the context so it cannot be read
     // stale by a later graceful terminal that forgets to set its own.
@@ -17672,6 +18836,7 @@ export async function runReconstruct(
       previousSourceObservationsRef: preparationRefs.source_observations,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceObservationDeltaPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     const sourceObservationDeltaValidation =
       await writeSourceObservationDeltaValidationArtifact({
@@ -17680,6 +18845,7 @@ export async function runReconstruct(
         frontierValidationPath: sourceFrontierValidationPath,
         sourceObservationsPath: preparationRefs.source_observations,
         outputPath: sourceObservationDeltaValidationPath,
+        ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
       });
     assertRuntimeValidationValid({
       artifactName: `source-observation-delta ${roundId}`,
@@ -18185,6 +19351,7 @@ export async function runReconstruct(
     seedAuthoringReadinessValidationRef: seedAuthoringReadinessValidationPath,
     sourceObservations: promptSourceObservations,
     sourceObservationsRef: preparationRefs.source_observations,
+    sourceInventory,
     contractRegistry,
   };
   let ontologySeed = await writeAuthoredYamlDocument(
@@ -19149,6 +20316,7 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       targetMaterialProfileValidationPath,
       outputPath: maturationClosureFrontierValidationPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
   assertRuntimeValidationValid({
     artifactName: "maturation-closure-frontier",
@@ -19168,6 +20336,8 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       ...(params.codeStructureObservation === true ? { codeStructureObservation: true } : {}),
       ...(params.codeSetTier === true ? { codeSetTierObservation: true } : {}),
+      ...(params.codeStructureLayout === true ? { codeStructureLayout: true } : {}),
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     sourceObservationDeltaPath = path.join(
       maturationRoundRoot,
@@ -19200,6 +20370,7 @@ export async function runReconstruct(
       previousSourceObservationsRef: preparationRefs.source_observations,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceObservationDeltaPath,
+      ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
     });
     const maturationSourceObservationDeltaValidation =
       await writeSourceObservationDeltaValidationArtifact({
@@ -19208,6 +20379,7 @@ export async function runReconstruct(
         frontierValidationPath: maturationClosureFrontierValidationPath,
         sourceObservationsPath: preparationRefs.source_observations,
         outputPath: sourceObservationDeltaValidationPath,
+        ...(params.sourceRegionDecomposition === true ? { sourceRegionDecomposition: true } : {}),
       });
     assertRuntimeValidationValid({
       artifactName: "source-observation-delta maturation-round-1",

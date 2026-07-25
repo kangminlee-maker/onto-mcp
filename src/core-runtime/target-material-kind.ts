@@ -1,5 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { identifyLanguage, type LinguistIdentification } from "./linguist-language.js";
+import {
+  LINGUIST_LANGUAGE_META,
+  LINGUIST_VERSION,
+} from "./linguist-language-catalog.generated.js";
 
 export type TargetMaterialKind =
   | "code"
@@ -54,27 +59,38 @@ export interface TargetMaterialKindDetection {
 }
 
 const CODE_EXTENSIONS = new Set([
+  ".bash",
   ".c",
   ".cc",
   ".cfg",
+  ".cjs",
   ".conf",
   ".cpp",
   ".cs",
   ".css",
+  ".cts",
+  ".cxx",
   ".dockerfile",
   ".env",
   ".go",
   ".graphql",
+  ".h",
+  ".hh",
+  ".hpp",
   ".java",
   ".js",
   ".json",
   ".jsx",
   ".kt",
+  ".kts",
   ".lock",
   ".mjs",
+  ".mts",
   ".php",
   ".prisma",
   ".proto",
+  ".ps1",
+  ".psm1",
   ".py",
   ".rb",
   ".rs",
@@ -142,7 +158,21 @@ function confidenceForRefKind(kind: TargetMaterialKind, exists: boolean): number
   return exists ? 0.92 : 0.35;
 }
 
-function classifyFileName(ref: string): {
+/** Linguist candidates indicate CODE material iff at least one candidate is a programming OR markup
+ *  language (data/prose-only → not code). markup (Vue/Svelte/HTML/TeX …) is included per the
+ *  layout-observer scope decision (owner 2026-07-21): markup also carries conceptual
+ *  hierarchy/relations, so a rough layout observation is worth reaching. */
+function linguistCandidatesIndicateCode(ident: LinguistIdentification): boolean {
+  return ident.candidates.some((candidate) => {
+    const type = LINGUIST_LANGUAGE_META[candidate.token].type;
+    return type === "programming" || type === "markup";
+  });
+}
+
+function classifyFileName(
+  ref: string,
+  opts?: { layoutFallback?: boolean },
+): {
   kind: TargetMaterialKind;
   basis: string;
 } {
@@ -160,13 +190,71 @@ function classifyFileName(ref: string): {
   if (DATABASE_EXTENSIONS.has(extension)) {
     return { kind: "database", basis: "file extension indicates database material" };
   }
+  // Layout-observer opt-in (code_structure_layout): a long-tail extension/basename that missed
+  // every hand table is classified `code` when Linguist identifies a programming OR markup
+  // candidate, so grammar-free sources (.lua/.hs/.scala/.vue …) reach observation instead of being
+  // silently skipped. Pure (extension/basename only — the extensionless shebang rung's 128B read
+  // lives in the IO callers via classifyExistingFile). The hand tables win FIRST, so no existing
+  // classification regresses (structural no-regression); data/prose-only hits stay `unknown`.
+  if (opts?.layoutFallback) {
+    const ident = identifyLanguage({ basename, extension });
+    if (linguistCandidatesIndicateCode(ident)) {
+      return {
+        kind: "code",
+        basis: `Linguist identifies code/markup material (${LINGUIST_VERSION})`,
+      };
+    }
+  }
   return { kind: "unknown", basis: "no known material extension or basename" };
+}
+
+/** Bounded first-line read (≤128 bytes) for the extensionless shebang rung. Returns the shebang
+ *  line only, or null on any IO failure / non-shebang head (a quiet miss — classification stays
+ *  `unknown`; this is pre-observation, so IO errors are swallowed, not censused). */
+async function readBoundedShebangLine(ref: string): Promise<string | null> {
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  try {
+    handle = await fs.open(ref, "r");
+    const buffer = Buffer.alloc(128);
+    const { bytesRead } = await handle.read(buffer, 0, 128, 0);
+    const head = buffer.subarray(0, bytesRead).toString("utf8");
+    const firstLine = head.split(/\r?\n/, 1)[0] ?? "";
+    return firstLine.startsWith("#!") ? firstLine : null;
+  } catch {
+    return null;
+  } finally {
+    if (handle) await handle.close().catch(() => {});
+  }
+}
+
+/** classifyFileName for a file KNOWN to exist on disk, extended with the extensionless shebang rung
+ *  under the layout opt-in: an extensionless ref that missed every table reads its first 128 bytes
+ *  and, if a shebang names a programming/markup interpreter, is classified `code`. IO failure or a
+ *  non-code shebang keeps the pure result. */
+async function classifyExistingFile(
+  ref: string,
+  opts?: { layoutFallback?: boolean },
+): Promise<{ kind: TargetMaterialKind; basis: string }> {
+  const classified = classifyFileName(ref, opts);
+  if (classified.kind !== "unknown" || !opts?.layoutFallback) return classified;
+  if (path.extname(ref) !== "") return classified;
+  const firstLine = await readBoundedShebangLine(ref);
+  if (firstLine === null) return classified;
+  const ident = identifyLanguage({ basename: path.basename(ref), extension: "", firstLine });
+  if (linguistCandidatesIndicateCode(ident)) {
+    return {
+      kind: "code",
+      basis: `shebang interpreter indicates code material (Linguist ${LINGUIST_VERSION})`,
+    };
+  }
+  return classified;
 }
 
 async function collectDirectoryMaterialDetections(args: {
   root: string;
   maxEntries: number;
   maxDepth: number;
+  layoutFallback?: boolean;
 }): Promise<TargetMaterialRefDetection[]> {
   const entries: TargetMaterialRefDetection[] = [];
 
@@ -188,7 +276,9 @@ async function collectDirectoryMaterialDetections(args: {
         continue;
       }
       if (!dirent.isFile()) continue;
-      const classified = classifyFileName(child);
+      const classified = await classifyExistingFile(child, {
+        layoutFallback: args.layoutFallback === true,
+      });
       entries.push({
         ref: child,
         exists: true,
@@ -203,7 +293,10 @@ async function collectDirectoryMaterialDetections(args: {
   return entries;
 }
 
-async function classifyRef(ref: string): Promise<TargetMaterialRefDetection> {
+async function classifyRef(
+  ref: string,
+  opts?: { layoutFallback?: boolean },
+): Promise<TargetMaterialRefDetection> {
   const resolved = path.resolve(ref);
   try {
     const stat = await fs.stat(resolved);
@@ -212,6 +305,7 @@ async function classifyRef(ref: string): Promise<TargetMaterialRefDetection> {
         root: resolved,
         maxEntries: TARGET_MATERIAL_WALK_MAX_ENTRIES,
         maxDepth: TARGET_MATERIAL_WALK_MAX_DEPTH,
+        ...(opts?.layoutFallback ? { layoutFallback: true } : {}),
       });
       const aggregated = aggregateTargetMaterialDetections(childDetections);
       return {
@@ -225,7 +319,7 @@ async function classifyRef(ref: string): Promise<TargetMaterialRefDetection> {
             : "empty or unreadable directory inventory",
       };
     }
-    const classified = classifyFileName(resolved);
+    const classified = await classifyExistingFile(resolved, opts);
     return {
       ref: resolved,
       exists: true,
@@ -234,7 +328,9 @@ async function classifyRef(ref: string): Promise<TargetMaterialRefDetection> {
       confidence_basis: classified.basis,
     };
   } catch {
-    const classified = classifyFileName(resolved);
+    // Missing ref: no file to read, so only the pure extension/basename fallback applies (no
+    // shebang rung — there is nothing to read).
+    const classified = classifyFileName(resolved, opts);
     return {
       ref: resolved,
       exists: false,
@@ -311,12 +407,15 @@ export function aggregateTargetMaterialDetections(
 export async function detectTargetMaterialKind(
   refs: string[],
 ): Promise<TargetMaterialKindDetection> {
-  const detections = await Promise.all(refs.map(classifyRef));
+  // Review classifier: no layout opt-in (a reconstruct.execution key) — byte-identical. The
+  // explicit arrow keeps Array.map's index arg from reaching classifyRef's opts slot.
+  const detections = await Promise.all(refs.map((ref) => classifyRef(ref)));
   return aggregateTargetMaterialDetections(detections);
 }
 
 export async function detectTargetMaterialRefs(
   refs: string[],
+  opts?: { layoutFallback?: boolean },
 ): Promise<TargetMaterialRefDetection[]> {
   const detections: TargetMaterialRefDetection[] = [];
   for (const ref of refs) {
@@ -328,6 +427,7 @@ export async function detectTargetMaterialRefs(
           root: resolved,
           maxEntries: TARGET_MATERIAL_WALK_MAX_ENTRIES,
           maxDepth: TARGET_MATERIAL_WALK_MAX_DEPTH,
+          ...(opts?.layoutFallback ? { layoutFallback: true } : {}),
         });
         detections.push(...childDetections);
         if (childDetections.length === 0) {
@@ -344,7 +444,7 @@ export async function detectTargetMaterialRefs(
     } catch {
       // classifyRef preserves fail-loud existence metadata for missing refs.
     }
-    detections.push(await classifyRef(resolved));
+    detections.push(await classifyRef(resolved, opts));
   }
   return detections;
 }

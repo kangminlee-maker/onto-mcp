@@ -897,6 +897,17 @@ describe("reconstruct source-layer structure preservation (design §5.1)", () =>
     expect(out).toEqual({ execution: { semantic_map_authoring: true } });
   });
 
+  // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+  // §12/§13 PR-2a): threaded like every other RECONSTRUCT_EXECUTION_SCALAR_KEYS entry via the
+  // single structure-preserving iteration above (line ~1298) — this proves the new key actually
+  // resolves through the chain rather than merely typechecking as a declared constant.
+  it("normalize preserves the source_admission_selection opt-in scalar", () => {
+    const out = v3ReconstructSettings(
+      { execution: { source_admission_selection: true } } as never,
+    );
+    expect(out).toEqual({ execution: { source_admission_selection: true } });
+  });
+
   // Drift guard ③: merge iterates every actor key (project > user per actor)
   // and preserves the scalar across sides even with actors on one side only.
   it("merge preserves every actor key and the opt-in scalar across sides", () => {

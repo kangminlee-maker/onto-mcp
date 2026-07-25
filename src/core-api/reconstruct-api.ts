@@ -573,24 +573,29 @@ async function directoryExists(directoryPath: string): Promise<boolean> {
   }
 }
 
-/** The three code-observation opt-ins as one projection (경계 결정 2026-07-20 + Phase 1b FD1).
+/** The four code-observation opt-ins as one projection (경계 결정 2026-07-20 + Phase 1b FD1 +
+ *  layout 20260721).
  *  - capture (codeStructureObservation) = code_structure_inventory OR semantic_map_code —
  *    the LLM map folds from the captured inventory, so the map opt-in implies capture.
  *  - semanticMapCode = the LLM map stage gate (DD7), never capture.
  *  - codeSetTier = semantic_map_code_set_tier; REQUIRES capture (fail-loud
- *    `requires_code_structure_inventory` — never implicit activation, FD1). */
+ *    `requires_code_structure_inventory` — never implicit activation, FD1).
+ *  - codeStructureLayout = code_structure_layout; the grammar-free layout tier extends capture to
+ *    tree-sitter-unsupported languages, so it too REQUIRES capture (same fail-loud). */
 function resolveCodeObservationOptIns(settings: {
   reconstruct?: {
     execution?: {
       code_structure_inventory?: boolean;
       semantic_map_code?: boolean;
       semantic_map_code_set_tier?: boolean;
+      code_structure_layout?: boolean;
     };
   };
 }): {
   codeStructureObservation: boolean;
   semanticMapCode: boolean;
   codeSetTier: boolean;
+  codeStructureLayout: boolean;
 } {
   const execution = settings.reconstruct?.execution;
   const codeStructureObservation =
@@ -602,10 +607,17 @@ function resolveCodeObservationOptIns(settings: {
       "requires_code_structure_inventory: reconstruct.execution.semantic_map_code_set_tier=true needs the code structure inventory captured — set reconstruct.execution.code_structure_inventory=true (or semantic_map_code=true). The set tier never activates capture implicitly (Phase 1b FD1).",
     );
   }
+  const codeStructureLayout = execution?.code_structure_layout === true;
+  if (codeStructureLayout && !codeStructureObservation) {
+    throw new Error(
+      "requires_code_structure_inventory: reconstruct.execution.code_structure_layout=true needs the code structure inventory captured — set reconstruct.execution.code_structure_inventory=true (or semantic_map_code=true). The layout tier extends capture to grammar-free languages; it never activates capture implicitly.",
+    );
+  }
   return {
     codeStructureObservation,
     semanticMapCode: execution?.semantic_map_code === true,
     codeSetTier,
+    codeStructureLayout,
   };
 }
 
@@ -1080,6 +1092,15 @@ export function createOntoReconstructCoreApi(
         projectRoot,
       );
       const prepareOptIns = resolveCodeObservationOptIns(prepareSettings);
+      // Stage 1 source-region-decomposition opt-in (design 20260722 §10 PR-1b-2): independent of the
+      // code opt-ins above (self-contained — no requires_code_structure_inventory dependency).
+      const prepareSourceRegionDecomposition =
+        prepareSettings.reconstruct?.execution?.source_region_decomposition === true;
+      // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+      // §12/§13 PR-2a): resolved like source_region_decomposition. UNUSED by materialize in this
+      // PR — no code branches on it yet.
+      const prepareSourceAdmissionSelection =
+        prepareSettings.reconstruct?.execution?.source_admission_selection === true;
       const preparationRefs = await materializeReconstructPreparationArtifacts({
         sessionRoot,
         targetRefs,
@@ -1089,6 +1110,9 @@ export function createOntoReconstructCoreApi(
           [projectRoot],
         ...(prepareOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
         ...(prepareOptIns.codeSetTier ? { codeSetTierObservation: true } : {}),
+        ...(prepareOptIns.codeStructureLayout ? { codeStructureLayout: true } : {}),
+        ...(prepareSourceRegionDecomposition ? { sourceRegionDecomposition: true } : {}),
+        ...(prepareSourceAdmissionSelection ? { sourceAdmissionSelection: true } : {}),
       });
       const targetMaterialProfileValidationPath = path.join(
         sessionRoot,
@@ -1179,6 +1203,22 @@ export function createOntoReconstructCoreApi(
       // content for declared-dependency framework signals). Inert unless the base profile is on.
       const environmentContextProfileContent =
         settings.reconstruct?.execution?.environment_context_profile_content === true;
+      // Stage 1 source-region-decomposition opt-in (design 20260722 §10 PR-1b-2, INVARIANT-CHANGE):
+      // independent of the code opt-ins (self-contained) — see resolveCodeObservationOptIns's doc
+      // comment for why this one is resolved separately rather than folded into that helper.
+      const sourceRegionDecomposition =
+        settings.reconstruct?.execution?.source_region_decomposition === true;
+      // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
+      // §12/§13 PR-2a): resolved like source_region_decomposition. UNUSED by the run path in this
+      // PR — no code branches on it yet (PR-2b wires the admission-selection stage).
+      const sourceAdmissionSelection =
+        settings.reconstruct?.execution?.source_admission_selection === true;
+      // Deterministic recursive observation — projection-layer breadth fold (design 20260723 §8 PR-3):
+      // an author-level projection knob (the fold lives entirely inside writeSourceObservationDirective),
+      // so it is passed as a directive-author construction arg — like enableSemanticMapAuthoring — rather
+      // than threaded through the run params. Absent = off, byte-identical.
+      const sourceBreadthFold =
+        settings.reconstruct?.execution?.source_breadth_fold === true;
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1403,6 +1443,8 @@ export function createOntoReconstructCoreApi(
             llmConfig: fallbackLlmConfig,
             // DD10: the fallback author renders the same surfaces — same label root.
             projectRoot,
+            // PR-3: the fallback directive author folds identically (same author-level projection knob).
+            ...(sourceBreadthFold ? { sourceBreadthFold: true } : {}),
             semanticMapSynthesizeLlmConfig: fallbackLlmConfig,
             enableSemanticMapAuthoring: true,
             semanticMapDispatchCapabilities: {
@@ -1492,6 +1534,8 @@ export function createOntoReconstructCoreApi(
           llmConfig: semanticAuthorLlmConfig,
           // DD10: render-label root for code semantic-map surfaces (라벨만 상대화 — artifact 절대경로 유지).
           projectRoot,
+          // PR-3: projection-layer breadth fold (design 20260723 §8) — author-level knob, off = byte-parity.
+          ...(sourceBreadthFold ? { sourceBreadthFold: true } : {}),
           ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
           // Production opt-in + per-role synthesize override (design §5.5/§5.2)
           // from the single wiring seam. Opt-in absent/false = pair not
@@ -1631,8 +1675,11 @@ export function createOntoReconstructCoreApi(
             ...(runOptIns.codeStructureObservation ? { codeStructureObservation: true } : {}),
             ...(runOptIns.semanticMapCode ? { semanticMapCode: true } : {}),
             ...(runOptIns.codeSetTier ? { codeSetTier: true } : {}),
+            ...(runOptIns.codeStructureLayout ? { codeStructureLayout: true } : {}),
             ...(environmentContextProfile ? { environmentContextProfile: true } : {}),
             ...(environmentContextProfileContent ? { environmentContextProfileContent: true } : {}),
+            ...(sourceRegionDecomposition ? { sourceRegionDecomposition: true } : {}),
+            ...(sourceAdmissionSelection ? { sourceAdmissionSelection: true } : {}),
             ...(settings.reconstruct?.execution?.dispatch_fallback
               ? {
                   dispatchFallback:

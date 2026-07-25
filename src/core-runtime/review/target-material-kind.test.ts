@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   detectTargetMaterialKind,
+  detectTargetMaterialRefs,
   reviewMaterialGoals,
   reviewMaterialSupportStatus,
 } from "../target-material-kind.js";
@@ -60,6 +61,69 @@ describe("detectTargetMaterialKind", () => {
     expect(detection.target_material_kind).toBe("unknown");
     expect(detection.target_material_kind_candidates).toEqual(["unknown"]);
   });
+
+  // PR-0 defect fix: the code-structure observer already maps .cjs/.mts/.cts to
+  // javascript/typescript grammars, but CODE_EXTENSIONS omitted them — so such a file was
+  // classified `unknown` and never reached observation (or review's code support path).
+  // Contrast: before this fix each extension below yielded kind "unknown".
+  it.each([".mts", ".cts", ".cjs"])(
+    "classifies %s module files as code so they reach observation",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `handler${ext}`);
+      await fs.writeFile(target, "export const ok = true;\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+      expect(detection.target_material_kind_candidates).toEqual(["code"]);
+      // Shared classifier ⇒ review's kind-level support path also resolves to supported.
+      expect(reviewMaterialSupportStatus(detection.target_material_kind)).toEqual({
+        status: "supported",
+        reason: null,
+      });
+    },
+  );
+
+  // Multi-language Tier 2 expansion (T1): the C/C++ observer parses .c/.h/.cpp/... via the cpp
+  // grammar, so C/C++ headers and alternate source extensions must classify as code to reach it.
+  it.each([".h", ".hpp", ".hh", ".cxx"])(
+    "classifies C/C++ header/source extension %s as code",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `widget${ext}`);
+      await fs.writeFile(target, "int main() { return 0; }\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+    },
+  );
+
+  // Tier 2 scripts (T3): Bash/PowerShell files must classify as code to reach the observer.
+  it.each([".bash", ".ps1", ".psm1"])(
+    "classifies script extension %s as code",
+    async (ext) => {
+      const root = await makeTmpProject();
+      const target = path.join(root, `script${ext}`);
+      await fs.writeFile(target, "echo hi\n", "utf8");
+
+      const detection = await detectTargetMaterialKind([target]);
+
+      expect(detection.target_material_kind).toBe("code");
+    },
+  );
+
+  // Kotlin (T2): .kt already classified; .kts (Kotlin script) added so both reach the observer.
+  it.each([".kt", ".kts"])("classifies Kotlin extension %s as code", async (ext) => {
+    const root = await makeTmpProject();
+    const target = path.join(root, `Main${ext}`);
+    await fs.writeFile(target, "fun main() {}\n", "utf8");
+
+    const detection = await detectTargetMaterialKind([target]);
+
+    expect(detection.target_material_kind).toBe("code");
+  });
 });
 
 describe("reviewMaterialSupportStatus (kind-level claim)", () => {
@@ -101,5 +165,81 @@ describe("reviewMaterialGoals (kind-derived review obligations)", () => {
     for (const kind of ["code", "document", "database", "mixed", "unknown"] as const) {
       expect(reviewMaterialGoals(kind)).toEqual([]);
     }
+  });
+});
+
+// Layout-observer opt-in (design 20260721 §3.3): the Linguist unknown-fallback + extensionless
+// shebang rung promote tree-sitter-unsupported long-tail sources to `code` ONLY behind the
+// layoutFallback option, so they reach observation. Off = classifier byte-identical.
+describe("detectTargetMaterialRefs layout unknown-fallback", () => {
+  async function kindOf(ref: string, opts?: { layoutFallback?: boolean }) {
+    const [detection] = await detectTargetMaterialRefs([ref], opts);
+    return detection?.kind;
+  }
+
+  it("promotes a grammar-free programming extension (.lua) to code only under the opt-in", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "config.lua");
+    await fs.writeFile(target, "local M = {}\nfunction M.f() end\nreturn M\n", "utf8");
+
+    // Contrast: off → unknown (skipped from observation), on → code (reaches observation).
+    expect(await kindOf(target)).toBe("unknown");
+    expect(await kindOf(target, { layoutFallback: true })).toBe("code");
+  });
+
+  it("promotes another programming long-tail (.hs) and a markup source (.vue) under the opt-in", async () => {
+    const root = await makeTmpProject();
+    const hs = path.join(root, "Main.hs");
+    const vue = path.join(root, "App.vue");
+    await fs.writeFile(hs, "module Main where\nmain = putStrLn \"hi\"\n", "utf8");
+    await fs.writeFile(vue, "<template><div/></template>\n", "utf8");
+
+    expect(await kindOf(hs, { layoutFallback: true })).toBe("code");
+    expect(await kindOf(vue, { layoutFallback: true })).toBe("code");
+  });
+
+  it("keeps data-only (.rbs) and truly-unknown (.zzz) extensions unknown even under the opt-in", async () => {
+    const root = await makeTmpProject();
+    const rbs = path.join(root, "sig.rbs");
+    const zzz = path.join(root, "opaque.zzz");
+    await fs.writeFile(rbs, "class Foo\nend\n", "utf8");
+    await fs.writeFile(zzz, "whatever\n", "utf8");
+
+    // Data-only Linguist candidates (.rbs) and no-candidate extensions (.zzz) are NOT promoted:
+    // the fallback requires a programming/markup candidate, so serialization/prose data stays out.
+    expect(await kindOf(rbs, { layoutFallback: true })).toBe("unknown");
+    expect(await kindOf(zzz, { layoutFallback: true })).toBe("unknown");
+  });
+
+  it("classifies an extensionless shebang source as code via the 128B rung, only under the opt-in", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "run-thing");
+    await fs.writeFile(target, "#!/usr/bin/env lua\nprint('hi')\n", "utf8");
+
+    // Contrast: the shebang rung is gated on the opt-in and only fires for extensionless refs.
+    expect(await kindOf(target)).toBe("unknown");
+    expect(await kindOf(target, { layoutFallback: true })).toBe("code");
+  });
+
+  it("keeps an extensionless non-shebang file unknown even under the opt-in", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "notes");
+    await fs.writeFile(target, "just some plain text, no shebang\n", "utf8");
+
+    expect(await kindOf(target, { layoutFallback: true })).toBe("unknown");
+  });
+
+  it("does not regress the existing hand-table classification (.ts/.md/.csv) with the opt-in on", async () => {
+    const root = await makeTmpProject();
+    const ts = path.join(root, "h.ts");
+    const md = path.join(root, "readme.md");
+    const csv = path.join(root, "data.csv");
+    await fs.writeFile(ts, "export const x = 1;\n", "utf8");
+    await fs.writeFile(md, "# doc\n", "utf8");
+    await fs.writeFile(csv, "a,b\n1,2\n", "utf8");
+
+    expect(await kindOf(ts, { layoutFallback: true })).toBe("code");
+    expect(await kindOf(md, { layoutFallback: true })).toBe("document");
+    expect(await kindOf(csv, { layoutFallback: true })).toBe("spreadsheet");
   });
 });

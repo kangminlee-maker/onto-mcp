@@ -7,23 +7,31 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { zipSync, strToU8 } from "fflate";
 import type {
   ReconstructSourceInventoryArtifact,
+  ReconstructSourceInventoryUnit,
   ReconstructSourceObservationsArtifact,
   ReconstructTargetMaterialProfileArtifact,
   ReconstructInitialSourceFrontierArtifact,
 } from "./artifact-types.js";
+import type { ReconstructSourceObservation } from "./source-observations.js";
 import {
   buildReconstructSourceObservation,
+  DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT,
   deriveDocumentExcerptProjectionBudget,
   DOCUMENT_CAPTURE_CEILING_CHARS,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+  expandSourceObservationIntoRegions,
   isFullExcerptCaptureEligible,
+  isSourceRegionDecompositionEligible,
   materializeReconstructPreparationArtifacts,
+  OUTLINE_EXCERPT_CHAR_LIMIT,
+  SOURCE_ADMISSION_SELECTION_THRESHOLD,
   spreadsheetUnsupportedReason,
+  stableFrontierRefId,
 } from "./materialize-preparation.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import { SPREADSHEET_OBSERVER_ADAPTER_ID } from "../spreadsheet-structure-observer.js";
-import { codeStructureLanguageForExtension } from "../code-structure-observer.js";
+import { codeStructureLanguageForExtension, observeCodeStructure } from "../code-structure-observer.js";
 
 describe("isFullExcerptCaptureEligible (M3a shared whole-capture policy)", () => {
   it("whole-captures source-language code; bounds config/data code (the M3a allowlist)", () => {
@@ -933,5 +941,680 @@ describe("buildReconstructSourceObservation spreadsheet seam (P2, csv)", () => {
     expect(inventory.unsupported_reason).toEqual(expect.stringMatching(/unzip failed|workbook\.xml/));
     expect(observation!.summary).toContain("extraction unsupported");
     expect(observation!.summary).toContain("structure_inspected_only");
+  });
+});
+
+describe("stableFrontierRefId (Stage 1 source-region-decomposition design 20260722 §5 A9)", () => {
+  function unit(overrides: Partial<ReconstructSourceInventoryUnit> = {}): ReconstructSourceInventoryUnit {
+    return {
+      ref: "/repo/src/feature.ts",
+      exists: true,
+      target_material_kind: "code",
+      inventory_unit: "file",
+      profile_ref: "code-file",
+      scan_status: "planned",
+      skip_reason: null,
+      ...overrides,
+    };
+  }
+
+  it("with location absent (this PR's only state), matches the pre-A9 formula byte-for-byte", () => {
+    const withoutLocation = unit();
+    const preA9Digest = crypto
+      .createHash("sha256")
+      .update(
+        `${withoutLocation.target_material_kind}\n${path.resolve(withoutLocation.ref)}\n${withoutLocation.inventory_unit}`,
+      )
+      .digest("hex")
+      .slice(0, 16);
+    expect(stableFrontierRefId(withoutLocation)).toBe(`frontier_initial_${preA9Digest}`);
+  });
+
+  it("folds location into the digest ONLY when present — two units differing only by an absent" +
+    "vs. present location produce DIFFERENT ids (region-readiness)", () => {
+    const wholeFile = unit();
+    const region = unit({ location: "L1-50" });
+    expect(stableFrontierRefId(region)).not.toBe(stableFrontierRefId(wholeFile));
+  });
+
+  it("two DIFFERENT locations on the same ref produce distinct ids", () => {
+    const region1 = unit({ location: "L1-50" });
+    const region2 = unit({ location: "L51-100" });
+    expect(stableFrontierRefId(region1)).not.toBe(stableFrontierRefId(region2));
+  });
+});
+
+describe("isSourceRegionDecompositionEligible (Stage 1 source-region-decomposition design 20260722 §3/§10 PR-1b-2)", () => {
+  it("document: eligible strictly above DOCUMENT_EXCERPT_PROJECTION_FLOOR, not at or below", () => {
+    expect(isSourceRegionDecompositionEligible("document", DOCUMENT_EXCERPT_PROJECTION_FLOOR)).toBe(false);
+    expect(isSourceRegionDecompositionEligible("document", DOCUMENT_EXCERPT_PROJECTION_FLOOR + 1)).toBe(true);
+  });
+
+  it("code: eligible strictly above DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT, not at or below", () => {
+    expect(isSourceRegionDecompositionEligible("code", DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT)).toBe(false);
+    expect(isSourceRegionDecompositionEligible("code", DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT + 1)).toBe(true);
+  });
+
+  it("never eligible for spreadsheet/database/mixed/unknown regardless of size", () => {
+    for (const kind of ["spreadsheet", "database", "mixed", "unknown"] as const) {
+      expect(isSourceRegionDecompositionEligible(kind, 10_000_000)).toBe(false);
+    }
+  });
+
+  it("never eligible without a numeric char_count (null/undefined)", () => {
+    expect(isSourceRegionDecompositionEligible("code", null)).toBe(false);
+    expect(isSourceRegionDecompositionEligible("code", undefined)).toBe(false);
+    expect(isSourceRegionDecompositionEligible("document", null)).toBe(false);
+  });
+});
+
+function minimalObservation(
+  overrides: Partial<ReconstructSourceObservation> = {},
+): ReconstructSourceObservation {
+  return {
+    observation_id: "obs-test",
+    target_material_kind: "document",
+    adapter_id: "minimal-document-structure-observer",
+    source_ref: "/nonexistent/expand-region-fixture.md",
+    location: "/nonexistent/expand-region-fixture.md",
+    summary: "document material observed at expand-region-fixture.md",
+    structural_data: {
+      char_count: 0,
+      content_excerpt: "",
+      excerpt_truncated: false,
+    },
+    ...overrides,
+  };
+}
+
+describe("expandSourceObservationIntoRegions (design §10 PR-1b-2 observe-time fanout)", () => {
+  it("degrades to the ORIGINAL whole-file observation, unchanged, when the segmenter finds nothing to split (document, no headings, single paragraph)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "single-paragraph.md");
+    await fs.writeFile(target, "One unbroken paragraph with no blank lines and no headings at all.\n", "utf8");
+    const observation = minimalObservation({ source_ref: target, location: target });
+
+    const result = await expandSourceObservationIntoRegions(observation);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(observation); // pass-through — same reference, no clone/mutation.
+  });
+
+  it("degrades to the ORIGINAL whole-file observation when the source_ref has vanished (TOCTOU)", async () => {
+    const observation = minimalObservation({
+      source_ref: "/definitely/does/not/exist/vanished.md",
+      location: "/definitely/does/not/exist/vanished.md",
+    });
+    const result = await expandSourceObservationIntoRegions(observation);
+    expect(result).toEqual([observation]);
+  });
+
+  it("splits a headed document into gap-free, distinctly-located region observations, keeping content_sha256 as the WHOLE-FILE hash", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "headed.md");
+    const text = [
+      "# Overview",
+      "Intro paragraph.",
+      "",
+      "## Goals",
+      "Goal paragraph one.",
+      "Goal paragraph two.",
+      "",
+      "## Milestones",
+      "Milestone paragraph.",
+      "",
+    ].join("\n");
+    await fs.writeFile(target, text, "utf8");
+    const wholeFileSha = await sha256File(target);
+    const lineCount = text.split(/\r?\n/).length;
+    const observation = minimalObservation({
+      source_ref: target,
+      location: target,
+      structural_data: {
+        char_count: text.length,
+        line_count: lineCount,
+        content_sha256: wholeFileSha,
+        content_excerpt: text,
+        excerpt_truncated: false,
+      },
+    });
+
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions.length).toBeGreaterThanOrEqual(2);
+    const ids = regions.map((r) => r.observation_id);
+    const locations = regions.map((r) => r.location);
+    expect(new Set(ids).size).toBe(regions.length);
+    expect(new Set(locations).size).toBe(regions.length);
+    for (const region of regions) {
+      // content_sha256 stays the WHOLE-FILE hash (provenance spine, design §6) — never region bytes.
+      expect(region.structural_data.content_sha256).toBe(wholeFileSha);
+      expect(region.structural_data.excerpt_truncated).toBe(false);
+      const start = region.structural_data.region_line_start as number;
+      const end = region.structural_data.region_line_end as number;
+      expect(end).toBeGreaterThanOrEqual(start);
+      // The stored excerpt is the EXACT slice for that region's line range (byte-perfect, not
+      // truncated/resampled) — reconstructed from the same original text.
+      const expectedSlice = text.split(/\r?\n/).slice(start - 1, end).join("\n") +
+        (end < lineCount ? "\n" : "");
+      expect((region.structural_data.content_excerpt as string).replace(/\n+$/, ""))
+        .toBe(expectedSlice.replace(/\n+$/, ""));
+    }
+    const sorted = [...regions].sort(
+      (a, b) => (a.structural_data.region_line_start as number) - (b.structural_data.region_line_start as number),
+    );
+    expect(sorted[0]!.structural_data.region_line_start).toBe(1);
+    for (let i = 1; i < sorted.length; i += 1) {
+      expect(sorted[i]!.structural_data.region_line_start).toBe(
+        (sorted[i - 1]!.structural_data.region_line_end as number) + 1,
+      );
+    }
+    expect(sorted[sorted.length - 1]!.structural_data.region_line_end).toBe(lineCount);
+  });
+
+  it("stores the segmenter's role_signal as an additive structural_data.region_role field — 'heading' for a heading-strategy region (design §10 PR-1b-3)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "headed3.md");
+    const text = "# Overview\nIntro.\n\n## Goals\nGoal text.\n";
+    await fs.writeFile(target, text, "utf8");
+    const observation = minimalObservation({
+      source_ref: target,
+      location: target,
+      structural_data: { content_excerpt: text, excerpt_truncated: false },
+    });
+
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions.length).toBeGreaterThanOrEqual(2);
+    for (const region of regions) {
+      expect(region.structural_data.region_role).toBe("heading");
+    }
+  });
+
+  it("stores structural_data.region_role 'body' for the blank-line-paragraph fallback (no headings)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "paragraphs.md");
+    const text =
+      "Paragraph one line one.\nParagraph one line two.\n\nParagraph two.\n\nParagraph three.\n";
+    await fs.writeFile(target, text, "utf8");
+    const observation = minimalObservation({
+      source_ref: target,
+      location: target,
+      structural_data: { content_excerpt: text, excerpt_truncated: false },
+    });
+
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions.length).toBeGreaterThanOrEqual(2);
+    for (const region of regions) {
+      expect(region.structural_data.region_role).toBe("body");
+    }
+  });
+
+  it("re-validates every region observation through the source-observation boundary (fail-loud, never a silent malformed emission)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "headed2.md");
+    await fs.writeFile(target, "# A\nbody a\n\n# B\nbody b\n", "utf8");
+    const observation = minimalObservation({ source_ref: target, location: target });
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions.length).toBeGreaterThanOrEqual(2);
+    for (const region of regions) {
+      expect(region.location.trim().length).toBeGreaterThan(0);
+      expect(region.observation_id.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  // Adversarial review Finding 3: the fanout re-reads the file bytes SEPARATELY from the
+  // whole-file capture (only the fs.readFile a few lines up is guarded — a stale
+  // code_structure_inventory disagreeing with the fresh re-read was NOT). A benign concurrent
+  // edit between capture and re-read must degrade to the whole-file observation, never crash.
+  it("degrades to the ORIGINAL whole-file observation when a stale code_structure_inventory disagrees with the re-read text (TOCTOU edit, not vanish)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "toctou.py");
+    const text = "def a():\n    return 1\n";
+    await fs.writeFile(target, text, "utf8");
+    const result = await observeCodeStructure({ ref: target, text });
+    if (result.status !== "ok") throw new Error(`expected ok observation: ${result.status}`);
+    // The captured inventory disagrees with the (unchanged-on-disk) re-read text — simulating the
+    // file having been edited between the whole-file capture and this fanout's independent re-read.
+    const staleInventory = { ...result.inventory, line_count: result.inventory.line_count + 5 };
+    const observation = minimalObservation({
+      target_material_kind: "code",
+      source_ref: target,
+      location: target,
+      structural_data: {
+        char_count: text.length,
+        content_excerpt: text,
+        excerpt_truncated: false,
+        code_structure_inventory: staleInventory,
+      },
+    });
+
+    const regions = await expandSourceObservationIntoRegions(observation);
+    expect(regions).toEqual([observation]); // degrade, not throw
+  });
+});
+
+function largeCodeFixtureContent(functionCount = 100): string {
+  const parts: string[] = [];
+  for (let i = 0; i < functionCount; i += 1) {
+    parts.push(
+      `export function feature${i}(value: number): number {\n` +
+        `  // computed feature ${i}\n` +
+        `  return value + ${i};\n` +
+        `}\n`,
+    );
+  }
+  return parts.join("\n");
+}
+
+describe("Stage 1 source-region-decomposition observe-time fanout — materializeReconstructPreparationArtifacts integration (design §10 PR-1b-2)", () => {
+  it("a sub-budget file stays exactly one whole-file observation — byte-identical to the opt-in OFF (dedicated assertion)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "small.ts");
+    await fs.writeFile(target, "export function tiny(): number {\n  return 1;\n}\n", "utf8");
+
+    // Same session basename (→ same session_id) under different parents, so the ONLY input
+    // difference between the two runs is the opt-in itself.
+    const off = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, "off", ".onto", "reconstruct", "session-x"),
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+    const on = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, "on", ".onto", "reconstruct", "session-x"),
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceRegionDecomposition: true,
+    });
+
+    const offObservations = await readYaml<ReconstructSourceObservationsArtifact>(off.source_observations);
+    const onObservations = await readYaml<ReconstructSourceObservationsArtifact>(on.source_observations);
+    expect(offObservations.observations).toHaveLength(1);
+    expect(onObservations.observations).toHaveLength(1);
+    const stripCreatedAt = <T extends { created_at: string }>(artifact: T): T => ({
+      ...artifact,
+      created_at: "STRIPPED",
+    });
+    expect(stringifyYaml(stripCreatedAt(onObservations))).toBe(
+      stringifyYaml(stripCreatedAt(offObservations)),
+    );
+
+    const offInventory = await readYaml<ReconstructSourceInventoryArtifact>(off.source_inventory);
+    const onInventory = await readYaml<ReconstructSourceInventoryArtifact>(on.source_inventory);
+    expect(stringifyYaml(stripCreatedAt(onInventory))).toBe(stringifyYaml(stripCreatedAt(offInventory)));
+  });
+
+  it("an over-budget code fixture (with a real code inventory) decomposes into ≥2 gap-free region observations with distinct ids, and inventory_units/initial-source-frontier reflect the expansion", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "big.ts");
+    const content = largeCodeFixtureContent();
+    expect(content.length).toBeGreaterThan(DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT); // fixture sanity
+    await fs.writeFile(target, content, "utf8");
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-big");
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      codeStructureObservation: true,
+      sourceRegionDecomposition: true,
+    });
+
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(refs.source_observations);
+    const regionObservations = observations.observations.filter((o) => o.source_ref === target);
+    expect(regionObservations.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(regionObservations.map((o) => o.observation_id)).size).toBe(regionObservations.length);
+    expect(new Set(regionObservations.map((o) => o.location)).size).toBe(regionObservations.length);
+
+    const wholeFileSha = await sha256File(target);
+    for (const observation of regionObservations) {
+      // content_sha256 stays the WHOLE-FILE hash (provenance spine, design §6) on every region.
+      expect(observation.structural_data.content_sha256).toBe(wholeFileSha);
+      expect(typeof observation.structural_data.region_line_start).toBe("number");
+      expect(typeof observation.structural_data.region_line_end).toBe("number");
+      expect(observation.structural_data.excerpt_truncated).toBe(false);
+      // NO false "duplicate observation_id" material: every id is unique (asserted above) and
+      // non-blank.
+      expect(observation.observation_id.trim().length).toBeGreaterThan(0);
+    }
+    // gap-free, non-overlapping [1..lineCount] coverage.
+    const sorted = [...regionObservations].sort(
+      (a, b) => (a.structural_data.region_line_start as number) - (b.structural_data.region_line_start as number),
+    );
+    expect(sorted[0]!.structural_data.region_line_start).toBe(1);
+    for (let i = 1; i < sorted.length; i += 1) {
+      expect(sorted[i]!.structural_data.region_line_start).toBe(
+        (sorted[i - 1]!.structural_data.region_line_end as number) + 1,
+      );
+    }
+    const lineCount = regionObservations[0]!.structural_data.line_count as number;
+    expect(sorted[sorted.length - 1]!.structural_data.region_line_end).toBe(lineCount);
+
+    // inventory_units reflects the region expansion (design §10 "구현 아키텍처 정정"): one
+    // planned unit per region, each region-distinct, so buildInitialSourceFrontier (derived from
+    // inventory_units) is automatically per-region — frontier↔observation stays 1:1.
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refs.source_inventory);
+    const regionUnits = inventory.inventory_units.filter((u) => u.ref === target);
+    expect(regionUnits.length).toBe(regionObservations.length);
+    expect(new Set(regionUnits.map((u) => u.location)).size).toBe(regionUnits.length);
+    for (const unit of regionUnits) expect(unit.scan_status).toBe("planned");
+
+    const initialFrontier = await readYaml<ReconstructInitialSourceFrontierArtifact>(
+      refs.initial_source_frontier,
+    );
+    const regionFrontierRefs = initialFrontier.source_refs.filter((r) => r.source_ref === target);
+    expect(regionFrontierRefs.length).toBe(regionObservations.length);
+    expect(new Set(regionFrontierRefs.map((r) => r.frontier_ref_id)).size).toBe(regionFrontierRefs.length);
+    expect(new Set(regionFrontierRefs.map((r) => r.location)).size).toBe(regionFrontierRefs.length);
+  });
+
+  it("an over-budget code fixture with NO captured inventory (codeStructureObservation off) still fully decomposes via the blank-line-paragraph fallback (self-contained, design §10)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "big-no-inventory.ts");
+    await fs.writeFile(target, largeCodeFixtureContent(), "utf8");
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-big-no-inv");
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      // codeStructureObservation intentionally OMITTED — proves the opt-in is self-contained.
+      sourceRegionDecomposition: true,
+    });
+
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(refs.source_observations);
+    const regionObservations = observations.observations.filter((o) => o.source_ref === target);
+    expect(regionObservations.length).toBeGreaterThanOrEqual(2);
+    for (const observation of regionObservations) {
+      expect(observation.structural_data.code_structure_inventory).toBeUndefined();
+    }
+  });
+});
+
+describe("buildReconstructSourceObservation outlineOnly (Core Stage 2 inter-document breadth design 20260722 §3, PR-2a substrate)", () => {
+  it("forces the small OUTLINE_EXCERPT_CHAR_LIMIT cap on a code file that would otherwise whole-capture, keeps content_sha256 as the WHOLE-FILE hash, and still captures the code-structure skeleton", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "big.ts");
+    // Source-language code whole-captures by default (M3a) — outlineOnly must override that
+    // regardless of isFullExcerptCaptureEligible, since outline mode never whole-captures.
+    const body = `// big code file\nexport function example(x: number): number {\n  return x + 1;\n}\n${"export const value = 1;\n".repeat(500)}`;
+    expect(body.length).toBeGreaterThan(OUTLINE_EXCERPT_CHAR_LIMIT);
+    await fs.writeFile(target, body, "utf8");
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "code" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+
+    const observation = await buildReconstructSourceObservation(detection, undefined, {
+      outlineOnly: true,
+      codeStructureObservation: true,
+    });
+    expect(observation).not.toBeNull();
+    const sd = observation!.structural_data as Record<string, unknown>;
+
+    // Bounded excerpt — never whole-capture in outline mode, even for a whole-capture-eligible kind.
+    expect((sd.content_excerpt as string).length).toBe(OUTLINE_EXCERPT_CHAR_LIMIT);
+    expect(sd.excerpt_truncated).toBe(true);
+
+    // content_sha256 stays the WHOLE-FILE hash (the provenance spine, design §3) even though the
+    // excerpt captured alongside it is tiny.
+    expect(sd.content_sha256).toBe(await sha256File(target));
+
+    // The kind-specific skeleton (exactly one — code_structure_inventory here) is still captured;
+    // outlineOnly only narrows the excerpt, it does not disable the structure observers.
+    expect(sd.code_structure_inventory).toBeDefined();
+    expect(sd.workbook_inventory).toBeUndefined();
+
+    // "The caller keeps only the outline fields" (design §3): plucking exactly the outline shape
+    // from the returned observation discards observation_id/adapter_id/summary/round_id/... —
+    // the full observation is never what gets persisted for an admitted unit.
+    const outline = {
+      content_sha256: sd.content_sha256 as string,
+      char_count: sd.char_count as number,
+      line_count: sd.line_count as number,
+      size_bytes: sd.size_bytes as number,
+      outline_excerpt: sd.content_excerpt as string | null,
+      outline_excerpt_truncated: sd.excerpt_truncated as boolean,
+      code_structure_inventory: sd.code_structure_inventory,
+    };
+    expect(Object.keys(outline).sort()).toEqual(
+      [
+        "char_count",
+        "code_structure_inventory",
+        "content_sha256",
+        "line_count",
+        "outline_excerpt",
+        "outline_excerpt_truncated",
+        "size_bytes",
+      ].sort(),
+    );
+  });
+
+  it("does not falsely mark a file shorter than the cap as truncated (cap, not a fixed slice)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "small.md");
+    const body = "# Title\n\nshort body\n";
+    await fs.writeFile(target, body, "utf8");
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "document" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+    const observation = await buildReconstructSourceObservation(detection, undefined, {
+      outlineOnly: true,
+    });
+    const sd = observation!.structural_data as Record<string, unknown>;
+    expect(sd.content_excerpt).toBe(body);
+    expect(sd.excerpt_truncated).toBe(false);
+  });
+
+  it("absent (the default) stays byte-identical to the pre-existing whole-capture behavior", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "big-default.ts");
+    const body = "export const value = 1;\n".repeat(500);
+    expect(body.length).toBeGreaterThan(OUTLINE_EXCERPT_CHAR_LIMIT);
+    await fs.writeFile(target, body, "utf8");
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "code" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+    const observation = await buildReconstructSourceObservation(detection);
+    const sd = observation!.structural_data as Record<string, unknown>;
+    // Whole-captured (M3a), unaffected by OUTLINE_EXCERPT_CHAR_LIMIT — outlineOnly was never passed.
+    expect(sd.content_excerpt).toBe(body);
+    expect(sd.excerpt_truncated).toBe(false);
+  });
+});
+
+describe("ReconstructSourceInventoryUnit admitted status + outline (Core Stage 2 inter-document breadth design 20260722 §2/§3, PR-2a substrate)", () => {
+  it("a hand-built 'admitted' unit with a populated outline (real code_structure_inventory) round-trips through YAML unchanged", async () => {
+    const root = await makeTmpProject();
+    const filePath = path.join(root, "admitted-unit.yaml");
+    const codeStructureResult = await observeCodeStructure({
+      ref: "big-module.ts",
+      text: "export function entry(): void {}\n",
+    });
+    expect(codeStructureResult.status).toBe("ok");
+    const codeStructureInventory =
+      codeStructureResult.status === "ok" ? codeStructureResult.inventory : undefined;
+
+    const admittedUnit: ReconstructSourceInventoryUnit = {
+      ref: "/repo/src/big-module.ts",
+      exists: true,
+      target_material_kind: "code",
+      inventory_unit: "file",
+      profile_ref: "code-file",
+      scan_status: "admitted",
+      skip_reason: null,
+      outline: {
+        content_sha256: crypto.createHash("sha256").update("whole file bytes").digest("hex"),
+        char_count: 12000,
+        line_count: 400,
+        size_bytes: 12000,
+        outline_excerpt: "export function entry(): void {}\n",
+        outline_excerpt_truncated: true,
+        code_structure_inventory: codeStructureInventory,
+      },
+    };
+
+    await fs.writeFile(filePath, stringifyYaml(admittedUnit), "utf8");
+    const roundTripped = await readYaml<ReconstructSourceInventoryUnit>(filePath);
+
+    expect(roundTripped).toEqual(admittedUnit);
+    expect(roundTripped.scan_status).toBe("admitted");
+    expect(roundTripped.outline?.code_structure_inventory).toBeDefined();
+    expect(roundTripped.outline?.workbook_inventory).toBeUndefined();
+  });
+});
+
+describe("materializeReconstructPreparationArtifacts admission mode (Core Stage 2 inter-document breadth design 20260722 §2/§3/§8, PR-2b)", () => {
+  async function writeTinyCodeFiles(root: string, count: number): Promise<string[]> {
+    const refs: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const ref = path.join(root, `file-${String(i).padStart(3, "0")}.ts`);
+      await fs.writeFile(ref, `export function fn${i}(): number {\n  return ${i};\n}\n`, "utf8");
+      refs.push(ref);
+    }
+    return refs;
+  }
+
+  it("opt-in on, planned count AT the threshold: stays deep-observe-all (strict > gating, byte-identical to opt-in off)", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD);
+    const off = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, "off", ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+    const on = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, "on", ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+    });
+    const offObservations = await readYaml<ReconstructSourceObservationsArtifact>(off.source_observations);
+    const onObservations = await readYaml<ReconstructSourceObservationsArtifact>(on.source_observations);
+    expect(offObservations.observations).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD);
+    expect(onObservations.observations).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD);
+    const offInventory = await readYaml<ReconstructSourceInventoryArtifact>(off.source_inventory);
+    const onInventory = await readYaml<ReconstructSourceInventoryArtifact>(on.source_inventory);
+    expect(onInventory.inventory_units.every((u) => u.scan_status === "planned")).toBe(true);
+    const stripCreatedAt = <T extends { created_at: string }>(artifact: T): T => ({
+      ...artifact,
+      created_at: "STRIPPED",
+    });
+    expect(stringifyYaml(stripCreatedAt(onObservations))).toBe(
+      stringifyYaml(stripCreatedAt(offObservations)),
+    );
+    expect(stringifyYaml(stripCreatedAt(onInventory))).toBe(stringifyYaml(stripCreatedAt(offInventory)));
+  });
+
+  it("planned count OVER the threshold, opt-in OFF: stays deep-observe-all (threshold alone never triggers admission)", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(refsResult.source_observations);
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    expect(observations.observations).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    expect(inventory.inventory_units.every((u) => u.scan_status === "planned")).toBe(true);
+    expect(inventory.inventory_units.every((u) => u.outline === undefined)).toBe(true);
+  });
+
+  it("planned count OVER the threshold, opt-in ON: enters admission mode — every planned unit becomes 'admitted' with a populated outline, zero deep observations, source-observations.yaml stays empty", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+      codeStructureObservation: true,
+    });
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(refsResult.source_observations);
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    expect(observations.observations).toHaveLength(0);
+    expect(inventory.inventory_units).toHaveLength(SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    expect(inventory.inventory_units.every((u) => u.scan_status === "admitted")).toBe(true);
+    for (const unit of inventory.inventory_units) {
+      expect(unit.outline).toBeDefined();
+      expect(unit.outline!.content_sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(unit.outline!.content_sha256).toBe(await sha256File(unit.ref));
+      expect(unit.outline!.outline_excerpt).not.toBeNull();
+      expect((unit.outline!.outline_excerpt as string).length).toBeLessThanOrEqual(OUTLINE_EXCERPT_CHAR_LIMIT);
+      // codeStructureObservation opt-in was on: the code skeleton is captured (§3 "kind별 skeleton").
+      expect(unit.outline!.code_structure_inventory).toBeDefined();
+      expect(unit.outline!.workbook_inventory).toBeUndefined();
+    }
+    // initial-source-frontier's "planned" filter yields nothing in admission mode (design §8) — this
+    // is informational/audit-only downstream (never re-read for content), not a correctness defect.
+    const initialFrontier = await readYaml<ReconstructInitialSourceFrontierArtifact>(
+      refsResult.initial_source_frontier,
+    );
+    expect(initialFrontier.source_refs).toEqual([]);
+  });
+
+  it("admission mode without codeStructureObservation: outline carries no code_structure_inventory (additive-absent, mirrors the deep-observe path's own opt-in gating)", async () => {
+    const root = await makeTmpProject();
+    const refs = await writeTinyCodeFiles(root, SOURCE_ADMISSION_SELECTION_THRESHOLD + 1);
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+      // codeStructureObservation intentionally OMITTED.
+    });
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    for (const unit of inventory.inventory_units) {
+      expect(unit.outline).toBeDefined();
+      expect(unit.outline!.code_structure_inventory).toBeUndefined();
+      expect(unit.outline!.workbook_inventory).toBeUndefined();
+    }
+  });
+
+  it("admission mode over a spreadsheet corpus: outline falls back to char_count/line_count=0 (no raw-text stats for a workbook) and carries workbook_inventory as the skeleton", async () => {
+    const root = await makeTmpProject();
+    const refs: string[] = [];
+    const csvHeader = "a,b,c\n1,2,3\n";
+    for (let i = 0; i < SOURCE_ADMISSION_SELECTION_THRESHOLD + 1; i += 1) {
+      const ref = path.join(root, `sheet-${String(i).padStart(3, "0")}.csv`);
+      await fs.writeFile(ref, csvHeader, "utf8");
+      refs.push(ref);
+    }
+    const refsResult = await materializeReconstructPreparationArtifacts({
+      sessionRoot: path.join(root, ".onto", "reconstruct", "session-x"),
+      targetRefs: refs,
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+      sourceAdmissionSelection: true,
+    });
+    const inventory = await readYaml<ReconstructSourceInventoryArtifact>(refsResult.source_inventory);
+    expect(inventory.inventory_units.length).toBeGreaterThan(0); // non-vacuous
+    for (const unit of inventory.inventory_units) {
+      expect(unit.scan_status).toBe("admitted");
+      expect(unit.outline).toBeDefined();
+      expect(unit.outline!.char_count).toBe(0);
+      expect(unit.outline!.line_count).toBe(0);
+      expect(unit.outline!.outline_excerpt).toBeNull();
+      expect(unit.outline!.workbook_inventory).toBeDefined();
+      expect(unit.outline!.code_structure_inventory).toBeUndefined();
+    }
   });
 });
