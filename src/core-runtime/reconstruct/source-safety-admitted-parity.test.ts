@@ -160,7 +160,21 @@ describe("Stage 2 admitted-inventory provenance parity (design 20260723 §9)", (
       sourceObservationsRef: "source-observations.yaml",
       admittedSourceRefs: new Set<string>(),
     });
-    expect(JSON.stringify(omitted)).toBe(JSON.stringify(empty));
+    // `created_at` is a wall-clock stamp (source-safety-validation.ts: isoNow()), NOT input-determined:
+    // two builds straddling a millisecond differ there and only there, so comparing the whole artifact
+    // passed only by luck and flaked in CI. Exclude that ONE field — and prove the exclusion is exactly
+    // that, so a future non-deterministic field cannot hide behind the same strip: the key sets must
+    // match, and the excluded field must be a real timestamp in both.
+    expect(Object.keys(omitted)).toEqual(Object.keys(empty));
+    for (const ledger of [omitted, empty]) {
+      expect(ledger.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    }
+    const withoutClock = (ledger: typeof omitted): Record<string, unknown> => {
+      const rest: Record<string, unknown> = { ...ledger };
+      delete rest.created_at;
+      return rest;
+    };
+    expect(JSON.stringify(withoutClock(omitted))).toBe(JSON.stringify(withoutClock(empty)));
     // and the recovered observation stays unauthorized off-path (conservative downgrade intact)
     const row = omitted.safety_rows.find(
       (r) => r.visibility_derivation.intended_consumption === "material_claim",
