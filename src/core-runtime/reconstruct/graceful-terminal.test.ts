@@ -2,13 +2,16 @@
 //
 // S2 covers the two pure judges the rest of the slice is built on, each with a falsifiable
 // negative control (the design's N-elig / invariant contrasts):
-//   1. isZeroObservationGracefulTerminalEligible — eligible ONLY when zero observations AND every
-//      planned runtime-target unit was skipped; a lone still-"planned" unit must stay ineligible
-//      (so a supported-but-empty target keeps crashing, N-elig).
+//   1. isZeroObservationGracefulTerminalEligible — eligible ONLY when zero observations AND no unit
+//      the run intended to observe is left unresolved; a lone still-"planned" unit must stay
+//      ineligible (so a supported-but-empty target keeps crashing, N-elig). Under admission
+//      selection "intended" narrows to the attempted set, with its own N-elig controls plus an
+//      OFF-parity control proving the widening is unreachable without an attempted set.
 //   2. reconstructTerminalStatus — the single terminal-status projection (record_stage, or the
 //      graceful terminal_disposition when set).
 //   3. assertReconstructTerminalDispositionCoherent — the record invariant: a graceful disposition
 //      can never pair with record_stage "completed".
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type {
   ReconstructRecordArtifact,
@@ -26,12 +29,15 @@ import {
 import { assertSeedAuthoringReadinessAllowsSeed } from "./seed-authoring-readiness-validation.js";
 import type { ReconstructSeedAuthoringReadinessArtifact } from "./artifact-types.js";
 
-function unit(scanStatus: "planned" | "skipped"): ReconstructSourceInventoryUnit {
+function unit(
+  scanStatus: "planned" | "skipped" | "admitted",
+  id: string = scanStatus,
+): ReconstructSourceInventoryUnit {
   return {
-    ref: `/tmp/target.${scanStatus}`,
+    ref: `/tmp/target.${id}`,
     exists: true,
     target_material_kind: "spreadsheet_workbook",
-    inventory_unit: `unit:${scanStatus}`,
+    inventory_unit: `unit:${id}`,
     profile_ref: null,
     scan_status: scanStatus,
     skip_reason: scanStatus === "skipped" ? "spreadsheet extraction unsupported: xls" : null,
@@ -82,6 +88,76 @@ describe("isZeroObservationGracefulTerminalEligible", () => {
       isZeroObservationGracefulTerminalEligible({
         sourceObservations: { observations: [] },
         sourceInventory: { inventory_units: [] },
+      }),
+    ).toBe(false);
+  });
+
+  // source_admission_selection: promotion never rewrites scan_status, so units the stage chose NOT
+  // to deep-observe stay `admitted`. Only the attempted set (accepted ∩ file-limit cap) counts as
+  // "planned"; the rest were deferred by design, with their outlines retained.
+  const attempted = new Set([path.resolve("/tmp/target.attempted")]);
+
+  it("admission: every attempted ref vanished while deferred units remain is graceful", () => {
+    expect(
+      isZeroObservationGracefulTerminalEligible({
+        sourceObservations: { observations: [] },
+        // The attempted unit was demoted to `skipped` by observeInventoryUnitDeep (vanished
+        // mid-run); the other two were never attempted.
+        sourceInventory: {
+          inventory_units: [
+            unit("skipped", "attempted"),
+            unit("admitted", "deferred-a"),
+            unit("admitted", "deferred-b"),
+          ],
+        },
+        attemptedSourceRefs: attempted,
+      }),
+    ).toBe(true);
+  });
+
+  it("OFF parity control: the same inventory without an attempted set stays ineligible", () => {
+    // Only the presence of attemptedSourceRefs differs from the case above — proves the widening is
+    // reachable exclusively through admission selection, so non-admission runs keep the old rule.
+    expect(
+      isZeroObservationGracefulTerminalEligible({
+        sourceObservations: { observations: [] },
+        sourceInventory: {
+          inventory_units: [
+            unit("skipped", "attempted"),
+            unit("admitted", "deferred-a"),
+            unit("admitted", "deferred-b"),
+          ],
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it("admission N-elig control: an attempted unit that was never resolved must crash", () => {
+    // Producer desync — the stage tried this ref but it neither yielded an observation nor got
+    // demoted to `skipped`. Only its scan_status differs from the graceful case.
+    expect(
+      isZeroObservationGracefulTerminalEligible({
+        sourceObservations: { observations: [] },
+        sourceInventory: {
+          inventory_units: [unit("admitted", "attempted"), unit("admitted", "deferred-a")],
+        },
+        attemptedSourceRefs: attempted,
+      }),
+    ).toBe(false);
+  });
+
+  it("admission N-elig control: a stray planned unit still crashes", () => {
+    expect(
+      isZeroObservationGracefulTerminalEligible({
+        sourceObservations: { observations: [] },
+        sourceInventory: {
+          inventory_units: [
+            unit("skipped", "attempted"),
+            unit("admitted", "deferred-a"),
+            unit("planned"),
+          ],
+        },
+        attemptedSourceRefs: attempted,
       }),
     ).toBe(false);
   });
