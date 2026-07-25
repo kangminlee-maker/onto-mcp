@@ -16,7 +16,6 @@ import {
   capAdmissionSelectionAcceptedRefs,
   capProjectedRegionsPerFile,
   deferredSourceRefs,
-  isZeroObservationGracefulTerminalEligible,
   MAX_PROJECTED_REGIONS_PER_FILE,
   runSourceAdmissionSelectionStage,
   SOURCE_ADMISSION_DEEP_FILE_LIMIT,
@@ -24,6 +23,7 @@ import {
   validateSourceFrontier,
   type ReconstructSourceAdmissionSelectionAuthorInput,
 } from "./run.js";
+import { isZeroObservationGracefulTerminalEligible } from "./graceful-terminal.js";
 import { validateSourceObservationBoundary } from "./source-observations.js";
 
 // Spec basis: development-records/design/20260722-inter-document-breadth-stage2-design.md §4-§7,
