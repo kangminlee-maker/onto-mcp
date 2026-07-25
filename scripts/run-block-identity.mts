@@ -87,6 +87,20 @@ const EXTRACTIONS: readonly Extraction[] = [
       "let environmentContextProfileRef: string | null = null;",
     destBodySuffix: "return environmentContextProfileRef;",
   },
+  {
+    label: "온톨로지 시드 수리 시도 (입력 12 / 바깥 let 2개 변형)",
+    baseStartLine: 3590,
+    baseEndLine: 3641,
+    expectStartsWith: 'if (ontologySeedValidation.validation_status === "invalid") {',
+    destFile: "src/core-runtime/reconstruct/ontology-seed-repair-stage.ts",
+    destFunction: "repairInvalidOntologySeed",
+    destBodyPrefix:
+      "const { candidateDispositionPath, contractRegistry, contractRegistryPath, " +
+      "currentAuthoredArtifactReuseMatch, directiveAuthor, ontologySeedAuthorInput, " +
+      "ontologySeedPath, ontologySeedValidationPath, preparationRefs, sessionRoot } = args;\n" +
+      "let { ontologySeed, ontologySeedValidation } = args;",
+    destBodySuffix: "return { ontologySeed, ontologySeedValidation };",
+  },
 ];
 
 // ---------------------------------------------------------------- 순수 핵심부

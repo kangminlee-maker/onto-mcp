@@ -244,7 +244,7 @@ import {
 import { codeAuthoringPromptContractSha256 } from "./authoring-llm-call.js";
 import { reconstructContractRegistryPathFromProfilesRoot } from "./contract-registry.js";
 import { competencyQuestionsRepairDirectives } from "./post-seed-validation.js";
-import { ontologySeedRepairSections } from "./ontology-seed-validation.js";
+import { repairInvalidOntologySeed } from "./ontology-seed-repair-stage.js";
 import {
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   deriveSemanticMapFallbackPriorDispatchSpend,
@@ -3529,58 +3529,20 @@ export async function runReconstruct(
       contractRegistry,
       outputPath: ontologySeedValidationPath,
     });
-  if (ontologySeedValidation.validation_status === "invalid") {
-    directiveAuthor.executionTelemetry?.recordValidationGateFailure({
-      unitId: "ontology_seed",
-      failureMessage: validationDetailSummary(
-        ontologySeedValidation as unknown as Record<string, unknown>,
-      ),
-    });
-    const repairAttemptId = "ontology-seed-repair-1";
-    const repairInputPath = path.join(sessionRoot, `${repairAttemptId}.input.yaml`);
-    const repairInputValidationPath = path.join(
-      sessionRoot,
-      `${repairAttemptId}.input-validation.yaml`,
-    );
-    await fs.copyFile(ontologySeedPath, repairInputPath);
-    await fs.copyFile(ontologySeedValidationPath, repairInputValidationPath);
-    ontologySeed = await directiveAuthor.writeOntologySeed({
-      ...ontologySeedAuthorInput,
-      repairAttempt: {
-        attempt_id: repairAttemptId,
-        repair_sections: ontologySeedRepairSections(ontologySeedValidation),
-        previous_ontology_seed: ontologySeed,
-        previous_ontology_seed_validation: ontologySeedValidation,
-        previous_ontology_seed_validation_ref: repairInputValidationPath,
-      },
-    });
-    await writeYamlDocument(ontologySeedPath, ontologySeed);
-    if (currentAuthoredArtifactReuseMatch) {
-      await writeAuthoredArtifactReuseProvenance({
-        filePath: ontologySeedPath,
-        artifactName: "ontology-seed.yaml",
-        reuseMatch: currentAuthoredArtifactReuseMatch,
-      });
-    }
-    ontologySeedValidation = await writeOntologySeedValidationArtifact({
-      ontologySeedPath,
-      candidateDispositionPath,
-      sourceObservationsPath: preparationRefs.source_observations,
-      registryPath: contractRegistryPath,
-      contractRegistry,
-      outputPath: ontologySeedValidationPath,
-    });
-    if (ontologySeedValidation.validation_status === "invalid") {
-      // The repair output is still invalid: record the terminal validation-gate
-      // rejection so the failed unit's lineage ends at the gate that halts it.
-      directiveAuthor.executionTelemetry?.recordValidationGateFailure({
-        unitId: "ontology_seed",
-        failureMessage: validationDetailSummary(
-          ontologySeedValidation as unknown as Record<string, unknown>,
-        ),
-      });
-    }
-  }
+  ({ ontologySeed, ontologySeedValidation } = await repairInvalidOntologySeed({
+    candidateDispositionPath,
+    contractRegistry,
+    contractRegistryPath,
+    currentAuthoredArtifactReuseMatch,
+    directiveAuthor,
+    ontologySeed,
+    ontologySeedAuthorInput,
+    ontologySeedPath,
+    ontologySeedValidation,
+    ontologySeedValidationPath,
+    preparationRefs,
+    sessionRoot,
+  }));
   assertRuntimeValidationValid({
     artifactName: "ontology-seed",
     artifactRef: ontologySeedValidationPath,
