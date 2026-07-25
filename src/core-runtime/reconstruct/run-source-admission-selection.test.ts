@@ -10,15 +10,15 @@ import type {
   ReconstructTargetMaterialProfileArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
+import { assertSemanticAuthoringHasObservedEvidence } from "./run.js";
 import {
   applyAdmissionSelectionFloorPolicy,
-  assertSemanticAuthoringHasObservedEvidence,
   capAdmissionSelectionAcceptedRefs,
   runSourceAdmissionSelectionStage,
   SOURCE_ADMISSION_DEEP_FILE_LIMIT,
   SOURCE_ADMISSION_SELECTION_FLOOR,
   validateSourceFrontier,
-} from "./run.js";
+} from "./source-admission-selection-stage.js";
 import {
   capProjectedRegionsPerFile,
   deferredSourceRefs,

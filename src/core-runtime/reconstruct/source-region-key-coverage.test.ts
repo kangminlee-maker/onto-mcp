@@ -32,6 +32,7 @@ import { describe, expect, it } from "vitest";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RUN_TS = path.join(HERE, "run.ts");
+const ADMISSION_TS = path.join(HERE, "source-admission-selection-stage.ts");
 const DELTA_TS = path.join(HERE, "source-observation-delta-validation.ts");
 const MATURATION_TS = path.join(HERE, "maturation-validation.ts");
 
@@ -84,8 +85,8 @@ function callsRegionKeyDerivation(node: ts.Node): boolean {
 // Bucket A coverage/dedup sites (design §5) — each MUST route its key through
 // regionKey/regionCoverageKeys.
 const BUCKET_A_SITES: ReadonlyArray<{ file: string; fn: string; label: string }> = [
-  { file: RUN_TS, fn: "validateSourceFrontier", label: "A1" },
-  { file: RUN_TS, fn: "observeAcceptedFrontierRefs", label: "A2" },
+  { file: ADMISSION_TS, fn: "validateSourceFrontier", label: "A1" },
+  { file: ADMISSION_TS, fn: "observeAcceptedFrontierRefs", label: "A2" },
   { file: RUN_TS, fn: "observeAcceptedMaturationClosureSourceRequests", label: "A3" },
   { file: DELTA_TS, fn: "observationsBySourceRef", label: "A4" },
   { file: DELTA_TS, fn: "buildSourceObservationDeltaArtifact", label: "A5" },
