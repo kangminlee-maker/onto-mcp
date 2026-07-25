@@ -185,14 +185,16 @@ Stage 1/2 규율: 순수 모듈 byte-identical → 배선 → opt-in flip·autho
   → **실측 완료 (2026-07-25, 하니스 `scripts/breadth-fold-selection-quality-bench.mts`)**. 공통 기반 문제(rung은 오버플로우에서만 도달하므로 "큰 코퍼스를 full vs one_line"은 **존재할 수 없는 비교**)를 투영의 **per-row 순수성**으로 해소: 큰 코퍼스에서 포착한 coarse 행을 부분집합 id로 필터하면 그 부분집합이 그 rung에서 냈을 카탈로그와 byte-동일. **가정하지 않고 검사한다** — 같은 rung을 서로 다른 복제배수로 2회 포착해 S의 행이 byte-동일함을 확인(×2/×3, ×5/×8 PASS). 제품 표면 추가 0(실 author에 `llmCall` 래퍼로 카탈로그 슬롯만 교체 — 나머지 전 바이트·응답 파싱·id 검증은 프로덕션 코드).
   선택은 확률적이라 단일 표본은 arm 효과와 실행간 분산을 구별 못 한다 → **참조 rung을 2회 dispatch해 노이즈 바닥을 세운다**. 실 seat(`openai/gpt-5.6-sol`), 실 48파일 S:
 
-  | arm | dispatch | input tok | 선택 | Jaccard vs full |
-  |---|---|---|---|---|
-  | `full` | 1,028,392 B | 257,428 | 15 | 1.000 (참조) |
-  | `full` 반복 = **노이즈 바닥** | 1,028,392 B | 257,428 | 14 | **0.813** |
-  | `inventory_skeleton` | 285,358 B | 71,670 | 16 | 0.824 |
-  | `one_line` | 54,770 B | 14,023 | 16 | 0.824 |
+  | arm | dispatch | input tok | 선택 | Jaccard vs full | recall | precision | top-5 일치 |
+  |---|---|---|---|---|---|---|---|
+  | `full` | 1,028,392 B | 257,428 | 15 | 1.000 (참조) | — | — | — |
+  | `full` 반복 = **노이즈 바닥** | 1,028,392 B | 257,428 | 14 | **0.813** | .867 | .929 | 5/5 |
+  | `inventory_skeleton` | 285,358 B | 71,670 | 16 | 0.824 | .933 | .875 | 5/5 |
+  | `one_line` | 54,770 B | 14,023 | 16 | 0.824 | .933 | .875 | **4/5** |
 
-  **두 coarse arm 모두 동일-rung 노이즈 바닥과 같거나 그 위** — 이 워크로드에서 coarse rung의 선택품질 열화는 **분산보다 작아 검출되지 않는다**. 부수 발견: `one_line`은 카탈로그를 45× 줄이면서 **input 토큰 18× 절감**(257k→14k) — fold는 오버플로우 구조뿐 아니라 비용 축에서도 값이 있다. **한계(정직)**: arm당 N=1(참조만 2), 단일 코퍼스·단일 intent·단일 seat, `full`을 정답으로 간주. 작은 효과는 해상 불가 — 주장은 "열화 없음"이 아니라 "큰 노이즈 바닥 대비 큰 효과 아님". 증거 `.onto/temp/breadth-fold-selection-quality/selection-quality.json`.
+  **판정 = 두 coarse arm 모두 동일-rung 노이즈 바닥과 구별 불가** — 이 워크로드에서 coarse rung의 선택품질 열화는 **분산보다 작아 검출되지 않는다**. ("바닥과 같거나 그 위"는 방어 불가라 철회: coarse는 바닥보다 recall이 높고 **precision은 낮으며**(더 많이 고른다: 16 vs 14) jaccard는 그 둘을 합산해 사실상 동률 — 축마다 부호가 다르다.)
+  `one_line`의 **top-5 4/5는 coarse arm이 바닥 아래로 떨어지는 유일한 컬럼**이라 표에 남긴다. 다만 무엇을 재는 컬럼인지가 중요하다: `selected_observations`는 프롬프트 계약상 **집합**이고(run.ts:11704), 런타임은 중복 제거된 id 리스트로 정규화하며(`selectedObservationIds` run.ts:11298) **순서를 rank로 읽는 소비자가 없다**(선택 집합 top-N 절단 코드 없음) → 이 컬럼은 계약이 정의하지 않는 **방출 순서**를 잰다. 결정적으로 **두 coarse arm은 완전히 같은 16개를 골랐다**(집합 동일·순서만 다름) — 같은 집합이 순서 때문에 5/5와 4/5로 갈리므로 이 컬럼의 차이는 구성상 선택품질 차이일 수 없다. 실제 차이도 탈락이 아니라 재배열이다: `one_line`은 참조 12위를 2위로 올리고 참조 5위를 7위로 내렸을 뿐 **그 항목은 여전히 선택 집합 안에 있다**. 그래서 결론을 뒤집지 않되, 한 칸 차이를 무해함의 증거로도 쓰지 않는다.
+  부수 발견: `one_line`은 카탈로그를 45× 줄이면서 **input 토큰 18× 절감**(257k→14k) — fold는 오버플로우 구조뿐 아니라 비용 축에서도 값이 있다. **한계(정직)**: arm당 N=1(참조만 2), 단일 코퍼스·단일 intent·단일 seat, `full`을 정답으로 간주. 바닥도 1회 표본이라 분산의 폭 자체를 모른다. 작은 효과는 해상 불가 — 주장은 "열화 없음"이 아니라 "큰 노이즈 바닥 대비 큰 효과 아님". 증거 `development-records/benchmark/breadth-fold-selection-quality/`(JSON + 실행 로그; input token은 런타임 `[model-call]` 줄에만 있어 로그를 함께 커밋).
 - **예산 상수 실측 pinning**: §3.4·DW-2c. packet의 1,349,907은 char/byte 실측치·codex 내부 한도는 probe 확정.
 - **competency 가드 char latent 갭(별개)**: 기존 `promptPayloadCharCount` char 기반이라 다바이트 competency 프롬프트도 이론상 under-count. 이 설계 범위 밖(directive/admission 가드만 byte)·후속 정정 후보로 기록.
 - ~~**admission-outline fold 유보**: MVP는 admission dispatch에 **가드만**(fold는 directive 우선·outline 이미 얇음 600자/파일). admission이 실 대형 코퍼스서 초과하면 같은 모듈 확장(§5 한 헬퍼).~~ → **정정 (2026-07-25, 실측이 전제 반증)**: "outline 이미 얇음"이 틀렸다. 실 Stage-2 인벤토리 실측 = **unit당 ~1.36 KB**(source_ref 123 B + scalar 56 B + `outline_excerpt` 462 B + `structure_skeleton_digest` ~720 B — 600자 예산은 digest **하나**의 상한이지 unit 전체가 아님). directive는 observation당 ~0.49 KB → **admission이 ~750파일에서 먼저 터지고 directive는 ~2,000까지 버틴다**. 유보 해제하고 같은 모듈·같은 키로 확장(§12 PR-4a).

@@ -223,7 +223,9 @@ if (!(armBytes[0]!.bytes > armBytes[1]!.bytes && armBytes[1]!.bytes > armBytes[2
 }
 ok(`detail strictly decreases across arms — a non-vacuous contrast`);
 
-const evidenceDir = path.join(REPO_ROOT, ".onto/temp/breadth-fold-selection-quality");
+// Durable, NOT `.onto/temp/` (gitignored:14) — the design cites these numbers, so a clean clone has to be
+// able to reconstruct them. Same convention as `benchmark/stage2-admission-live/`.
+const evidenceDir = path.join(REPO_ROOT, "development-records/benchmark/breadth-fold-selection-quality");
 await fs.mkdir(evidenceDir, { recursive: true });
 
 if (!live) {
