@@ -8,7 +8,7 @@
 
 ```
 브랜치  refactor/run-ts-extraction   base origin/main b76904c (drift 없음)
-HEAD    3057e8b                      미푸시 27커밋
+HEAD    7be7f3c                      푸시 완료 · PR #264 (28커밋)
 run.ts  4,966줄   runReconstruct 3,769줄
 블록 검사기 기준본 = 5aecae2 (분해 직전). 검사기는 **기준본**을 git에서 읽으므로
   현 워킹트리 변경과 무관하게 유효하다.
@@ -37,6 +37,10 @@ run.ts  4,966줄   runReconstruct 3,769줄
 | 순환 | 파일-레벨 import SCC | HEAD 4개 → 현재 4개 (**신규 0**) |
 
 `check:invariant-change`(G4)는 커밋 후 rc=0 · `protected_changes: 2`.
+
+**CI(`invariant-guards`, run 30169074234) = success · PR #264 mergeState CLEAN.** 로컬에서
+rc=1이던 G7·drift 2건이 청정 체크아웃에서는 통과한다 — 원인이 gitignored 세션 잔해라는
+판정을 CI가 독립 확증했다(이전 배치와 같은 패턴). 게이트 우회 머지는 여전히 금지다.
 
 **선언 총계 보존 실측**: HEAD(STAYED 15 + MOVED 376 + MODIFIED 1 = 392) →
 현재(14 + 377 + 1 = 392). MOVED 목록 diff 결과 델타는 `annotateDispatchFallbackCensus`
@@ -148,8 +152,8 @@ owner가 고른 범위 밖이다. 하려면 설계 §4 옵션 3으로 되돌아�
 
 ## 7. 다음 세션이 물려받을 것
 
-1. **push / PR** — owner가 "작업 끝난 뒤 한 번에 PR"을 선택했다. 미푸시 **27커밋**.
-   Tier 1이 끝났으므로 **지금이 그 시점**이다 → owner 승인 필요.
+1. **PR #264 리뷰·머지** — owner 승인으로 푸시·PR 완료(28커밋).
+   머지는 owner 소관이다.
 2. Tier 2 이상은 별도 승인 사안(§6).
 3. `annotateDispatchFallbackCensus`의 최종 거처 확인(§2.2).
 
