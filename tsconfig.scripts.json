@@ -45,7 +45,8 @@
     "scripts/breadth-fold-selection-quality-bench.mts",
     "scripts/stage2-value-bench-run.mts",
     "scripts/generate-linguist-tables.ts",
-    "scripts/check-linguist-drift.ts"
+    "scripts/check-linguist-drift.ts",
+    "scripts/run-split-plan.mts"
   ],
   "exclude": []
 }
