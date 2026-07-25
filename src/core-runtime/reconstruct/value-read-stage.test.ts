@@ -254,16 +254,21 @@ function noCapabilityAuthor(): ReconstructDirectiveAuthor {
   return { authorId: "no-cap", owner: "host_llm" } as unknown as ReconstructDirectiveAuthor;
 }
 
-function safetyFor(observations: ReconstructSourceObservationsArtifact) {
+function safetyFor(
+  observations: ReconstructSourceObservationsArtifact,
+  admittedSourceRefs?: ReadonlySet<string>,
+) {
   const sourceSafetyLedger = buildSourceSafetyLedgerFromSourceObservations({
     sourceObservations: observations,
     sourceObservationsRef: "source-observations.yaml",
+    admittedSourceRefs,
   });
   const sourceSafetyLedgerValidation = validateSourceSafetyLedger({
     sourceSafetyLedger,
     sourceSafetyLedgerRef: "source-safety-ledger.yaml",
     sourceObservations: observations,
     sourceObservationsRef: "source-observations.yaml",
+    admittedSourceRefs,
   });
   return { sourceSafetyLedger, sourceSafetyLedgerValidation };
 }
@@ -272,6 +277,7 @@ async function runStage(
   author: ReconstructDirectiveAuthor,
   observations: ReconstructSourceObservationsArtifact,
   baseline: ReconstructMaturationBaselineArtifact,
+  admittedSourceRefs?: ReadonlySet<string>,
 ) {
   const sessionRoot = await mkdtemp(path.join(tmpdir(), "value-read-stage-out-"));
   tmpRoots.push(sessionRoot);
@@ -281,7 +287,7 @@ async function runStage(
     maturationBaselineRef: "maturation-baseline.yaml",
     maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
   });
-  const safety = safetyFor(observations);
+  const safety = safetyFor(observations, admittedSourceRefs);
   const result = await runMaturationValueReadStage({
     sessionId: SESSION,
     baselineMatrix,
@@ -357,6 +363,40 @@ describe("runMaturationValueReadStage (value-read cut §15 — real raw-cell-rea
   it("F4: a non-runtime-target source produces no candidate → no-op", async () => {
     const { observations } = await realRuntimeTargetSpreadsheet();
     (observations.observations[0] as unknown as Record<string, unknown>).is_runtime_target_source = false;
+    const { result } = await runStage(
+      directCallValueReadAuthor("satisfied"),
+      observations,
+      baselineWithLimitedRow(),
+    );
+    expect(result.dischargePath).toBeNull();
+  });
+
+  // D-B (Stage 2 parity, design 20260723 §9): a source that admission DEFERRED and a later frontier
+  // round RECOVERED is forced to keep is_runtime_target_source:false, but its material_claim safety
+  // row carries authorization_scope_ref:"runtime_target_ref_read_scope" (proof 2). This reproduces
+  // before the fix: with only the flag checked, this admitted-proof source was wrongly no-op'd.
+  it("D-B: a deferred-then-admitted source (proof 2, flag false) is still eligible for value-read", async () => {
+    const { observations, sourceRef } = await realRuntimeTargetSpreadsheet();
+    (observations.observations[0] as unknown as Record<string, unknown>).is_runtime_target_source = false;
+    const { result } = await runStage(
+      directCallValueReadAuthor("satisfied"),
+      observations,
+      baselineWithLimitedRow(),
+      new Set([path.resolve(sourceRef)]),
+    );
+    expect(result.dischargePath).not.toBeNull();
+  });
+
+  // D-B negative control: an explicitly-authorized (not runtime-target-provenance) non-target source
+  // must stay rejected — its authorization_scope_ref is "source_safety_explicit_consumption_authorization",
+  // not "runtime_target_ref_read_scope", so proof 2 must not (and does not) match it.
+  it("D-B negative control: explicit-authorization on a non-flag source stays rejected (no widening)", async () => {
+    const { observations } = await realRuntimeTargetSpreadsheet();
+    const obs = observations.observations[0] as unknown as Record<string, unknown>;
+    obs.is_runtime_target_source = false;
+    (obs.structural_data as Record<string, unknown>).source_safety_consumption_authorizations = [
+      "material_claim",
+    ];
     const { result } = await runStage(
       directCallValueReadAuthor("satisfied"),
       observations,

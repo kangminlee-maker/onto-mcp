@@ -2579,8 +2579,18 @@ export function validateMaturationValueDischarge(args: {
       }
     }
     // Governance (F4/F5): the value evidence must come from an ALREADY-OBSERVED, runtime-target
-    // (basis A) source whose material_claim safety row is consumption_allowed. A non-target
-    // source is rejected outright — reading it would leak its raw values into the prompt.
+    // source whose material_claim safety row is consumption_allowed. A non-target source is
+    // rejected outright — reading it would leak its raw values into the prompt. Runtime-target
+    // provenance has TWO admissible proofs, mirroring source-safety-validation.ts basis A (Stage 2
+    // parity, design 20260723 §9): (1) the observation's own is_runtime_target_source flag, or (2)
+    // its material_claim safety row was authorized via runtime-target provenance
+    // (authorization_scope_ref === "runtime_target_ref_read_scope" — NOT the explicit-authorization
+    // scope, which stays rejected here). Proof (2) covers a user runtime-target file that admission
+    // DEFERRED and a later frontier round RECOVERED: that path is forced to stamp
+    // is_runtime_target_source:false, so the flag alone under-reports it. Known residual: a source
+    // that is BOTH admitted-proof AND explicitly-authorized records the explicit-authorization scope
+    // (source-safety-validation.ts's ternary prefers it), so proof (2) misses it there too — no worse
+    // than before this fix, since that case was never picked up by the flag either.
     const observationId = entry.value_evidence_ref.observation_id;
     const observation = sourceObservationsById.get(observationId);
     if (!observation) {
@@ -2592,7 +2602,14 @@ export function validateMaturationValueDischarge(args: {
       }));
       continue;
     }
-    if (observation.is_runtime_target_source !== true) {
+    const materialClaimRowId = sourceSafetyRowIdForObservation(
+      observation,
+      "material_claim",
+    );
+    const materialClaimRow = safetyRowsById.get(materialClaimRowId);
+    const runtimeTargetProven = observation.is_runtime_target_source === true ||
+      materialClaimRow?.authorization_scope_ref === "runtime_target_ref_read_scope";
+    if (!runtimeTargetProven) {
       violations.push(violation({
         code: "conflicting_state",
         message:
@@ -2610,11 +2627,6 @@ export function validateMaturationValueDischarge(args: {
       }));
     }
     if (args.sourceSafetyLedger) {
-      const materialClaimRowId = sourceSafetyRowIdForObservation(
-        observation,
-        "material_claim",
-      );
-      const materialClaimRow = safetyRowsById.get(materialClaimRowId);
       if (
         !materialClaimRow ||
         materialClaimRow.proof_sufficiency_state !== "sufficient_for_claim" ||

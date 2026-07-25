@@ -5304,9 +5304,17 @@ function enumerateAllowedValueReadLocations(
  * (design §13.7): the discharge artifact is plain-written each run with no reuse provenance — like
  * final_output, so no llm_touch_fingerprint is needed (stale reuse is impossible).
  *
- * F4 read-set gate: only `is_runtime_target_source === true` observations whose material_claim
- * safety row is consumption_allowed are eligible — a non-target source's values never reach the
- * value-read prompt. The discharge governance validator re-enforces this independently.
+ * F4 read-set gate: eligible observations must have PROVEN runtime-target provenance AND a
+ * consumption_allowed material_claim safety row. Provenance has two admissible proofs, mirroring
+ * source-safety-validation.ts basis A (Stage 2 parity, design 20260723 §9): (1) the observation's
+ * own `is_runtime_target_source` flag, or (2) its material_claim row's `authorization_scope_ref` is
+ * `"runtime_target_ref_read_scope"` — covering a source that admission DEFERRED and a later
+ * frontier round RECOVERED, which is forced to keep the flag false. A non-target source's values
+ * never reach the value-read prompt. The discharge governance validator re-enforces this
+ * independently. Known residual: a source that is BOTH admitted-proof AND explicitly-authorized
+ * records the explicit-authorization scope instead (source-safety-validation.ts's ternary prefers
+ * it), so proof (2) misses it there too — no worse than before this fix, since the flag alone never
+ * picked that case up either.
  */
 export async function runMaturationValueReadStage(args: {
   sessionId: string;
@@ -5341,7 +5349,6 @@ export async function runMaturationValueReadStage(args: {
   );
   const eligibleObservations = args.sourceObservations.observations.filter(
     (observation) => {
-      if (observation.is_runtime_target_source !== true) return false;
       const inventory = (observation.structural_data as Record<string, unknown> | undefined)
         ?.workbook_inventory;
       if (!inventory) return false; // value-read targets spreadsheet sources
@@ -5350,6 +5357,9 @@ export async function runMaturationValueReadStage(args: {
         "material_claim",
       );
       const materialClaimRow = safetyRowsById.get(materialClaimRowId);
+      const runtimeTargetProven = observation.is_runtime_target_source === true ||
+        materialClaimRow?.authorization_scope_ref === "runtime_target_ref_read_scope";
+      if (!runtimeTargetProven) return false;
       return Boolean(
         materialClaimRow &&
           materialClaimRow.proof_sufficiency_state === "sufficient_for_claim" &&
@@ -5721,29 +5731,49 @@ function requireFirstObservation(
 
 /**
  * Classifies whether a zero-observation run is a graceful blocked terminal (design §16.2) rather
- * than a crash. Eligible only when there are no observations AND every planned runtime-target
- * inventory unit was skipped (unsupported format / vanished ref) — no unit remains "planned" yet
- * unobserved. A supported target that simply yields no rows keeps ≥1 planned unit and stays
- * ineligible, so the zero-observation evidence gate still crashes on genuinely empty evidence
- * (N-elig control). Every source-inventory unit is a runtime-target source (the inventory is the
- * initial target inventory), so `.every` over all units is the runtime-target scope. Domain-agnostic
- * (scan_status enum only — no skip_reason string matching).
+ * than a crash. Eligible only when there are no observations AND no inventory unit remains that the
+ * run *intended* to observe but did not — §16.2's "planned인데 미관측 unit 0". Without admission that
+ * is exactly "every unit was skipped" (unsupported format / vanished ref).
+ *
+ * `source_admission_selection` adds a state §16.2 predates: a unit stays `admitted` (promotion never
+ * rewrites scan_status) but was deliberately NOT attempted this run — deferred with its outline
+ * retained. A deferred unit was never intended for observation, so it must not pin an all-vanished
+ * run into the crash branch. Pass `attemptedSourceRefs` — the resolved refs the admission stage
+ * actually tried to deep-observe (accepted ∩ file-limit cap) — and only those admitted units count
+ * against eligibility. Omit it and the predicate is identical to the pre-admission rule.
+ *
+ * A supported target that simply yields no rows keeps ≥1 planned unit and stays ineligible, so the
+ * zero-observation evidence gate still crashes on genuinely empty evidence (N-elig control). An
+ * *attempted* unit that produced neither an observation nor a `skipped` demotion is a producer
+ * desync and likewise stays a crash. Domain-agnostic (scan_status enum only — no skip_reason string
+ * matching).
  */
 export function isZeroObservationGracefulTerminalEligible(args: {
   sourceObservations: Pick<ReconstructSourceObservationsArtifact, "observations">;
   sourceInventory: Pick<ReconstructSourceInventoryArtifact, "inventory_units">;
+  attemptedSourceRefs?: ReadonlySet<string>;
 }): boolean {
   if (args.sourceObservations.observations.length > 0) return false;
   const units = args.sourceInventory.inventory_units;
-  return units.length > 0 && units.every((unit) => unit.scan_status === "skipped");
+  const attempted = args.attemptedSourceRefs;
+  return units.length > 0 && units.every((unit) =>
+    unit.scan_status === "skipped" ||
+    (attempted !== undefined && unit.scan_status === "admitted" &&
+      !attempted.has(path.resolve(unit.ref)))
+  );
 }
 
 /**
  * The zero-observation diagnostic (shared by the crash path and the graceful blocked terminal so
  * both carry the same honest "why": target kind, support status, unsupported reason, and the merged
- * set of skipped refs). Refs that vanished between detection and re-observation are recorded in
- * source-observations.skipped_refs (not the inventory, built before re-observation), so merge both —
- * otherwise a single-ref TOCTOU run reports a misleading skipped_refs=none.
+ * set of skipped refs). A ref that vanishes between detection and re-observation lands on BOTH
+ * surfaces — observeInventoryUnitDeep demotes its inventory unit to `skipped` *and* returns a
+ * skipped_refs row — so the merge mostly dedups; it still matters for refs discovered mid-run that
+ * never became inventory units, which reach skipped_refs alone.
+ *
+ * `deferred_admitted_refs` counts inventory units still `admitted` at the terminal: material the run
+ * held back rather than failed to read. Emitted only when non-zero, so runs without admission
+ * selection keep the pre-existing message byte-for-byte.
  */
 function buildZeroObservationDiagnostic(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
@@ -5760,12 +5790,16 @@ function buildZeroObservationDiagnostic(args: {
     `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
   );
   const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
+  const deferredAdmitted = args.sourceInventory.inventory_units.filter(
+    (unit) => unit.scan_status === "admitted",
+  ).length;
   return [
     "reconstruct semantic authoring requires at least one runtime source observation",
     `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
     `support_status=${args.targetMaterialProfile.support_status}`,
     `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
     `skipped_refs=${skipped.join(", ") || "none"}`,
+    ...(deferredAdmitted > 0 ? [`deferred_admitted_refs=${deferredAdmitted}`] : []),
   ].join("; ");
 }
 
@@ -16078,6 +16112,12 @@ export async function runSourceAdmissionSelectionStage(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   admissionSelection: ReconstructSourceFrontierArtifact;
   admissionSelectionValidation: ReconstructSourceFrontierValidationArtifact;
+  /**
+   * Resolved source refs this stage actually tried to deep-observe (accepted ∩ file-limit cap) —
+   * NOT every frontier ref. Everything admitted outside this set was deferred by design, which is
+   * what lets the zero-observation graceful-terminal gate tell "held back" apart from "unread".
+   */
+  attemptedSourceRefs: ReadonlySet<string>;
 } | null> {
   const admittedUnits = args.sourceInventory.inventory_units.filter(
     (unit) => unit.scan_status === "admitted",
@@ -16203,6 +16243,7 @@ export async function runSourceAdmissionSelectionStage(args: {
     sourceObservations: nextSourceObservations,
     admissionSelection: effectiveSelection,
     admissionSelectionValidation: effectiveValidation,
+    attemptedSourceRefs: new Set(frontierBySourceRef.keys()),
   };
 }
 
@@ -17566,9 +17607,17 @@ export async function runReconstruct(
   // skipped (unsupported/vanished) is a graceful BLOCKED terminal, not a crash. Populate the
   // assembly context the catch-side needs (the inside-`try` pieces it cannot see), then throw the
   // signal; the catch (§16.4) assembles an honest blocked terminal. A supported-but-empty target
-  // (a planned unit remains) stays ineligible and crashes below (evidence gate stays honest).
+  // (a planned unit remains) stays ineligible and crashes below (evidence gate stays honest). Under
+  // admission selection the attempted set is what "planned" means — units left `admitted` were
+  // deferred on purpose, so they do not hold an all-vanished run in the crash branch.
   if (
-    isZeroObservationGracefulTerminalEligible({ sourceObservations, sourceInventory })
+    isZeroObservationGracefulTerminalEligible({
+      sourceObservations,
+      sourceInventory,
+      ...(admissionSelectionResult
+        ? { attemptedSourceRefs: admissionSelectionResult.attemptedSourceRefs }
+        : {}),
+    })
   ) {
     gracefulTerminalContext = {
       reachedArtifactRefs: {

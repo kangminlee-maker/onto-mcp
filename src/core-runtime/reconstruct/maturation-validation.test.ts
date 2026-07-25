@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
 import type {
   ReconstructActionabilityMatrixValidationArtifact,
   ReconstructAnswerSupportLedgerArtifact,
@@ -366,16 +367,19 @@ function sourceObservations(refs = ["src/feature.ts"]): ReconstructSourceObserva
 
 function sourceSafetyAuthority(
   observations = sourceObservations(["src/feature.ts"]),
+  admittedSourceRefs?: ReadonlySet<string>,
 ) {
   const sourceSafetyLedger = buildSourceSafetyLedgerFromSourceObservations({
     sourceObservations: observations,
     sourceObservationsRef: "source-observations.yaml",
+    admittedSourceRefs,
   });
   const sourceSafetyLedgerValidation = validateSourceSafetyLedger({
     sourceSafetyLedger,
     sourceSafetyLedgerRef: "source-safety-ledger.yaml",
     sourceObservations: observations,
     sourceObservationsRef: "source-observations.yaml",
+    admittedSourceRefs,
   });
   return {
     sourceSafetyLedger,
@@ -5773,8 +5777,9 @@ describe("maturation value-read discharge governance (§13.5 F4/F5)", () => {
     base: ReturnType<typeof baselineWithLimitation>,
     dischargeArt: ReconstructMaturationValueDischargeArtifact,
     safetyOverride?: { validationStatus: "valid" | "invalid" },
+    admittedSourceRefs?: ReadonlySet<string>,
   ) {
-    const safety = sourceSafetyAuthority(observations);
+    const safety = sourceSafetyAuthority(observations, admittedSourceRefs);
     return validateMaturationValueDischarge({
       maturationValueDischarge: dischargeArt,
       maturationValueDischargeRef: "maturation-value-discharge.yaml",
@@ -5814,6 +5819,53 @@ describe("maturation value-read discharge governance (§13.5 F4/F5)", () => {
     const rowId = base.baseline_rows[0]!.baseline_row_id;
     const validation = validate(
       runtimeTargetObservations(false),
+      base,
+      dischargeArtifact({ baselineRowId: rowId, targetLimitationRefs: ["structure_inspected_only"] }),
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some(
+        (v) => v.code === "conflicting_state" && v.subject_id === RUNTIME_OBS_ID,
+      ),
+    ).toBe(true);
+  });
+
+  // D-B (Stage 2 parity, design 20260723 §9): a source that admission DEFERRED and a later frontier
+  // round RECOVERED is forced to keep is_runtime_target_source:false, but its material_claim safety
+  // row carries authorization_scope_ref:"runtime_target_ref_read_scope" (proof 2, the trusted
+  // inventory scan_status:"admitted" signal). This reproduces before the fix: checking only the flag
+  // rejected this admitted-proof source outright.
+  it("D-B: a deferred-then-admitted source (proof 2, flag false) discharges the same as flag-true", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const validation = validate(
+      runtimeTargetObservations(false),
+      base,
+      dischargeArtifact({ baselineRowId: rowId, targetLimitationRefs: ["structure_inspected_only"] }),
+      undefined,
+      new Set([path.resolve("src/feature.ts")]),
+    );
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.satisfied_discharge_count).toBe(1);
+  });
+
+  // D-B negative control: an explicitly-authorized (basis B) non-target source must stay rejected —
+  // its authorization_scope_ref is "source_safety_explicit_consumption_authorization", not
+  // "runtime_target_ref_read_scope", so proof 2 must not (and does not) match it. This proves the fix
+  // is additive to runtime-target provenance only, not a widening of the read-set gate.
+  it("D-B negative control: explicit-authorization (basis B) on a non-flag source stays rejected", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const nonTargetWithExplicitAuth = runtimeTargetObservations(false);
+    nonTargetWithExplicitAuth.observations = nonTargetWithExplicitAuth.observations.map((obs) => ({
+      ...obs,
+      structural_data: {
+        ...(obs.structural_data as Record<string, unknown>),
+        source_safety_consumption_authorizations: ["material_claim"],
+      },
+    }));
+    const validation = validate(
+      nonTargetWithExplicitAuth,
       base,
       dischargeArtifact({ baselineRowId: rowId, targetLimitationRefs: ["structure_inspected_only"] }),
     );
