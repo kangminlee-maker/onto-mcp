@@ -595,3 +595,209 @@ describe("PR-3 — opt-in source_breadth_fold flip (fold the over-budget catalog
     expect(onDirective.open_questions).toEqual(offDirective.open_questions);
   });
 });
+
+describe("PR-4 — the fold reaches the ADMISSION surface (the count-scaling surface that binds first)", () => {
+  // Measured over the real Stage-2 ON inventory, the admitted-outline catalog projects ~1.36 KB/unit
+  // (source_ref 123 B + scalars 56 B + outline_excerpt 462 B + structure_skeleton_digest ~720 B),
+  // versus the directive's ~0.49 KB/observation — so admission overflows at ~750 admitted files while
+  // the directive survives to ~2,000. Same opt-in key, same ladder, same breadth invariant.
+
+  const minimalProfile = {
+    schema_version: "1",
+    session_id: "session-1",
+    target_refs: [],
+    target_material_kind: "code",
+    target_material_kind_candidates: [],
+    support_status: "supported",
+    unsupported_reason: null,
+    detection: { owner: "runtime", confidence: "high", confidence_basis: "fixture", per_ref: [] },
+    selected_source_profiles: [],
+  };
+
+  const inventoryOfCount = (unitCount: number, excerptChars = 500) => {
+    const excerpt = "x".repeat(excerptChars);
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-07-24T00:00:00.000Z",
+      inventory_units: Array.from({ length: unitCount }, (_, i) => ({
+        ref: `/src/module${i}/file.ts`,
+        target_material_kind: "code" as const,
+        scan_status: "admitted" as const,
+        outline: {
+          content_sha256: "c0de",
+          char_count: excerptChars,
+          line_count: 20,
+          size_bytes: excerptChars,
+          outline_excerpt: excerpt,
+          outline_excerpt_truncated: false,
+        },
+      })),
+      skipped_refs: [],
+    };
+  };
+
+  const admissionInput = (sourceInventory: unknown) => ({
+    sessionId: "session-1",
+    intent: "reconstruct the api surface",
+    targetMaterialProfile: minimalProfile as never,
+    sourceInventory: sourceInventory as never,
+    admissionFileLimit: 16,
+    admissionFloor: 1,
+  });
+
+  // Mock provider captures the dispatched payload and selects the FIRST offered ref — so the real
+  // parse/validate path runs over a folded row (folded rows must carry genuine, resolvable refs).
+  const capturingAdmissionAuthor = (sourceBreadthFold: boolean) => {
+    const dispatched: { systemPrompt: string; userPrompt: string }[] = [];
+    const author = createDirectCallReconstructDirectiveAuthor({
+      ...(sourceBreadthFold ? { sourceBreadthFold: true } : {}),
+      llmCall: (systemPrompt, userPrompt) => {
+        dispatched.push({ systemPrompt, userPrompt });
+        const payload = JSON.parse(userPrompt) as { admitted_outlines: { source_ref: string }[] };
+        const firstRef = payload.admitted_outlines[0]?.source_ref ?? "/src/module0/file.ts";
+        return Promise.resolve({
+          text: JSON.stringify({
+            frontier_refs: [{ source_ref: firstRef, rationale: "picked", priority: "high" }],
+            no_next_frontier_rationale: null,
+          }),
+        });
+      },
+    });
+    return { author, dispatched };
+  };
+
+  it("ON: an over-budget outline catalog folds to a fitting rung and dispatches — every admitted unit stays offered", async () => {
+    const inventory = inventoryOfCount(2500);
+    const beforeSnapshot = JSON.stringify(inventory); // projection-only: the inventory must not mutate
+    const { author, dispatched } = capturingAdmissionAuthor(true);
+    const selection = await author.writeSourceAdmissionSelection(admissionInput(inventory));
+
+    expect(dispatched.length).toBe(1); // the PR-2 fail-loud became a bounded success
+    const { systemPrompt, userPrompt } = dispatched[0]!;
+    expect(
+      Buffer.byteLength(systemPrompt, "utf8") + Buffer.byteLength(userPrompt, "utf8"),
+    ).toBeLessThanOrEqual(SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET);
+
+    const payload = JSON.parse(userPrompt) as {
+      admitted_outlines: { source_ref: string; kind: string; line_count: number }[];
+    };
+    // Breadth invariant: all 2500 admitted units still offered — only per-unit DETAIL was demoted.
+    expect(payload.admitted_outlines.length).toBe(2500);
+    expect(new Set(payload.admitted_outlines.map((row) => row.source_ref)).size).toBe(2500);
+    // The anchor survives every rung (WHERE / WHAT kind / HOW big), so the LM can still choose.
+    expect(payload.admitted_outlines[0]!.kind).toBe("code");
+    expect(payload.admitted_outlines[0]!.line_count).toBe(20);
+    // The picked ref parsed through the real frontier-ref path.
+    expect(selection.frontier_refs.length).toBe(1);
+    expect(selection.frontier_refs[0]!.source_ref).toBe(payload.admitted_outlines[0]!.source_ref);
+    // R2 disclosure: the demoted rung landed on the run-scoped sink runReconstruct records durably.
+    const disclosures = author.sourceBreadthFoldDisclosures ?? [];
+    expect(disclosures.length).toBe(1);
+    expect(disclosures[0]!.fold_level).not.toBe("full");
+    expect(disclosures[0]!.catalog_observation_count).toBe(2500);
+    expect(disclosures[0]!.over_budget).toBe(false);
+    expect(JSON.stringify(inventory)).toBe(beforeSnapshot);
+  });
+
+  it("OFF (contrast): the same over-budget catalog still fails loud pre-dispatch — the fold is gated by the opt-in", async () => {
+    const { author, dispatched } = capturingAdmissionAuthor(false);
+    await expect(
+      author.writeSourceAdmissionSelection(admissionInput(inventoryOfCount(2500))),
+    ).rejects.toThrow(/SourceAdmissionSelection compact prompt exceeds deterministic prompt budget/);
+    expect(dispatched.length).toBe(0);
+    expect(author.sourceBreadthFoldDisclosures ?? []).toEqual([]); // nothing to disclose: nothing folded
+  });
+
+  it("ON but even one_line overflows (extreme scale) → the always-on guard still fails loud (backstop)", async () => {
+    // source_ref is an always-kept anchor, so very long paths survive to the coarsest rung: no rung
+    // fits, the fold flags over_budget, and the guard turns that into an honest pre-dispatch failure.
+    const longPathInventory = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-07-24T00:00:00.000Z",
+      inventory_units: Array.from({ length: 3000 }, (_, i) => ({
+        ref: `/src/${"deeply/nested/".repeat(30)}module${i}/file.ts`,
+        target_material_kind: "code" as const,
+        scan_status: "admitted" as const,
+        outline: {
+          content_sha256: "c0de",
+          char_count: 10,
+          line_count: 2,
+          size_bytes: 10,
+          outline_excerpt: "y",
+          outline_excerpt_truncated: false,
+        },
+      })),
+      skipped_refs: [],
+    };
+    const { author, dispatched } = capturingAdmissionAuthor(true);
+    await expect(
+      author.writeSourceAdmissionSelection(admissionInput(longPathInventory)),
+    ).rejects.toThrow(/SourceAdmissionSelection compact prompt exceeds deterministic prompt budget/);
+    expect(dispatched.length).toBe(0);
+  });
+
+  it("ON with a fitting catalog is byte-identical to OFF — the fold returns `full`, records no disclosure", async () => {
+    // Includes a code_structure_inventory unit so the `full` rung's skeleton-digest budget (scale 1)
+    // is exercised: the folded path must reproduce today's 600-char projection byte-for-byte.
+    const spans: CodeSymbolSpan[] = [
+      {
+        line_start: 1,
+        line_end: 4,
+        kind: "function_decl",
+        symbol_names: ["handleRequest"],
+        depth: 1,
+        doc_first_line: "Handle an inbound request.",
+        signature_line: "export function handleRequest(input: Input): Output {",
+      },
+    ];
+    const fitting = () => ({
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-07-24T00:00:00.000Z",
+      inventory_units: [
+        {
+          ref: "/src/a.ts",
+          target_material_kind: "code" as const,
+          scan_status: "admitted" as const,
+          outline: {
+            content_sha256: "c0de",
+            char_count: 40,
+            line_count: 4,
+            size_bytes: 40,
+            outline_excerpt: "export function handleRequest() {}",
+            outline_excerpt_truncated: false,
+            code_structure_inventory: {
+              schema_version: "1" as const,
+              language: "typescript" as const,
+              line_count: 4,
+              content_sha256: "c0de",
+              extractor_logic_sha256: "10g1c",
+              symbol_tiles: {
+                spans,
+                hierarchy: [
+                  { key: "1-4", kind: "function_decl", symbol_name: "handleRequest", child_keys: [] },
+                ],
+                root_key: "1-4",
+              },
+            },
+          },
+        },
+      ],
+      skipped_refs: [],
+    });
+    const off = capturingAdmissionAuthor(false);
+    const on = capturingAdmissionAuthor(true);
+    await off.author.writeSourceAdmissionSelection(admissionInput(fitting()));
+    await on.author.writeSourceAdmissionSelection(admissionInput(fitting()));
+    expect(on.dispatched[0]!.userPrompt).toBe(off.dispatched[0]!.userPrompt);
+    expect(on.author.sourceBreadthFoldDisclosures ?? []).toEqual([]);
+    // And the `full` rung really did carry the detail fields (so the parity above is not vacuous).
+    const row = (JSON.parse(on.dispatched[0]!.userPrompt) as {
+      admitted_outlines: Record<string, unknown>[];
+    }).admitted_outlines[0]!;
+    expect(row.outline_excerpt).toBe("export function handleRequest() {}");
+    expect(row.structure_skeleton_digest).not.toBeNull();
+  });
+});

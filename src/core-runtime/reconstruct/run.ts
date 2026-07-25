@@ -307,6 +307,7 @@ import {
   type ReconstructSourceObservation,
 } from "./source-observations.js";
 import {
+  type BreadthFoldDisclosure,
   type BreadthFoldLevel,
   foldObservationsToBudget,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
@@ -472,11 +473,12 @@ export interface ReconstructDirectiveAuthor {
    */
   readonly documentExcerptProjectionBudget?: number;
   /**
-   * Projection-layer breadth-fold opt-in (design 20260723 §8 PR-3), folded into the resume reuse key
-   * like documentExcerptProjectionBudget: when ON and the candidate catalog overflows, the directive
-   * authors a COARSER-detail selection prompt, so resuming under a different flag value must regenerate
-   * rather than silently reuse a directive authored at the other detail rung. Absent/false = today's
-   * flat projection. The flag reaches the reuse key only through this field.
+   * Projection-layer breadth-fold opt-in (design 20260723 §8 PR-3/PR-4), folded into the resume reuse
+   * key like documentExcerptProjectionBudget: when ON and a selection catalog overflows, that prompt is
+   * authored at a COARSER detail rung, so resuming under a different flag value must regenerate rather
+   * than silently reuse an artifact authored at the other rung. One flag drives BOTH count-scaling
+   * surfaces (source-observation-directive, admission-selection). Absent/false = today's flat
+   * projection. The flag reaches the reuse key only through this field.
    */
   readonly sourceBreadthFold?: boolean;
   /**
@@ -486,6 +488,14 @@ export interface ReconstructDirectiveAuthor {
    * runReconstruct clears it per run (like executionTelemetry).
    */
   readonly documentExcerptProjectionTruncations?: DocumentExcerptProjectionTruncation[];
+  /**
+   * Run-scoped sink (mirroring documentExcerptProjectionTruncations) of breadth-fold demotions on the
+   * ADMISSION-selection surface. The directive surface discloses its fold in-artifact on
+   * `open_questions`; the admission-selection artifact (a source-frontier) has no free-text channel,
+   * so its disclosure lands here and runReconstruct records it durably as a runtime status event —
+   * a demoted rung is never silent (R2). Empty unless the fold actually demoted a rung.
+   */
+  readonly sourceBreadthFoldDisclosures?: BreadthFoldDisclosure[];
   /**
    * Canonical authoring-model identity ("<provider>/<model_id>") folded into the
    * resume reuse key (DET-1/CG-2). Resuming under a DIFFERENT authoring model must
@@ -10507,6 +10517,13 @@ const DEFERRED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 // shared defaults down by this multiplier instead of hand-building a bespoke tight caps object.
 const ADMISSION_OUTLINE_CODE_SKELETON_CHAR_BUDGET = 600;
 const ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER = 0.04;
+// Breadth-fold rung-2 tightening for the admission catalog (design 20260723 §7, admission surface).
+// One factor scales BOTH per-unit skeleton budgets above, so the `inventory_skeleton` rung stays a
+// demotion OF the existing budgets rather than a second, independently-drifting pair of constants.
+// PRELIMINARY / tunable — the ≤-budget GUARANTEE lives in the coarsest rung (`one_line`, which drops
+// the skeleton and the excerpt outright) plus the always-on byte guard, never in this value.
+const ADMISSION_OUTLINE_FOLD_SKELETON_SCALE = 0.2;
+const ADMISSION_OUTLINE_FOLD_EXCERPT_CHAR_LIMIT = 160;
 
 /**
  * Core Stage 2 inter-document breadth (design §4.3): the per-unit `structure_skeleton_digest` the
@@ -10521,17 +10538,20 @@ const ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER = 0.04;
  */
 function admissionOutlineSkeletonDigest(
   outline: NonNullable<ReconstructSourceInventoryUnit["outline"]>,
+  skeletonScale = 1,
 ): unknown {
   if (outline.code_structure_inventory) {
     return projectCodeInventoryForPrompt(
       outline.code_structure_inventory,
-      ADMISSION_OUTLINE_CODE_SKELETON_CHAR_BUDGET,
+      Math.round(ADMISSION_OUTLINE_CODE_SKELETON_CHAR_BUDGET * skeletonScale),
     ).inventory;
   }
   if (outline.workbook_inventory) {
     return projectInventoryForPrompt(
       outline.workbook_inventory,
-      deriveWorkbookInventoryPromptCaps(ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER),
+      deriveWorkbookInventoryPromptCaps(
+        ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER * skeletonScale,
+      ),
     ).inventory;
   }
   return null;
@@ -10546,27 +10566,45 @@ function admissionOutlineSkeletonDigest(
  */
 function admittedOutlinesForPrompt(
   sourceInventory: ReconstructSourceInventoryArtifact,
+  level: BreadthFoldLevel = "full",
 ): Array<{
   source_ref: string;
   kind: TargetMaterialKind;
   size: number;
   line_count: number;
-  outline_excerpt: string | null;
-  structure_skeleton_digest: unknown;
+  outline_excerpt?: string | null;
+  structure_skeleton_digest?: unknown;
 }> {
   return sourceInventory.inventory_units
     .filter((unit): unit is ReconstructSourceInventoryUnit & {
       outline: NonNullable<ReconstructSourceInventoryUnit["outline"]>;
     } => unit.scan_status === "admitted" && unit.outline !== undefined)
     .sort((a, b) => path.resolve(a.ref).localeCompare(path.resolve(b.ref)))
-    .map((unit) => ({
-      source_ref: unit.ref,
-      kind: unit.target_material_kind,
-      size: unit.outline.size_bytes,
-      line_count: unit.outline.line_count,
-      outline_excerpt: unit.outline.outline_excerpt,
-      structure_skeleton_digest: admissionOutlineSkeletonDigest(unit.outline),
-    }));
+    .map((unit) => {
+      // The always-present per-unit anchor: WHERE it is, WHAT kind, HOW big. Every rung keeps it for
+      // every admitted unit — the breadth invariant (detail is demoted, a unit is never dropped).
+      const anchor = {
+        source_ref: unit.ref,
+        kind: unit.target_material_kind,
+        size: unit.outline.size_bytes,
+        line_count: unit.outline.line_count,
+      };
+      // Coarsest rung: drop BOTH variable-size fields (the measured ~1.2 KB of the ~1.36 KB per-unit
+      // projection), leaving the anchor. The LM selects on path/kind/size alone at this rung.
+      if (level === "one_line") return anchor;
+      const excerpt = unit.outline.outline_excerpt;
+      const folded = level === "inventory_skeleton";
+      return {
+        ...anchor,
+        outline_excerpt: folded && excerpt !== null
+          ? excerpt.slice(0, ADMISSION_OUTLINE_FOLD_EXCERPT_CHAR_LIMIT)
+          : excerpt,
+        structure_skeleton_digest: admissionOutlineSkeletonDigest(
+          unit.outline,
+          folded ? ADMISSION_OUTLINE_FOLD_SKELETON_SCALE : 1,
+        ),
+      };
+    });
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {
@@ -12366,6 +12404,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // it after authoring (and clears it per run, like executionTelemetry).
   const documentExcerptProjectionTruncations: DocumentExcerptProjectionTruncation[] =
     [];
+  // Run-scoped sink for admission-surface breadth-fold demotions (the admission artifact has no
+  // in-artifact free-text channel the directive's open_questions provides). runReconstruct reads it
+  // after the admission stage and clears it per run, exactly like the truncation sink above.
+  const sourceBreadthFoldDisclosures: BreadthFoldDisclosure[] = [];
   const recordDocumentExcerptProjectionTruncation = (
     truncation: DocumentExcerptProjectionTruncation,
   ): void => {
@@ -12559,6 +12601,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     documentExcerptProjectionBudget,
     sourceBreadthFold: args.sourceBreadthFold === true,
     documentExcerptProjectionTruncations,
+    sourceBreadthFoldDisclosures,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
     // Effective synthesize identity — consumed by the semantic-map stage's
@@ -13128,19 +13171,59 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeSourceAdmissionSelection(input) {
-      const admissionUserPayload = {
+      const admissionTargetMaterialProfile =
+        compactTargetMaterialProfileForPrompt(input.targetMaterialProfile);
+      // Single builder so the folded, the measured, and the dispatched payloads are the SAME shape in
+      // the SAME key order — JSON.stringify is order-sensitive, so a measured-vs-dispatched key-order
+      // drift would both mis-measure the fold and break off-path byte parity.
+      const buildAdmissionUserPayload = (admittedOutlines: unknown[]) => ({
         intent: input.intent,
-        target_material_profile:
-          compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
-        admitted_outlines: admittedOutlinesForPrompt(input.sourceInventory),
+        target_material_profile: admissionTargetMaterialProfile,
+        admitted_outlines: admittedOutlines,
         admission_budget: {
           file_limit: input.admissionFileLimit,
           must_select_at_least: input.admissionFloor,
         },
-      };
+      });
+      // The admitted-outline catalog is the SECOND count-scaling dispatch surface, and the one that
+      // binds FIRST: measured over the real Stage-2 inventory it projects ~1.36 KB/unit (vs the
+      // directive's ~0.49 KB/observation), so it overflows at ~750 admitted files where the directive
+      // survives to ~2,000. Same ladder, same opt-in key, same breadth invariant — every admitted ref
+      // stays offered at every rung; only per-unit DETAIL is demoted.
+      const projectAdmittedOutlinesAtFoldLevel = (level: BreadthFoldLevel): unknown[] =>
+        admittedOutlinesForPrompt(input.sourceInventory, level);
+      const fullAdmittedOutlines = projectAdmittedOutlinesAtFoldLevel("full");
+      const admissionBreadthFold =
+        args.sourceBreadthFold === true
+          ? foldObservationsToBudget({
+              budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+              catalogObservationCount: fullAdmittedOutlines.length,
+              projectAtLevel: (level) =>
+                level === "full"
+                  ? fullAdmittedOutlines
+                  : projectAdmittedOutlinesAtFoldLevel(level),
+              measure: (projection) =>
+                promptPayloadByteCount(
+                  SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
+                  buildAdmissionUserPayload(projection),
+                ),
+            })
+          : null;
+      const admissionUserPayload = buildAdmissionUserPayload(
+        admissionBreadthFold ? admissionBreadthFold.projection : fullAdmittedOutlines,
+      );
+      // R2 no-silent-truncation disclosure: a demoted rung changes WHAT the admitting LM saw when it
+      // chose which files to deep-observe, so it must be auditable. The admission artifact has no
+      // open_questions channel, so the disclosure goes to the run-scoped sink runReconstruct records
+      // durably. `full` = no demotion → nothing recorded (byte-parity intact).
+      if (admissionBreadthFold && admissionBreadthFold.disclosure.fold_level !== "full") {
+        sourceBreadthFoldDisclosures.push(admissionBreadthFold.disclosure);
+      }
       // Always-on total-size safety net (design 20260723 §7, Alt-5b): the admitted-outline catalog
       // scales with the admitted file count — the second count-scaling dispatch surface. Same codex
-      // stdin ceiling as the directive, so the same byte budget guards it. Byte-identical below budget.
+      // stdin ceiling as the directive, so the same byte budget guards it. Byte-identical below budget,
+      // and it stays UNGATED behind the fold opt-in — a safety net that is opt-in is not a safety net,
+      // and it is what turns an over_budget fold (nothing fit) into an honest pre-dispatch failure.
       assertPromptPayloadByteLimit({
         artifactName: "SourceAdmissionSelection",
         systemPrompt: SOURCE_ADMISSION_SELECTION_SYSTEM_PROMPT,
@@ -17071,6 +17154,7 @@ export async function runReconstruct(
   // Same run-scoping for the projection-truncation sink (a reused author must not
   // carry a prior run's truncations into this run's durable record/final output).
   directiveAuthor.documentExcerptProjectionTruncations?.splice(0);
+  directiveAuthor.sourceBreadthFoldDisclosures?.splice(0);
   const reuseExistingAuthoredArtifacts =
     params.resumeMode === "reuse_existing_authored_artifacts";
   let currentAuthoredArtifactReuseMatch: AuthoredArtifactReuseMatch | null = null;
@@ -17441,6 +17525,23 @@ export async function runReconstruct(
   if (admissionSelectionResult) {
     sourceInventory = admissionSelectionResult.sourceInventory;
     sourceObservations = admissionSelectionResult.sourceObservations;
+  }
+  // R2 disclosure for the admission surface's breadth fold: record the demoted rung durably right
+  // after the stage that produced it (the source-frontier artifact has no free-text channel of its
+  // own). Empty on every off / fitting run, so nothing is emitted unless detail was actually demoted.
+  for (const disclosure of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+    appendRuntimeStatusEventSync({
+      pipeline: "reconstruct",
+      sessionRoot,
+      sourceLabel: "source-breadth-fold",
+      stageId: "source_admission_selection",
+      message:
+        `Runtime folded the admitted-outline selection catalog to '${disclosure.fold_level}' detail ` +
+        `(${disclosure.catalog_observation_count} admitted units, ` +
+        `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so the whole ` +
+        "catalog fit the dispatch budget; every admitted unit stayed selectable at reduced per-unit " +
+        "detail (outlines retained in full in source-inventory).",
+    });
   }
   // Site 1 graceful terminal (design §16.2): a zero-observation run whose every planned target was
   // skipped (unsupported/vanished) is a graceful BLOCKED terminal, not a crash. Populate the
