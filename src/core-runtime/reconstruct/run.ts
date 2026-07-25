@@ -12807,11 +12807,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // under overflow.
       const projectCatalogAtFoldLevel = (level: BreadthFoldLevel): unknown[] => {
         // Tail rungs (PR-4b) are DERIVED from the `one_line` rows by dropping keys — never rebuilt by a
-        // parallel row-builder. A strict key subset of the same rows, in the same order, with the same
-        // values, is smaller than its parent on EVERY corpus, so the ladder's non-increasing invariant
-        // holds structurally instead of corpus-contingently. `location` goes first: it is byte-identical
-        // to `source_ref` on every whole-file observation (100% of the measured corpus) yet costs ~142
-        // B/row, while `summary` costs ~55 B/row and carries the selection signal.
+        // parallel row-builder. A per-row strict key subset, in the same order, with the same values, is
+        // never larger than its parent on ANY corpus, so the ladder's non-increasing invariant holds
+        // structurally instead of corpus-contingently. `location` goes first WHERE IT IS REDUNDANT with
+        // `source_ref` (every whole-file observation — 100% of the measured corpus — where it costs ~142
+        // B/row to repeat the path); on region rows it is the only thing telling siblings of one file
+        // apart, so it survives. `summary` costs ~55 B/row and carries the selection signal, so it goes
+        // last.
         if (level === "summary_anchor" || level === "anchor") {
           return projectBreadthFoldTailRung(projectCatalogAtFoldLevel("one_line"), level);
         }

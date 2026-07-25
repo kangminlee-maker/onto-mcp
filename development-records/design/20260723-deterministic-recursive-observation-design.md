@@ -69,11 +69,13 @@ for level in [inventory_skeleton, one_line]:
 throw assertPromptPayloadByteLimit(...)
 ```
 - **보장 근거**: 사전-dispatch payload를 **dispatch가 쓰는 바로 그 측정 함수**로 잰다("잰 것에 맞으면 보낸 것에 맞음", 구성). 사다리 단조 감소 → 맞는 가장 세밀한 rung 채택. 실측 59파일은 inventory_skeleton(59×~4.3k≈254k ≪ 예산)에서 **전 59파일 top-level 구조와 함께 보임**.
-- **정정 (2026-07-25, 실측이 §3.3 전제를 반증)** — 위 의사코드 주석의 "극단 N: **id-리스트 자체 초과**"는 **틀렸다**. 실 코퍼스를 N=2000까지 복제해 **가드가 쓰는 그 byte 함수**로 잰 결과(probe `.onto/temp/source-breadth-fold-promotion/`):
+- **정정 (2026-07-25, 실측이 §3.3 전제를 반증)** — 위 의사코드 주석의 "극단 N: **id-리스트 자체 초과**"는 **틀렸다**. 실 코퍼스를 N=2000까지 복제해 **가드가 쓰는 그 byte 함수**로 잰 결과(probe·캡처 출력 = `development-records/benchmark/source-breadth-fold/`):
   - `available_observation_ids`는 payload의 **6.2%**뿐이고, **그것만** 투영하면 **≈31,049 파일**까지 안 터진다.
   - 실제로 먼저 묶는 것은 **per-row 절대경로 텍스트**다 — 446 B 행 중 ~285 B, 그나마 `source_ref`와 `location`이 whole-file 관찰에서 사실상 중복. 이것이 **≈2,020 파일**에서 바인딩 = id 한계보다 **14× 먼저**.
   - ⇒ collapse(=id를 숨김)와 그것이 요구하는 zoom 채널은 **측정된 병목이 아니다**. id를 하나도 숨기지 않고 per-row 텍스트만 줄여도 사다리는 크게 더 내려간다(one_line 2,018 → 상대경로 3,279 → −location 3,968 → −summary 5,173).
-  - 또한 `directory_rollup`은 **디렉터리 군집도 의존**이라 사다리 불변식(DW-1f, 단조 비증가)을 만족하지 않는다: 1파일/디렉터리에서 353.5 B/unit로 **바로 윗 rung(302 B/unit)보다 크게** 측정된다. 군집도가 낮은 코퍼스에서 floor가 될 수 없다.
+  - 또한 `directory_rollup`은 **디렉터리 군집도 의존**이라 사다리 불변식(DW-1f, 단조 비증가)을 floor로서 만족하지 않는다.
+    - **정정 (2026-07-25, 적대 판정이 기저 혼합을 적발)**: 초판이 쓴 "353.5 vs 바로 윗 rung 302 B/unit"은 **기저가 섞였다** — 353.5는 1파일/디렉터리(`coarse-rung-candidates.mts`), 301.6은 8파일/디렉터리(`rollup-rung-headroom.mts`)에서 나온 수치이고 상대화 방식도 다르다. **단일 기저(1파일/디렉터리)로 재서술**: rollup 353.5 B/unit는 `one_line`(452.2)보다 **작고**, `anchor` rung(157.3)보다 **크다**. 즉 rollup은 PR-4b 이전 사다리에 대해 비단조였던 적이 없고, **자기 밑에 놓일 rung들에 대해서만** 크다 — floor 자격이 없다는 결론은 유지되지만 근거가 다르다.
+    - 결정적 근거는 **불변식의 성격**이다: 군집도 1→8파일/디렉터리에서 rollup은 353.5 → 251.2 B/unit로 **29% 이동**(코퍼스 의존)하는 반면 파생 rung은 157.3 → 156.4로 **0.6%**(구성적). floor는 코퍼스에 따라 흔들리면 안 된다.
   - 결론 보류: 어느 대안으로 갈지는 §12 PR-4 항목에 기록한다. 위 수치 자체는 대안 선택과 무관하게 성립한다.
 - ~~**극단규모 후속 rung(PR-4·directory-topology rollup)** = B 초안: set-tier의 **export된 primitives**(`pathComponentsOf` comprehension-set-tier.ts:240·`commonPrefixLength` :248·`validateMemberPaths` :258) 재사용해 디렉터리 트리(bottom-up `descendant_file_count`), `renderOverview`(:406) candidate cascade mirror, **최대 subtree부터 collapse**, terminal **root-digest(O(K)·구성으로 ≤budget)**. collapse된 구성원은 selectable에서 빠지고 **zoom(§5)로만 도달**. → 어떤 topology도 구조적 ≤budget. (MVP엔 불필요: 실측 문제는 one_line으로 해소.)~~
   → **폐기·대체 (2026-07-25, PR-4b). 승인된 설계를 뒤집는 정정이므로 침묵 발산이 아니라 여기 기록한다.** 위 정정 bullet이 rollup의 전제를 이미 반증했고(id는 병목이 아님·rollup은 1파일/디렉터리에서 윗 rung보다 크게 측정), **격리 FRONTIER 판정**이 Alt-A(=`one_line`에서 **키를 떨구는 파생 rung**)를 채택했다. rollup을 버리는 실질 이유는 성능이 아니라 **불변식의 성격**이다: rollup은 별도 row-builder라 "부모보다 작다"가 **코퍼스 우발적**이지만, 파생 rung은 같은 행의 **strict key 부분집합**(같은 순서·같은 값)이라 **모든 코퍼스에서 구성적으로** 작다 = DW-1f가 구조적. collapse가 사라지므로 **zoom 채널도 불필요**(전 id가 floor까지 selectable) — 신규 개념 0.
@@ -262,5 +264,18 @@ owner 승인 시 → **PR-1(순수 fold 모듈 + byte 가드)** 착수. §9 owne
 - **격리 FRONTIER 판정**: blind packet(증거·제약·rubric·중립 대안, 초안 결론 미포함)으로 Alt-A 채택. **판정도 가설로 취급** — 단일 anchor rung 권고를 실측(`location` 100% 중복·142 B/row vs `summary` 55 B/row·선택 신호)으로 **두 rung으로 분기**했고, 판정이 추정치라고 명시한 천장(≈3,690)을 실측으로 대체(3,445, ~7% 낙관).
 - 구현(신규 settings 키 0·신규 아티팩트 0·zoom 0): `source-breadth-fold.ts`에 `BreadthFoldTailLevel`·`SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS`·`projectBreadthFoldTailRung`(순수·전역·순서/값 보존·부재 키는 **건너뛰고 null로 발행하지 않음**) 추가 — 부분집합 관계를 **사다리를 소유한 모듈에 한 번만** 선언. `run.ts`의 directive `projectCatalogAtFoldLevel`은 `one_line` 행을 그 헬퍼에 통과시켜 파생. **admission 표면은 명시 처리**(`admittedOutlinesForPrompt`에서 세 rung을 같은 anchor로 반환) — fall-through면 coarser rung이 `full` 형태를 내보내 불변식이 조용히 뒤집힌다.
 - **검증**: tsc0(core·scripts)·전체 스위트 **3680(회귀 0)**. 신규 단위 5 = DW-4b-1(실 투영기 24행 whole-file+region **행마다** 엄격 감소·strict key 부분집합·값/순서/행수 불변) / 부분집합 선언 / `summary` 없는 행은 두 꼬리 rung이 동일(null 미발행) / **DW-4b-3 부정대조**(1파일/디렉터리에서 폐기된 rollup이 `anchor`보다 **큼** — 불변식이 자동이 아님을 고정, 같은 코퍼스에서 shipped 꼬리는 엄격 감소) / DW-4b-2(250파일·5,000자 summary = `one_line`·`summary_anchor` 둘 다 초과 → **`anchor`에서 실 dispatch**·250 전부 offered·선택 resolve·rung 공개). DW-4b-4는 기존 backstop 테스트를 **긴 경로**로 교체해 유지(예전 큰-summary fixture는 이제 정상적으로 `anchor`에 적합하므로 더는 backstop을 증명하지 못한다 — 갈아엎지 않았으면 조용히 vacuous해질 자리).
-- **실 코퍼스 천장 측정**(추정 대체·probe `.onto/temp/source-breadth-fold-promotion/tail-rung-ceiling-measured.mts`): 실 59파일 아티팩트를 복제 스케일해 **실 author + 실 가드 byte 함수**로 이진탐색 — `one_line` 2,007 / `summary_anchor` 2,881 / `anchor` 3,445(N+1에서 실제로 거부됨을 확인), per-row 454 → 303 → 248 B, 단조성 HOLDS.
-- **다음 병목**: 두 표면 모두 fold된 뒤 directive `anchor` ~3,445 vs admission `one_line` ~4,200 → **directive가 여전히 first-binding**. 그 위(멀티레포 축)는 per-row 절대경로 텍스트가 지배하므로 **상대경로화**(§3.3 정정의 3,279 측정치)가 다음 후보이지 collapse가 아니다.
+- **실 코퍼스 천장 측정**(추정 대체·probe `development-records/benchmark/source-breadth-fold/probes/tail-rung-ceiling-measured.mts`): 실 59파일 아티팩트를 복제 스케일해 **실 author + 실 가드 byte 함수**로 이진탐색 — `one_line` 2,007 / `summary_anchor` 2,881 / `anchor` 3,445(N+1에서 실제로 거부됨을 확인), per-row 454 → 303 → 248 B, 단조성 HOLDS.
+- **다음 병목**: 두 표면 모두 fold된 뒤 directive `anchor` ~3,445 vs admission `one_line` ~4,200 → **directive가 여전히 first-binding**. 그 위(멀티레포 축)는 per-row 절대경로 텍스트가 지배하고 id 리스트가 아니다(ids만이면 ~31,049).
+
+**PR-4b 적대 교차검증 반영 (2026-07-25) — 실결함 1건 포함**
+
+신선 이종 렌즈 2벌(꼬리 rung 판정 / 값벤치 하니스)이 돌아왔고, 각 findings를 **가설로 재판정**한 뒤 실코드에서 재도출했다.
+
+- **[실결함·수정] region sibling이 floor에서 붕괴.** 꼬리가 `location`을 무조건 떨구면, 한 파일의 N개 region 관찰은 `source_ref`·`target_material_kind`가 같으므로 `anchor`에서 **`observation_id`만 다른 행**이 된다 — breadth 불변식이 **형식으로는 온전**(전 id selectable)하고 **실질로는 파괴**(선택할 근거가 없음). id 개수를 세는 어떤 테스트도 못 잡는다. `MAX_PROJECTED_REGIONS_PER_FILE = 8`(run.ts:10482)이라 `source_region_decomposition` ON이면 **수백 파일**에서 도달하므로 가상의 대역이 아니다.
+  - **수정**: `location`을 **중복일 때만**(`location === source_ref`) 떨군다. whole-file 행(실 코퍼스 100%)에서는 동작 불변 = 천장 3,445 그대로(재측정 확인), region 행에서는 싼 토큰을 보존. 구현은 행의 **자기 entries를 키 필터**하는 방식이라 키 **순서도** 부모와 같고 "같은 행·키 부분집합"이 증명 없이 성립.
+  - **falsifiable 확인**: predicate를 끄면 신규 테스트 2개가 실패한다(sibling 구별 가능 집합 `8 → 1`). 가드가 실제로 하중을 받는다.
+- **[정정] 실측 reach는 코퍼스 shape 의존.** whole-file **1.83×** vs region 분해(8 regions/file) **1.20×** — region 코퍼스에서 `summary_anchor`는 떨굴 중복이 없어 **no-op**이고 이득은 전부 `anchor`에서 나온다(probe `region-corpus-reach.mts`). 사다리는 여전히 비증가, 한 칸 정체할 뿐. **분해 런에 whole-file 수치를 인용하지 않는다.**
+- **[정정] 상대경로화는 "다음 레버"가 아니다.** 이 코퍼스 root가 99자 temp 경로라 이득이 부풀었다. root 30자로 재측정하면 anchor 위 상대화 이득이 ~1.48× → **~1.11×**로 줄고, 멀티레포 축은 공유 root를 더 짧게 만들어 이득이 0에 수렴한다. 위 "다음 병목" 문장의 상대경로화 후보 지정은 이 정정으로 **철회**한다.
+- **[정정] rollup 기각 근거의 기저 혼합** → §3.3 해당 정정 참조.
+- **[정정] 증거 durable화**: 설계가 인용하던 `.onto/temp/…`는 `.gitignore:14`라 클린 클론에서 재구성 불가였다. probe·캡처 출력을 `development-records/benchmark/source-breadth-fold/`로 옮기고 인용 경로를 교체.
+- **[미해결·owner 결정 대기] 판정은 Alt-D(=지금은 아무것도 짓지 말 것)였다.** 근거 3: ①이미 지은 fold가 OFF인데 새 rung에 쓰는 건 잘못된 지출(플래그 ON만으로 first-binding이 ~750 → ~2,041, 2.7×) ②`anchor` rung은 값벤치가 **유일하게 검증하지 않은** rung(4개 arm 전부 `summary` 보유) ③연기 비용 ≈ 0(순수 additive·settings 키 0·마이그레이션 0). 반증 조건: directive 카탈로그가 ~2,041 관찰을 넘는 실 런, 또는 fold를 **이미 켠 채** 가드를 때리는 운영자. → **머지 여부는 owner 판단**; #258은 "머지하면 옳은" 상태로 정리해 둔다.

@@ -29,8 +29,12 @@
  * the real Stage-2 corpus, admission binds FIRST (~1.36 KB/unit → overflow at ~750 admitted files, vs
  * the directive's ~0.49 KB/observation → ~2,000); folding admission moves its ceiling to ~4,200, and the
  * PR-4b tail rungs move the directive's from 2,007 to 3,445 — so the DIRECTIVE is now the first-binding
- * surface. Beyond that band the per-row absolute-path text dominates (relative-path projection is the
- * measured next lever, not collapsing ids: design 20260723 §3.3 correction).
+ * surface. What binds beyond that band is the per-row absolute-path text, NOT the id list (ids alone
+ * reach ~31,049: design 20260723 §3.3 correction). Root-relative refs are the obvious next lever and are
+ * deliberately NOT taken here: their apparent payoff is an artifact of the bench corpus's 99-char temp
+ * root. Re-measured across root lengths, relativizing on top of the anchor rung buys ~1.48× at a 99-char
+ * root but only ~1.11× at a realistic 30-char one, and the multi-repo axis it is pitched for shortens the
+ * shared root further — the margin approaches zero exactly where it would have to pay.
  */
 
 /**
@@ -41,27 +45,43 @@
  *   inventory_skeleton → same, with a tighter codeInventoryCharBudget (hierarchy→imports→spans demotion)
  *   one_line           → includeStructuralData:false → {observation_id, target_material_kind, source_ref,
  *                        location, summary} — the always-present semantic anchor, no spans/imports/excerpt
- *   summary_anchor     → one_line − `location` (PR-4b)
+ *   summary_anchor     → one_line − REDUNDANT `location` (PR-4b)
  *   anchor             → summary_anchor − `summary` (PR-4b): {observation_id, target_material_kind,
- *                        source_ref} — navigation identity only, the last rung before fail-loud
+ *                        source_ref, non-redundant `location`} — navigation identity only, the last
+ *                        rung before fail-loud
  *
- * The tail rungs are STRICT KEY SUBSETS of `one_line`, each of the next: one_line ⊃ summary_anchor ⊃
- * anchor, same rows, same order, same values. That is what makes the ladder's non-increasing invariant
- * (design DW-1f) STRUCTURAL rather than corpus-contingent — a rung built by a parallel row-builder could
- * measure larger than its parent on some corpus, which is exactly why the design's original
- * directory-rollup rung was rejected (measured 353.5 B/unit vs 302 for the rung above it at one file per
- * directory: a floor that is not always a floor).
+ * Each tail rung's row is a STRICT KEY SUBSET of its parent's, same order, same values: one_line ⊇
+ * summary_anchor ⊇ anchor, strict on every row that carries the dropped key. That is what makes the
+ * ladder's non-increasing invariant (design DW-1f) STRUCTURAL rather than corpus-contingent — a rung
+ * built by a parallel row-builder is smaller than its parent only on corpora with the right shape,
+ * which is why the design's original directory-rollup rung was rejected. Measured on ONE basis (1 file
+ * per directory, `coarse-rung-candidates.mts`): rollup 353.5 B/unit sits ABOVE the anchor rung's 157.3,
+ * so it cannot serve as a floor beneath the tail; and its cost swings with directory clustering
+ * (353.5 → 251.2 B/unit from 1 to 8 files/dir, a 29% corpus-dependent move) where every derived rung is
+ * clustering-invariant (157.3 → 156.4, 0.6%). Rollup IS smaller than `one_line` (452.2) — it was never
+ * non-monotone against the pre-PR-4b ladder, only against the rungs that now sit below it.
  *
  * Field ORDER within the tail is measured, not guessed. On the real corpus `location` is byte-identical
- * to `source_ref` on 100% of rows (whole-file observations; region decomposition is default-off) yet
- * costs 142 B/row, while `summary` costs 55 B/row and is the LM's actual selection signal — the value
- * bench found `one_line` matching `full` at the same-rung noise floor while carrying only ref+summary
- * semantics. So the redundant-and-expensive field goes first and the informative-and-cheap field goes
- * last. Under region decomposition `location` stops being redundant (it becomes a short `L<a>-<b>` token,
- * the only thing distinguishing siblings of one file) but also stops being expensive; dropping it at
- * `summary_anchor` costs region NAVIGATION granularity at that rung, which is acceptable because the
- * catalog is navigation-only (ids are what get selected; evidence refs are minted from the STORED
- * observations) and because the alternative in this band is a hard dispatch failure.
+ * to `source_ref` on 100% of rows (whole-file observations) yet costs 142 B/row, while `summary` costs
+ * 55 B/row and is the LM's actual selection signal — the value bench found `one_line` indistinguishable
+ * from `full` at the noise floor while carrying only ref+summary semantics. So the redundant-and-
+ * expensive field goes first and the informative-and-cheap field goes last.
+ *
+ * `location` is dropped ONLY WHERE IT IS REDUNDANT (`location === source_ref`). Under region
+ * decomposition it is not: N regions of one file share a `source_ref` and are told apart solely by a
+ * short `L<a>-<b>` / `§<heading>` token, so a blanket drop would leave siblings differing only in
+ * `observation_id` — the breadth invariant intact in FORM (every id still selectable) and destroyed in
+ * SUBSTANCE (nothing left to select BY), with no id-count test able to notice. The redundancy predicate
+ * costs nothing where the drop paid (whole-file rows, where the token IS the path) and keeps the cheap
+ * token exactly where it carries the only signal. Per row the key set is still a subset of `one_line`'s,
+ * so DW-1f stays structural.
+ *
+ * What the tail buys therefore depends on corpus SHAPE, and both numbers are measured (probe
+ * `region-corpus-reach.mts`, N=2,000): on a whole-file corpus 454.2 → 303.5 → 248.2 B/row, a 1.83× reach
+ * gain; on a region-decomposed one (8 regions/file, the `MAX_PROJECTED_REGIONS_PER_FILE` cap) 330.9 →
+ * 330.9 → 275.6, only 1.20× — `summary_anchor` is a NO-OP there because nothing is redundant to drop, so
+ * the whole gain comes from `anchor`. The ladder stays non-increasing either way; it just stalls a rung.
+ * Do not quote the whole-file figure for a decomposed run.
  */
 export type BreadthFoldLevel =
   | "full"
@@ -82,9 +102,10 @@ export const SOURCE_BREADTH_FOLD_LEVELS: readonly BreadthFoldLevel[] = [
 export type BreadthFoldTailLevel = Extract<BreadthFoldLevel, "summary_anchor" | "anchor">;
 
 /**
- * Keys each tail rung KEEPS, as strict descending subsets of the `one_line` row. Declared here (not at
- * the call site) so the subset relation that makes DW-1f structural is stated once, in the module that
- * owns the ladder, and is directly assertable.
+ * Keys each tail rung KEEPS unconditionally, as strict descending subsets of the `one_line` row.
+ * Declared here (not at the call site) so the subset relation that makes DW-1f structural is stated
+ * once, in the module that owns the ladder, and is directly assertable. `location` is absent from both
+ * lists because it is CONDITIONALLY kept — see `locationIsRedundantWithSourceRef`.
  */
 export const SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS: Readonly<
   Record<BreadthFoldTailLevel, readonly string[]>
@@ -94,20 +115,40 @@ export const SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS: Readonly<
 };
 
 /**
+ * True when a row's `location` carries nothing its `source_ref` does not already say — the whole-file
+ * case (100% of the measured corpus), where `location` IS the path and costs 142 B/row to repeat. False
+ * for a region row, where `location` is the short token that tells siblings of one file apart; dropping
+ * it there would collapse them to id-only. A missing `location` counts as redundant: there is nothing
+ * to keep.
+ */
+function locationIsRedundantWithSourceRef(row: Record<string, unknown>): boolean {
+  if (!("location" in row)) return true;
+  return row.location === row.source_ref;
+}
+
+/**
  * Project `one_line` rows down to a tail rung by DROPPING KEYS — never by rebuilding rows. Pure, total,
- * order-preserving, value-preserving: the result is the same rows with a subset of their keys, so it is
- * smaller than its input on every corpus (the structural basis of the ladder's non-increasing invariant).
- * Absent keys are skipped rather than emitted as null, so a row that never carried `summary` projects
- * identically at both tail rungs instead of gaining a key on the way down.
+ * order-preserving, value-preserving: each result row carries a subset of its input row's keys, so it is
+ * never larger than its input (the structural basis of the ladder's non-increasing invariant). Absent
+ * keys are skipped rather than emitted as null, so a row that never carried `summary` projects
+ * identically at both tail rungs instead of gaining a key on the way down. `location` survives on rows
+ * where it is not redundant with `source_ref`, so region siblings stay distinguishable at every rung.
  */
 export function projectBreadthFoldTailRung(
   oneLineRows: readonly unknown[],
   level: BreadthFoldTailLevel,
 ): unknown[] {
-  const keep = SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS[level];
+  const keep = new Set(SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS[level]);
   return oneLineRows.map((row) => {
     const record = row as Record<string, unknown>;
-    return Object.fromEntries(keep.filter((key) => key in record).map((key) => [key, record[key]]));
+    const keepLocation = !locationIsRedundantWithSourceRef(record);
+    // Filter the ROW's own entries rather than rebuilding from the keep-list: the result is literally a
+    // key-filtered copy, so key ORDER is the parent's too and "same rows, subset of keys" needs no proof.
+    return Object.fromEntries(
+      Object.entries(record).filter(
+        ([key]) => keep.has(key) || (key === "location" && keepLocation),
+      ),
+    );
   });
 }
 

@@ -1,0 +1,83 @@
+=== coarse-rung-candidates.mts ===
+
+=== 1 file(s)/directory (root = 99 chars) ===
+  one_line (today's floor)        452.2 B/unit   ceiling ≈   2,018 files   —
+  …+ root-relative refs           266.3 B/unit   ceiling ≈   3,279 files   monotone: same fields, strictly shorter strings + 1 root line
+  …− location                     214.6 B/unit   ceiling ≈   3,968 files   monotone: strict field subset
+  …− summary  (anchor rung)       157.3 B/unit   ceiling ≈   5,173 files   monotone: strict field subset
+  directory_rollup (design PR-4)  353.5 B/unit   ceiling ≈   2,536 files   NOT monotone: clustering-dependent
+
+=== 8 file(s)/directory (root = 99 chars) ===
+  one_line (today's floor)        450.5 B/unit   ceiling ≈   2,026 files   —
+  …+ root-relative refs           264.5 B/unit   ceiling ≈   3,298 files   monotone: same fields, strictly shorter strings + 1 root line
+  …− location                     213.7 B/unit   ceiling ≈   3,983 files   monotone: strict field subset
+  …− summary  (anchor rung)       156.4 B/unit   ceiling ≈   5,198 files   monotone: strict field subset
+  directory_rollup (design PR-4)  251.2 B/unit   ceiling ≈   3,454 files   NOT monotone: clustering-dependent
+
+structural floor (available_observation_ids alone) ≈ 31,049 files
+
+=== rollup-rung-headroom.mts ===
+
+=== coarsest-rung headroom (budget 1040384 B) ===
+
+one_line (today's floor)     catalog=  900953 B  450.5 B/unit
+one_line − location          catalog=  603226 B  301.6 B/unit
+directory_rollup             catalog=  502428 B  251.2 B/unit
+directory_rollup − summary   catalog=  383821 B  191.9 B/unit
+
+ceiling = largest N where framing(64002) + ids(31.4·N) + catalog(perUnit·N) ≤ budget
+
+one_line (today's floor)     ceiling ≈ 2,026 files
+one_line − location          ceiling ≈ 2,931 files
+directory_rollup             ceiling ≈ 3,454 files
+directory_rollup − summary   ceiling ≈ 4,371 files
+
+STRUCTURAL floor — available_observation_ids ALONE (nothing else projected): ≈ 31,049 files.
+Only PAST that does a zoom loop (dropping ids from the catalog) become necessary — design §3.3 assumed this bound WAS the floor.
+
+=== region-corpus-reach.mts ===
+
+=== PR-4b reach: whole-file corpus vs region-decomposed corpus ===
+
+budget = 1,040,384 bytes
+regions/file = 8 (MAX_PROJECTED_REGIONS_PER_FILE)
+
+whole-file (N=2,000 observations):
+  one_line 454.2 → summary_anchor 303.5 → anchor 248.2 B/row   non-increasing: HOLDS
+  summary_anchor saves 33.2%, anchor saves 45.4% vs one_line  → reach gain 1.83×
+
+region-decomposed (N=2,000 observations):
+  one_line 330.9 → summary_anchor 330.9 → anchor 275.6 B/row   non-increasing: HOLDS
+  summary_anchor saves 0.0%, anchor saves 16.7% vs one_line  → reach gain 1.20×
+
+region siblings at the floor: 8 rows of one file → 8 distinguishable ignoring observation_id  (SEPARABLE)
+
+=== one-line-floor-anatomy.mts ===
+
+=== one_line floor anatomy (real 59-observation corpus, scaled) ===
+N= 1000  total=  523576  ids=  30892 (5.9%)  obs=  444682 (84.9%, 445 B/row)  scout=2115  rest=45887  rung=full(no disclosure)
+N= 2000  total= 1018497  ids=  62892 (6.2%)  obs=  891603 (87.5%, 446 B/row)  scout=2115  rest=61887  rung=full(no disclosure)
+      one_line row sample: {"observation_id":"obs_64fb33fb3b9060aa-r0","target_material_kind":"code","source_ref":"/Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-value-bench-2026-07-22T17-45-58-944Z/off/corpus/audio/audio.ts.r0.ts","location":"/Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-value-bench-2026-07-22T17-45-58-944Z/off/corpus/audio/audio.ts","summary":"code material observed at audio.ts"}
+      observation_id length: 23 chars
+N= 2100  total=  947680  ids=  66092 (7.0%)  obs=  820186 (86.5%, 391 B/row)  scout=2115  rest=59287  rung=full(no disclosure)
+N= 3000  THREW  SourceObservationDirective compact prompt exceeds deterministic prompt budget: 1342847 > 1
+N= 5000  THREW  SourceObservationDirective compact prompt exceeds deterministic prompt budget: 2218065 > 1
+
+budget = 1040384 B
+
+What a directory rollup rung COULD remove: the per-row summary/location detail (obs%).
+What it CANNOT remove without breaking "every id selectable": available_observation_ids (ids%).
+
+=== tail-rung-ceiling-measured.mts ===
+
+budget = 1,040,384 bytes
+
+shipped ladder ceiling = 3,445 observations (rung reached: 'anchor'), N+1 dispatches: false
+  one_line       ceiling = 2,007   (the floor BEFORE PR-4b)
+  summary_anchor ceiling = 2,881
+  anchor         ceiling = 3,445   (the floor AFTER PR-4b)
+
+reach gain = 1.72×  (packet ESTIMATE was ≈3,690 at the anchor rung)
+
+non-increasing at N=2,007: one_line 911,675 → summary_anchor 609,124 → anchor 498,129  (HOLDS)
+  per-row: 454 → 303 → 248 B

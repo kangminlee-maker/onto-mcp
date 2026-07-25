@@ -873,7 +873,7 @@ describe("PR-4b — the tail rungs below one_line (`summary_anchor` → `anchor`
 
   const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value, null, 2), "utf8");
 
-  it("per row: bytes(anchor) < bytes(summary_anchor) < bytes(one_line), on whole-file AND region rows (DW-1f, structural)", () => {
+  it("per row: bytes are non-increasing down the tail, on whole-file AND region rows (DW-1f, structural)", () => {
     const artifact = observationSet({ fileCount: 6, regionsPerFile: 3, summaryChars: 60 });
     const parent = oneLineRows(artifact);
     expect(parent.length).toBe(24); // non-vacuous subject: 6 whole-file + 18 region rows
@@ -889,12 +889,15 @@ describe("PR-4b — the tail rungs below one_line (`summary_anchor` → `anchor`
     for (const [i, parentRow] of parent.entries()) {
       const mid = summaryAnchor[i]!;
       const leaf = anchor[i]!;
-      // Strict descent, per row — the property a parallel row-builder cannot guarantee.
-      expect(bytes(leaf)).toBeLessThan(bytes(mid));
-      expect(bytes(mid)).toBeLessThan(bytes(parentRow));
-      // Each rung is a strict KEY SUBSET of the one above, with values untouched (never rebuilt).
+      // Non-increasing, per row — the property a parallel row-builder cannot guarantee. NOT strict at
+      // every step: on a region row `summary_anchor` has nothing redundant to drop, so it equals its
+      // parent and the reach comes from `anchor` alone.
+      expect(bytes(leaf)).toBeLessThanOrEqual(bytes(mid));
+      expect(bytes(mid)).toBeLessThanOrEqual(bytes(parentRow));
+      // Each rung is a KEY SUBSET of the one above, values untouched and in the parent's key order.
       expect(Object.keys(leaf).every((k) => k in mid)).toBe(true);
       expect(Object.keys(mid).every((k) => k in parentRow)).toBe(true);
+      expect(Object.keys(mid)).toEqual(Object.keys(parentRow).filter((k) => k in mid));
       for (const [key, value] of Object.entries(leaf)) expect(value).toEqual(parentRow[key]);
       for (const [key, value] of Object.entries(mid)) expect(value).toEqual(parentRow[key]);
       // Navigation identity survives to the last rung — the catalog stays selectable at the floor.
@@ -902,9 +905,49 @@ describe("PR-4b — the tail rungs below one_line (`summary_anchor` → `anchor`
       expect(leaf.source_ref).toBe(parentRow.source_ref);
       expect(leaf).not.toHaveProperty("summary");
       expect(mid.summary).toBe(parentRow.summary);
-      // `location` is what `summary_anchor` buys: dropped first because it duplicates `source_ref` on
-      // whole-file rows, and is a short token (not a cost driver) on region rows.
-      expect(mid).not.toHaveProperty("location");
+    }
+
+    // `location` is what `summary_anchor` buys — but ONLY where it duplicates `source_ref`.
+    const wholeFile = parent.flatMap((r, i) => (r.location === r.source_ref ? [i] : []));
+    const regions = parent.flatMap((r, i) => (r.location === r.source_ref ? [] : [i]));
+    expect(wholeFile).toHaveLength(6);
+    expect(regions).toHaveLength(18);
+    for (const i of wholeFile) {
+      expect(summaryAnchor[i]).not.toHaveProperty("location");
+      expect(bytes(summaryAnchor[i]!)).toBeLessThan(bytes(parent[i]!)); // strict where the drop pays
+    }
+    for (const i of regions) expect(anchor[i]!.location).toBe(parent[i]!.location);
+  });
+
+  it("region siblings of one file stay distinguishable at EVERY rung, including the floor (breadth invariant in substance)", () => {
+    // The hazard a key-count or id-count assertion cannot see. Region observations of one file share a
+    // `source_ref` and a `target_material_kind`; `location` is the only field telling them apart. A
+    // blanket `location` drop would leave `anchor` rows differing solely in `observation_id` — every id
+    // still formally selectable, and nothing left to select BY. `MAX_PROJECTED_REGIONS_PER_FILE = 8`
+    // (run.ts) makes this reachable at a few hundred FILES once `source_region_decomposition` is on, so
+    // it is not a hypothetical band.
+    const artifact = observationSet({ fileCount: 3, regionsPerFile: 8, summaryChars: 50 });
+    const parent = oneLineRows(artifact);
+    const regionRows = parent.filter((r) => r.location !== r.source_ref);
+    expect(regionRows).toHaveLength(24); // non-vacuous: 3 files × 8 regions
+
+    // Identify the sibling set from the PARENT rows by index — after projection a whole-file row has no
+    // `location` at all, so a post-projection predicate would sweep it in and measure the wrong subject.
+    const targetRef = parent[1]!.source_ref;
+    const siblingIndexes = parent.flatMap((r, i) =>
+      r.source_ref === targetRef && r.location !== r.source_ref ? [i] : [],
+    );
+    expect(siblingIndexes).toHaveLength(8);
+
+    for (const level of ["summary_anchor", "anchor"] as const) {
+      const rows = projectBreadthFoldTailRung(parent, level) as Record<string, unknown>[];
+      const siblings = siblingIndexes.map((i) => rows[i]!);
+      // Strip the id: what remains must still separate the siblings. Without the redundancy predicate
+      // this set collapses to size 1 at `anchor` and the assertion fails.
+      const withoutId = new Set(
+        siblings.map((r) => JSON.stringify(Object.entries(r).filter(([k]) => k !== "observation_id"))),
+      );
+      expect(withoutId.size).toBe(8);
     }
   });
 
