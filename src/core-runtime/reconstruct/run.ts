@@ -166,11 +166,7 @@ import {
   type CodeSetTierExcludedRef,
   type CodeSetTierMemberInput,
 } from "./comprehension-set-tier.js";
-import {
-  assembleEnvironmentContextProfile,
-} from "./environment-context-profile.js";
-import { scanEnvironmentSignalFiles } from "./environment-signal-scan.js";
-import { parseEnvironmentManifests, type ParsedManifest } from "./environment-content-parse.js";
+import { emitEnvironmentContextProfile } from "./environment-context-profile-stage.js";
 import {
   GracefulTerminalSignal,
   SEED_READINESS_TERMINAL_ROUTE,
@@ -261,7 +257,6 @@ import { readLensPrompt, sourceObservationsForPrompt } from "./authoring-prompt-
 import { buildGracefulTerminalFinalOutput } from "./graceful-terminal.js";
 import type { GracefulTerminalAssemblyContext } from "./graceful-terminal.js";
 import { writeFinalOutputProvenanceValidationArtifact } from "./final-output-assembly.js";
-import { projectEnvironmentContextProfileInput } from "./environment-context-profile.js";
 import {
   observeAcceptedMaturationClosureSourceRequests,
 } from "./source-admission-selection-stage.js";
@@ -2601,66 +2596,13 @@ export async function runReconstruct(
   // DELIBERATELY never handed to directiveAuthor (no setter) so it can never reach the seed
   // userPayload (M2 capability boundary — enforced structurally, not by a prompt rule). OFF ⇒ no
   // artifact, no scan, no read, byte-identical.
-  if (params.environmentContextProfile === true) {
-    // Known-signal scan (Stage 0.5): the bounded target census (200/depth-3, dotdir-excluded) can
-    // bury root manifests under a large non-manifest directory (live-verified on this repo). Scan
-    // the target directories for known-signal files (allowlist-driven, BFS shallow-first, path-safe)
-    // and merge them into the census. Scan roots = the target refs resolved to directories.
-    const scanRootSet = new Set<string>();
-    for (const ref of targetMaterialProfile.target_refs) {
-      const resolved = path.resolve(ref);
-      try {
-        const stat = await fs.stat(resolved);
-        scanRootSet.add(stat.isDirectory() ? resolved : path.dirname(resolved));
-      } catch (error) {
-        // INV-SCHEMA-1 (G11): never swallow a terminal signal, even in a best-effort fs catch.
-        if (isGracefulTerminalSignal(error)) throw error;
-        if (readReconstructLlmDispatchFailureError(error)) throw error;
-        // Unresolvable ref — skip; the scan is best-effort augmentation, never a hard dependency.
-      }
-    }
-    // Drop any scan root that is a DESCENDANT of another (nested target refs) so its subtree is not
-    // walked twice — double-charging the shared dirent budget would hasten truncation.
-    const sortedRoots = [...scanRootSet].sort();
-    const scanRoots = sortedRoots.filter((r) =>
-      !sortedRoots.some((other) => other !== r && (r === other || r.startsWith(other + path.sep))));
-    const scan = await scanEnvironmentSignalFiles({ scanRoots });
-    // Content parse (Stage 3a) — nested inside the base profile gate, so it is inert unless the base
-    // profile is also on. OFF ⇒ contentManifests stays undefined ⇒ no manifest content is read and the
-    // profile is byte-identical to Stage 0.5 (side-effect 0). Candidates = the scan's known-signal
-    // paths ∪ the census refs (a target file passed directly), filtered to dep manifests + within the
-    // vetted scan roots by the content-parse module itself (path-safety).
-    let contentManifests: ParsedManifest[] | undefined;
-    if (params.environmentContextProfileContent === true) {
-      const censusRefs = targetMaterialProfile.detection.per_ref
-        .filter((r) => r.exists)
-        .map((r) => r.ref);
-      contentManifests = await parseEnvironmentManifests({
-        candidatePaths: [...scan.signals, ...censusRefs],
-        allowedRoots: scanRoots,
-      });
-    }
-    const profile = assembleEnvironmentContextProfile(
-      projectEnvironmentContextProfileInput({
-        targetMaterialProfile,
-        sourceObservations,
-        scannedSignals: {
-          refs: scan.signals,
-          truncated: scan.truncated,
-          maxDepth: scan.max_depth,
-          maxDirents: scan.max_dirents,
-        },
-        ...(contentManifests !== undefined ? { contentManifests } : {}),
-      }),
-    );
-    const profilePath = path.join(
-      sessionRoot,
-      "comprehension",
-      "environment-context-profile.yaml",
-    );
-    await writeYamlDocument(profilePath, { session_id: sessionId, ...profile });
-    environmentContextProfileRef = profilePath;
-  }
+  environmentContextProfileRef = await emitEnvironmentContextProfile({
+    params,
+    sessionId,
+    sessionRoot,
+    sourceObservations,
+    targetMaterialProfile,
+  });
   const semanticMapCensusRef = semanticMapStage.censusPath;
   const semanticMapSidecarRef = semanticMapStage.sidecarPath;
   const dispatchIncompleteRef = await exists(dispatchIncompleteArtifactPath(sessionRoot))

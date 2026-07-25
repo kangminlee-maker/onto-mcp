@@ -75,6 +75,18 @@ const EXTRACTIONS: readonly Extraction[] = [
     destBodyPrefix: "const { artifactRefs, preHandoffManifestPath } = args;",
     destBodySuffix: "return seedingRecordArtifactRefs;",
   },
+  {
+    label: "환경 컨텍스트 프로파일 발화 (입력 6 / 출력 0·바깥 let 변형)",
+    baseStartLine: 2604,
+    baseEndLine: 2663,
+    expectStartsWith: "if (params.environmentContextProfile === true) {",
+    destFile: "src/core-runtime/reconstruct/environment-context-profile-stage.ts",
+    destFunction: "emitEnvironmentContextProfile",
+    destBodyPrefix:
+      "const { params, sessionId, sessionRoot, sourceObservations, targetMaterialProfile } = args;\n" +
+      "let environmentContextProfileRef: string | null = null;",
+    destBodySuffix: "return environmentContextProfileRef;",
+  },
 ];
 
 // ---------------------------------------------------------------- 순수 핵심부

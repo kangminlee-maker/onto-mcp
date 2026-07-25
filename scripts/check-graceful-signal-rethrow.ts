@@ -39,6 +39,7 @@ const RUN_SURFACE_REFS = [
   "src/core-runtime/reconstruct/run.ts",
   "src/core-runtime/reconstruct/authoring-llm-call.ts",
   "src/core-runtime/reconstruct/direct-call-directive-author.ts",
+  "src/core-runtime/reconstruct/environment-context-profile-stage.ts",
   "src/core-runtime/reconstruct/leaf-read-stage.ts",
   "src/core-runtime/reconstruct/semantic-map-authoring.ts",
   "src/core-runtime/reconstruct/semantic-map-resume.ts",

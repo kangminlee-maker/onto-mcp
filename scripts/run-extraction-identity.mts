@@ -243,6 +243,19 @@ const git = (...args: string[]): string =>
  */
 const DECOMPOSED_DECLARATIONS = ["runReconstruct"];
 
+/**
+ * **분해 래퍼** — 추출된 블록을 감싸는 새 함수. 기준본에 없으니 이 검사기에는 ADDED로 보이고,
+ * 그건 정확한 판정이다(래퍼 자체는 새 코드다). 하지만 래퍼 **안의 블록**은 바이트 동일하며
+ * 그 증명은 `scripts/run-block-identity.mts`가 한다.
+ *
+ * 남용을 기계적으로 막는다:
+ *   1) 여기 적힌 이름이 실제로 ADDED가 아니면 FAIL(스테일·과다 선언).
+ *   2) 여기 적힌 이름이 블록 검사기의 `destFunction`으로 **선언돼 있지 않으면** FAIL. 즉 블록
+ *      증명 없이 ADDED 면제를 받는 경로가 없다.
+ */
+const DECOMPOSITION_WRAPPERS = ["emitEnvironmentContextProfile"];
+const BLOCK_IDENTITY_SCRIPT = "scripts/run-block-identity.mts";
+
 const APPEND_DEST_REFS = [
   "src/core-runtime/reconstruct/contract-registry.ts",
   "src/core-runtime/reconstruct/environment-context-profile.ts",
@@ -460,6 +473,34 @@ const decomposedExempt = new Set(DECOMPOSED_DECLARATIONS);
 const violations = report.findings.filter(
   (f) => f.verdict !== "STAYED" && f.verdict !== "MOVED" && !decomposedExempt.has(f.name),
 );
+
+// 분해 래퍼 면제 — (1) 실제로 ADDED인가 (2) 블록 검사기에 선언돼 있는가, 둘 다 확인한다.
+if (DECOMPOSITION_WRAPPERS.length > 0) {
+  const blockScript = fs.existsSync(BLOCK_IDENTITY_SCRIPT)
+    ? fs.readFileSync(BLOCK_IDENTITY_SCRIPT, "utf8")
+    : "";
+  if (blockScript.length === 0) {
+    console.error(`\n!! ${BLOCK_IDENTITY_SCRIPT}를 읽을 수 없다 — 래퍼 면제를 검증할 수 없다.`);
+    process.exit(1);
+  }
+  const wrapperProblems: string[] = [];
+  for (const name of DECOMPOSITION_WRAPPERS) {
+    if (!report.added.some((a) => a.name === name)) {
+      wrapperProblems.push(`${name}: ADDED가 아니다 — 면제가 스테일하거나 과다 선언이다`);
+    }
+    if (!blockScript.includes(`destFunction: "${name}"`)) {
+      wrapperProblems.push(
+        `${name}: ${BLOCK_IDENTITY_SCRIPT}의 destFunction으로 선언돼 있지 않다 — 블록 증명 없는 면제는 허용하지 않는다`,
+      );
+    }
+  }
+  if (wrapperProblems.length > 0) {
+    console.error(`\n!! DECOMPOSITION_WRAPPERS 검증 실패 ${wrapperProblems.length}건:\n  ${wrapperProblems.join("\n  ")}`);
+    process.exit(1);
+  }
+}
+const wrapperExempt = new Set(DECOMPOSITION_WRAPPERS);
+const addedViolations = report.added.filter((a) => !wrapperExempt.has(a.name));
 if (violations.length > 0) {
   console.log("\n=== 위반 상세 ===");
   for (const f of violations) {
@@ -473,7 +514,10 @@ if (violations.length > 0) {
 }
 if (report.added.length > 0) {
   console.log("\n=== 신규 선언 (이동이 아닌 새 로직) ===");
-  for (const a of report.added) console.log(`  [ADDED] ${a.name} @ ${a.file}`);
+  for (const a of report.added) {
+    const exempt = wrapperExempt.has(a.name) ? " [분해 래퍼 — 블록 증명은 run-block-identity]" : "";
+    console.log(`  [ADDED] ${a.name} @ ${a.file}${exempt}`);
+  }
 }
 
 if (VERBOSE) {
@@ -486,7 +530,7 @@ if (VERBOSE) {
   }
 }
 
-const failures = violations.length + report.added.length;
+const failures = violations.length + addedViolations.length;
 console.log("");
 if (failures > 0) {
   console.error(`FAIL — 위반 ${failures}건. 순수 이동이 아니다.`);
