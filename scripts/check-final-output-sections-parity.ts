@@ -54,11 +54,15 @@ const PROJECT_ROOT = path.resolve(
 );
 const REGISTRY_REF =
   ".onto/processes/reconstruct/reconstruct-contract-registry.yaml";
-/** The runtime final-output surface. run.ts still holds the emitters and the provenance-binding
- * rows; the prompt-policy hint moved out with the prompt payload builders, so the guard reads
- * the concatenation of both — the module-consumption and anti-re-inline checks stay whole. */
+/** The runtime final-output surface, spread across modules: final-output-assembly.ts holds the
+ * `## <Heading>` emitters and the provenance-binding rows; the prompt-policy hint lives with the
+ * prompt payload builders; run.ts holds the remaining assembly call sites. The guard reads the
+ * concatenation of all of them — the module-consumption and anti-re-inline checks stay whole.
+ * ENUMERATE the files; do NOT swap this for a directory scan — markdown-section.ts,
+ * final-output-sections.ts and source-profiles.ts also carry `## ` literals and would false-positive. */
 const RUNTIME_REFS = [
   "src/core-runtime/reconstruct/run.ts",
+  "src/core-runtime/reconstruct/final-output-assembly.ts",
   "src/core-runtime/reconstruct/authoring-prompt-payloads.ts",
 ];
 const RUNTIME_REF = "the reconstruct final-output surface";

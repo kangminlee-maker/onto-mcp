@@ -43,10 +43,8 @@ import type {
   ReconstructSourceScoutPackValidationArtifact,
   ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
-import {
-  runReconstruct,
-  appendFinalOutputUnresolvedRevisionSection,
-} from "./run.js";
+import { runReconstruct } from "./run.js";
+import { appendFinalOutputUnresolvedRevisionSection } from "./final-output-assembly.js";
 import {
   reuseMatchArtifactHash,
   sourceObservationsReuseSha256,
