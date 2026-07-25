@@ -20,6 +20,11 @@ import type {
   DocumentExcerptProjectionTruncation,
   WorkbookInventoryProjectionTruncation,
 } from "./projection-truncation.js";
+import fs from "node:fs/promises";
+import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import type { ReconstructFinalOutputProvenanceValidationArtifact } from "./artifact-types.js";
+import { validateFinalOutputProvenance } from "./post-seed-validation.js";
+import { isoNow } from "./run-primitives.js";
 
 /**
  * Surfaces unresolved (reject/defer) revision proposals in final output (#2): these
@@ -651,4 +656,59 @@ export function finalOutputProvenanceSectionBindings(args: {
       required_fragments: runtimeProvenanceBindingsRequiredFragments(),
     },
   ];
+}
+
+export async function writeFinalOutputProvenanceValidationArtifact(args: {
+  sessionId: string;
+  finalOutputPath: string;
+  sectionBindings: ReconstructFinalOutputProvenanceSectionBindingInput[];
+  forbiddenFragments: string[];
+  outputPath: string;
+}): Promise<ReconstructFinalOutputProvenanceValidationArtifact> {
+  const finalOutputText = await fs.readFile(args.finalOutputPath, "utf8");
+  const requiredFragments = [
+    ...new Set(args.sectionBindings.flatMap((binding) => binding.required_fragments)),
+  ];
+  const violations = validateFinalOutputProvenance({
+    finalOutputText,
+    sectionBindings: args.sectionBindings,
+    forbiddenFragments: args.forbiddenFragments,
+  });
+  const violationSubjects = new Set(
+    violations.map((item) => item.subject_id).filter((item): item is string => item !== null),
+  );
+  const artifact = {
+    schema_version: "1" as const,
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    final_output_ref: args.finalOutputPath,
+    validation_status: violations.length === 0 ? "valid" as const : "invalid" as const,
+    required_fragments: requiredFragments,
+    forbidden_fragments: args.forbiddenFragments,
+    section_bindings: args.sectionBindings.map((binding) => {
+      const missing = binding.required_fragments.some((fragment) =>
+        violationSubjects.has(`${binding.section_id}:${fragment}`)
+      ) || violationSubjects.has(binding.section_id);
+      return {
+        section_id: binding.section_id,
+        heading: binding.heading,
+        claim_summary: binding.claim_summary,
+        authority_refs: binding.authority_refs,
+        validation_refs: binding.validation_refs,
+        required_fragments: binding.required_fragments,
+        binding_status: missing
+          ? "missing" as const
+          : "present" as const,
+        trust_status: missing
+          ? "unbound" as const
+          : "grounded" as const,
+      };
+    }),
+    validation_results: violations.length === 0
+      ? ["final_output_provenance_valid"]
+      : ["final_output_provenance_invalid"],
+    violations,
+  };
+  await writeYamlDocument(args.outputPath, artifact);
+  return artifact;
 }

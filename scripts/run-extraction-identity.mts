@@ -231,8 +231,11 @@ const git = (...args: string[]): string =>
  */
 const APPEND_DEST_REFS = [
   "src/core-runtime/reconstruct/contract-registry.ts",
+  "src/core-runtime/reconstruct/environment-context-profile.ts",
   "src/core-runtime/reconstruct/ontology-seed-validation.ts",
   "src/core-runtime/reconstruct/post-seed-validation.ts",
+  "src/core-runtime/reconstruct/record.ts",
+  "src/core-runtime/reconstruct/source-observations.ts",
 ];
 
 /** run.ts + base ref에 없던 신규 파일 + APPEND_DEST_REFS. 근거는 Inputs.currentFiles 주석 참조. */

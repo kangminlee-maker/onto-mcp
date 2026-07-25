@@ -31,7 +31,8 @@ import { describe, expect, it } from "vitest";
  */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RUN_TS = path.join(HERE, "run.ts");
+// A1~A3이 전부 source-admission-selection-stage.ts로 옮겨가면서 run.ts는 이 가드의
+// 스캔 표면에서 빠졌다. Bucket A 사이트가 run.ts로 되돌아오면 여기에 다시 추가한다.
 const ADMISSION_TS = path.join(HERE, "source-admission-selection-stage.ts");
 const DELTA_TS = path.join(HERE, "source-observation-delta-validation.ts");
 const MATURATION_TS = path.join(HERE, "maturation-validation.ts");
@@ -87,7 +88,7 @@ function callsRegionKeyDerivation(node: ts.Node): boolean {
 const BUCKET_A_SITES: ReadonlyArray<{ file: string; fn: string; label: string }> = [
   { file: ADMISSION_TS, fn: "validateSourceFrontier", label: "A1" },
   { file: ADMISSION_TS, fn: "observeAcceptedFrontierRefs", label: "A2" },
-  { file: RUN_TS, fn: "observeAcceptedMaturationClosureSourceRequests", label: "A3" },
+  { file: ADMISSION_TS, fn: "observeAcceptedMaturationClosureSourceRequests", label: "A3" },
   { file: DELTA_TS, fn: "observationsBySourceRef", label: "A4" },
   { file: DELTA_TS, fn: "buildSourceObservationDeltaArtifact", label: "A5" },
   { file: MATURATION_TS, fn: "validateMaturationClosureFrontier", label: "A7" },

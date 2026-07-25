@@ -10,7 +10,6 @@ import type {
   ReconstructTargetMaterialProfileArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
-import { assertSemanticAuthoringHasObservedEvidence } from "./run.js";
 import {
   applyAdmissionSelectionFloorPolicy,
   capAdmissionSelectionAcceptedRefs,
@@ -28,7 +27,10 @@ import {
   type ReconstructSourceAdmissionSelectionAuthorInput,
 } from "./directive-author-contract.js";
 import { isZeroObservationGracefulTerminalEligible } from "./graceful-terminal.js";
-import { validateSourceObservationBoundary } from "./source-observations.js";
+import {
+  assertSemanticAuthoringHasObservedEvidence,
+  validateSourceObservationBoundary,
+} from "./source-observations.js";
 
 // Spec basis: development-records/design/20260722-inter-document-breadth-stage2-design.md §4-§7,
 // §13 PR-2b. Direct-function-call style (run-source-region-decomposition.test.ts precedent):

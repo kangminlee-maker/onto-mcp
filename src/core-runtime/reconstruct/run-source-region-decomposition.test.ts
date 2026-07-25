@@ -12,9 +12,9 @@ import type {
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
-import { observeAcceptedMaturationClosureSourceRequests } from "./run.js";
 import {
   observeAcceptedFrontierRefs,
+  observeAcceptedMaturationClosureSourceRequests,
   validateSourceFrontier,
 } from "./source-admission-selection-stage.js";
 import { sourceObservationsReuseSha256 } from "./authored-artifact-reuse.js";

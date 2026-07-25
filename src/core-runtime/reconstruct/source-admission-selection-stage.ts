@@ -21,6 +21,10 @@ import {
 import { isoNow } from "./run-primitives.js";
 import { regionCoverageKeys, regionKey } from "./source-observations.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
+import type {
+  ReconstructMaturationClosureFrontierArtifact,
+  ReconstructMaturationClosureFrontierValidationArtifact,
+} from "./artifact-types.js";
 
 export function assertRuntimeValidationValid(args: {
   artifactName: string;
@@ -576,6 +580,136 @@ export async function observeAcceptedFrontierRefs(args: {
       ...new Set([
         ...args.sourceObservations.validation_results,
         "source_frontier_refs_observed",
+      ]),
+    ],
+  };
+  await writeYamlDocument(args.sourceObservationsPath, nextSourceObservations);
+  return nextSourceObservations;
+}
+
+// Exported for direct unit testing — see validateSourceFrontier's export comment above.
+export async function observeAcceptedMaturationClosureSourceRequests(args: {
+  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+  maturationClosureFrontierValidation:
+    ReconstructMaturationClosureFrontierValidationArtifact;
+  maturationClosureFrontierValidationPath: string;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsPath: string;
+  codeStructureObservation?: boolean;
+  codeSetTierObservation?: boolean;
+  codeStructureLayout?: boolean;
+  // Stage 1 source-region-decomposition opt-in (design §5 A3, §10 PR-1b-2, INVARIANT-CHANGE): gates
+  // whether request.requested_location is consulted below. requested_location is a PRE-EXISTING,
+  // always-populated field (unlike frontier.location in A2) — threading it unconditionally would
+  // change accept/reject outcomes for every maturation closure run, on or off, so this must stay
+  // opt-in-gated to hold the off-path byte-identical.
+  sourceRegionDecomposition?: boolean;
+}): Promise<ReconstructSourceObservationsArtifact> {
+  // A3 (design §5): regionKey-keyed coverage set (registered under both the
+  // file-level and precise forms). request.requested_location is a pre-existing
+  // LLM-authored field (not a region anchor); threaded into the query key ONLY when
+  // sourceRegionDecomposition is on (see the field doc comment above) — PR-1b-2.
+  const observedSourceRefs = new Set(
+    args.sourceObservations.observations.flatMap((observation) =>
+      regionCoverageKeys(observation.source_ref, observation.location)
+    ),
+  );
+  const sourceRequestById = new Map(
+    args.maturationClosureFrontier.source_requests.map((request) => [
+      request.source_request_id,
+      request,
+    ]),
+  );
+  const inventoryByRef = new Map(
+    args.sourceInventory.inventory_units.map((unit) => [
+      path.resolve(unit.ref),
+      unit,
+    ]),
+  );
+  const addedObservations: ReconstructSourceObservationsArtifact["observations"] = [];
+
+  for (
+    const sourceRequestId of
+      args.maturationClosureFrontierValidation.accepted_source_request_ids
+  ) {
+    const request = sourceRequestById.get(sourceRequestId);
+    if (!request) {
+      throw new Error(
+        `accepted maturation closure source request id has no source request row: ${sourceRequestId}`,
+      );
+    }
+    const resolvedSourceRef = path.resolve(request.requested_source_ref);
+    // coverageKey: request.requested_location is consulted ONLY when sourceRegionDecomposition is
+    // on (see the field doc comment above) — off is the file-level form, byte-identical to the
+    // prior bare `path.resolve()` lookup.
+    const coverageKey = regionKey(
+      request.requested_source_ref,
+      args.sourceRegionDecomposition === true ? (request.requested_location ?? undefined) : undefined,
+    );
+    if (observedSourceRefs.has(coverageKey)) {
+      throw new Error(
+        `accepted maturation closure source request was already observed before re-entry: ${request.requested_source_ref}`,
+      );
+    }
+    const inventoryUnit = inventoryByRef.get(resolvedSourceRef);
+    if (!inventoryUnit) {
+      throw new Error(
+        `accepted maturation closure source request is not present in source inventory: ${request.requested_source_ref}`,
+      );
+    }
+    const detection: TargetMaterialRefDetection = {
+      ref: inventoryUnit.ref,
+      exists: inventoryUnit.exists,
+      kind: inventoryUnit.target_material_kind,
+      confidence: inventoryUnit.exists ? 0.92 : 0.1,
+      confidence_basis:
+        `maturation-closure-frontier accepted source request ${sourceRequestId}`,
+    };
+    const observation = await buildReconstructSourceObservation(detection, {
+      roundId: args.maturationClosureFrontier.round_id,
+      observationBatchId:
+        `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
+      triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
+    }, {
+      ...(args.codeStructureObservation === true
+        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
+        : {}),
+      // A3 thread-through (design §5/§10 PR-1b-2): the re-observed observation's anchor becomes the
+      // maturation-requested location, ONLY when the opt-in is on (matches the coverage key above).
+      ...(args.sourceRegionDecomposition === true && request.requested_location
+        ? { locationOverride: request.requested_location }
+        : {}),
+    });
+    // Unsupported workbook formats are un-observable like a vanished ref — no
+    // evidence to admit (mirrors the materialize-loop demotion and F1).
+    if (!observation || spreadsheetUnsupportedReason(observation)) {
+      throw new Error(
+        `accepted maturation closure source request cannot be observed by current runtime: ${request.requested_source_ref}`,
+      );
+    }
+    addedObservations.push(observation);
+    // Register the newly added observation under both coverage forms — same as
+    // the initial Set construction above.
+    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
+      observedSourceRefs.add(k);
+    }
+  }
+
+  const nextSourceObservations: ReconstructSourceObservationsArtifact = {
+    ...args.sourceObservations,
+    created_at: isoNow(),
+    observations: [
+      ...args.sourceObservations.observations,
+      ...addedObservations,
+    ],
+    skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
+      !observedSourceRefs.has(regionKey(skipped.ref))
+    ),
+    validation_results: [
+      ...new Set([
+        ...args.sourceObservations.validation_results,
+        "maturation_closure_source_requests_observed",
       ]),
     ],
   };

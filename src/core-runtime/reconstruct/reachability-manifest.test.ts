@@ -17,10 +17,8 @@ import type {
   ReconstructStageId,
 } from "./artifact-types.js";
 import { validateReconstructRunManifest } from "./terminal-validation.js";
-import {
-  artifactRefsWithDefaults,
-  buildSourceObservationLineageCensus,
-} from "./run.js";
+import { buildSourceObservationLineageCensus } from "./run.js";
+import { artifactRefsWithDefaults } from "./record.js";
 import type { ReconstructConfirmationProvider } from "./confirmation-provider-contract.js";
 import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
 import {

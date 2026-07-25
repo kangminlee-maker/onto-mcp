@@ -1,4 +1,15 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
+import type { CodeStructureInventory } from "../code-structure-observer.js";
+import {
+  TARGET_MATERIAL_WALK_MAX_DEPTH,
+  TARGET_MATERIAL_WALK_MAX_ENTRIES,
+} from "../target-material-kind.js";
+import type {
+  ReconstructSourceObservationsArtifact,
+  ReconstructTargetMaterialProfileArtifact,
+} from "./artifact-types.js";
+import type { ParsedManifest } from "./environment-content-parse.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // environment-context-profile — deterministic environment/tech-stack profile of the reconstruct
@@ -925,5 +936,107 @@ export function assembleEnvironmentContextProfile(
     conflicts,
     coverage,
     fingerprint,
+  };
+}
+
+/** Project the already-materialized target-material census + source observations down to the pure
+ *  {@link EnvironmentContextProfileInput} the profile assembler consumes (Stage 0). Deterministic
+ *  path/field math only — NO filesystem access. Absolute census/observation refs are relativized to
+ *  their deepest common directory so scope tokens + the fingerprint stay path-portable. Imports and
+ *  language come from the captured code inventory (present only under the set-tier opt-in). Exported
+ *  for direct coverage of the real-path projection (the assembler is unit-tested separately). */
+export function projectEnvironmentContextProfileInput(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  /** Absolute paths found by the known-signal scan (environment-signal-scan.ts) — merged into the
+   *  census (deduped with per_ref) so manifests the bounded target walk buried are still detected.
+   *  `truncated` flows to coverage. Empty/false when the scan did not run (e.g. unit tests). */
+  scannedSignals?: { refs: readonly string[]; truncated: boolean; maxDepth: number; maxDirents: number };
+  /** Statically-parsed manifests (Stage 3a content_parse), keyed by absolute path. UNDEFINED ⇒ the
+   *  content opt-in did not run → `content_manifests` stays undefined → the profile is byte-identical
+   *  to Stage 0.5. Relativized here to the same common root as the census/observations. */
+  contentManifests?: readonly ParsedManifest[];
+}): EnvironmentContextProfileInput {
+  const censusRefs = args.targetMaterialProfile.detection.per_ref;
+  const scannedRefs = args.scannedSignals?.refs ?? [];
+  const commonRoot = deepestCommonDirectory(
+    censusRefs.map((r) => r.ref)
+      .concat(scannedRefs)
+      .concat(args.sourceObservations.observations.map((o) => o.source_ref)),
+  );
+  const relativize = (absPath: string): string => {
+    const rel = path.relative(commonRoot, absPath);
+    // path.relative can emit "" (the root itself) or ".."-escapes for refs outside commonRoot; the
+    // basename fallback keeps a signal (never dropped) and never carries an escape into the output.
+    // Normalize separators to "/" so path-shape rules (which use "/") match on Windows too.
+    const chosen = rel === "" || rel.startsWith("..") ? path.basename(absPath) : rel;
+    return chosen.replace(/\\/g, "/");
+  };
+  // Census = per_ref ∪ scanned known-signals, deduped by resolved absolute path (a scanned manifest
+  // the bounded walk also happened to reach must not double-count).
+  const censusByAbs = new Map<string, EnvironmentCensusFile>();
+  for (const r of censusRefs) censusByAbs.set(path.resolve(r.ref), { rel_path: relativize(r.ref), exists: r.exists });
+  for (const ref of scannedRefs) {
+    const abs = path.resolve(ref);
+    if (!censusByAbs.has(abs)) censusByAbs.set(abs, { rel_path: relativize(ref), exists: true });
+  }
+  const census: EnvironmentCensusFile[] = [...censusByAbs.values()];
+  // imports_available is derived from the OBSERVED DATA (whether any inventory actually carries the
+  // captured imports field — present even when empty), NOT from a caller flag: this stays correct
+  // for a direct runReconstruct caller that passes codeSetTier without the capture opt-in (the
+  // set∧capture precondition is enforced only in the API), and honestly reflects what was captured.
+  let importsAvailable = false;
+  const observations: EnvironmentObservedFile[] = args.sourceObservations.observations.map((obs) => {
+    const structural = obs.structural_data as Record<string, unknown>;
+    const inventory = structural.code_structure_inventory;
+    const inv = inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)
+      ? (inventory as CodeStructureInventory)
+      : null;
+    // Grammar-free ROUGH layout imports were extracted heuristically (no static parse) — they must
+    // NOT drive import-based framework detection (design 20260721 §6-5): a rough `require "react"`
+    // in a Lua string could otherwise mis-promote `framework:react` (the import signal's "near
+    // certain" class assumes AST extraction). Excluded from BOTH the imports list and
+    // imports_available, exactly as if this member had not captured imports.
+    const capturedImports = inv?.extraction_tier === "layout" ? undefined : inv?.symbol_tiles.imports;
+    if (capturedImports !== undefined) importsAvailable = true;
+    const contentSha = typeof structural.content_sha256 === "string"
+      ? structural.content_sha256
+      : inv?.content_sha256 ?? null;
+    return {
+      rel_path: relativize(obs.source_ref),
+      language: inv?.language ?? null,
+      content_sha256: contentSha,
+      imports: capturedImports?.map((record) => record.to_specifier) ?? [],
+    };
+  });
+  return {
+    census,
+    observations,
+    // The reused census is a bounded walk (never a complete scan) — disclose its structural limits
+    // so detections are never read as a completeness claim (single-sourced from target-material-kind).
+    census_walk_bounds: {
+      max_entries_per_directory_ref: TARGET_MATERIAL_WALK_MAX_ENTRIES,
+      max_depth: TARGET_MATERIAL_WALK_MAX_DEPTH,
+    },
+    imports_available: importsAvailable,
+    signal_scan: {
+      truncated: args.scannedSignals?.truncated ?? false,
+      max_depth: args.scannedSignals?.maxDepth ?? 0,
+      max_dirents: args.scannedSignals?.maxDirents ?? 0,
+    },
+    // Content manifests (Stage 3a) — undefined when the opt-in did not run (byte-identical Stage 0.5).
+    // Relativized to the same common root; the abs_path is a scanned/census ref so it is inside it.
+    ...(args.contentManifests !== undefined
+      ? {
+          content_manifests: args.contentManifests.map((m): EnvironmentContentManifest => ({
+            rel_path: relativize(m.abs_path),
+            status: m.status,
+            declared_packages: m.declared_packages,
+            runtime_version_constraint: m.runtime_version_constraint,
+            module_type: m.module_type,
+            content_sha256: m.content_sha256,
+          })),
+        }
+      : {}),
   };
 }

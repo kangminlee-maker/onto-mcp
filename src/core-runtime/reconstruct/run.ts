@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { assertArrayField, atomicWriteFile, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { atomicWriteFile, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructOntologySeedArtifact,
   ReconstructOntologySeedValidationArtifact,
@@ -15,12 +15,9 @@ import type {
   ReconstructEvidenceRef,
   ReconstructExplorationSynthesisArtifact,
   ReconstructFailureClassificationValidationArtifact,
-  ReconstructFinalOutputProvenanceValidationArtifact,
   ReconstructLensJudgmentArtifact,
   ReconstructLensJudgmentIndexArtifact,
   ReconstructMaterialAdmissionLedgerValidationArtifact,
-  ReconstructMaturationClosureFrontierArtifact,
-  ReconstructMaturationClosureFrontierValidationArtifact,
   ReconstructSemanticMapCensus,
   ReconstructSemanticMapSidecar,
   ReconstructMetricsArtifact,
@@ -65,23 +62,14 @@ import {
   type DispatchIncompleteArtifact,
 } from "../llm/dispatch-breaker.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
-import {
-  TARGET_MATERIAL_WALK_MAX_ENTRIES,
-  TARGET_MATERIAL_WALK_MAX_DEPTH,
-  type TargetMaterialRefDetection,
-} from "../target-material-kind.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
 import {
-  buildReconstructSourceObservation,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   materializeReconstructPreparationArtifacts,
-  observeInventoryUnitDeep,
-  spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import {
   validateFinalOutputProvenance,
-  type ReconstructFinalOutputProvenanceSectionBindingInput,
   writeClaimRealizationMapValidationForOntologySeedArtifact,
   writeCompetencyQuestionAssessmentValidationArtifact,
   writeCompetencyQuestionsValidationForOntologySeedArtifact,
@@ -191,10 +179,6 @@ import {
 import {
   ontologySeedAnswerabilitySummary,
 } from "./seed-claim-projections.js";
-import {
-  regionCoverageKeys,
-  regionKey,
-} from "./source-observations.js";
 // W1/W2 (wiring design 20260702 §15.1/§3): the semantic-map capability seat + W2 stage reuse the
 // module's canonical shapes and single-source builders (no live runReconstruct call site until W3).
 import {
@@ -210,11 +194,6 @@ import {
 } from "./comprehension-set-tier.js";
 import {
   assembleEnvironmentContextProfile,
-  deepestCommonDirectory,
-  type EnvironmentCensusFile,
-  type EnvironmentContentManifest,
-  type EnvironmentContextProfileInput,
-  type EnvironmentObservedFile,
 } from "./environment-context-profile.js";
 import { scanEnvironmentSignalFiles } from "./environment-signal-scan.js";
 import { parseEnvironmentManifests, type ParsedManifest } from "./environment-content-parse.js";
@@ -314,6 +293,16 @@ import {
 import { readLensPrompt, sourceObservationsForPrompt } from "./authoring-prompt-payloads.js";
 import { buildGracefulTerminalFinalOutput } from "./graceful-terminal.js";
 import type { GracefulTerminalAssemblyContext } from "./graceful-terminal.js";
+import { writeFinalOutputProvenanceValidationArtifact } from "./final-output-assembly.js";
+import { projectEnvironmentContextProfileInput } from "./environment-context-profile.js";
+import {
+  observeAcceptedMaturationClosureSourceRequests,
+} from "./source-admission-selection-stage.js";
+import {
+  assertSemanticAuthoringHasObservedEvidence,
+  buildZeroObservationDiagnostic,
+} from "./source-observations.js";
+import { artifactRefsWithDefaults } from "./record.js";
 
 export interface RunReconstructParams {
   projectRoot: string;
@@ -489,108 +478,6 @@ const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
 // leaf-reader precedent) — the earlier hand-bumped literal was a silent-stale seed on any predicate
 // edit whose author forgot the bump (ultracode audit F, 2-lens convergence with design §13.4).
 
-/** Project the already-materialized target-material census + source observations down to the pure
- *  {@link EnvironmentContextProfileInput} the profile assembler consumes (Stage 0). Deterministic
- *  path/field math only — NO filesystem access. Absolute census/observation refs are relativized to
- *  their deepest common directory so scope tokens + the fingerprint stay path-portable. Imports and
- *  language come from the captured code inventory (present only under the set-tier opt-in). Exported
- *  for direct coverage of the real-path projection (the assembler is unit-tested separately). */
-export function projectEnvironmentContextProfileInput(args: {
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  /** Absolute paths found by the known-signal scan (environment-signal-scan.ts) — merged into the
-   *  census (deduped with per_ref) so manifests the bounded target walk buried are still detected.
-   *  `truncated` flows to coverage. Empty/false when the scan did not run (e.g. unit tests). */
-  scannedSignals?: { refs: readonly string[]; truncated: boolean; maxDepth: number; maxDirents: number };
-  /** Statically-parsed manifests (Stage 3a content_parse), keyed by absolute path. UNDEFINED ⇒ the
-   *  content opt-in did not run → `content_manifests` stays undefined → the profile is byte-identical
-   *  to Stage 0.5. Relativized here to the same common root as the census/observations. */
-  contentManifests?: readonly ParsedManifest[];
-}): EnvironmentContextProfileInput {
-  const censusRefs = args.targetMaterialProfile.detection.per_ref;
-  const scannedRefs = args.scannedSignals?.refs ?? [];
-  const commonRoot = deepestCommonDirectory(
-    censusRefs.map((r) => r.ref)
-      .concat(scannedRefs)
-      .concat(args.sourceObservations.observations.map((o) => o.source_ref)),
-  );
-  const relativize = (absPath: string): string => {
-    const rel = path.relative(commonRoot, absPath);
-    // path.relative can emit "" (the root itself) or ".."-escapes for refs outside commonRoot; the
-    // basename fallback keeps a signal (never dropped) and never carries an escape into the output.
-    // Normalize separators to "/" so path-shape rules (which use "/") match on Windows too.
-    const chosen = rel === "" || rel.startsWith("..") ? path.basename(absPath) : rel;
-    return chosen.replace(/\\/g, "/");
-  };
-  // Census = per_ref ∪ scanned known-signals, deduped by resolved absolute path (a scanned manifest
-  // the bounded walk also happened to reach must not double-count).
-  const censusByAbs = new Map<string, EnvironmentCensusFile>();
-  for (const r of censusRefs) censusByAbs.set(path.resolve(r.ref), { rel_path: relativize(r.ref), exists: r.exists });
-  for (const ref of scannedRefs) {
-    const abs = path.resolve(ref);
-    if (!censusByAbs.has(abs)) censusByAbs.set(abs, { rel_path: relativize(ref), exists: true });
-  }
-  const census: EnvironmentCensusFile[] = [...censusByAbs.values()];
-  // imports_available is derived from the OBSERVED DATA (whether any inventory actually carries the
-  // captured imports field — present even when empty), NOT from a caller flag: this stays correct
-  // for a direct runReconstruct caller that passes codeSetTier without the capture opt-in (the
-  // set∧capture precondition is enforced only in the API), and honestly reflects what was captured.
-  let importsAvailable = false;
-  const observations: EnvironmentObservedFile[] = args.sourceObservations.observations.map((obs) => {
-    const structural = obs.structural_data as Record<string, unknown>;
-    const inventory = structural.code_structure_inventory;
-    const inv = inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)
-      ? (inventory as CodeStructureInventory)
-      : null;
-    // Grammar-free ROUGH layout imports were extracted heuristically (no static parse) — they must
-    // NOT drive import-based framework detection (design 20260721 §6-5): a rough `require "react"`
-    // in a Lua string could otherwise mis-promote `framework:react` (the import signal's "near
-    // certain" class assumes AST extraction). Excluded from BOTH the imports list and
-    // imports_available, exactly as if this member had not captured imports.
-    const capturedImports = inv?.extraction_tier === "layout" ? undefined : inv?.symbol_tiles.imports;
-    if (capturedImports !== undefined) importsAvailable = true;
-    const contentSha = typeof structural.content_sha256 === "string"
-      ? structural.content_sha256
-      : inv?.content_sha256 ?? null;
-    return {
-      rel_path: relativize(obs.source_ref),
-      language: inv?.language ?? null,
-      content_sha256: contentSha,
-      imports: capturedImports?.map((record) => record.to_specifier) ?? [],
-    };
-  });
-  return {
-    census,
-    observations,
-    // The reused census is a bounded walk (never a complete scan) — disclose its structural limits
-    // so detections are never read as a completeness claim (single-sourced from target-material-kind).
-    census_walk_bounds: {
-      max_entries_per_directory_ref: TARGET_MATERIAL_WALK_MAX_ENTRIES,
-      max_depth: TARGET_MATERIAL_WALK_MAX_DEPTH,
-    },
-    imports_available: importsAvailable,
-    signal_scan: {
-      truncated: args.scannedSignals?.truncated ?? false,
-      max_depth: args.scannedSignals?.maxDepth ?? 0,
-      max_dirents: args.scannedSignals?.maxDirents ?? 0,
-    },
-    // Content manifests (Stage 3a) — undefined when the opt-in did not run (byte-identical Stage 0.5).
-    // Relativized to the same common root; the abs_path is a scanned/census ref so it is inside it.
-    ...(args.contentManifests !== undefined
-      ? {
-          content_manifests: args.contentManifests.map((m): EnvironmentContentManifest => ({
-            rel_path: relativize(m.abs_path),
-            status: m.status,
-            declared_packages: m.declared_packages,
-            runtime_version_constraint: m.runtime_version_constraint,
-            module_type: m.module_type,
-            content_sha256: m.content_sha256,
-          })),
-        }
-      : {}),
-  };
-}
-
 // ── code semantic-map prompts (step 6 · multi-artifact design DD6) ────────────────────────────────
 // Registered in CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT — NOT in the CG-1 catalog above: the
 // CG-1 sha folds into every SPREADSHEET fingerprint (reduce_prompt_sha256), so cataloging these
@@ -738,58 +625,6 @@ function countBy<T extends string>(
   return counts;
 }
 
-/**
- * The zero-observation diagnostic (shared by the crash path and the graceful blocked terminal so
- * both carry the same honest "why": target kind, support status, unsupported reason, and the merged
- * set of skipped refs). A ref that vanishes between detection and re-observation lands on BOTH
- * surfaces — observeInventoryUnitDeep demotes its inventory unit to `skipped` *and* returns a
- * skipped_refs row — so the merge mostly dedups; it still matters for refs discovered mid-run that
- * never became inventory units, which reach skipped_refs alone.
- *
- * `deferred_admitted_refs` counts inventory units still `admitted` at the terminal: material the run
- * held back rather than failed to read. Emitted only when non-zero, so runs without admission
- * selection keep the pre-existing message byte-for-byte.
- */
-function buildZeroObservationDiagnostic(args: {
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceInventory: ReconstructSourceInventoryArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}): string {
-  const inventorySkipped = args.sourceInventory.inventory_units
-    .filter((unit) => unit.scan_status === "skipped")
-    .map((unit) =>
-      `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
-    );
-  assertArrayField(args.sourceObservations.skipped_refs, "source-observations", "skipped_refs");
-  const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
-    `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
-  );
-  const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
-  const deferredAdmitted = args.sourceInventory.inventory_units.filter(
-    (unit) => unit.scan_status === "admitted",
-  ).length;
-  return [
-    "reconstruct semantic authoring requires at least one runtime source observation",
-    `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
-    `support_status=${args.targetMaterialProfile.support_status}`,
-    `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
-    `skipped_refs=${skipped.join(", ") || "none"}`,
-    ...(deferredAdmitted > 0 ? [`deferred_admitted_refs=${deferredAdmitted}`] : []),
-  ].join("; ");
-}
-
-// Exported (Core Stage 2 inter-document breadth design 20260722-inter-document-breadth-stage2 §4
-// PR-2b): direct unit testing that the admission-selection stage's floor policy populates
-// `sourceObservations` before this gate would otherwise crash (design §4/§7 gate-ordering).
-export function assertSemanticAuthoringHasObservedEvidence(args: {
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceInventory: ReconstructSourceInventoryArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}): void {
-  if (args.sourceObservations.observations.length > 0) return;
-  throw new Error(buildZeroObservationDiagnostic(args));
-}
-
 function calculateMetrics(args: {
   sessionId: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -909,188 +744,6 @@ function calculateMetrics(args: {
         ? 0
         : Number((passedQuestions / competencyQuestionCount).toFixed(4)),
     validation_status: validationStatus,
-  };
-}
-
-export function artifactRefsWithDefaults(args: {
-  refs: Partial<ReconstructRecordArtifactRefs>;
-}): ReconstructRecordArtifactRefs {
-  return {
-    reconstruct_run_control: args.refs.reconstruct_run_control ?? null,
-    reconstruct_run_control_validation:
-      args.refs.reconstruct_run_control_validation ?? null,
-    reconstruct_run_control_pre_publication_validation:
-      args.refs.reconstruct_run_control_pre_publication_validation ?? null,
-    reconstruct_run_bootstrap_diagnostic:
-      args.refs.reconstruct_run_bootstrap_diagnostic ?? null,
-    registry_verification_evidence:
-      args.refs.registry_verification_evidence ?? null,
-    registry_verification_evidence_validation:
-      args.refs.registry_verification_evidence_validation ?? null,
-    target_material_profile: args.refs.target_material_profile ?? null,
-    target_material_profile_validation:
-      args.refs.target_material_profile_validation ?? null,
-    source_inventory: args.refs.source_inventory ?? null,
-    initial_source_frontier: args.refs.initial_source_frontier ?? null,
-    source_observations: args.refs.source_observations ?? null,
-    seed_stage_prompt_source_observations:
-      args.refs.seed_stage_prompt_source_observations ?? null,
-    source_observation_delta: args.refs.source_observation_delta ?? null,
-    source_observation_delta_validation:
-      args.refs.source_observation_delta_validation ?? null,
-    source_observation_reentry_validation:
-      args.refs.source_observation_reentry_validation ?? null,
-    source_observation_lineage_index:
-      args.refs.source_observation_lineage_index ?? null,
-    source_observation_lineage_index_validation:
-      args.refs.source_observation_lineage_index_validation ?? null,
-    leaf_read_census: args.refs.leaf_read_census ?? null,
-    dispatch_incomplete: args.refs.dispatch_incomplete ?? null,
-    semantic_map_census: args.refs.semantic_map_census ?? null,
-    semantic_map_sidecar: args.refs.semantic_map_sidecar ?? null,
-    semantic_map_resume_validation:
-      args.refs.semantic_map_resume_validation ?? null,
-    environment_context_profile:
-      args.refs.environment_context_profile ?? null,
-    source_safety_ledger: args.refs.source_safety_ledger ?? null,
-    source_safety_ledger_validation:
-      args.refs.source_safety_ledger_validation ?? null,
-    source_scout_pack: args.refs.source_scout_pack ?? null,
-    source_scout_pack_validation:
-      args.refs.source_scout_pack_validation ?? null,
-    source_scout_pack_pre_seed:
-      args.refs.source_scout_pack_pre_seed ?? null,
-    source_scout_pack_validation_pre_seed:
-      args.refs.source_scout_pack_validation_pre_seed ?? null,
-    source_scout_pack_post_maturation:
-      args.refs.source_scout_pack_post_maturation ?? null,
-    source_scout_pack_validation_post_maturation:
-      args.refs.source_scout_pack_validation_post_maturation ?? null,
-    post_maturation_gate_projection_validation:
-      args.refs.post_maturation_gate_projection_validation ?? null,
-    source_observation_directive:
-      args.refs.source_observation_directive ?? null,
-    source_observation_directive_validation:
-      args.refs.source_observation_directive_validation ?? null,
-    lens_judgment_index: args.refs.lens_judgment_index ?? null,
-    exploration_synthesis: args.refs.exploration_synthesis ?? null,
-    source_frontier: args.refs.source_frontier ?? null,
-    source_frontier_validation: args.refs.source_frontier_validation ?? null,
-    source_purpose_candidates: args.refs.source_purpose_candidates ?? null,
-    source_purpose_candidates_validation:
-      args.refs.source_purpose_candidates_validation ?? null,
-    purpose_confirmation: args.refs.purpose_confirmation ?? null,
-    purpose_confirmation_validation:
-      args.refs.purpose_confirmation_validation ?? null,
-    material_admission_ledger:
-      args.refs.material_admission_ledger ?? null,
-    material_admission_ledger_validation:
-      args.refs.material_admission_ledger_validation ?? null,
-    candidate_inventory: args.refs.candidate_inventory ?? null,
-    candidate_disposition: args.refs.candidate_disposition ?? null,
-    candidate_disposition_validation:
-      args.refs.candidate_disposition_validation ?? null,
-    seed_authoring_readiness:
-      args.refs.seed_authoring_readiness ?? null,
-    seed_authoring_readiness_validation:
-      args.refs.seed_authoring_readiness_validation ?? null,
-    ontology_seed: args.refs.ontology_seed ?? null,
-    ontology_seed_validation: args.refs.ontology_seed_validation ?? null,
-    claim_realization_map: args.refs.claim_realization_map ?? null,
-    claim_realization_map_validation:
-      args.refs.claim_realization_map_validation ?? null,
-    seed_confirmation: args.refs.seed_confirmation ?? null,
-    seed_confirmation_validation:
-      args.refs.seed_confirmation_validation ?? null,
-    competency_questions: args.refs.competency_questions ?? null,
-    competency_questions_validation:
-      args.refs.competency_questions_validation ?? null,
-    competency_question_assessment:
-      args.refs.competency_question_assessment ?? null,
-    competency_question_assessment_validation:
-      args.refs.competency_question_assessment_validation ?? null,
-    failure_classification: args.refs.failure_classification ?? null,
-    failure_classification_validation:
-      args.refs.failure_classification_validation ?? null,
-    revision_proposal: args.refs.revision_proposal ?? null,
-    revision_proposal_validation:
-      args.refs.revision_proposal_validation ?? null,
-    reconstruct_metrics: args.refs.reconstruct_metrics ?? null,
-    stop_decision: args.refs.stop_decision ?? null,
-    pre_handoff_run_manifest_validation:
-      args.refs.pre_handoff_run_manifest_validation ?? null,
-    post_publication_run_manifest_validation:
-      args.refs.post_publication_run_manifest_validation ?? null,
-    handoff_decision_validation:
-      args.refs.handoff_decision_validation ?? null,
-    maturation_baseline: args.refs.maturation_baseline ?? null,
-    maturation_baseline_validation:
-      args.refs.maturation_baseline_validation ?? null,
-    baseline_actionability_matrix:
-      args.refs.baseline_actionability_matrix ?? null,
-    baseline_actionability_matrix_validation:
-      args.refs.baseline_actionability_matrix_validation ?? null,
-    maturation_value_discharge: args.refs.maturation_value_discharge ?? null,
-    maturation_value_discharge_validation:
-      args.refs.maturation_value_discharge_validation ?? null,
-    maturation_value_discharge_census:
-      args.refs.maturation_value_discharge_census ?? null,
-    actionability_matrix: args.refs.actionability_matrix ?? null,
-    actionability_matrix_validation:
-      args.refs.actionability_matrix_validation ?? null,
-    maturation_question_frontier:
-      args.refs.maturation_question_frontier ?? null,
-    maturation_question_frontier_validation:
-      args.refs.maturation_question_frontier_validation ?? null,
-    maturation_closure_frontier:
-      args.refs.maturation_closure_frontier ?? null,
-    maturation_closure_frontier_validation:
-      args.refs.maturation_closure_frontier_validation ?? null,
-    maturation_authority_response:
-      args.refs.maturation_authority_response ?? null,
-    maturation_authority_response_validation:
-      args.refs.maturation_authority_response_validation ?? null,
-    answer_support_ledger: args.refs.answer_support_ledger ?? null,
-    answer_support_ledger_validation:
-      args.refs.answer_support_ledger_validation ?? null,
-    answer_support_judgment: args.refs.answer_support_judgment ?? null,
-    answer_support_judgment_validation:
-      args.refs.answer_support_judgment_validation ?? null,
-    maturation_answer_claims: args.refs.maturation_answer_claims ?? null,
-    maturation_answer_claims_validation:
-      args.refs.maturation_answer_claims_validation ?? null,
-    ontology_expansion: args.refs.ontology_expansion ?? null,
-    ontology_expansion_validation:
-      args.refs.ontology_expansion_validation ?? null,
-    maturation_source_delta: args.refs.maturation_source_delta ?? null,
-    maturation_source_delta_validation:
-      args.refs.maturation_source_delta_validation ?? null,
-    maturation_convergence_ledger:
-      args.refs.maturation_convergence_ledger ?? null,
-    maturation_convergence_ledger_validation:
-      args.refs.maturation_convergence_ledger_validation ?? null,
-    maturation_continuation_decision:
-      args.refs.maturation_continuation_decision ?? null,
-    maturation_continuation_decision_validation:
-      args.refs.maturation_continuation_decision_validation ?? null,
-    query_proofs: args.refs.query_proofs ?? null,
-    query_proofs_validation: args.refs.query_proofs_validation ?? null,
-    visualization_proofs: args.refs.visualization_proofs ?? null,
-    visualization_proofs_validation:
-      args.refs.visualization_proofs_validation ?? null,
-    graph_exploration_proofs: args.refs.graph_exploration_proofs ?? null,
-    graph_exploration_proofs_validation:
-      args.refs.graph_exploration_proofs_validation ?? null,
-    actionable_ontology: args.refs.actionable_ontology ?? null,
-    actionable_ontology_validation:
-      args.refs.actionable_ontology_validation ?? null,
-    claim_projection: args.refs.claim_projection ?? null,
-    claim_projection_validation:
-      args.refs.claim_projection_validation ?? null,
-    final_output: args.refs.final_output ?? null,
-    final_output_provenance_validation:
-      args.refs.final_output_provenance_validation ?? null,
-    reconstruct_run_manifest: args.refs.reconstruct_run_manifest ?? null,
   };
 }
 
@@ -2023,191 +1676,6 @@ if (SOURCE_ADMISSION_SELECTION_FLOOR > SOURCE_ADMISSION_DEEP_FILE_LIMIT) {
 // coverage is complete (DD6). Concept split 근거: fingerprint 격리라는 런타임 동작 차이.
 
 const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;
-
-// Exported for direct unit testing — see validateSourceFrontier's export comment above.
-export async function observeAcceptedMaturationClosureSourceRequests(args: {
-  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
-  maturationClosureFrontierValidation:
-    ReconstructMaturationClosureFrontierValidationArtifact;
-  maturationClosureFrontierValidationPath: string;
-  sourceInventory: ReconstructSourceInventoryArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsPath: string;
-  codeStructureObservation?: boolean;
-  codeSetTierObservation?: boolean;
-  codeStructureLayout?: boolean;
-  // Stage 1 source-region-decomposition opt-in (design §5 A3, §10 PR-1b-2, INVARIANT-CHANGE): gates
-  // whether request.requested_location is consulted below. requested_location is a PRE-EXISTING,
-  // always-populated field (unlike frontier.location in A2) — threading it unconditionally would
-  // change accept/reject outcomes for every maturation closure run, on or off, so this must stay
-  // opt-in-gated to hold the off-path byte-identical.
-  sourceRegionDecomposition?: boolean;
-}): Promise<ReconstructSourceObservationsArtifact> {
-  // A3 (design §5): regionKey-keyed coverage set (registered under both the
-  // file-level and precise forms). request.requested_location is a pre-existing
-  // LLM-authored field (not a region anchor); threaded into the query key ONLY when
-  // sourceRegionDecomposition is on (see the field doc comment above) — PR-1b-2.
-  const observedSourceRefs = new Set(
-    args.sourceObservations.observations.flatMap((observation) =>
-      regionCoverageKeys(observation.source_ref, observation.location)
-    ),
-  );
-  const sourceRequestById = new Map(
-    args.maturationClosureFrontier.source_requests.map((request) => [
-      request.source_request_id,
-      request,
-    ]),
-  );
-  const inventoryByRef = new Map(
-    args.sourceInventory.inventory_units.map((unit) => [
-      path.resolve(unit.ref),
-      unit,
-    ]),
-  );
-  const addedObservations: ReconstructSourceObservationsArtifact["observations"] = [];
-
-  for (
-    const sourceRequestId of
-      args.maturationClosureFrontierValidation.accepted_source_request_ids
-  ) {
-    const request = sourceRequestById.get(sourceRequestId);
-    if (!request) {
-      throw new Error(
-        `accepted maturation closure source request id has no source request row: ${sourceRequestId}`,
-      );
-    }
-    const resolvedSourceRef = path.resolve(request.requested_source_ref);
-    // coverageKey: request.requested_location is consulted ONLY when sourceRegionDecomposition is
-    // on (see the field doc comment above) — off is the file-level form, byte-identical to the
-    // prior bare `path.resolve()` lookup.
-    const coverageKey = regionKey(
-      request.requested_source_ref,
-      args.sourceRegionDecomposition === true ? (request.requested_location ?? undefined) : undefined,
-    );
-    if (observedSourceRefs.has(coverageKey)) {
-      throw new Error(
-        `accepted maturation closure source request was already observed before re-entry: ${request.requested_source_ref}`,
-      );
-    }
-    const inventoryUnit = inventoryByRef.get(resolvedSourceRef);
-    if (!inventoryUnit) {
-      throw new Error(
-        `accepted maturation closure source request is not present in source inventory: ${request.requested_source_ref}`,
-      );
-    }
-    const detection: TargetMaterialRefDetection = {
-      ref: inventoryUnit.ref,
-      exists: inventoryUnit.exists,
-      kind: inventoryUnit.target_material_kind,
-      confidence: inventoryUnit.exists ? 0.92 : 0.1,
-      confidence_basis:
-        `maturation-closure-frontier accepted source request ${sourceRequestId}`,
-    };
-    const observation = await buildReconstructSourceObservation(detection, {
-      roundId: args.maturationClosureFrontier.round_id,
-      observationBatchId:
-        `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
-      triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
-    }, {
-      ...(args.codeStructureObservation === true
-        ? { codeStructureObservation: true, ...(args.codeSetTierObservation === true ? { codeSetTierObservation: true } : {}), ...(args.codeStructureLayout === true ? { codeStructureLayout: true } : {}) }
-        : {}),
-      // A3 thread-through (design §5/§10 PR-1b-2): the re-observed observation's anchor becomes the
-      // maturation-requested location, ONLY when the opt-in is on (matches the coverage key above).
-      ...(args.sourceRegionDecomposition === true && request.requested_location
-        ? { locationOverride: request.requested_location }
-        : {}),
-    });
-    // Unsupported workbook formats are un-observable like a vanished ref — no
-    // evidence to admit (mirrors the materialize-loop demotion and F1).
-    if (!observation || spreadsheetUnsupportedReason(observation)) {
-      throw new Error(
-        `accepted maturation closure source request cannot be observed by current runtime: ${request.requested_source_ref}`,
-      );
-    }
-    addedObservations.push(observation);
-    // Register the newly added observation under both coverage forms — same as
-    // the initial Set construction above.
-    for (const k of regionCoverageKeys(observation.source_ref, observation.location)) {
-      observedSourceRefs.add(k);
-    }
-  }
-
-  const nextSourceObservations: ReconstructSourceObservationsArtifact = {
-    ...args.sourceObservations,
-    created_at: isoNow(),
-    observations: [
-      ...args.sourceObservations.observations,
-      ...addedObservations,
-    ],
-    skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
-      !observedSourceRefs.has(regionKey(skipped.ref))
-    ),
-    validation_results: [
-      ...new Set([
-        ...args.sourceObservations.validation_results,
-        "maturation_closure_source_requests_observed",
-      ]),
-    ],
-  };
-  await writeYamlDocument(args.sourceObservationsPath, nextSourceObservations);
-  return nextSourceObservations;
-}
-
-async function writeFinalOutputProvenanceValidationArtifact(args: {
-  sessionId: string;
-  finalOutputPath: string;
-  sectionBindings: ReconstructFinalOutputProvenanceSectionBindingInput[];
-  forbiddenFragments: string[];
-  outputPath: string;
-}): Promise<ReconstructFinalOutputProvenanceValidationArtifact> {
-  const finalOutputText = await fs.readFile(args.finalOutputPath, "utf8");
-  const requiredFragments = [
-    ...new Set(args.sectionBindings.flatMap((binding) => binding.required_fragments)),
-  ];
-  const violations = validateFinalOutputProvenance({
-    finalOutputText,
-    sectionBindings: args.sectionBindings,
-    forbiddenFragments: args.forbiddenFragments,
-  });
-  const violationSubjects = new Set(
-    violations.map((item) => item.subject_id).filter((item): item is string => item !== null),
-  );
-  const artifact = {
-    schema_version: "1" as const,
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    final_output_ref: args.finalOutputPath,
-    validation_status: violations.length === 0 ? "valid" as const : "invalid" as const,
-    required_fragments: requiredFragments,
-    forbidden_fragments: args.forbiddenFragments,
-    section_bindings: args.sectionBindings.map((binding) => {
-      const missing = binding.required_fragments.some((fragment) =>
-        violationSubjects.has(`${binding.section_id}:${fragment}`)
-      ) || violationSubjects.has(binding.section_id);
-      return {
-        section_id: binding.section_id,
-        heading: binding.heading,
-        claim_summary: binding.claim_summary,
-        authority_refs: binding.authority_refs,
-        validation_refs: binding.validation_refs,
-        required_fragments: binding.required_fragments,
-        binding_status: missing
-          ? "missing" as const
-          : "present" as const,
-        trust_status: missing
-          ? "unbound" as const
-          : "grounded" as const,
-      };
-    }),
-    validation_results: violations.length === 0
-      ? ["final_output_provenance_valid"]
-      : ["final_output_provenance_invalid"],
-    violations,
-  };
-  await writeYamlDocument(args.outputPath, artifact);
-  return artifact;
-}
 
 export async function runReconstruct(
   params: RunReconstructParams,
