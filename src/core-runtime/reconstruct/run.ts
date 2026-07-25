@@ -4,51 +4,29 @@ import path from "node:path";
 import { atomicWriteFile, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructOntologySeedArtifact,
-  ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionArtifact,
-  ReconstructCandidateDispositionValidationArtifact,
   ReconstructCandidateInventoryArtifact,
-  ReconstructClaimRealizationMapValidationArtifact,
-  ReconstructCompetencyQuestionAssessmentValidationArtifact,
-  ReconstructCompetencyQuestionsArtifact,
-  ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructEvidenceRef,
   ReconstructExplorationSynthesisArtifact,
-  ReconstructFailureClassificationValidationArtifact,
   ReconstructLensJudgmentArtifact,
   ReconstructLensJudgmentIndexArtifact,
-  ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructSemanticMapCensus,
   ReconstructSemanticMapSidecar,
-  ReconstructMetricsArtifact,
-  ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
   ReconstructSourcePurposeCandidatesArtifact,
-  ReconstructSourceObservationDeltaArtifact,
-  ReconstructSourceObservationLineageIndexArtifact,
   ReconstructSourceObservationLineageIndexValidationArtifact,
   ReconstructSourceSafetyLedgerArtifact,
   ReconstructSourceSafetyLedgerValidationArtifact,
   ReconstructSourceScoutPackArtifact,
   ReconstructSourceScoutPackValidationArtifact,
-  ReconstructRevisionProposalValidationArtifact,
-  ReconstructRunManifestArtifact,
   ReconstructSeedAuthoringReadinessValidationArtifact,
-  ReconstructSeedConfirmationArtifact,
-  ReconstructSeedConfirmationValidationArtifact,
-  ReconstructStageId,
   ReconstructSourceObservationLineageCensus,
-  ReconstructReachabilityStageWitness,
-  ReconstructSourceObservationDirectiveValidationArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationsArtifact,
-  ReconstructStopDecisionArtifact,
   ReconstructTargetMaterialProfileArtifact,
-  ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
 import {
-  SemanticMapDispatchAccounting,
   type ResolvedLlmDispatchCapability,
 } from "../llm/sealed-dispatch-capability.js";
 import {
@@ -130,7 +108,6 @@ import {
   type DispatchFallbackActivation,
   type DispatchFallbackOutcome,
 } from "./dispatch-fallback-artifacts.js";
-import type { DispatchFallbackSettings } from "../discovery/settings-chain.js";
 import {
   writeRegistryVerificationEvidenceArtifact,
   writeRegistryVerificationEvidenceValidationArtifact,
@@ -176,9 +153,6 @@ import {
   writeProofAuthorityArtifact,
   writeProofAuthorityValidationArtifact,
 } from "./proof-authority-validation.js";
-import {
-  ontologySeedAnswerabilitySummary,
-} from "./seed-claim-projections.js";
 // W1/W2 (wiring design 20260702 §15.1/§3): the semantic-map capability seat + W2 stage reuse the
 // module's canonical shapes and single-source builders (no live runReconstruct call site until W3).
 import {
@@ -210,7 +184,6 @@ import {
 } from "./projection-truncation.js";
 import type {
   ReconstructCompetencyQuestionAuthorInput,
-  ReconstructDirectiveAuthor,
   ReconstructOntologySeedAuthorInput,
 } from "./directive-author-contract.js";
 import { isoNow, sha256Text, stableJson } from "./run-primitives.js";
@@ -227,12 +200,7 @@ import type {
   SemanticMapPreImageBase,
   SemanticMapStageResult,
 } from "./semantic-map-stage.js";
-import type { ReconstructConfirmationProvider } from "./confirmation-provider-contract.js";
 import { createRunManifest } from "./run-manifest.js";
-import type {
-  ReconstructConfirmationProviderRealization,
-  ReconstructSemanticAuthorRealization,
-} from "./run-manifest.js";
 import {
   authoringPromptContractSha256,
 } from "./authoring-llm-call.js";
@@ -241,7 +209,6 @@ import {
 } from "./authoring-output-parsing.js";
 import {
   applyFirstFrontierScoutPolicy,
-  ontologyClaims,
   ontologySeedMaturationHandoffPrompt,
   requireFirstObservation,
   validationDetailSummary,
@@ -303,150 +270,16 @@ import {
   buildZeroObservationDiagnostic,
 } from "./source-observations.js";
 import { artifactRefsWithDefaults } from "./record.js";
-
-export interface RunReconstructParams {
-  projectRoot: string;
-  targetRefs: string[];
-  intent: string;
-  sessionRoot: string;
-  profilesRoot: string;
-  domain?: string;
-  resumeMode?: "fresh" | "reuse_existing_authored_artifacts";
-  filesystemAllowedRoots?: string[];
-  semanticAuthorRealization: ReconstructSemanticAuthorRealization;
-  confirmationProviderRealization: ReconstructConfirmationProviderRealization;
-  directiveAuthor: ReconstructDirectiveAuthor;
-  confirmationProvider: ReconstructConfirmationProvider;
-  /** 설계 B: unattended-batch dispatch circuit breaker (default-off; resolved
-   * from reconstruct.execution.dispatch_breaker settings by the caller). */
-  dispatchBreaker?: DispatchBreakerPolicy;
-  dispatchFallback?: DispatchFallbackSettings;
-  dispatchFallbackRuntime?: ReconstructDispatchFallbackRuntime;
-  /** Inventory CAPTURE opt-in (design 20260718 DD4 + 경계 결정 2026-07-20): code FILE
-   *  observations carry the deterministic structure inventory. Set from
-   *  reconstruct.execution.code_structure_inventory OR semantic_map_code (the map stage folds
-   *  from the captured inventory, so the map opt-in implies capture). Absent = off. */
-  codeStructureObservation?: boolean;
-  /** Semantic-map code STAGE opt-in (DD7): set from reconstruct.execution.semantic_map_code
-   *  only. Gates code-kind eligibility of the LLM map stage — never capture. Absent = off,
-   *  so an inventory-only run (codeStructureObservation without this) keeps the stage
-   *  spreadsheet-only. */
-  semanticMapCode?: boolean;
-  /** Phase 1b set-tier opt-in (FD1, deterministic 모드): set from
-   *  reconstruct.execution.semantic_map_code_set_tier. Requires codeStructureObservation
-   *  (enforced fail-loud at the api settings projection). Gates observer import capture and
-   *  the post-loop deterministic set assembly. Absent = off. */
-  codeSetTier?: boolean;
-  /** Grammar-free layout observer opt-in (design 20260721 §7): set from
-   *  reconstruct.execution.code_structure_layout. Requires codeStructureObservation (enforced
-   *  fail-loud at the api settings projection). Extends deterministic code capture to tree-sitter
-   *  UNSUPPORTED languages: (a) long-tail classification (Linguist unknown-fallback + extensionless
-   *  shebang rung) so .lua/.hs/.vue … reach observation, and (b) the Tier 1 layout observer dispatch.
-   *  Absent = off (byte-identical). */
-  codeStructureLayout?: boolean;
-  /** Environment context profile opt-in (design 20260720 env-context-profile §0, Stage 0): set
-   *  from reconstruct.execution.environment_context_profile. Gates a deterministic, disclosure-only
-   *  environment/tech-stack profile derived from the EXISTING observation census (no new fs scan,
-   *  no seed impact). Independent of the code opt-ins. Absent = off (byte-identical, side-effect 0). */
-  environmentContextProfile?: boolean;
-  /** Manifest content_parse opt-in (design 20260721 env-context-profile Stage 3a): set from
-   *  reconstruct.execution.environment_context_profile_content. AUGMENTS the base profile — statically
-   *  reads known dependency manifests (package.json) for declared-dependency framework signals + closed
-   *  properties. Inert unless environmentContextProfile is also on (nested inside its hook). Absent =
-   *  off: no manifest content is read, the profile is byte-identical to Stage 0.5 (side-effect 0). */
-  environmentContextProfileContent?: boolean;
-  /** Stage 1 source-region-decomposition opt-in (design 20260722-source-region-decomposition-stage1
-   *  §10 PR-1b-2, INVARIANT-CHANGE): set from reconstruct.execution.source_region_decomposition.
-   *  When true, an eligible captured file is decomposed at observe time into one observation per
-   *  region, and a maturation-closure source request's requested_location becomes a re-observed
-   *  observation's anchor (both the identity/dedup keys AND the observe-time fanout change what
-   *  "already observed" means for that ref — INVARIANT-CHANGE). Self-contained: independent of the
-   *  code opt-ins. Absent = off — every observation stays whole-file, byte-identical. */
-  sourceRegionDecomposition?: boolean;
-  /** Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
-   *  §8/§12/§13 PR-2a): set from reconstruct.execution.source_admission_selection. UNUSED in
-   *  this PR — no code branches on it yet (materialize keeps deep-observing every planned unit
-   *  regardless; PR-2b wires the threshold-gated admission-selection stage). Absent = off,
-   *  byte-identical. */
-  sourceAdmissionSelection?: boolean;
-}
-
-export interface ReconstructDispatchFallbackRuntime {
-  accounting: SemanticMapDispatchAccounting;
-  primary: {
-    synthesize?: ResolvedLlmDispatchCapability;
-    verify?: ResolvedLlmDispatchCapability;
-  };
-  fallback: {
-    synthesize: ResolvedLlmDispatchCapability;
-    verify: ResolvedLlmDispatchCapability;
-    directiveAuthor: ReconstructDirectiveAuthor;
-  };
-}
-
-export interface ReconstructRunResult {
-  sessionId: string;
-  sessionRoot: string;
-  /**
-   * "completed" = the run reached the terminal pipeline. "blocked"/"limited" = a graceful
-   * terminal (Slice 3): the run stopped early with an honest assembled output instead of
-   * crashing. This is an immediate-return mirror of the durable authority
-   * (ReconstructRecordArtifact.terminal_disposition); re-read/poll consumers read the record.
-   */
-  status: "completed" | "limited" | "blocked";
-  finalOutputPath: string;
-  finalOutputText: string;
-  reconstructRecordPath: string;
-  reconstructRunManifestPath: string;
-  artifactRefs: ReconstructRecordArtifactRefs & {
-    reconstruct_record: string;
-  };
-  reconstructRecord: ReconstructRecordArtifact;
-  reconstructRunManifest: ReconstructRunManifestArtifact;
-  /**
-   * Present only on a completed run. Absent on a graceful terminal (blocked/limited) — those
-   * stages were never reached. Consumers must narrow on `status` before reading.
-   */
-  metrics?: ReconstructMetricsArtifact;
-  stopDecision?: ReconstructStopDecisionArtifact;
-}
-
-async function writeSourceObservationLineageIndexArtifact(args: {
-  sessionId: string;
-  rows: Array<{
-    sourceObservationDeltaPath: string;
-    sourceObservationDeltaValidationPath: string;
-    sourceObservationReentryValidationPath: string;
-  }>;
-  outputPath: string;
-}): Promise<ReconstructSourceObservationLineageIndexArtifact> {
-  const lineageRows: ReconstructSourceObservationLineageIndexArtifact["lineage_rows"] = [];
-  for (const row of args.rows) {
-    const delta = await readYamlDocument<ReconstructSourceObservationDeltaArtifact>(
-      row.sourceObservationDeltaPath,
-    );
-    lineageRows.push({
-      lineage_row_id:
-        `source-observation-lineage:${delta.round_id}:${delta.frontier_kind}:${lineageRows.length + 1}`,
-      round_id: delta.round_id,
-      frontier_kind: delta.frontier_kind,
-      source_observation_delta_ref: row.sourceObservationDeltaPath,
-      source_observation_delta_validation_ref:
-        row.sourceObservationDeltaValidationPath,
-      source_observation_reentry_validation_ref:
-        row.sourceObservationReentryValidationPath,
-      added_observation_ids: [...delta.added_observation_ids],
-    });
-  }
-  const artifact: ReconstructSourceObservationLineageIndexArtifact = {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    lineage_rows: lineageRows,
-  };
-  await writeYamlDocument(args.outputPath, artifact);
-  return artifact;
-}
+import {
+  buildSourceObservationLineageCensus,
+  writeSourceObservationLineageIndexArtifact,
+} from "./source-observation-lineage.js";
+import { calculateMetrics } from "./run-metrics.js";
+import type {
+  ReconstructDispatchFallbackRuntime,
+  ReconstructRunResult,
+  RunReconstructParams,
+} from "./run-contract.js";
 
 async function readTextIfPresent(filePath: string): Promise<string | null> {
   try {
@@ -606,12 +439,6 @@ function annotateDispatchFallbackCensus(args: {
   ]);
 }
 
-function answerabilitySummary(
-  ontologySeed: ReconstructOntologySeedArtifact,
-): ReconstructMetricsArtifact["answerability_summary"] {
-  return ontologySeedAnswerabilitySummary(ontologySeed);
-}
-
 function countBy<T extends string>(
   values: readonly T[],
   selected: readonly T[],
@@ -623,172 +450,6 @@ function countBy<T extends string>(
     counts[value] += 1;
   }
   return counts;
-}
-
-function calculateMetrics(args: {
-  sessionId: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  targetMaterialProfileValidation:
-    ReconstructTargetMaterialProfileValidationArtifact;
-  sourceObservationDirectiveValidation:
-    ReconstructSourceObservationDirectiveValidationArtifact;
-  sourceSafetyLedgerValidation: ReconstructSourceSafetyLedgerValidationArtifact;
-  materialAdmissionLedgerValidation:
-    ReconstructMaterialAdmissionLedgerValidationArtifact;
-  candidateDispositionValidation: ReconstructCandidateDispositionValidationArtifact;
-  ontologySeed: ReconstructOntologySeedArtifact;
-  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
-  claimRealizationMapValidation: ReconstructClaimRealizationMapValidationArtifact;
-  seedConfirmation: ReconstructSeedConfirmationArtifact;
-  seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
-  competencyQuestions: ReconstructCompetencyQuestionsArtifact;
-  competencyQuestionsValidation: ReconstructCompetencyQuestionsValidationArtifact;
-  competencyQuestionAssessmentValidation:
-    ReconstructCompetencyQuestionAssessmentValidationArtifact;
-  failureClassificationValidation: ReconstructFailureClassificationValidationArtifact;
-  revisionProposalValidation: ReconstructRevisionProposalValidationArtifact;
-}): ReconstructMetricsArtifact {
-  const validationStatus = {
-    target_material_profile:
-      args.targetMaterialProfileValidation.validation_status,
-    source_observation_directive:
-      args.sourceObservationDirectiveValidation.validation_status,
-    source_safety: args.sourceSafetyLedgerValidation.validation_status,
-    material_admission:
-      args.materialAdmissionLedgerValidation.validation_status,
-    candidate_disposition:
-      args.candidateDispositionValidation.validation_status,
-    ontology_seed: args.ontologySeedValidation.validation_status,
-    seed_confirmation: args.seedConfirmation.confirmation_status,
-    claim_realization: args.claimRealizationMapValidation.validation_status,
-    seed_confirmation_validation:
-      args.seedConfirmationValidation.validation_status,
-    competency_questions: args.competencyQuestionsValidation.validation_status,
-    competency_question_assessment:
-      args.competencyQuestionAssessmentValidation.validation_status,
-    failure_classification:
-      args.failureClassificationValidation.validation_status,
-    revision_proposal: args.revisionProposalValidation.validation_status,
-  };
-  const rejectedClaimCount =
-    args.seedConfirmationValidation.rejected_claim_ids.length;
-  const partialClaimCount = args.seedConfirmationValidation.partial_claim_ids.length;
-  const deferredClaimCount =
-    args.seedConfirmationValidation.deferred_claim_ids.length;
-  const invalidGateCount = [
-    validationStatus.source_observation_directive,
-    validationStatus.target_material_profile,
-    validationStatus.source_safety,
-    validationStatus.material_admission,
-    validationStatus.candidate_disposition,
-    validationStatus.ontology_seed,
-    validationStatus.claim_realization,
-    validationStatus.seed_confirmation_validation,
-    validationStatus.competency_questions,
-    validationStatus.competency_question_assessment,
-    validationStatus.failure_classification,
-    validationStatus.revision_proposal,
-  ].filter((status) => status !== "valid").length;
-  const unresolvedQuestionCount =
-    rejectedClaimCount +
-    partialClaimCount +
-    args.sourceObservations.skipped_refs.length +
-    args.failureClassificationValidation.material_failure_count +
-    args.competencyQuestions.open_questions.length +
-    invalidGateCount;
-  const competencyQuestionCount = args.competencyQuestions.questions.length;
-  const passedQuestions = Math.max(
-    0,
-    competencyQuestionCount - unresolvedQuestionCount,
-  );
-  const answerStatusCounts =
-    args.competencyQuestionAssessmentValidation.answer_status_counts;
-  const projectedOntologyClaims = ontologyClaims(args.ontologySeed);
-
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    source_observation_count: args.sourceObservations.observations.length,
-    selected_observation_count:
-      args.sourceObservationDirectiveValidation.selected_observation_count,
-    semantic_claim_count: projectedOntologyClaims.length,
-    evidence_ref_count: args.ontologySeedValidation.evidence_ref_count,
-    confirmed_claim_count:
-      args.seedConfirmationValidation.accepted_claim_ids.length,
-    rejected_claim_count: rejectedClaimCount,
-    partial_claim_count: partialClaimCount,
-    deferred_claim_count: deferredClaimCount,
-    competency_question_count: competencyQuestionCount,
-    competency_question_assessment_count:
-      args.competencyQuestionAssessmentValidation.assessment_count,
-    unresolved_question_count: unresolvedQuestionCount,
-    deferred_count: deferredClaimCount +
-      answerStatusCounts.deferred +
-      args.failureClassificationValidation.failure_kind_counts.deferred_scope,
-    answerability_summary: answerabilitySummary(args.ontologySeed),
-    claim_realization_stance_counts:
-      args.claimRealizationMapValidation.stance_counts,
-    confirmation_state_counts: {
-      accepted: args.seedConfirmationValidation.accepted_claim_ids.length,
-      rejected: rejectedClaimCount,
-      partial: partialClaimCount,
-      deferred: deferredClaimCount,
-    },
-    competency_question_answer_status_counts: answerStatusCounts,
-    failure_kind_counts:
-      args.failureClassificationValidation.failure_kind_counts,
-    revision_proposal_action_counts: args.revisionProposalValidation.action_counts,
-    pass_rate:
-      competencyQuestionCount === 0
-        ? 0
-        : Number((passedQuestions / competencyQuestionCount).toFixed(4)),
-    validation_status: validationStatus,
-  };
-}
-
-/**
- * Reachability witness for the five witness-less observation-lineage stages (design v2 §3,
- * leaf_read/f1a3c1b pattern). Built deterministically from the number of exploration rounds
- * that produced a source-observation delta, and written ALWAYS when the observation-lineage
- * phase runs (even with zero delta rounds) — so "ran and legitimately produced nothing" is a
- * recorded fact, distinct from "never ran" (no census). A graceful terminal reads this to
- * authorize a legit_conditional skip; the manifest builder cannot self-declare a no-op the
- * census does not confirm.
- *
- * delta / delta-validation / reentry-validation are produced per round and produce nothing when
- * the exploration loop converged without accepting new frontier refs — a legitimate no-op (the
- * only way the loop reaches this phase with zero delta rounds is convergence; a non-convergent
- * overrun throws and never reaches the census). The lineage index and its validation are written
- * unconditionally once the phase closes, so they always produced.
- */
-export function buildSourceObservationLineageCensus(args: {
-  sessionId: string;
-  deltaRoundsProduced: number;
-}): ReconstructSourceObservationLineageCensus {
-  const deltaProduced = args.deltaRoundsProduced > 0;
-  const deltaGroup: ReconstructReachabilityStageWitness[] = [
-    "source_observation_delta",
-    "source_observation_delta_validation",
-    "source_observation_reentry_validation",
-  ].map((stepId) => ({
-    step_id: stepId as ReconstructStageId,
-    produced: deltaProduced,
-    legit_no_op: !deltaProduced,
-  }));
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    stage_witnesses: [
-      ...deltaGroup,
-      { step_id: "source_observation_lineage_index", produced: true, legit_no_op: false },
-      {
-        step_id: "source_observation_lineage_index_validation",
-        produced: true,
-        legit_no_op: false,
-      },
-    ],
-  };
 }
 
 function enumChoices(values: readonly string[]): string {

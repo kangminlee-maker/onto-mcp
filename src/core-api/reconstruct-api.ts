@@ -36,11 +36,11 @@ export {
   reconstructTerminalStatus,
   type ReconstructTerminalStatus,
 } from "../core-runtime/reconstruct/record.js";
-import {
-  runReconstruct,
-  type ReconstructDispatchFallbackRuntime,
-  type ReconstructRunResult,
-} from "../core-runtime/reconstruct/run.js";
+import { runReconstruct } from "../core-runtime/reconstruct/run.js";
+import type {
+  ReconstructDispatchFallbackRuntime,
+  ReconstructRunResult,
+} from "../core-runtime/reconstruct/run-contract.js";
 import {
   createDirectCallReconstructConfirmationProvider,
 } from "../core-runtime/reconstruct/direct-call-confirmation-provider.js";
