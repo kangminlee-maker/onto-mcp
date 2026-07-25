@@ -5,19 +5,27 @@ import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
-  authoringPromptContractSha256,
   CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
   codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-  semanticMapRenderCharBudget,
   deriveSemanticMapFallbackPriorDispatchSpend,
-  observationPromptPayload,
   prepareSemanticMapResumeContext,
+} from "./run.js";
+import {
+  authoringPromptContractSha256,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
-  renderSemanticMapProjection,
+} from "./authoring-llm-call.js";
+import {
+  observationPromptPayload,
+} from "./authoring-prompt-payloads.js";
+import {
   SEMANTIC_MAP_PROMPT_NOTE,
   SEMANTIC_MAP_SEED_PROMPT_NOTE,
-} from "./run.js";
+} from "./authoring-system-prompts.js";
+import {
+  semanticMapRenderCharBudget,
+  renderSemanticMapProjection,
+} from "./semantic-map-authoring.js";
 import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
 import {
   buildSemanticMapBridgeCallbacks,

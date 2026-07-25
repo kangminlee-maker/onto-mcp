@@ -13,11 +13,11 @@
  *       (and those embedded values equal the exported budget constants — module-internal
  *       consistency), so a hardcoded contract-output edit cannot pass;
  *   (4) the projection child node has NO unguarded extra key beyond payload/policy/budget;
- *   (5) run.ts CONSUMES the extracted module — it imports the contract fn AND all three
- *       budget constants from it (symbol-level) AND actually references each budget
- *       constant outside the import, and holds NO duplicate local definition — so the
- *       registry/module parity certifies the actual runtime prompt surface, not a stale
- *       fork (onto issue-001);
+ *   (5) the runtime prompt surface (RUNTIME_REFS) CONSUMES the extracted module — it imports
+ *       the contract fn AND all three budget constants from it (symbol-level) AND actually
+ *       references each budget constant outside the import, and holds NO duplicate local
+ *       definition — so the registry/module parity certifies the actual runtime prompt
+ *       surface, not a stale fork (onto issue-001);
  *   (6) NO unguarded sibling exists under prompt_projection_contracts — the supported
  *       projection keys ARE the keys of PROJECTION_PARITY_CHECKS, so a sibling cannot be
  *       silenced without wiring a real parity check.
@@ -47,16 +47,25 @@ const PROJECT_ROOT = path.resolve(
 );
 const REGISTRY_REF =
   ".onto/processes/reconstruct/reconstruct-contract-registry.yaml";
-const RUNTIME_REF = "src/core-runtime/reconstruct/run.ts";
+/** The runtime prompt surface that must consume the SSOT module. It spans several modules
+ * since run.ts was split, so the guard reads their concatenation: a symbol may be imported
+ * and used in any one of them, and none of them may redeclare it. */
+const RUNTIME_REFS = [
+  "src/core-runtime/reconstruct/run.ts",
+  "src/core-runtime/reconstruct/authoring-prompt-payloads.ts",
+  "src/core-runtime/reconstruct/prompt-payload-budget.ts",
+  "src/core-runtime/reconstruct/direct-call-directive-author.ts",
+];
+const RUNTIME_REF = "the reconstruct runtime prompt surface";
 const MODULE_SPECIFIER = "./competency-projection-contract.js";
 
 /** The exact child keys a competency_question_assessment node may declare. */
 const COMPETENCY_CHILD_KEYS = ["payload_fields", "policy_fields", "budget_fields"];
 
-/** Every symbol moved into the extracted SSOT module that run.ts MUST consume from it
+/** Every symbol moved into the extracted SSOT module that the runtime prompt surface MUST consume
  * (the contract fn + the projection version + the three budget constants). The consumption
  * check is UNIFORM over all of them: each must be imported under its own name, referenced
- * outside the import (no dead import), and not locally re-declared — so run.ts cannot drift
+ * outside the import (no dead import), and not locally re-declared — so the runtime cannot drift
  * its prompt surface to a stale literal/local for ANY of them. */
 const MODULE_SSOT_SYMBOLS = [
   "competencyQuestionAssessmentProjectionContract",
@@ -89,30 +98,35 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-/** The `{ ... }` import block from MODULE_SPECIFIER, or null if run.ts does not import it. */
-function moduleImportBlock(runtimeSource: string): string | null {
-  const match = new RegExp(
-    `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${MODULE_SPECIFIER.replace(/[.]/g, "\\$&")}["']`,
-  ).exec(runtimeSource);
-  return match ? match[0]! : null;
+/** Every `{ ... }` import block from MODULE_SPECIFIER (one per runtime file that imports it). */
+function moduleImportBlocks(runtimeSource: string): string[] {
+  return [
+    ...runtimeSource.matchAll(
+      new RegExp(
+        `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${MODULE_SPECIFIER.replace(/[.]/g, "\\$&")}["']`,
+        "g",
+      ),
+    ),
+  ].map((match) => match[0]!);
 }
 
 /** Imports from MODULE_SPECIFIER, split into canonical (`X`) vs aliased (`X as Y`)
  * SOURCE names. A required symbol imported aliased is NOT bound under its own name, so
  * the usage / redefinition checks below would be meaningless — the guard rejects it. */
 function parsedModuleImports(
-  importBlock: string | null,
+  importBlocks: string[],
 ): { canonical: Set<string>; aliased: Set<string> } {
   const canonical = new Set<string>();
   const aliased = new Set<string>();
-  if (!importBlock) return { canonical, aliased };
-  const inner = /\{([^}]*)\}/.exec(importBlock)?.[1] ?? "";
-  for (const raw of inner.split(",")) {
-    const entry = raw.trim();
-    if (entry.length === 0) continue;
-    const alias = /^(\S+)\s+as\s+\S+$/.exec(entry);
-    if (alias) aliased.add(alias[1]!);
-    else canonical.add(entry);
+  for (const importBlock of importBlocks) {
+    const inner = /\{([^}]*)\}/.exec(importBlock)?.[1] ?? "";
+    for (const raw of inner.split(",")) {
+      const entry = raw.trim();
+      if (entry.length === 0) continue;
+      const alias = /^(\S+)\s+as\s+\S+$/.exec(entry);
+      if (alias) aliased.add(alias[1]!);
+      else canonical.add(entry);
+    }
   }
   return { canonical, aliased };
 }
@@ -225,22 +239,23 @@ const PROJECTION_PARITY_CHECKS: Record<
 /** A standalone (word-boundary) reference to `symbol` appears in `source`. This is a
  * source-text tripwire, not a semantic analysis: it cannot tell a real identifier use
  * from a mention in a comment/string. Distinguishing those needs an AST; the authoritative
- * check that run.ts uses the real values is the behavioral test suite (run.test.ts pins the
+ * check that the runtime uses the real values is the behavioral test suite (run.test.ts pins the
  * emitted prompt budget/version). This guard catches the common accidental-drift case. */
 function referencesSymbol(source: string, symbol: string): boolean {
   return new RegExp(`\\b${symbol}\\b`).test(source);
 }
 
-/** run.ts SSOT-consumption assertions for the extracted competency module — applied
+/** Runtime SSOT-consumption assertions for the extracted competency module — applied
  * UNIFORMLY to every moved symbol (contract fn + version + budgets). */
-function evaluateRunTsConsumption(runtimeSource: string): string[] {
+function evaluateRuntimeConsumption(runtimeSource: string): string[] {
   const errors: string[] = [];
-  const importBlock = moduleImportBlock(runtimeSource);
-  const { canonical, aliased } = parsedModuleImports(importBlock);
-  // Strip the import block so "referenced outside the import" is meaningful.
-  const sourceOutsideImport = importBlock
-    ? runtimeSource.replace(importBlock, "")
-    : runtimeSource;
+  const importBlocks = moduleImportBlocks(runtimeSource);
+  const { canonical, aliased } = parsedModuleImports(importBlocks);
+  // Strip the import blocks so "referenced outside the import" is meaningful.
+  let sourceOutsideImport = runtimeSource;
+  for (const block of importBlocks) {
+    sourceOutsideImport = sourceOutsideImport.replace(block, "");
+  }
   for (const symbol of MODULE_SSOT_SYMBOLS) {
     // (a) imported under its own name (not aliased, not missing).
     if (aliased.has(symbol)) {
@@ -273,7 +288,7 @@ export interface PromptProjectionParityInputs {
   runtimeVersion: string;
   /** The registry parent node prompt_projection_contracts (all siblings). */
   promptProjectionContracts: unknown;
-  /** run.ts source text (for the SSOT-consumption assertion). */
+  /** Runtime source text — RUNTIME_REFS concatenated (for the SSOT-consumption assertion). */
   runtimeSource: string;
 }
 
@@ -312,8 +327,8 @@ export function evaluatePromptProjectionParity(
     );
   }
 
-  // (5) run.ts consumes the extracted module (symbol-level + used + no duplicate).
-  errors.push(...evaluateRunTsConsumption(inputs.runtimeSource));
+  // (5) the runtime consumes the extracted module (symbol-level + used + no duplicate).
+  errors.push(...evaluateRuntimeConsumption(inputs.runtimeSource));
 
   return errors;
 }
@@ -337,10 +352,13 @@ async function main(): Promise<void> {
 
   let runtimeSource: string;
   try {
-    runtimeSource = await fs.readFile(path.join(PROJECT_ROOT, RUNTIME_REF), "utf8");
+    const parts = await Promise.all(
+      RUNTIME_REFS.map((ref) => fs.readFile(path.join(PROJECT_ROOT, ref), "utf8")),
+    );
+    runtimeSource = parts.join("\n");
   } catch (error) {
     fail([
-      `cannot read ${RUNTIME_REF}: ${
+      `cannot read ${RUNTIME_REFS.join(" / ")}: ${
         error instanceof Error ? error.message : String(error)
       }`,
     ]);

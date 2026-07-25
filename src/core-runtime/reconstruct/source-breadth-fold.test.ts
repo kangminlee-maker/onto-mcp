@@ -9,11 +9,15 @@ import {
   type BreadthFoldLevel,
 } from "./source-breadth-fold.js";
 import {
-  assertPromptPayloadByteLimit,
-  createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
+} from "./authoring-prompt-payloads.js";
+import {
+  createDirectCallReconstructDirectiveAuthor,
+} from "./direct-call-directive-author.js";
+import {
+  assertPromptPayloadByteLimit,
   promptPayloadByteCount,
-} from "./run.js";
+} from "./prompt-payload-budget.js";
 import {
   CODE_STRUCTURE_INVENTORY_PROMPT_CHAR_BUDGET,
   projectCodeInventoryForPrompt,

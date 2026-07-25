@@ -12,13 +12,14 @@
  *       activation) keyed by section_id;
  *   (3) heading uniqueness (the provenance gate keys on heading);
  *   (4) the prompt-policy id set equals the module's non-null prompt_policy_id set;
- *   (5) run.ts CONSUMES the module — imports the heading/id maps + the ordered accessors and
+ *   (5) the runtime final-output surface (RUNTIME_REFS) CONSUMES the module — imports the
+ *       heading/id maps + the ordered accessors and
  *       derives the bindings required_fragments from the module;
  *   (6) completeness / anti-fooling (static source-region sweep): EVERY `## ` heading literal in
- *       run.ts is a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template (no inline/re-inlined or
+ *       that surface is a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template (no inline/re-inlined or
  *       NEW heading), and the appendFinalOutput* emitter-definition count equals the section
  *       count — so a 9th section (new emitter or non-module heading) fails CI at the source;
- *   (7) the run.ts provenance-binding row order equals the module's canonical bindings order.
+ *   (7) the runtime provenance-binding row order equals the module's canonical bindings order.
  * The static sweep (6) is the enforceable completeness mechanism for the common cases (inline /
  * re-inlined / new heading, count drift, and the heading-key multiset). Its source-text boundary
  * is the same one G8 R5 documented: it cannot defend against every adversarial rewrite — e.g. a
@@ -27,7 +28,8 @@
  * emits its OWN module heading (catching a conditional swap), and the runtime provenance gate
  * (post-seed-validation, keyed on binding.heading) + the run.test.ts pipeline heading assertions
  * fail for any bound-section heading swap (the swapped section no longer carries its required
- * fragments). run.ts has no prose `## ` today, so the sweep is exact; a future legitimate `## `
+ * fragments). The scanned files have no prose `## ` today, so the sweep is exact; a future
+ * legitimate `## `
  * prose line surfaces here and must be reconciled.
  *
  * npm: `check:final-output-sections-parity`.
@@ -52,7 +54,14 @@ const PROJECT_ROOT = path.resolve(
 );
 const REGISTRY_REF =
   ".onto/processes/reconstruct/reconstruct-contract-registry.yaml";
-const RUNTIME_REF = "src/core-runtime/reconstruct/run.ts";
+/** The runtime final-output surface. run.ts still holds the emitters and the provenance-binding
+ * rows; the prompt-policy hint moved out with the prompt payload builders, so the guard reads
+ * the concatenation of both — the module-consumption and anti-re-inline checks stay whole. */
+const RUNTIME_REFS = [
+  "src/core-runtime/reconstruct/run.ts",
+  "src/core-runtime/reconstruct/authoring-prompt-payloads.ts",
+];
+const RUNTIME_REF = "the reconstruct final-output surface";
 const MODULE_SPECIFIER = "./final-output-sections.js";
 const REQUIRED_MODULE_IMPORTS = [
   "FINAL_OUTPUT_SECTION_HEADINGS",
@@ -80,29 +89,35 @@ function setDiff(
   };
 }
 
-function importBlock(source: string): string | null {
-  const m = new RegExp(
-    `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${MODULE_SPECIFIER.replace(/[.]/g, "\\$&")}["']`,
-  ).exec(source);
-  return m ? m[0]! : null;
+/** Every `{ ... }` import block from MODULE_SPECIFIER (one per runtime file that imports it). */
+function importBlocks(source: string): string[] {
+  return [
+    ...source.matchAll(
+      new RegExp(
+        `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${MODULE_SPECIFIER.replace(/[.]/g, "\\$&")}["']`,
+        "g",
+      ),
+    ),
+  ].map((m) => m[0]!);
 }
 
-function importedSymbols(block: string | null): Set<string> {
-  if (!block) return new Set();
-  const inner = /\{([^}]*)\}/.exec(block)?.[1] ?? "";
-  return new Set(
-    inner
-      .split(",")
-      .map((n) => n.trim())
-      .filter((n) => n.length > 0 && !/\s+as\s+/.test(n)),
-  );
+function importedSymbols(blocks: string[]): Set<string> {
+  const names = new Set<string>();
+  for (const block of blocks) {
+    const inner = /\{([^}]*)\}/.exec(block)?.[1] ?? "";
+    for (const raw of inner.split(",")) {
+      const name = raw.trim();
+      if (name.length > 0 && !/\s+as\s+/.test(name)) names.add(name);
+    }
+  }
+  return names;
 }
 
 export interface FinalOutputSectionsParityInputs {
   moduleSections: readonly FinalOutputSectionDescriptor[];
   modulePromptPolicyIds: readonly string[];
   moduleHeadings: readonly string[];
-  /** Map of FINAL_OUTPUT_SECTION_IDS key -> section_id (for the run.ts bindings-order check). */
+  /** Map of FINAL_OUTPUT_SECTION_IDS key -> section_id (for the bindings-order check). */
   moduleIdMap: Record<string, string>;
   /** Map of FINAL_OUTPUT_SECTION_HEADINGS key -> heading (for emitter/binding key checks). */
   moduleHeadingMap: Record<string, string>;
@@ -112,16 +127,16 @@ export interface FinalOutputSectionsParityInputs {
   runtimeSource: string;
 }
 
-/** The ONLY allowed run.ts heading form: a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template;
+/** The ONLY allowed runtime heading form: a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template;
  * captures the heading key so the guard can assert each section heading is emitted exactly once. */
 const ALLOWED_HEADING_RE = /`## \$\{FINAL_OUTPUT_SECTION_HEADINGS\.(\w+)\}`/g;
 /** Any markdown `## ` heading inside a string/template — opened by a quote (single/double/
  * backtick) OR embedded after a newline (a literal `\n## ` or an actual line break in a template),
  * so a heading hidden mid-string (`"...\n## Ghost"`) is also counted. */
 const ANY_HEADING_LITERAL_RE = /(?:['`"]|\\n|\n)## /g;
-/** A run.ts provenance-binding row's section_id reference, in source order. */
+/** A runtime provenance-binding row's section_id reference, in source order. */
 const BINDING_SECTION_ID_RE = /section_id:\s*FINAL_OUTPUT_SECTION_IDS\.(\w+)/g;
-/** A run.ts provenance-binding row's heading reference, in source order. */
+/** A runtime provenance-binding row's heading reference, in source order. */
 const BINDING_HEADING_RE = /heading:\s*FINAL_OUTPUT_SECTION_HEADINGS\.(\w+)/g;
 /** A final-output append emitter function definition. */
 const APPEND_FN_DEF_RE = /function\s+appendFinalOutput\w+\s*\(/g;
@@ -222,9 +237,9 @@ export function evaluateFinalOutputSectionsParity(
   if (headingConsistency.onlyInFirst.length) errors.push(`heading constant(s) with no descriptor row: ${headingConsistency.onlyInFirst.join(", ")}`);
   if (headingConsistency.onlyInSecond.length) errors.push(`descriptor heading(s) with no FINAL_OUTPUT_SECTION_HEADINGS constant: ${headingConsistency.onlyInSecond.join(", ")}`);
 
-  // (5) run.ts SSOT consumption — imports present AND the prompt-policy / required-fragments
+  // (5) runtime SSOT consumption — imports present AND the prompt-policy / required-fragments
   // fields are assigned the module accessor DIRECTLY (not just any call/import left in place).
-  const imported = importedSymbols(importBlock(inputs.runtimeSource));
+  const imported = importedSymbols(importBlocks(inputs.runtimeSource));
   for (const sym of REQUIRED_MODULE_IMPORTS) {
     if (!imported.has(sym)) {
       errors.push(`${RUNTIME_REF} must import ${sym} from ${MODULE_SPECIFIER}`);
@@ -243,7 +258,7 @@ export function evaluateFinalOutputSectionsParity(
   //       (so a re-inline, a NEW heading, OR an emitter using the WRONG valid module template
   //        fails), and
   //   (c) the appendFinalOutput* emitter-definition count equals the section count.
-  // run.ts has no prose `## `, so the sweep is exact; a future legitimate `## ` prose line
+  // The scanned files have no prose `## `, so the sweep is exact; a future legitimate `## ` prose line
   // surfaces here and must be reconciled.
   const headingLiterals = inputs.runtimeSource.match(ANY_HEADING_LITERAL_RE) ?? [];
   const emitterHeadingKeys = [...inputs.runtimeSource.matchAll(ALLOWED_HEADING_RE)].map((m) => m[1]!);
@@ -265,7 +280,7 @@ export function evaluateFinalOutputSectionsParity(
     );
   }
 
-  // (7) bindings-array order — the run.ts provenance-binding rows' section_id AND heading order
+  // (7) bindings-array order — the runtime provenance-binding rows' section_id AND heading order
   // must equal the module's canonical bindings order (load-bearing: it drives the rendered
   // bindings section text + the persisted validation artifact's section_bindings/required_fragments
   // dedup order; and the gate keys on heading, so a binding's heading must also be module-sourced).
@@ -305,9 +320,12 @@ async function main(): Promise<void> {
 
   let runtimeSource: string;
   try {
-    runtimeSource = await fs.readFile(path.join(PROJECT_ROOT, RUNTIME_REF), "utf8");
+    const parts = await Promise.all(
+      RUNTIME_REFS.map((ref) => fs.readFile(path.join(PROJECT_ROOT, ref), "utf8")),
+    );
+    runtimeSource = parts.join("\n");
   } catch (error) {
-    fail([`cannot read ${RUNTIME_REF}: ${error instanceof Error ? error.message : String(error)}`]);
+    fail([`cannot read ${RUNTIME_REFS.join(" / ")}: ${error instanceof Error ? error.message : String(error)}`]);
     return;
   }
 

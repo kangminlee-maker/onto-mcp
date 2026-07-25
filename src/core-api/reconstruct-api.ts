@@ -37,12 +37,16 @@ export {
   type ReconstructTerminalStatus,
 } from "../core-runtime/reconstruct/record.js";
 import {
-  createDirectCallReconstructConfirmationProvider,
-  createDirectCallReconstructDirectiveAuthor,
   runReconstruct,
   type ReconstructDispatchFallbackRuntime,
   type ReconstructRunResult,
 } from "../core-runtime/reconstruct/run.js";
+import {
+  createDirectCallReconstructConfirmationProvider,
+} from "../core-runtime/reconstruct/direct-call-confirmation-provider.js";
+import {
+  createDirectCallReconstructDirectiveAuthor,
+} from "../core-runtime/reconstruct/direct-call-directive-author.js";
 import {
   RECONSTRUCT_SEMANTIC_AUTHOR_MAX_BASE_OUTPUT_TOKENS,
 } from "../core-runtime/reconstruct/output-budget.js";

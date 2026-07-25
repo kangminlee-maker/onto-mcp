@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ReconstructClaimRealizationMapArtifact } from "./artifact-types.js";
-import { compactClaimRealizationMapForAssessmentPrompt } from "./run.js";
+import {
+  compactClaimRealizationMapForAssessmentPrompt,
+} from "./authoring-prompt-payloads.js";
 
 function claimRealizationMap(): ReconstructClaimRealizationMapArtifact {
   return {

@@ -12,7 +12,9 @@ import type {
   SemanticSynthesisInput,
   SemanticSynthesisOutput,
 } from "../reconstruct/comprehension-semantic-map.js";
-import { projectSemanticMapSynthesisOutput } from "../reconstruct/run.js";
+import {
+  projectSemanticMapSynthesisOutput,
+} from "../reconstruct/semantic-map-authoring.js";
 import type { SynthesizeCertJudgementRow } from "./synthesize-cert-record.js";
 import { synthesizeCertOutputSha256 } from "./synthesize-cert-loop.js";
 import {

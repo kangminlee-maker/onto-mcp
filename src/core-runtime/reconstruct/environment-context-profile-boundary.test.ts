@@ -3,10 +3,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-  assertSeedUserPayloadBoundary,
   projectEnvironmentContextProfileInput,
-  SEED_USER_PAYLOAD_ALLOWED_KEYS,
 } from "./run.js";
+import {
+  assertSeedUserPayloadBoundary,
+  SEED_USER_PAYLOAD_ALLOWED_KEYS,
+} from "./prompt-payload-budget.js";
 import { assembleEnvironmentContextProfile } from "./environment-context-profile.js";
 import { parseEnvironmentManifests } from "./environment-content-parse.js";
 import type { ReconstructTargetMaterialProfileArtifact } from "./artifact-types.js";

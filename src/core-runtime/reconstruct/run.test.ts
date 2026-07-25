@@ -44,29 +44,43 @@ import type {
   ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
 import {
-  createDirectCallReconstructConfirmationProvider,
-  createDirectCallReconstructDirectiveAuthor,
-  MAX_PROJECTED_REGIONS_PER_FILE,
-  observationPromptPayload,
   sourceObservationsReuseSha256,
-  assessmentEvidenceObservationIds,
   runReconstruct,
-  stopDecisionAllowedDecisions,
-  boundEvidenceBySerializedSize,
-  deriveCompetencyAssessmentEvidenceReserveChars,
-  assessmentOmittedObservationCount,
-  shouldDispatchSingleCompetencyAssessment,
   appendFinalOutputUnresolvedRevisionSection,
   reuseMatchArtifactHash,
+} from "./run.js";
+import {
   authoringPromptContractSha256,
   AUTHORING_PROMPT_CONTRACT_VERSION,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+} from "./authoring-llm-call.js";
+import {
+  MAX_PROJECTED_REGIONS_PER_FILE,
+  observationPromptPayload,
+  assessmentEvidenceObservationIds,
+  stopDecisionAllowedDecisions,
+  shouldDispatchSingleCompetencyAssessment,
+} from "./authoring-prompt-payloads.js";
+import {
   SEMANTIC_MAP_PROMPT_NOTE,
   SEMANTIC_MAP_SEED_PROMPT_NOTE,
   SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
   SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
-} from "./run.js";
-import type { ReconstructConfirmationProvider } from "./run.js";
+} from "./authoring-system-prompts.js";
+import {
+  createDirectCallReconstructConfirmationProvider,
+} from "./direct-call-confirmation-provider.js";
+import {
+  createDirectCallReconstructDirectiveAuthor,
+} from "./direct-call-directive-author.js";
+import {
+  boundEvidenceBySerializedSize,
+  deriveCompetencyAssessmentEvidenceReserveChars,
+  assessmentOmittedObservationCount,
+} from "./prompt-payload-budget.js";
+import type {
+  ReconstructConfirmationProvider,
+} from "./confirmation-provider-contract.js";
 import {
   recomputeCodeInventoryProjectionTruncations,
   recomputeWorkbookInventoryProjectionTruncations,
