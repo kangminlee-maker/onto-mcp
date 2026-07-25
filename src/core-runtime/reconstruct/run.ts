@@ -10521,8 +10521,8 @@ const ADMISSION_OUTLINE_WORKBOOK_SKELETON_CAP_MULTIPLIER = 0.04;
 // Breadth-fold rung-2 tightening for the admission catalog (design 20260723 §7, admission surface).
 // One factor scales BOTH per-unit skeleton budgets above, so the `inventory_skeleton` rung stays a
 // demotion OF the existing budgets rather than a second, independently-drifting pair of constants.
-// PRELIMINARY / tunable — the ≤-budget GUARANTEE lives in the coarsest rung (`one_line`, which drops
-// the skeleton and the excerpt outright) plus the always-on byte guard, never in this value.
+// PRELIMINARY / tunable — the ≤-budget GUARANTEE lives in the coarsest rungs (`one_line` and below,
+// which drop the skeleton and the excerpt outright) plus the always-on byte guard, never in this value.
 const ADMISSION_OUTLINE_FOLD_SKELETON_SCALE = 0.2;
 const ADMISSION_OUTLINE_FOLD_EXCERPT_CHAR_LIMIT = 160;
 
@@ -12335,13 +12335,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * source-observation-directive projects its pre-selection candidate catalog flat (today's full
    * projection) and the always-on byte guard fails loud on overflow — byte-identical with PR-2.
    * Explicit true makes writeSourceObservationDirective fold the catalog to the finest detail rung
-   * that fits the byte budget (full → inventory_skeleton → one_line) BEFORE the guard, turning a
-   * large-corpus overflow into a bounded dispatch success. Projection-only for the OBSERVATION layer —
-   * no observation is minted or mutated, so the source-observation reuse key and per-observation delta
-   * hashes never rotate (DW-3d). It DOES change the authored directive's detail rung on an overflowing
-   * catalog, so it is exposed as `sourceBreadthFold` and folded into the DIRECTIVE resume reuse key
-   * (authoredArtifactReuseMatch) — a resume across a flag change regenerates rather than silently
-   * reusing the other rung's selection (silent-stale guard; same treatment as documentExcerptProjectionBudget).
+   * that fits the byte budget (full → inventory_skeleton → one_line → summary_anchor → anchor) BEFORE
+   * the guard, turning a large-corpus overflow into a bounded dispatch success. Projection-only for
+   * the OBSERVATION layer — no observation is minted or mutated, so the source-observation reuse key
+   * and per-observation delta hashes never rotate (DW-3d). It DOES change the authored directive's
+   * detail rung on an overflowing catalog, so it is exposed as `sourceBreadthFold` and folded into
+   * the DIRECTIVE resume reuse key (authoredArtifactReuseMatch) — a resume across a flag change
+   * regenerates rather than silently reusing the other rung's selection (silent-stale guard; same
+   * treatment as documentExcerptProjectionBudget).
    */
   sourceBreadthFold?: boolean;
   /**

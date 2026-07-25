@@ -544,9 +544,9 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // count-scaling selection catalogs would overflow the codex worker stdin byte budget (a large
   // multi-file corpus) — the source-observation-directive's pre-selection candidate catalog, or the
   // admission-selection's admitted-outline catalog — that prompt projects the FINEST detail rung that
-  // fits (full → inventory_skeleton → one_line) instead of the flat full projection — every
-  // observation/unit stays selectable at reduced per-item DETAIL, so an overflow becomes a bounded
-  // dispatch success instead of the always-on byte guard's honest fail-loud. One key covers both
+  // fits (full → inventory_skeleton → one_line → summary_anchor → anchor) instead of the flat full
+  // projection — every observation/unit stays selectable at reduced per-item DETAIL, so an overflow
+  // becomes a bounded dispatch success instead of the always-on byte guard's honest fail-loud. One key covers both
   // surfaces: they share the ceiling, the ladder, and the failure. Projection-only: mints/mutates
   // NO observations, so every provenance/determinism invariant is preserved (the source-observation
   // reuse key and per-observation delta hashes are byte-identical off vs on). When the catalog fits

@@ -166,10 +166,10 @@ let onResult: {
   ok(`all ${capturedFileCount} files stay offered AND projected (breadth invariant)`);
 
   const foldNote = directive.open_questions.find((q) =>
-    /folded the source-observation candidate catalog to '(inventory_skeleton|one_line)'/.test(q),
+    /folded the source-observation candidate catalog to '(inventory_skeleton|one_line|summary_anchor|anchor)'/.test(q),
   );
   if (!foldNote) fail(`no fold disclosure in open_questions: ${JSON.stringify(directive.open_questions)}`);
-  const level = /catalog to '(inventory_skeleton|one_line)'/.exec(foldNote)![1]!;
+  const level = /catalog to '(inventory_skeleton|one_line|summary_anchor|anchor)'/.exec(foldNote)![1]!;
   ok(`fold_level = ${level} (disclosed on the open-questions channel)`);
 
   if (directive.selected_observations.length !== 1) {
