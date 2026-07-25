@@ -41,9 +41,21 @@ const RUN_SURFACE_REFS = [
   "src/core-runtime/reconstruct/direct-call-directive-author.ts",
   "src/core-runtime/reconstruct/leaf-read-stage.ts",
   "src/core-runtime/reconstruct/semantic-map-authoring.ts",
+  "src/core-runtime/reconstruct/semantic-map-resume.ts",
   "src/core-runtime/reconstruct/semantic-map-stage.ts",
   "src/core-runtime/reconstruct/value-read-stage.ts",
 ];
+/**
+ * Erosion floor. The per-file non-emptiness guard below catches "listed but empty"; it CANNOT catch
+ * "moved out of run.ts into a module nobody added to RUN_SURFACE_REFS" — run.ts keeps a non-empty
+ * remainder, so every count stays plausible and the gate passes while covering less. That silent
+ * loss has now happened twice during the run.ts concept extraction (1st pass: 16 of 27 clauses left
+ * the scanned surface; 2nd pass: 4 more), which is why the procedural reminder is replaced by a
+ * mechanism: the total inventory may never DROP. A legitimate new catch raises the total and is
+ * never blocked; a catch leaving the scanned surface lowers it and fails loud. Raise this number
+ * (never lower it to make a red gate green) only together with the code change that adds clauses.
+ */
+const MIN_GUARDED_CATCH_TOTAL = 28;
 const LEAF_READER_TS = path.join(
   PROJECT_ROOT,
   "src/core-runtime/reconstruct/leaf-reader.ts",
@@ -596,6 +608,15 @@ if (emptySurfaceRefs.length > 0) {
   console.error(
     `\nERROR: declared run-surface file(s) hold no catch clause — the guard's subject set shrank ` +
       `without failing. Follow the moved code or drop the entry:\n  ${emptySurfaceRefs.join("\n  ")}`,
+  );
+  process.exit(1);
+}
+if (findings.length < MIN_GUARDED_CATCH_TOTAL) {
+  console.error(
+    `\nERROR: the run-surface catch inventory shrank from ${MIN_GUARDED_CATCH_TOTAL} to ${findings.length} — ` +
+      `${MIN_GUARDED_CATCH_TOTAL - findings.length} clause(s) left the scanned surface without failing this gate. ` +
+      `A catch that moves must stay covered: find the module it moved to and add it to RUN_SURFACE_REFS ` +
+      `(\`rg -c '\\} catch' <new module>\`). Do NOT lower MIN_GUARDED_CATCH_TOTAL to make this green.`,
   );
   process.exit(1);
 }

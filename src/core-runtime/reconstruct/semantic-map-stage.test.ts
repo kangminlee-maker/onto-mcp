@@ -9,8 +9,8 @@ import {
   codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   deriveSemanticMapFallbackPriorDispatchSpend,
-  prepareSemanticMapResumeContext,
 } from "./run.js";
+import { prepareSemanticMapResumeContext } from "./semantic-map-resume.js";
 import {
   authoringPromptContractSha256,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
