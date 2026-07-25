@@ -69,11 +69,14 @@ for level in [inventory_skeleton, one_line]:
 throw assertPromptPayloadByteLimit(...)
 ```
 - **보장 근거**: 사전-dispatch payload를 **dispatch가 쓰는 바로 그 측정 함수**로 잰다("잰 것에 맞으면 보낸 것에 맞음", 구성). 사다리 단조 감소 → 맞는 가장 세밀한 rung 채택. 실측 59파일은 inventory_skeleton(59×~4.3k≈254k ≪ 예산)에서 **전 59파일 top-level 구조와 함께 보임**.
-- **정정 (2026-07-25, 실측이 §3.3 전제를 반증)** — 위 의사코드 주석의 "극단 N: **id-리스트 자체 초과**"는 **틀렸다**. 실 코퍼스를 N=2000까지 복제해 **가드가 쓰는 그 byte 함수**로 잰 결과(probe `.onto/temp/source-breadth-fold-promotion/`):
+- **정정 (2026-07-25, 실측이 §3.3 전제를 반증)** — 위 의사코드 주석의 "극단 N: **id-리스트 자체 초과**"는 **틀렸다**. 실 코퍼스를 N=2000까지 복제해 **가드가 쓰는 그 byte 함수**로 잰 결과(probe·캡처 출력 = `development-records/benchmark/source-breadth-fold/`):
   - `available_observation_ids`는 payload의 **6.2%**뿐이고, **그것만** 투영하면 **≈31,049 파일**까지 안 터진다.
   - 실제로 먼저 묶는 것은 **per-row 절대경로 텍스트**다 — 446 B 행 중 ~285 B, 그나마 `source_ref`와 `location`이 whole-file 관찰에서 사실상 중복. 이것이 **≈2,020 파일**에서 바인딩 = id 한계보다 **14× 먼저**.
   - ⇒ collapse(=id를 숨김)와 그것이 요구하는 zoom 채널은 **측정된 병목이 아니다**. id를 하나도 숨기지 않고 per-row 텍스트만 줄여도 사다리는 크게 더 내려간다(one_line 2,018 → 상대경로 3,279 → −location 3,968 → −summary 5,173).
-  - 또한 `directory_rollup`은 **디렉터리 군집도 의존**이라 사다리 불변식(DW-1f, 단조 비증가)을 만족하지 않는다: 1파일/디렉터리에서 353.5 B/unit로 **바로 윗 rung(302 B/unit)보다 크게** 측정된다. 군집도가 낮은 코퍼스에서 floor가 될 수 없다.
+    - **주의 (2026-07-25)**: 위 "상대경로 3,279"를 실행 후보로 인용하지 않는다. 이 코퍼스 root가 99자 temp 경로라 상대화 이득이 부풀었다 — root를 realistic한 30자로 두면 이득이 **~1.48× → ~1.11×**로 줄고, 멀티레포 축은 공유 root를 더 짧게 만들어 0에 수렴한다. 값이 있는 것은 **키를 떨구는 파생 rung**이지 상대화가 아니다.
+  - 또한 `directory_rollup`은 **디렉터리 군집도 의존**이라 사다리 불변식(DW-1f, 단조 비증가)을 floor로서 만족하지 않는다.
+    - **정정 (2026-07-25, 적대 판정이 기저 혼합을 적발)**: 초판이 쓴 "353.5 vs 바로 윗 rung 302 B/unit"은 **기저가 섞였다** — 353.5는 1파일/디렉터리(`coarse-rung-candidates.mts`), 301.6은 8파일/디렉터리(`rollup-rung-headroom.mts`)에서 나온 수치이고 상대화 방식도 다르다. **단일 기저(1파일/디렉터리)로 재서술**: rollup 353.5 B/unit는 `one_line`(452.2)보다 **작고**, 그 아래 파생 rung(157.3)보다 **크다**. 즉 rollup은 기존 사다리에 대해 비단조였던 적이 없고, **자기 밑에 놓일 rung들에 대해서만** 크다 — floor 자격이 없다는 결론은 유지되지만 근거가 다르다.
+    - 결정적 근거는 **불변식의 성격**이다: 군집도 1→8파일/디렉터리에서 rollup은 353.5 → 251.2 B/unit로 **29% 이동**(코퍼스 의존)하는 반면 파생 rung은 157.3 → 156.4로 **0.6%**(구성적). floor는 코퍼스에 따라 흔들리면 안 된다.
   - 결론 보류: 어느 대안으로 갈지는 §12 PR-4 항목에 기록한다. 위 수치 자체는 대안 선택과 무관하게 성립한다.
 - **극단규모 후속 rung(PR-4·directory-topology rollup)** = B 초안: set-tier의 **export된 primitives**(`pathComponentsOf` comprehension-set-tier.ts:240·`commonPrefixLength` :248·`validateMemberPaths` :258) 재사용해 디렉터리 트리(bottom-up `descendant_file_count`), `renderOverview`(:406) candidate cascade mirror, **최대 subtree부터 collapse**, terminal **root-digest(O(K)·구성으로 ≤budget)**. collapse된 구성원은 selectable에서 빠지고 **zoom(§5)로만 도달**. → 어떤 topology도 구조적 ≤budget. (MVP엔 불필요: 실측 문제는 one_line으로 해소.)
 
