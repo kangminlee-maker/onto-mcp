@@ -105,6 +105,11 @@
 
 ### §9.3 확정 공통-basis (증명·assert)
 - **settings 해석 실측 정정(2026-07-23)**: `resolveSettingsChain(_ontoHome, projectRoot)`의 1st 인자는 **무시**(underscore). user layer = **`~/.onto/settings.json`(홈)**, project layer = `projectRoot/.onto/settings.json`. → 벤치는 **repo `.onto/settings.json`을 안 읽음**. 홈엔 seats(gpt-5.6-sol OAuth)만·code 옵트인 없음. 따라서 **양 arm 오버레이에 `code_structure_inventory:true`+`code_structure_layout:true`를 명시**(결정론=추가 LLM 0·admission outline에 실 code skeleton 부여=공정·production 충실). `semantic_map_authoring`은 OFF(무거운 별개 LLM 기능·측정대상 아님). 상속 X이므로 명시.
+- **개정 (2026-07-25) — `source_breadth_fold:true` 를 공통 옵트인에 추가**: 이 절은 fold
+  착지 전에 쓰였다. 위 실측대로 벤치는 repo `.onto/settings.json`(fold 가 live-ON 인 곳)을
+  **안 읽으므로**, 명시하지 않으면 양 arm 이 fold-OFF 로 돌고 **OFF arm 이 1.35MB directive
+  오버플로우로 죽는다** — fold 가 닫은 바로 그 실패. 양 arm 동일 적용이므로
+  `configsMatchExceptOptIn`(admission 키만 제거하고 비교) 불변. 하니스 `CODE_OPTINS` 반영 완료.
 - 오버레이는 [code 옵트인 공통] + [ON만 `source_admission_selection`]. 하니스가 **양 arm의 완전 해석 `reconstruct.execution` config를 evidence에 스냅샷**하고 **`source_admission_selection` 외 바이트동일 단언**(preflight 실측: OFF/ON keys=actors+code_inv+layout, equal-except-opt-in True). 코퍼스 sha·git HEAD·seat route·intent sha 고정.
 
 ### §9.4 확정 judge (이종·저렴)
@@ -117,7 +122,15 @@
 - 비-vacuous 가드 강화: **≥3 discriminating CQ**(두 seed 판정 상이)·depth-varying(deep target 파일에서만 답 가능한 것 포함). 충족 못 하면 세트 무효.
 
 ### §9.6 확정 하니스 하드가드 (silent-pass 봉인)
-- 양 런 `record_stage==completed` 아니면 비교 거부. **OFF admitted=0 ∧ ON admitted>0** 단언(각 arm 의도 경로 확인). judge 실패콜=하니스 에러(≠ 침묵 unsupported). CQ N≥8·채점 non-empty·discriminating≥3 = **throw**. 코퍼스 manifest sha drift=throw. 비용 = 순수함수 `distinctDeepObservedRefs(finalObservations)` 양 arm 동일 적용 + arm별 fixture 단위테스트. per-런 dispatch cap·실패 checkpoint(admission 하니스 패턴).
+- 양 런 `record_stage==completed` 아니면 비교 거부. **OFF admitted=0 ∧ ON admitted>0** 단언(각 arm 의도 경로 확인).
+- **추가 (2026-07-25) — floor-only ON arm = 측정 무효**: `admitted>0` 만으로는 부족하다.
+  런타임 floor(`applyAdmissionSelectionFloorPolicy`)가 **구성상 ≥1 을 보장**하므로,
+  LM 이 아무것도 못 고른 런도 `admitted>0` 으로 green 이 된다. 하니스가
+  `source-admission-selection.yaml` 의 `frontier_ref_id` 접두사 `admission_floor_` 로
+  floor/LM 을 갈라 **`llm_selected>0` 아니면 throw** 한다. 이건 **실패가 아니라
+  MEASUREMENT-INVALID** — admission 의 선택 능력을 전혀 검증하지 않은 런이므로 판정 금지·재실행.
+  런타임 변경 0(마커는 이미 존재), 벤치 측 파생. 리포트 `admission_llm_selected_count_on` /
+  `admission_floor_promoted_count_on`. judge 실패콜=하니스 에러(≠ 침묵 unsupported). CQ N≥8·채점 non-empty·discriminating≥3 = **throw**. 코퍼스 manifest sha drift=throw. 비용 = 순수함수 `distinctDeepObservedRefs(finalObservations)` 양 arm 동일 적용 + arm별 fixture 단위테스트. per-런 dispatch cap·실패 checkpoint(admission 하니스 패턴).
 
 ### §9.7 확정 반복 (저렴·owner 승인)
 - reconstruct = **arm당 1회**(긴 pole). 변동성은 **싼 부분 반복**으로 유계: admission 선택 스테이지 단독 ≥3회(선택 안정성)·judge paired ≥3패스(σ→ε). 추가 ON 풀런·2번째 크기점 = **미채택**(단일-사용자 도구 비례).
