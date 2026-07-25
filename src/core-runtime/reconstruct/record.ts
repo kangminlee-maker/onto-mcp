@@ -1077,3 +1077,73 @@ export function artifactRefsWithDefaults(args: {
     reconstruct_run_manifest: args.refs.reconstruct_run_manifest ?? null,
   };
 }
+
+/**
+ * 시딩 레코드용 artifact refs — 성숙(maturation) 이후 단계의 ref를 전부 null로 눕히고
+ * run manifest만 pre-handoff 것으로 가리킨다.
+ *
+ * runReconstruct 본문에서 **원문 그대로** 옮겨온 블록이다(분해 설계 20260726 Tier 1). 본문이
+ * 기준본과 바이트 동일함을 `scripts/run-block-identity.mts`가 검사한다 — 파라미터를 원래 지역
+ * 변수 이름(`artifactRefs`·`preHandoffManifestPath`)으로 맨 앞에서 구조분해하는 것도 그 동일성을
+ * 지키기 위해서다. 구조분해 줄과 마지막 return 줄은 그 검사기에 prefix/suffix로 **선언돼 있고**,
+ * 선언하지 않은 코드가 끼면 FAIL한다.
+ */
+export function buildSeedingRecordArtifactRefs(args: {
+  artifactRefs: ReconstructRecordArtifactRefs;
+  preHandoffManifestPath: string;
+}): ReconstructRecordArtifactRefs {
+  const { artifactRefs, preHandoffManifestPath } = args;
+  const seedingRecordArtifactRefs = artifactRefsWithDefaults({
+    refs: {
+      ...artifactRefs,
+      reconstruct_run_control_pre_publication_validation: null,
+      post_publication_run_manifest_validation: null,
+      source_scout_pack_post_maturation: null,
+      source_scout_pack_validation_post_maturation: null,
+      post_maturation_gate_projection_validation: null,
+      maturation_baseline: null,
+      maturation_baseline_validation: null,
+      baseline_actionability_matrix: null,
+      baseline_actionability_matrix_validation: null,
+      maturation_value_discharge: null,
+      maturation_value_discharge_validation: null,
+      maturation_value_discharge_census: null,
+      actionability_matrix: null,
+      actionability_matrix_validation: null,
+      maturation_question_frontier: null,
+      maturation_question_frontier_validation: null,
+      maturation_closure_frontier: null,
+      maturation_closure_frontier_validation: null,
+      maturation_authority_response: null,
+      maturation_authority_response_validation: null,
+      answer_support_ledger: null,
+      answer_support_ledger_validation: null,
+      answer_support_judgment: null,
+      answer_support_judgment_validation: null,
+      maturation_answer_claims: null,
+      maturation_answer_claims_validation: null,
+      ontology_expansion: null,
+      ontology_expansion_validation: null,
+      maturation_source_delta: null,
+      maturation_source_delta_validation: null,
+      maturation_convergence_ledger: null,
+      maturation_convergence_ledger_validation: null,
+      maturation_continuation_decision: null,
+      maturation_continuation_decision_validation: null,
+      query_proofs: null,
+      query_proofs_validation: null,
+      visualization_proofs: null,
+      visualization_proofs_validation: null,
+      graph_exploration_proofs: null,
+      graph_exploration_proofs_validation: null,
+      actionable_ontology: null,
+      actionable_ontology_validation: null,
+      claim_projection: null,
+      claim_projection_validation: null,
+      final_output: null,
+      final_output_provenance_validation: null,
+      reconstruct_run_manifest: preHandoffManifestPath,
+    },
+  });
+  return seedingRecordArtifactRefs;
+}

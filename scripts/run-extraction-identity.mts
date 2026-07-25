@@ -229,6 +229,20 @@ const git = (...args: string[]): string =>
  * 상태에서 이미 DUPLICATE 20건이 뜬다. 여기 적은 파일마다 "이동해온 선언이 실제로 있는가"를
  * 아래에서 검사하므로, 코드가 또 움직이면 목록을 따라가라고 소리내어 실패한다.
  */
+/**
+ * **분해된** 선언 — 이 검사기의 바이트 증명 대상에서 명시적으로 빠지는 것.
+ *
+ * `runReconstruct` 분해(설계 20260726)는 순수 이동이 아니다. 닫힌 블록이 함수로 빠져나가고 그
+ * 자리에 호출문이 들어가므로 **이 함수의 선언 본문은 필연적으로 달라진다**. 증명이 사라지는 게
+ * 아니라 담당이 바뀐다:
+ *   - 추출된 블록 본문의 바이트 동일성 → `scripts/run-block-identity.mts`
+ *   - 래퍼(호출문이 들어간 자리)의 행동 동일성 → `scripts/run-reconstruct-equivalence.mts`
+ *
+ * 아래 가드가 이 목록의 남용을 막는다: 여기 적힌 이름이 실제로는 MODIFIED가 아니면(=아직
+ * 분해되지 않았거나 되돌려졌다면) FAIL한다. 면제가 조용히 넓어지거나 스테일해지지 않는다.
+ */
+const DECOMPOSED_DECLARATIONS = ["runReconstruct"];
+
 const APPEND_DEST_REFS = [
   "src/core-runtime/reconstruct/contract-registry.ts",
   "src/core-runtime/reconstruct/environment-context-profile.ts",
@@ -427,7 +441,25 @@ console.log(`  MISSING  ${String(c.MISSING).padStart(4)}  어디에도 없다`);
 console.log(`  DUPLICATE${String(c.DUPLICATE).padStart(4)}  두 곳 이상에 있다`);
 console.log(`  ADDED    ${String(report.added.length).padStart(4)}  신규 파일의 기준본-외 선언`);
 
-const violations = report.findings.filter((f) => f.verdict !== "STAYED" && f.verdict !== "MOVED");
+/**
+ * 분해 면제 처리. 목록에 적힌 이름이 실제로 MODIFIED인지 **확인한 뒤** 위반에서 뺀다.
+ * 적어놓고 실제로는 안 바뀐 것이 있으면(스테일·과다 선언) FAIL시킨다.
+ */
+const staleDecomposed = DECOMPOSED_DECLARATIONS.filter(
+  (name) => !report.findings.some((f) => f.name === name && f.verdict === "MODIFIED"),
+);
+if (staleDecomposed.length > 0) {
+  console.error(
+    `\n!! DECOMPOSED_DECLARATIONS에 적혀 있는데 MODIFIED가 아니다 — 면제가 스테일하거나 과다 선언이다:\n  ` +
+      staleDecomposed.join("\n  ") +
+      `\n   분해가 되돌려졌으면 목록에서 빼라. 면제는 실제로 분해된 것에만 붙는다.`,
+  );
+  process.exit(1);
+}
+const decomposedExempt = new Set(DECOMPOSED_DECLARATIONS);
+const violations = report.findings.filter(
+  (f) => f.verdict !== "STAYED" && f.verdict !== "MOVED" && !decomposedExempt.has(f.name),
+);
 if (violations.length > 0) {
   console.log("\n=== 위반 상세 ===");
   for (const f of violations) {

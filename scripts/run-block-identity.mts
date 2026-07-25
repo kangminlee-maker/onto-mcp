@@ -49,10 +49,32 @@ interface Extraction {
   readonly destFile: string;
   /** 목적지의 top-level 함수 이름. 그 함수 **본문**이 블록과 비교된다. */
   readonly destFunction: string;
+  /**
+   * 블록 앞에 붙는 것으로 **선언한** 텍스트. repo 관례인 객체 인자(`args: {...}`)를 쓰면서도
+   * 블록 본문을 바이트 그대로 두려면 맨 앞에서 지역 변수 이름으로 구조분해해야 한다
+   * (`const { a, b } = args;`). 검사기는 본문이 정확히 이 텍스트로 시작하는지 확인한 뒤 벗겨낸다.
+   * 선언하지 않은 코드가 앞에 들어가면 FAIL한다 — 관대해지는 게 아니라 **명시적으로** 허용한다.
+   */
+  readonly destBodyPrefix?: string;
+  /**
+   * 블록 뒤에 붙는 것으로 **선언한** 텍스트. const 초기자 블록을 함수로 빼면 결과를 돌려줘야
+   * 하므로 `return <원래이름>;` 한 줄이 필요하다. prefix와 같은 규칙으로 정확히 검사·제거한다.
+   */
+  readonly destBodySuffix?: string;
 }
 
 const EXTRACTIONS: readonly Extraction[] = [
-  // Tier 1 — 설계 §4 옵션 2. 싼 순서로 채워 넣는다.
+  // Tier 1 — 설계 §4 옵션 2. 싼 순서(입력 개수)로 채워 넣는다.
+  {
+    label: "시딩 레코드 artifact refs (입력 2 / 출력 1)",
+    baseStartLine: 4321,
+    baseEndLine: 4372,
+    expectStartsWith: "const seedingRecordArtifactRefs = artifactRefsWithDefaults({",
+    destFile: "src/core-runtime/reconstruct/record.ts",
+    destFunction: "buildSeedingRecordArtifactRefs",
+    destBodyPrefix: "const { artifactRefs, preHandoffManifestPath } = args;",
+    destBodySuffix: "return seedingRecordArtifactRefs;",
+  },
 ];
 
 // ---------------------------------------------------------------- 순수 핵심부
@@ -100,7 +122,14 @@ function functionBodyText(fileName: string, text: string, fnName: string): strin
   return found;
 }
 
-type BlockVerdict = "IDENTICAL" | "MODIFIED" | "DEST_FN_MISSING" | "RANGE_MISMATCH" | "RANGE_OUT_OF_BOUNDS";
+type BlockVerdict =
+  | "IDENTICAL"
+  | "MODIFIED"
+  | "DEST_FN_MISSING"
+  | "RANGE_MISMATCH"
+  | "RANGE_OUT_OF_BOUNDS"
+  | "PREFIX_MISMATCH"
+  | "SUFFIX_MISMATCH";
 
 interface BlockFinding {
   readonly label: string;
@@ -161,17 +190,62 @@ function analyze(input: Inputs): BlockFinding[] {
       });
       continue;
     }
+    const lines = ex.baseEndLine - ex.baseStartLine + 1;
+    /**
+     * 선언된 prefix/suffix를 **원문에서 줄 단위로** 떼어낸 뒤에 dedent한다. 순서가 중요하다:
+     * prefix가 붙은 채로 dedent하면 공통 최소 들여쓰기가 prefix 쪽으로 잡혀 블록의 상대
+     * 들여쓰기가 남고 비교가 어긋난다(self-test에서 실측).
+     * 비교는 각 줄을 trim해서 한다 — prefix/suffix의 들여쓰기는 목적지 형식의 문제일 뿐이다.
+     */
+    let bodyLines = body.split("\n");
+    const dropBlankFront = (): void => {
+      while (bodyLines.length > 0 && (bodyLines[0] as string).trim().length === 0) bodyLines.shift();
+    };
+    const dropBlankBack = (): void => {
+      while (bodyLines.length > 0 && (bodyLines[bodyLines.length - 1] as string).trim().length === 0) bodyLines.pop();
+    };
+    dropBlankFront();
+    dropBlankBack();
+    let mismatch: BlockFinding | null = null;
+    if (ex.destBodyPrefix !== undefined) {
+      for (const want of ex.destBodyPrefix.split("\n").map((l) => l.trim()).filter((l) => l.length > 0)) {
+        dropBlankFront();
+        const got = (bodyLines[0] ?? "").trim();
+        if (got !== want) {
+          mismatch = {
+            label: ex.label,
+            verdict: "PREFIX_MISMATCH",
+            lines,
+            detail: `선언된 prefix와 다르다\n      선언: ${JSON.stringify(want)}\n      실제: ${JSON.stringify(got)}`,
+          };
+          break;
+        }
+        bodyLines.shift();
+      }
+    }
+    if (mismatch === null && ex.destBodySuffix !== undefined) {
+      for (const want of ex.destBodySuffix.split("\n").map((l) => l.trim()).filter((l) => l.length > 0).reverse()) {
+        dropBlankBack();
+        const got = (bodyLines[bodyLines.length - 1] ?? "").trim();
+        if (got !== want) {
+          mismatch = {
+            label: ex.label,
+            verdict: "SUFFIX_MISMATCH",
+            lines,
+            detail: `선언된 suffix와 다르다\n      선언: ${JSON.stringify(want)}\n      실제: ${JSON.stringify(got)}`,
+          };
+          break;
+        }
+        bodyLines.pop();
+      }
+    }
+    if (mismatch !== null) { out.push(mismatch); continue; }
+    const core = dedent(bodyLines.join("\n")).trim();
     const want = dedent(slice).trim();
-    const got = dedent(body).trim();
     out.push(
-      want === got
-        ? { label: ex.label, verdict: "IDENTICAL", lines: ex.baseEndLine - ex.baseStartLine + 1 }
-        : {
-          label: ex.label,
-          verdict: "MODIFIED",
-          lines: ex.baseEndLine - ex.baseStartLine + 1,
-          detail: firstDifference(want, got),
-        },
+      want === core
+        ? { label: ex.label, verdict: "IDENTICAL", lines }
+        : { label: ex.label, verdict: "MODIFIED", lines, detail: firstDifference(want, core) },
     );
   }
   return out;
@@ -248,6 +322,36 @@ function selfTest(): number {
       ex: { ...base, baseEndLine: 9999 },
       destBody: BLOCK,
       expect: (f) => f.verdict === "RANGE_OUT_OF_BOUNDS",
+    },
+    {
+      label: "선언된 prefix/suffix가 실제와 맞으면 → IDENTICAL",
+      ex: { ...base, destBodyPrefix: "const { x } = args;", destBodySuffix: "return a;" },
+      destBody: `  const { x } = args;\n${BLOCK}\n  return a;`,
+      expect: (f) => f.verdict === "IDENTICAL",
+    },
+    {
+      label: "선언하지 않은 코드가 앞에 붙으면 → PREFIX_MISMATCH (관대해지지 않는다)",
+      ex: { ...base, destBodyPrefix: "const { x } = args;" },
+      destBody: `  const { x } = args;\n  sneakyExtra();\n${BLOCK}`,
+      expect: (f) => f.verdict === "MODIFIED",
+    },
+    {
+      label: "prefix를 선언했는데 없으면 → PREFIX_MISMATCH",
+      ex: { ...base, destBodyPrefix: "const { x } = args;" },
+      destBody: BLOCK,
+      expect: (f) => f.verdict === "PREFIX_MISMATCH",
+    },
+    {
+      label: "suffix를 선언했는데 없으면 → SUFFIX_MISMATCH",
+      ex: { ...base, destBodySuffix: "return a;" },
+      destBody: BLOCK,
+      expect: (f) => f.verdict === "SUFFIX_MISMATCH",
+    },
+    {
+      label: "suffix 뒤에 선언하지 않은 코드가 있으면 → SUFFIX_MISMATCH",
+      ex: { ...base, destBodySuffix: "return a;" },
+      destBody: `${BLOCK}\n  return a;\n  sneakyAfter();`,
+      expect: (f) => f.verdict === "SUFFIX_MISMATCH",
     },
   ];
 
