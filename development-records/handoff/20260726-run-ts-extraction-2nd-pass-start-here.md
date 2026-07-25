@@ -17,6 +17,7 @@ wc -l src/core-runtime/reconstruct/run.ts    # 9328
 npx tsx scripts/run-split-plan.mts           # 순환 0개 · 밖으로 41심볼 · 잔류 예상 ≈7,134줄
 npx tsx scripts/run-extraction-identity.mts  # PASS (MOVED 302 / STAYED 90 / 나머지 0)
 npx vitest run                               # 217파일 3689 pass
+# check:* 17종 → 16 green, G7만 알려진 false positive (§7)
 ```
 
 미푸시 로컬 커밋 6개. **push/PR은 owner 명시 승인 후.** 직전 전례 = 브랜치에 여러 PR 단위를 누적한 뒤 GitHub PR.
@@ -140,6 +141,7 @@ buildSemanticMapResumeValidationArtifact,prepareSemanticMapResumeContext,backupS
 | `check:graceful-signal-rethrow` (G11) | `source-admission-selection-stage`/`semantic-map-resume`이 catch를 가져가면 `RUN_SURFACE_REFS`가 뒤처진다. **이번엔 조용히 지나가지 않는다** — §2에서 파일별 비어있음 가드를 넣었지만, 그건 "목록에 있는데 비었다"만 잡지 "빠져나간 걸 목록에 안 넣었다"는 못 잡는다 | 배치 후 `rg -c '\} catch' <새 모듈>` 로 확인하고 catch가 있으면 `RUN_SURFACE_REFS`에 추가 |
 | `check:prompt-projection-parity` | 2차 대상에 프롬프트 투영 심볼이 없어 영향 없을 것으로 본다 | 실행해서 확인 |
 | `check:spec-defaults` | waiver는 `direct-call-directive-author.ts`를 가리키고 있고 2차 대상이 아니다 | 실행해서 확인 |
+| `check:invariant-change` (G4) | waiver·보호 설정을 건드리면 걸린다. **커밋 후에** 돌려야 보인다(§7.1) | 마커 + owner 확인 |
 
 ### 6.2 테스트 (import 소스 재조준 필요 — **단정은 건드리지 않는다**)
 
@@ -157,13 +159,22 @@ buildSemanticMapResumeValidationArtifact,prepareSemanticMapResumeContext,backupS
 ### 6.3 텔레메트리 커버리지 가드
 `execution-telemetry.test.ts`는 1차에서 **디렉터리 전체 스캔**으로 바꿨다(단일 파일 스캔이었을 때 run.ts의 호출 사이트가 0이 되어 자기 공허-통과 가드가 발화했다). 2차에서 호출 사이트가 또 움직여도 이 테스트는 따라간다. **되돌리지 말 것.**
 
-## 7. 알려진 false positive (2차에서도 나올 것)
+## 7. 게이트 베이스라인 (2026-07-26 실측 — 2차 착수 전 상태)
+
+`check:*` **17종 중 16 green, 1 known false positive.**
 
 `check:supported-models`(G7)가 **gitignore된 세션 잔해** 때문에 로컬에서만 실패한다:
 - `.onto/reconstruct/20260720-dd6-live-exp2/runtime-events.ndjson`
 - `.onto/review/20260714-147a9121/runtime-events.ndjson`
 
-둘 다 `ignored=yes tracked=no`이고 `src/`·`scripts/`를 0회 참조한다. CI 청정 체크아웃에서 통과함이 1차에서 독립 확증됐다. **재확인 없이 넘기지 말고 매번 위 두 조건(ignored·tracked)을 확인한 뒤 넘긴다.**
+둘 다 `ignored=yes tracked=no`이고, G7 출력에서 `src/`·`scripts/` 경로는 npm 배너 한 줄뿐이다(실 위반 0). CI 청정 체크아웃 통과가 1차에서 독립 확증됐다. **매번 위 두 조건(ignored·tracked)을 실행해 확인한 뒤 넘긴다.** `check:invariant-drift`가 G7을 감싸 실행하므로 **drift도 같은 이유로 rc=1이 된다** — 별개 결함이 아니다.
+
+### 7.1 G4(`check:invariant-change`)는 **커밋된 range만** 본다
+
+`origin/main..HEAD`의 커밋 메시지를 스캔한다. 즉 **워킹트리 상태로 게이트를 돌리면 공허 통과한다.** 1차에서 이 함정에 걸렸다 — `check-no-hardcoded-spec-defaults.ts`의 waiver 경로를 `run.ts` → `direct-call-directive-author.ts`로 옮긴 것이 보호 키 변경인데, 커밋 전에 게이트를 돌려 green으로 보였고 커밋 후에야 FAIL했다.
+
+- 해소: `INVARIANT-CHANGE: INV-CFG-1` 마커를 range 내 커밋 메시지에 넣었다(owner 명시 승인 2026-07-26). 마커는 **range 안 아무 커밋에나** 있으면 되므로 과거 커밋을 다시 쓸 필요가 없다.
+- **2차에서도 waiver·보호 설정을 건드리면 같은 일이 생긴다.** 커밋 **후에** G4를 다시 돌린다.
 
 ## 8. 도구
 
