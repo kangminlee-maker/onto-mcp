@@ -946,6 +946,34 @@ async function callCodexCli(
     // map) — this closes the same gap on the codex route.
     "-s",
     "read-only",
+    // The sandbox above governs codex's OWN shell and patch tools. It does NOT cover MCP servers
+    // (separate processes) — measured 2026-07-26: under `-s read-only` the worker still called an
+    // MCP tool and got real data back. The three flags below close what the sandbox cannot, and
+    // each was verified against a control that proved the surface was reachable without it.
+    //
+    // --ignore-user-config: drops the operator's `~/.codex/config.toml`, and with it every
+    //   user-configured MCP server. Measured: removes `day1-mcp` (Google Workspace WRITE tools)
+    //   and `onto` (whose `onto_reconstruct` would let a worker start another reconstruct —
+    //   unbounded recursion). Chosen over a purpose-built CODEX_HOME because it leaves auth.json
+    //   in place: copying auth into a temp home would strand OAuth token refreshes there, so an
+    //   expiry would fail every worker. Model/effort/service_tier are passed explicitly below, so
+    //   nothing this path depends on lives in the dropped file.
+    "--ignore-user-config",
+    // --disable apps: drops the ChatGPT account connectors, which `--ignore-user-config` does NOT
+    //   reach (they are provider-side, not user config). Measured: without it the worker enumerated
+    //   193 tools including `github._merge_pull_request`, `_create_file`, `_delete_file`,
+    //   `_create_branch`, and `plugin_management._update_app_permissions`. With it the MCP server
+    //   list is empty and the deferred-tool search mechanism is gone.
+    "--disable",
+    "apps",
+    // --disable shell_tool: removes command execution itself. Closing the MCP surface alone is not
+    //   enough — the worker could still shell out to `gh`/`git` with the operator's credentials,
+    //   which is the same authority by a different door. Measured: control ran `echo`; with this
+    //   flag the worker reports `tools.exec_command is not a function`.
+    //   (`features.unified_exec=false` is a VALID config key that does NOT do this — a key being
+    //   accepted by the schema is not evidence it disables what its name suggests.)
+    "--disable",
+    "shell_tool",
   ];
   if (modelId) args.push("-m", modelId);
   if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
