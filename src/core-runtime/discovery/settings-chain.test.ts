@@ -908,6 +908,16 @@ describe("reconstruct source-layer structure preservation (design §5.1)", () =>
     expect(out).toEqual({ execution: { source_admission_selection: true } });
   });
 
+  // Observation catalog tool — push layer (design 20260726 §6 stage 3a). Same reason as the key
+  // above: the author-level tests construct the author directly, so nothing else proves the settings
+  // key actually resolves through the chain instead of merely typechecking as a declared constant.
+  it("normalize preserves the source_observation_catalog_tool opt-in scalar", () => {
+    const out = v3ReconstructSettings(
+      { execution: { source_observation_catalog_tool: true } } as never,
+    );
+    expect(out).toEqual({ execution: { source_observation_catalog_tool: true } });
+  });
+
   // Drift guard ③: merge iterates every actor key (project > user per actor)
   // and preserves the scalar across sides even with actors on one side only.
   it("merge preserves every actor key and the opt-in scalar across sides", () => {

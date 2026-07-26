@@ -25,7 +25,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { createDirectCallReconstructDirectiveAuthor } from "../src/core-runtime/reconstruct/direct-call-directive-author.ts";
-import { ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT } from "../src/core-runtime/reconstruct/authoring-prompt-payloads.ts";
+import {
+  ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
+  sourceObservationsForPrompt,
+} from "../src/core-runtime/reconstruct/authoring-prompt-payloads.ts";
 import { SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET } from "../src/core-runtime/reconstruct/source-breadth-fold.ts";
 import { CODEX_PROMPT_INPUT_CHAR_LIMIT } from "../src/core-runtime/llm/llm-caller.ts";
 
@@ -33,6 +36,10 @@ const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..");
 const OBSERVATIONS_PATH = path.join(
   REPO_ROOT,
   "scripts/fixtures/observation-catalog/source-observations.yaml",
+);
+const SAFETY_LEDGER_PATH = path.join(
+  REPO_ROOT,
+  "scripts/fixtures/observation-catalog/source-safety-ledger.yaml",
 );
 const SCALE_TO = 500;
 
@@ -60,6 +67,32 @@ if (withStructuralData !== realObservations.length) {
     `fixture has ${realObservations.length - withStructuralData} observations without structural_data —` +
       " the detail this stage moves out of the prompt is what is being measured",
   );
+}
+
+/**
+ * Row identity oracle: the projected rows ARE the observations (same id multiset, same values), not
+ * N copies of one row. Counts alone passed a duplicated catalog (cross-family review, lens B #7).
+ */
+function assertRowsAreTheObservations(
+  arm: string,
+  rows: AnyRecord[],
+  observations: AnyRecord[],
+): void {
+  const byId = new Map(observations.map((o) => [o.observation_id, o]));
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const id = String(row.observation_id);
+    if (seen.has(id)) fail(`${arm} duplicate row for ${id} — the catalog repeated a row`);
+    seen.add(id);
+    const observation = byId.get(id);
+    if (!observation) fail(`${arm} row ${id} is not an input observation`);
+    if (row.source_ref !== observation!.source_ref) {
+      fail(`${arm} row ${id} carries source_ref ${row.source_ref}, expected ${observation!.source_ref}`);
+    }
+    if ("summary" in row && row.summary !== observation!.summary) {
+      fail(`${arm} row ${id} carries another observation's summary`);
+    }
+  }
 }
 
 function artifactOf(observations: AnyRecord[]): AnyRecord {
@@ -202,8 +235,8 @@ async function author(
   catalogTool: boolean,
 ): Promise<{
   payload: AnyRecord;
-  userPromptBytes: number;
-  userPromptChars: number;
+  dispatchBytes: number;
+  dispatchChars: number;
   disclosures: AnyRecord[];
 }> {
   const dispatched: { systemPrompt: string; userPrompt: string }[] = [];
@@ -227,13 +260,16 @@ async function author(
     sourceObservations: artifactOf(observations),
   });
   if (dispatched.length !== 1) fail(`expected exactly one dispatch, got ${dispatched.length}`);
-  const { userPrompt } = dispatched[0]!;
+  const { systemPrompt, userPrompt } = dispatched[0]!;
+  // Measure what codex RECEIVES: system prompt + the separator callCodexCli inserts + user prompt.
+  // Measuring the user prompt alone under-reported the dispatch (cross-family review, lens B #7).
+  const combined = `${systemPrompt}\n\n---\n\n${userPrompt}`;
   return {
     payload: JSON.parse(userPrompt) as AnyRecord,
-    userPromptBytes: Buffer.byteLength(userPrompt, "utf8"),
+    dispatchBytes: Buffer.byteLength(combined, "utf8"),
     // The provider counts CHARACTERS (design §5: its rejection payload reports max_chars), so the
     // ceiling comparison below uses chars even though the projection budget is byte-counted.
-    userPromptChars: userPrompt.length,
+    dispatchChars: combined.length,
     disclosures: ((instance as AnyRecord).sourceBreadthFoldDisclosures ?? []) as AnyRecord[],
   };
 }
@@ -256,37 +292,42 @@ if (offDetailRows === 0) {
   fail("A OFF carried no structural_data — the contrast below would be vacuous");
 }
 // The point of arm A is not "OFF is bigger" — it is that on THIS corpus OFF does not survive at all.
-// If that ever stops being true the arm must say so rather than quietly becoming a size comparison.
-const offOverCeiling = off.userPromptChars > CODEX_PROMPT_INPUT_CHAR_LIMIT;
+// ASSERTED, not merely interpolated: an OFF defect that shrank the projection (one detailed row for
+// the whole corpus, say) would still be "bigger than ON" and used to reach the final PASS.
+if (off.dispatchChars <= CODEX_PROMPT_INPUT_CHAR_LIMIT) {
+  fail(
+    `A OFF dispatches ${off.dispatchChars} chars, WITHIN the ${CODEX_PROMPT_INPUT_CHAR_LIMIT}-char ceiling —` +
+      " the premise of this replay (that today's projection overflows on the real corpus) no longer holds",
+  );
+}
 ok(
-  `[A] OFF dispatches ${off.userPromptBytes} B / ${off.userPromptChars} chars, ${offRows.length} rows, ` +
-    `${offDetailRows} carrying detail — ${
-      offOverCeiling
-        ? `OVER the ${CODEX_PROMPT_INPUT_CHAR_LIMIT}-char worker ceiling (this surface kills the real run today)`
-        : `under the ${CODEX_PROMPT_INPUT_CHAR_LIMIT}-char ceiling`
-    }`,
+  `[A] OFF dispatches ${off.dispatchBytes} B / ${off.dispatchChars} chars, ${offRows.length} rows, ` +
+    `${offDetailRows} carrying detail — OVER the ${CODEX_PROMPT_INPUT_CHAR_LIMIT}-char worker ceiling ` +
+    "(this surface kills the real run today)",
 );
 
 const onRows = on.payload.source_observations as AnyRecord[];
 if (onRows.length !== realObservations.length) {
   fail(`B ON offered ${onRows.length} of ${realObservations.length} observations`);
 }
+// Row IDENTITY, not just a count: 59 copies of one navigation row would satisfy every count.
+assertRowsAreTheObservations("B", onRows, realObservations);
 if (onRows.some((row) => row.structural_data !== undefined)) {
   fail("B ON leaked structural_data into the navigation catalog");
 }
-if (on.userPromptBytes >= off.userPromptBytes) {
-  fail(`B ON (${on.userPromptBytes} B) is not smaller than OFF (${off.userPromptBytes} B)`);
+if (on.dispatchBytes >= off.dispatchBytes) {
+  fail(`B ON (${on.dispatchBytes} B) is not smaller than OFF (${off.dispatchBytes} B)`);
 }
 if (on.disclosures.length !== 0) {
   fail("B ON disclosed a demotion on a corpus that fits the pinned rung");
 }
-if (on.userPromptChars > CODEX_PROMPT_INPUT_CHAR_LIMIT) {
-  fail(`B ON still exceeds the worker ceiling: ${on.userPromptChars} chars`);
+if (on.dispatchChars > CODEX_PROMPT_INPUT_CHAR_LIMIT) {
+  fail(`B ON still exceeds the worker ceiling: ${on.dispatchChars} chars`);
 }
 ok(
-  `[B] ON dispatches ${on.userPromptBytes} B (${(off.userPromptBytes / on.userPromptBytes).toFixed(1)}× smaller), ` +
+  `[B] ON dispatches ${on.dispatchBytes} B (${(off.dispatchBytes / on.dispatchBytes).toFixed(1)}× smaller), ` +
     `all ${onRows.length} observations offered, zero detail rows, nothing to disclose` +
-    (offOverCeiling ? " — the overflow in [A] becomes a bounded dispatch" : ""),
+    " — the overflow in [A] becomes a bounded dispatch",
 );
 
 // [C] + [D] — the same REAL rows scaled past the cap.
@@ -302,9 +343,23 @@ const omittedCounter =
 if (omittedCounter !== 0) {
   fail(`C the omission counter reported ${omittedCounter} — the defect is that it reports nothing`);
 }
+const offPolicy = scaledOff.payload.source_observation_prompt_policy as AnyRecord;
+if (offPolicy.source_observation_count !== SCALE_TO) {
+  fail(`C policy reports ${offPolicy.source_observation_count} inputs, expected ${SCALE_TO}`);
+}
+if (offPolicy.prompt_observation_count !== ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT) {
+  fail(`C policy reports ${offPolicy.prompt_observation_count} projected, expected the cap`);
+}
+if (offPolicy.observation_limit !== ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT) {
+  fail(`C policy reports observation_limit ${offPolicy.observation_limit}, expected the cap`);
+}
+// The dropped set is EXACTLY the tail of the catalog order, so "silent" is about these ids.
+const scaledOffRows = scaledOff.payload.source_observations as AnyRecord[];
+assertRowsAreTheObservations("C", scaledOffRows, scaledObservations);
 ok(
   `[C] OFF drops ${SCALE_TO - scaledOffIds.length} of ${SCALE_TO} observations and the only omission ` +
-    `counter still reads ${omittedCounter} — silent (design §1.2)`,
+    `counter still reads ${omittedCounter} — silent (design §1.2); policy reports ` +
+    `${offPolicy.source_observation_count} in / ${offPolicy.prompt_observation_count} projected`,
 );
 
 const scaledOn = await author(scaledObservations, true);
@@ -314,8 +369,12 @@ if (scaledOnRows.length !== SCALE_TO || scaledOnIds.length !== SCALE_TO) {
   fail(`D ON offered ${scaledOnIds.length} ids / ${scaledOnRows.length} rows, expected ${SCALE_TO}`);
 }
 if (new Set(scaledOnIds).size !== SCALE_TO) fail("D duplicate ids — the scaled corpus collapsed");
-if (scaledOn.userPromptBytes > SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET) {
-  fail(`D ON dispatched ${scaledOn.userPromptBytes} B over the ${SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET} B budget`);
+assertRowsAreTheObservations("D", scaledOnRows, scaledObservations);
+if (new Set(scaledOnIds).size !== new Set(scaledObservations.map((o) => o.observation_id)).size) {
+  fail("D visible id set is not the input observation set");
+}
+if (scaledOn.dispatchBytes > SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET) {
+  fail(`D ON dispatched ${scaledOn.dispatchBytes} B over the ${SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET} B budget`);
 }
 const rung = scaledOn.disclosures.length > 0
   ? String((scaledOn.disclosures[0]!.disclosure as AnyRecord).fold_level)
@@ -324,10 +383,64 @@ if (scaledOn.disclosures.length > 0 && scaledOn.disclosures[0]!.surface !== "mat
   fail(`D disclosure attributed to ${scaledOn.disclosures[0]!.surface}`);
 }
 ok(
-  `[D] ON offers all ${SCALE_TO} at rung '${rung}', ${scaledOn.userPromptBytes} B ≤ budget ` +
+  `[D] ON offers all ${SCALE_TO} at rung '${rung}', ${scaledOn.dispatchBytes} B ≤ budget ` +
     `(OFF would have offered ${scaledOffIds.length})`,
 );
 
+// [E] The consumption gate. Arms A-D pass the artifact straight to the author, so none of them
+// exercises the fail-closed gate the run applies upstream — the catalog must be the GATED set and
+// nothing more (C2). The real ledger admits all 59 rows, which alone would be a vacuous check, so a
+// one-row mutation is the contrast: a withheld observation must vanish from the catalog.
+console.log("\n[E] real source-safety ledger — the catalog is the GATED set");
+const safetyLedger = parseYaml(await fs.readFile(SAFETY_LEDGER_PATH, "utf8")) as AnyRecord;
+const gatedAll = sourceObservationsForPrompt({
+  sourceObservations: artifactOf(realObservations) as never,
+  sourceSafetyLedger: safetyLedger as never,
+}).observations as AnyRecord[];
+if (gatedAll.length !== realObservations.length) {
+  fail(
+    `E the real ledger withholds ${realObservations.length - gatedAll.length} observations; this arm` +
+      " assumes the unmutated ledger admits all of them (stage 2 measured 59/59)",
+  );
+}
+const onGated = await author(gatedAll, true);
+const onGatedIds = onGated.payload.prompt_visible_observation_ids as string[];
+if (onGatedIds.length !== gatedAll.length) {
+  fail(`E ON offered ${onGatedIds.length} of the ${gatedAll.length} gated observations`);
+}
+
+// Contrast: withhold ONE observation by flipping its prompt_context row's visibility tier.
+const withheldId = String(realObservations[0]!.observation_id);
+const mutatedRows = (safetyLedger.safety_rows as AnyRecord[]).map((row) =>
+  String(row.safety_row_id) === `source_safety:${withheldId}:prompt_context`
+    ? { ...row, visibility_tier: "no_prompt_use" }
+    : row
+);
+if (JSON.stringify(mutatedRows) === JSON.stringify(safetyLedger.safety_rows)) {
+  fail(`E the mutation matched no row for ${withheldId} — the contrast would be vacuous`);
+}
+const gatedMinusOne = sourceObservationsForPrompt({
+  sourceObservations: artifactOf(realObservations) as never,
+  sourceSafetyLedger: { ...safetyLedger, safety_rows: mutatedRows } as never,
+}).observations as AnyRecord[];
+if (gatedMinusOne.length !== realObservations.length - 1) {
+  fail(`E the mutated ledger admitted ${gatedMinusOne.length}, expected ${realObservations.length - 1}`);
+}
+const onWithheld = await author(gatedMinusOne, true);
+const onWithheldIds = onWithheld.payload.prompt_visible_observation_ids as string[];
+if (onWithheldIds.includes(withheldId)) {
+  fail(`E ON served the withheld observation ${withheldId}`);
+}
+if (onWithheldIds.length !== realObservations.length - 1) {
+  fail(`E ON offered ${onWithheldIds.length}, expected ${realObservations.length - 1}`);
+}
+assertRowsAreTheObservations("E", onWithheld.payload.source_observations as AnyRecord[], gatedMinusOne);
+ok(
+  `[E] gated set ${gatedAll.length} -> ON offers ${onGatedIds.length}; withholding ${withheldId} in the ` +
+    `ledger drops it from the catalog (${onWithheldIds.length} offered, id absent)`,
+);
+
 console.log(
-  "\n✓ OBSERVATION CATALOG TOOL STAGE 3A REPLAY PASS (A baseline, B collapse, C silent-drop control, D coverage)",
+  "\n✓ OBSERVATION CATALOG TOOL STAGE 3A REPLAY PASS (A baseline, B collapse, C silent-drop control," +
+    " D coverage, E consumption gate)",
 );

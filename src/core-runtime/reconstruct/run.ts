@@ -3940,45 +3940,61 @@ export async function runReconstruct(
     artifactRef: maturationAuthorityResponseValidationPath,
     validation: maturationAuthorityResponseValidation,
   });
-  const answerSupportLedger = await writeAuthoredYamlDocument(
-    answerSupportLedgerPath,
-    "answer-support-ledger.yaml",
-    () => directiveAuthor.writeAnswerSupportLedger({
-      sessionId,
-      roundId: "maturation-round-1",
-      maturationQuestionFrontier,
-      maturationQuestionFrontierRef: maturationQuestionFrontierPath,
-      maturationQuestionFrontierValidation,
-      maturationClosureFrontier,
-      maturationClosureFrontierValidation,
-      maturationAuthorityResponse,
-      maturationAuthorityResponseValidation,
-      sourceObservations: promptSourceObservations,
-    }),
-  );
   // R2 disclosure for the answer-support navigation catalog (design 20260726 §6, stage 3a). The
   // catalog is PINNED at `one_line`, so an entry here means the corpus was large enough that even
   // summaries had to go — the LM chose ids with less to choose by, which must not be silent. Empty
   // on every OFF run and on every ON run that fit the pinned rung. Reuse (a resumed ledger) authors
-  // nothing, so it discloses nothing — matching the artifact that was actually used.
-  for (const record of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
-    if (record.surface !== "maturation_answer_support") continue;
-    const disclosure = record.disclosure;
-    // What THAT rung dropped, from the module that owns the ladder — a message written here would
-    // drift from the rung definitions (cross-family review found exactly that drift).
-    const droppedByRung = breadthFoldRungDetailLoss(disclosure.fold_level);
-    appendRuntimeStatusEventSync({
-      pipeline: "reconstruct",
-      sessionRoot,
-      sourceLabel: "source-breadth-fold",
-      stageId: "maturation_answer_support",
-      message:
-        `Runtime folded the answer-support navigation catalog to '${disclosure.fold_level}' detail ` +
-        `(${disclosure.catalog_observation_count} observations, ` +
-        `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so every ` +
-        `consumption-approved observation stayed selectable; ${droppedByRung} ` +
-        "(retained in full in source-observations).",
-    });
+  // nothing, so it discloses nothing — the disclosure for the artifact in use was written by the run
+  // that authored it.
+  //
+  // In a `finally`: the sink is filled BEFORE dispatch, so a failed authoring (malformed output,
+  // worker timeout, provider error) is exactly the case where "the catalog was demoted" is the
+  // diagnostic — draining only on success would lose it, and the next run clears the sink
+  // (cross-family review, two lenses independently). Best-effort by design: the status sink swallows
+  // its own write errors so observation can never affect execution.
+  const drainAnswerSupportFoldDisclosures = (): void => {
+    for (const record of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+      if (record.surface !== "maturation_answer_support") continue;
+      const disclosure = record.disclosure;
+      // What THAT rung dropped, from the module that owns the ladder — a message written here would
+      // drift from the rung definitions (cross-family review found exactly that drift).
+      const droppedByRung = breadthFoldRungDetailLoss(disclosure.fold_level);
+      appendRuntimeStatusEventSync({
+        pipeline: "reconstruct",
+        sessionRoot,
+        sourceLabel: "source-breadth-fold",
+        stageId: "maturation_answer_support",
+        message:
+          `Runtime folded the answer-support navigation catalog to '${disclosure.fold_level}' detail ` +
+          `(${disclosure.catalog_observation_count} observations, ` +
+          `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so every ` +
+          `consumption-approved observation stayed selectable; ${droppedByRung} ` +
+          "(retained in full in source-observations).",
+      });
+    }
+  };
+  let answerSupportLedger: Awaited<
+    ReturnType<typeof directiveAuthor.writeAnswerSupportLedger>
+  >;
+  try {
+    answerSupportLedger = await writeAuthoredYamlDocument(
+      answerSupportLedgerPath,
+      "answer-support-ledger.yaml",
+      () => directiveAuthor.writeAnswerSupportLedger({
+        sessionId,
+        roundId: "maturation-round-1",
+        maturationQuestionFrontier,
+        maturationQuestionFrontierRef: maturationQuestionFrontierPath,
+        maturationQuestionFrontierValidation,
+        maturationClosureFrontier,
+        maturationClosureFrontierValidation,
+        maturationAuthorityResponse,
+        maturationAuthorityResponseValidation,
+        sourceObservations: promptSourceObservations,
+      }),
+    );
+  } finally {
+    drainAnswerSupportFoldDisclosures();
   }
   const answerSupportLedgerValidation =
     await writeAnswerSupportLedgerValidationArtifact({

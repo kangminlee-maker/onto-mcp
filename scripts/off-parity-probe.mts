@@ -3,8 +3,12 @@
  *
  * The claim "OFF is byte-identical" cannot be checked from one tree — a test written against the new
  * code can only re-derive it. So this script mentions NO opt-in flag and compiles in BOTH trees: run
- * it at the base commit and on the branch, and compare the sha256 it prints for the payload the OFF
- * path dispatches over the real 59-observation corpus (scripts/fixtures/observation-catalog/).
+ * it at the base commit and on the branch, and compare the digests it prints. It hashes the string
+ * codex actually receives (system prompt + the "\n\n---\n\n" separator + user prompt), over THREE
+ * corpora, because one corpus is not a parity proof:
+ *   real_corpus          the real 59-observation fixture (59 < the 64 cap, so the slice never bites)
+ *   scaled_past_cap      the same real rows replicated to 500 — exercises the slice
+ *   regions_of_one_file  nine regions of ONE file — exercises the per-file region cap
  *
  *   git worktree add /tmp/base <base-commit> --detach
  *   ln -s "$PWD/node_modules" /tmp/base/node_modules
@@ -12,12 +16,16 @@
  *   (cd /tmp/base && npx tsx scripts/off-parity-probe.mts)   # base
  *   npx tsx scripts/off-parity-probe.mts                     # branch
  *
- * Measured 2026-07-27 for stage 3a (design 20260726-observation-catalog-tool §9.3), base 23a00f3:
- *   both trees -> 1,331,365 chars, sha256 bebb095a9852cbcc4834bea7610bdc2bf9631a2a32f0bd30d7a72e3382d6cfca
- * Negative control run the same day: swapping two adjacent payload keys flips the digest to
- * eee936a4..., so an unchanged digest is evidence rather than insensitivity.
+ * Measured 2026-07-27 for stage 3a (design 20260726-observation-catalog-tool §9.3), base 23a00f3 —
+ * all three digests identical in both trees:
+ *   real_corpus          1,333,472 chars  8658b612d3cdecaf978d2d6898a37e3a147efd54e139fd59ab9377afdbf3d6fb
+ *   scaled_past_cap      1,453,819 chars  2575c57f8651284c28b7fbfc27e83244cb4aa60c0c80a879b9bac05d1fb0a1de
+ *   regions_of_one_file    111,388 chars  fc9a6126c1bd2d92fb020addb22b404a7074fc147f18d32079aa96fb26b1fae8
+ * Negative controls the same day: the slice 64->63 moves all three digests (the cap is also reported
+ * in the policy block), and the region cap 8->7 moves regions_of_one_file ALONE — the path a
+ * single-corpus probe could not see. So an unchanged digest is evidence rather than insensitivity.
  *
- * (That payload is 1.33 M chars — OVER the worker's 1,048,576-char ceiling. The OFF path really does
+ * (real_corpus is 1.33 M chars — OVER the worker's 1,048,576-char ceiling. The OFF path really does
  * overflow on this corpus; the parity claim is about not CHANGING that, not about it being healthy.)
  */
 import fs from "node:fs/promises";
@@ -39,13 +47,27 @@ const observations = artifact.observations as AnyRecord[];
 if (!Array.isArray(observations) || observations.length === 0) {
   throw new Error("fixture empty — the comparison would be vacuous");
 }
+let lastUserPrompt = "";
 const SESSION_ID = String(artifact.session_id);
 const CREATED_AT = String(artifact.created_at);
 
+// The hash covers the string codex actually receives on stdin — system prompt + the separator
+// callCodexCli inserts + user prompt. Hashing the user prompt alone left every OFF-path system-prompt
+// change invisible (cross-family review, lens B #6).
+const codexCombinedPrompt = (systemPrompt: string, userPrompt: string): string =>
+  `${systemPrompt}\n\n---\n\n${userPrompt}`;
+
+async function offDispatchDigest(observations: AnyRecord[]): Promise<{
+  chars: number;
+  sha256: string;
+  rows: number;
+  ids: number;
+}> {
 const dispatched: string[] = [];
 const author = createDirectCallReconstructDirectiveAuthor({
-  llmCall: (_systemPrompt: string, userPrompt: string) => {
-    dispatched.push(userPrompt);
+  llmCall: (systemPrompt: string, userPrompt: string) => {
+    dispatched.push(codexCombinedPrompt(systemPrompt, userPrompt));
+    lastUserPrompt = userPrompt;
     return Promise.resolve({ text: JSON.stringify({ evidence_clusters: [] }) });
   },
 } as never);
@@ -160,13 +182,50 @@ await (author as AnyRecord).writeAnswerSupportLedger({
     validation_results: [],
     violations: [],
   },
-  sourceObservations: artifact,
+  sourceObservations: { ...artifact, observations },
 });
 
-if (dispatched.length !== 1) throw new Error(`expected 1 dispatch, got ${dispatched.length}`);
-const userPrompt = dispatched[0]!;
+  if (dispatched.length !== 1) throw new Error(`expected 1 dispatch, got ${dispatched.length}`);
+  const combined = dispatched[0]!;
+  const payload = JSON.parse(lastUserPrompt) as AnyRecord;
+  return {
+    chars: combined.length,
+    sha256: crypto.createHash("sha256").update(combined, "utf8").digest("hex"),
+    rows: (payload.source_observations as AnyRecord[]).length,
+    ids: (payload.prompt_visible_observation_ids as string[]).length,
+  };
+}
+
+/** Replicate the real rows so the >64 SLICE path is covered, with unique ids/refs. */
+const scaled = (count: number): AnyRecord[] =>
+  Array.from({ length: count }, (_, index) => {
+    const source = observations[index % observations.length]!;
+    const round = Math.floor(index / observations.length);
+    return {
+      ...source,
+      observation_id: `${source.observation_id}-r${round}`,
+      source_ref: `${source.source_ref}.r${round}`,
+      location: `${source.location}.r${round}`,
+    };
+  });
+
+/** Nine regions of ONE file, so the per-file region cap path is covered. */
+const regionsOfOneFile = (count: number): AnyRecord[] => {
+  const source = observations[0]!;
+  return Array.from({ length: count }, (_, index) => ({
+    ...source,
+    observation_id: `${source.observation_id}-region-${index + 1}`,
+    source_ref: source.source_ref,
+    location: `L${index * 10}-${index * 10 + 9}`,
+  }));
+};
+
+// Three arms, because one corpus is not a parity proof: the real corpus (59 < the 64 cap, so the
+// slice never bites), a scaled one that DOES hit the slice, and a single file with more regions than
+// the per-file cap. Changing the cap from 8 to 7, or the slice from 64 to 63, moves exactly one of
+// these digests — a one-arm probe left both invisible (cross-family review, lens B #6).
 console.log(JSON.stringify({
-  chars: userPrompt.length,
-  sha256: crypto.createHash("sha256").update(userPrompt, "utf8").digest("hex"),
-  observation_rows: (JSON.parse(userPrompt) as AnyRecord).source_observations.length,
-}));
+  real_corpus: await offDispatchDigest(observations),
+  scaled_past_cap: await offDispatchDigest(scaled(500)),
+  regions_of_one_file: await offDispatchDigest(regionsOfOneFile(9)),
+}, null, 2));

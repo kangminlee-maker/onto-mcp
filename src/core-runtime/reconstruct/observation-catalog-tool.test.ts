@@ -5,6 +5,10 @@ import {
 } from "./authoring-prompt-payloads.js";
 import { createDirectCallReconstructDirectiveAuthor } from "./direct-call-directive-author.js";
 import { SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET } from "./source-breadth-fold.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { authoredArtifactReuseMatch } from "./authored-artifact-reuse.js";
 import type {
   ReconstructMaturationClosureFrontierArtifact,
   ReconstructMaturationQuestionFrontierArtifact,
@@ -237,6 +241,48 @@ interface CapturedPayload {
 const parsePayload = (dispatched: Dispatched[]): CapturedPayload =>
   JSON.parse(dispatched[0]!.userPrompt) as CapturedPayload;
 
+/**
+ * The order the catalog is expected in, re-derived from the FIXTURE rather than from the code under
+ * test: the closure request's ref is prioritized, so its observations come first (artifact order),
+ * then everything else in artifact order. Writing this out is what caught the author's real ordering
+ * (prioritized-first, not artifact-first) instead of assuming it.
+ */
+function expectedCatalogOrder(built: ReturnType<typeof fixture>): string[] {
+  const requestedRef = built.closureFrontier.source_requests[0]!.requested_source_ref;
+  const observations = built.sourceObservations.observations;
+  const prioritized = observations
+    .filter((o) => o.source_ref === requestedRef)
+    .map((o) => o.observation_id);
+  const rest = observations
+    .filter((o) => o.source_ref !== requestedRef)
+    .map((o) => o.observation_id);
+  return [...prioritized, ...rest];
+}
+
+/**
+ * Row-level identity oracle. Counting rows and reading the separate id LIST is not enough: a
+ * projection that emits N copies of one row keeps both numbers right (cross-family review named
+ * exactly that surviving defect). This compares each row's identity AND its values against the input
+ * artifact, in order, so a duplicated, reordered, or value-swapped catalog fails.
+ */
+function expectRowsMatchObservations(
+  rows: Record<string, any>[],
+  observations: readonly Record<string, any>[],
+  expectedIds: readonly string[],
+): void {
+  expect(expectedIds.length).toBeGreaterThan(0); // non-empty subject: the loop below can fail
+  const byId = new Map(observations.map((o) => [o.observation_id, o]));
+  expect(rows.map((row) => row.observation_id)).toEqual([...expectedIds]);
+  expect(new Set(rows.map((row) => row.observation_id)).size).toBe(rows.length);
+  for (const row of rows) {
+    const observation = byId.get(row.observation_id);
+    expect(observation).toBeDefined();
+    expect(row.source_ref).toBe(observation!.source_ref);
+    if ("summary" in row) expect(row.summary).toBe(observation!.summary);
+    expect(row.target_material_kind).toBe(observation!.target_material_kind);
+  }
+}
+
 describe("observation catalog tool — stage 3a push layer (design 20260726 §6)", () => {
   it("OFF: the dispatched payload is byte-identical to the pre-change projection", async () => {
     const built = fixture();
@@ -282,6 +328,16 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     expect(rows[0]!.structural_data.content_excerpt.length).toBe(
       POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
     );
+    // Row-level identity, not just a count: the prioritized observation first (it is the closure
+    // request's ref), then the supplemental ones in artifact order, each carrying ITS OWN values.
+    const expectedOffIds = expectedCatalogOrder(built)
+      .slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
+    expectRowsMatchObservations(
+      rows,
+      built.sourceObservations.observations as never,
+      expectedOffIds,
+    );
+    expect(payload.prompt_visible_observation_ids).toEqual(expectedOffIds);
   });
 
   it("OFF: supplemental observations past the cap are dropped SILENTLY — the defect stage 3a removes", async () => {
@@ -313,6 +369,15 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     expect(payload.source_observations.length).toBe(allIds.length);
     // The id OFF dropped is present here — the direct contrast with the test above.
     expect(payload.prompt_visible_observation_ids).toContain("obs-70");
+
+    // Row-level identity: N rows with the right ids is not enough — the ROWS must be the
+    // observations, in order, with their own values (the duplicated-row defect otherwise survives).
+    expectRowsMatchObservations(
+      payload.source_observations,
+      built.sourceObservations.observations as never,
+      expectedCatalogOrder(built),
+    );
+    expect(payload.prompt_visible_observation_ids).toEqual(expectedCatalogOrder(built));
 
     // Navigation rows: the semantic anchor, none of the detail the pull layer will serve.
     const row = payload.source_observations[0]!;
@@ -360,6 +425,15 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       .omitted_prioritized_observation_count).toBe(0);
     expect(onIds.length).toBe(9);
     expect(onIds).toContain("region-9");
+    const allRegionIds = expectedCatalogOrder(built);
+    expect(onIds).toEqual(allRegionIds);
+    expectRowsMatchObservations(
+      parsePayload(on.dispatched).source_observations,
+      built.sourceObservations.observations as never,
+      allRegionIds,
+    );
+    // And OFF's set is a strict subset — the exact 8 the cap kept, not "some 8".
+    expect(offIds).toEqual(allRegionIds.slice(0, 8));
   });
 
   it("ON: the navigation catalog is smaller than OFF's capped detailed one — on MORE observations", async () => {
@@ -371,11 +445,59 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     expect(on.dispatched[0]!.userPrompt.length).toBeLessThan(
       off.dispatched[0]!.userPrompt.length,
     );
+    // "Smaller" must not be achievable by truncation: ON carries MORE rows than OFF, each distinct.
+    const onRows = parsePayload(on.dispatched).source_observations;
+    const offRows = parsePayload(off.dispatched).source_observations;
+    expect(onRows.length).toBeGreaterThan(offRows.length);
+    expectRowsMatchObservations(
+      onRows,
+      built.sourceObservations.observations as never,
+      expectedCatalogOrder(built),
+    );
   });
 
-  it("ON: an over-budget catalog demotes DETAIL, keeps every observation, and discloses the rung", async () => {
-    // Summaries big enough that `one_line` overflows while the tail rungs (which drop `location`
-    // then `summary`) fit. Breadth must survive the demotion.
+  it("ON: an over-budget catalog demotes to summary_anchor — the SUMMARIES survive (rung pinned)", async () => {
+    // Long refs with a redundant `location` and short summaries: dropping the repeated `location`
+    // alone is enough, so this must land on summary_anchor and KEEP the selection signal. Measured
+    // shape — at 1,200 the pinned rung still fits, at 1,600 it does not.
+    const built = fixture({ observationCount: 1_600, sourceRefChars: 300, summaryChars: 10 });
+    const { author, dispatched } = capturingAuthor(true);
+    await authorLedger(author, built);
+
+    expect(dispatched.length).toBe(1);
+    const { systemPrompt, userPrompt } = dispatched[0]!;
+    expect(
+      Buffer.byteLength(systemPrompt, "utf8") + Buffer.byteLength(userPrompt, "utf8"),
+    ).toBeLessThanOrEqual(SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET);
+
+    const payload = parsePayload(dispatched);
+    const total = built.sourceObservations.observations.length;
+    expect(payload.source_observations.length).toBe(total); // breadth: nothing dropped
+    expectRowsMatchObservations(
+      payload.source_observations,
+      built.sourceObservations.observations as never,
+      expectedCatalogOrder(built),
+    );
+
+    const records = author.sourceBreadthFoldDisclosures ?? [];
+    expect(records.length).toBe(1);
+    expect(records[0]!.surface).toBe("maturation_answer_support");
+    expect(records[0]!.disclosure.fold_level).toBe("summary_anchor");
+    expect(records[0]!.disclosure.finer_levels_over_budget).toEqual(["one_line"]);
+    expect(records[0]!.disclosure.over_budget).toBe(false);
+    expect(records[0]!.disclosure.catalog_observation_count).toBe(total);
+    expect(records[0]!.disclosure.measured_prompt_bytes).toBe(
+      Buffer.byteLength(systemPrompt, "utf8") + Buffer.byteLength(userPrompt, "utf8"),
+    );
+    // The rung's SHAPE: redundant `location` gone, `summary` kept. A fold that skipped to `anchor`
+    // would drop the summaries and fail here.
+    expect(payload.source_observations[0]).not.toHaveProperty("location");
+    expect(payload.source_observations[0]).toHaveProperty("summary");
+  });
+
+  it("ON: a still-over-budget catalog demotes to anchor, keeps every observation, discloses the rung", async () => {
+    // Summaries big enough that dropping the redundant `location` is not enough, so the ladder
+    // reaches its last rung before fail-loud. Breadth must survive even there.
     const built = fixture({ observationCount: 3_000, summaryChars: 400 });
     const { author, dispatched } = capturingAuthor(true);
     await authorLedger(author, built);
@@ -390,13 +512,31 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     const total = built.sourceObservations.observations.length;
     expect(payload.source_observations.length).toBe(total); // breadth: nothing dropped
     expect(payload.prompt_visible_observation_ids.length).toBe(total);
+    expectRowsMatchObservations(
+      payload.source_observations,
+      built.sourceObservations.observations as never,
+      expectedCatalogOrder(built),
+    );
 
     const records = author.sourceBreadthFoldDisclosures ?? [];
     expect(records.length).toBe(1);
     expect(records[0]!.surface).toBe("maturation_answer_support");
-    expect(records[0]!.disclosure.fold_level).not.toBe("one_line");
+    // Pin the rung: 400-char summaries mean summary_anchor is not enough, so `anchor` is correct
+    // here — and the finer rungs it rejected are disclosed.
+    expect(records[0]!.disclosure.fold_level).toBe("anchor");
     expect(records[0]!.disclosure.catalog_observation_count).toBe(total);
     expect(records[0]!.disclosure.over_budget).toBe(false);
+    expect(records[0]!.disclosure.finer_levels_over_budget).toEqual([
+      "one_line",
+      "summary_anchor",
+    ]);
+    // The disclosed byte count is the measurement of the payload that was actually dispatched.
+    expect(records[0]!.disclosure.measured_prompt_bytes).toBe(
+      Buffer.byteLength(systemPrompt, "utf8") + Buffer.byteLength(userPrompt, "utf8"),
+    );
+    // `anchor` is navigation identity only: both the redundant `location` and the summary are gone.
+    expect(payload.source_observations[0]).not.toHaveProperty("location");
+    expect(payload.source_observations[0]).not.toHaveProperty("summary");
   });
 
   it("ON: a catalog that fits the pinned rung discloses NOTHING (a demotion notice is not noise)", async () => {
@@ -416,5 +556,93 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       /AnswerSupportLedger compact prompt exceeds deterministic prompt budget/,
     );
     expect(dispatched.length).toBe(0); // no worker was started
+
+    // Contrast: the SAME observation count with short refs dispatches fine, so the refusal is about
+    // SIZE and not a count threshold (a count-based early reject would pass the assertions above).
+    const shortRefs = fixture({ observationCount: 4_000, sourceRefChars: 0 });
+    const shortRun = capturingAuthor(true);
+    await authorLedger(shortRun.author, shortRefs);
+    expect(shortRun.dispatched.length).toBe(1);
+    expect(parsePayload(shortRun.dispatched).source_observations.length).toBe(4_001);
   });
 });
+
+describe("observation catalog tool — production wiring (cross-family review, lens B #8)", () => {
+  // The author-level tests above construct the author directly, so every one of them stays green if
+  // the settings key never reaches the author. These close that hop.
+  const repoFile = (relative: string): string =>
+    readFileSync(join(fileURLToPath(new URL("../../..", import.meta.url)), relative), "utf8");
+
+  it("Core API reads the settings key and forwards it to BOTH author constructions", () => {
+    const api = repoFile("src/core-api/reconstruct-api.ts");
+    // Read from settings (not a literal): a `const sourceObservationCatalogTool = false` mutation
+    // silently turns production ON runs into OFF runs and no author-level test can see it.
+    expect(api).toContain(
+      "settings.reconstruct?.execution?.source_observation_catalog_tool === true",
+    );
+    // Primary AND dispatch-fallback author: a fallback dispatch must not author in the other mode.
+    const forwards = api.match(
+      /\.\.\.\(sourceObservationCatalogTool \? \{ sourceObservationCatalogTool: true \} : \{\}\)/g,
+    ) ?? [];
+    expect(forwards.length).toBe(2);
+  });
+
+  it("the reuse key rotates with the mode — an ON artifact can never key as an OFF one", () => {
+    const authorOf = (catalogTool: boolean) =>
+      createDirectCallReconstructDirectiveAuthor({
+        ...(catalogTool ? { sourceObservationCatalogTool: true } : {}),
+        llmCall: () => Promise.resolve({ text: "{}" }),
+      } as never);
+    const matchFor = (catalogTool: boolean) =>
+      authoredArtifactReuseMatch({
+        sessionId: SESSION_ID,
+        intent: "reuse-key probe",
+        targetRefs: ["/fixture/target.ts"],
+        targetMaterialProfile: {
+          target_refs: ["/fixture/target.ts"],
+          target_material_kind: "code",
+          target_material_kind_candidates: [],
+          support_status: "supported",
+          selected_source_profiles: [],
+          detection: { per_ref: [] },
+        },
+        sourceInventory: { inventory_units: [] },
+        sourceObservations: { observations: [], skipped_refs: [] },
+        governingSnapshot: { requested_domain_ids: [] },
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+        directiveAuthor: authorOf(catalogTool),
+        confirmationProvider: { providerId: "probe-provider" },
+      } as never);
+    const off = matchFor(false);
+    const on = matchFor(true);
+    // The field carries the mode...
+    expect(off.source_observation_catalog_tool).toBe(false);
+    expect(on.source_observation_catalog_tool).toBe(true);
+    // ...and the two keys are genuinely different objects (so a resume cannot cross modes). Compared
+    // by serialization, which is what reuseMatchHash hashes.
+    expect(JSON.stringify(on)).not.toBe(JSON.stringify(off));
+    // Non-vacuous: everything ELSE about the two keys is identical, so the difference is the mode.
+    expect({ ...on, source_observation_catalog_tool: false }).toEqual(off);
+  });
+
+  it("run.ts drains the disclosure in a `finally`, so a FAILED authoring still records the demotion", () => {
+    // Structural, and honest about it: the drain lives in runReconstruct, and reaching it with a real
+    // demoting corpus AND a failing dispatch needs a whole-pipeline fixture. What this pins is the
+    // control flow the two review lenses independently flagged — drain-on-success-only loses the
+    // record precisely when it is the diagnostic, and the next run clears the sink.
+    const run = repoFile("src/core-runtime/reconstruct/run.ts");
+    const calls = run.match(/drainAnswerSupportFoldDisclosures\(\);/g) ?? [];
+    expect(calls.length).toBe(1); // the only call site
+    expect(run).toMatch(/\}\s*finally\s*\{\s*\n\s*drainAnswerSupportFoldDisclosures\(\);/);
+  });
+
+  it("run.ts derives the demotion wording from the ladder module rather than hard-coding it", () => {
+    // Lens B #5: the new wording unit test lives beside the helper, so a stale hard-coded message at
+    // the call site would leave it green. This asserts the call site actually uses the helper.
+    const run = repoFile("src/core-runtime/reconstruct/run.ts");
+    expect(run).toContain("breadthFoldRungDetailLoss(disclosure.fold_level)");
+    expect(run).not.toMatch(/per-observation summaries were dropped/);
+  });
+});
+

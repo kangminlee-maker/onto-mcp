@@ -211,9 +211,17 @@ export const CODEX_PROMPT_STDIN_BYTE_LIMIT = CODEX_PROMPT_INPUT_CHAR_LIMIT;
  * stdin ceiling. Set a margin BELOW the ceiling because the measured payload (systemPrompt + userPrompt)
  * is not the whole dispatch: callCodexCli joins them with a "\n\n---\n\n" separator and codex adds its own
  * framing, so the guard must fire slightly before the raw ceiling. The margin (~8 KiB) keeps the guard
- * conservative — it only ever refuses payloads codex would ALSO reject (so every currently-succeeding run
- * stays byte-identical), while the narrow over-refusal band (codex-accepts-but-guard-refuses) fails loud
- * with a deterministic budget error rather than a codex opaque exit. The generic error text says "split
+ * conservative, and the narrow over-refusal band (codex-accepts-but-guard-refuses) fails loud with a
+ * deterministic budget error rather than a codex opaque exit.
+ *
+ * UNIT ASYMMETRY, measured (cross-family review, 2026-07-27): this budget counts UTF-8 BYTES while the
+ * provider counts CHARACTERS, and UTF-8 bytes ≥ UTF-16 code units for every string. So on a multibyte-
+ * heavy payload the guard can refuse something codex would accept — a reviewer constructed 2,661 anchor
+ * rows with CJK paths measuring 1,040,549 bytes but only 614,796 characters. The direction is safe
+ * (refuse-early, never admit-late) and ASCII corpora — every corpus measured so far — see byte == char,
+ * which is why an earlier version of this note claimed the guard "only ever refuses payloads codex would
+ * also reject". That claim is false for multibyte input; correcting the UNIT would change all three
+ * surfaces that share this budget and is deliberately not done here. The generic error text says "split
  * or reduce the projection"; for the DIRECTIVE surface the operator's concrete remedy is to enable
  * source_breadth_fold (this module's fold), which the directive runs BEFORE the guard. Tightenable via
  * the DW-2c probe.
