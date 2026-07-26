@@ -27,6 +27,7 @@ import { parse as parseYaml } from "yaml";
 import { createDirectCallReconstructDirectiveAuthor } from "../src/core-runtime/reconstruct/direct-call-directive-author.ts";
 import {
   ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
+  maturationAnswerSupportPromptCatalog,
   sourceObservationsForPrompt,
 } from "../src/core-runtime/reconstruct/authoring-prompt-payloads.ts";
 import { SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET } from "../src/core-runtime/reconstruct/source-breadth-fold.ts";
@@ -495,8 +496,62 @@ const judgmentPromptChars = async (cited: AnyRecord[]): Promise<number> => {
   const { systemPrompt, userPrompt } = dispatched[0]!;
   return `${systemPrompt}\n\n---\n\n${userPrompt}`.length;
 };
-// OFF's exposure is the catalog cap; ON's is every approved observation.
-const offExposure = realObservations.slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
+// OFF's exposure comes from the REAL catalog function, not a hand-slice. Production OFF takes
+// closure-prioritized observations FIRST and only then slices, so `slice(0, 64)` in artifact order can
+// name a different 64 — and with detail-heavy rows at the front it measured OFF as already over the
+// ceiling, which would have let a genuine ON-only crossing pass (cross-family review, fourth round:
+// the defect this arm itself introduced).
+const offExposureIds = new Set(
+  maturationAnswerSupportPromptCatalog({
+    sourceObservations: artifactOf(realObservations) as never,
+    maturationQuestionFrontier: questionFrontier() as never,
+    maturationClosureFrontier: closureFrontier(String(realObservations[0]!.source_ref)) as never,
+  }).promptObservationIds,
+);
+const offExposure = realObservations.filter((observation) =>
+  offExposureIds.has(String(observation.observation_id))
+);
+if (offExposure.length === 0) fail("F OFF exposure came out empty — the measurement would be vacuous");
+if (offExposure.length > ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT) {
+  fail(`F OFF exposure ${offExposure.length} exceeds the cap ${ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT}`);
+}
+// Self-check of THIS arm's rule, on the shape that broke its first version: 128 observations whose
+// prioritized ones sit at the END of artifact order. A hand-slice would name the first 64; the real
+// catalog names the prioritized ones. If this ever regresses, the arm's OFF baseline is wrong and its
+// verdict is meaningless.
+{
+  const prioritizedRef = "/fixture/prioritized.ts";
+  const probeObservations = [
+    ...Array.from({ length: 64 }, (_, index) => ({
+      ...realObservations[index % realObservations.length]!,
+      observation_id: `probe-supplemental-${index + 1}`,
+      source_ref: `/fixture/supplemental-${index + 1}.ts`,
+      location: `/fixture/supplemental-${index + 1}.ts`,
+    })),
+    ...Array.from({ length: 64 }, (_, index) => ({
+      ...realObservations[index % realObservations.length]!,
+      observation_id: `probe-prioritized-${index + 1}`,
+      source_ref: prioritizedRef,
+      location: `L${index * 10}-${index * 10 + 9}`,
+    })),
+  ];
+  const probeExposure = maturationAnswerSupportPromptCatalog({
+    sourceObservations: artifactOf(probeObservations) as never,
+    maturationQuestionFrontier: questionFrontier() as never,
+    maturationClosureFrontier: closureFrontier(prioritizedRef) as never,
+  }).promptObservationIds;
+  const prioritizedFirst = probeExposure[0] ?? "";
+  if (!prioritizedFirst.startsWith("probe-prioritized-")) {
+    fail(
+      `F self-check: OFF exposure starts with ${prioritizedFirst}, not a prioritized id — the arm is ` +
+        "modelling OFF as an artifact-order slice again, which makes its verdict meaningless",
+    );
+  }
+  ok(
+    `[F self-check] OFF exposure on a prioritized-last corpus starts with '${prioritizedFirst}' ` +
+      "(prioritized first, then the cap) — the arm's baseline is the real selection, not a slice",
+  );
+}
 const judgeOff = await judgmentPromptChars(offExposure);
 const judgeOn = await judgmentPromptChars(realObservations);
 if (judgeOff <= 0 || judgeOn <= 0) fail("F measured nothing");

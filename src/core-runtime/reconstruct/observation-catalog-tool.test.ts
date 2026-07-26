@@ -7,7 +7,7 @@ import { createDirectCallReconstructDirectiveAuthor } from "./direct-call-direct
 import {
   answerSupportFoldDisclosureMessage,
   breadthFoldRungDetailLoss,
-  navigationRowFieldsForLevel,
+  navigationRowFieldsFromRows,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
 } from "./source-breadth-fold.js";
 import { readFileSync } from "node:fs";
@@ -295,7 +295,7 @@ function expectRowsMatchObservations(
   rows: Record<string, any>[],
   observations: readonly Record<string, any>[],
   expectedIds: readonly string[],
-  options: { navigationOnly?: boolean } = {},
+  options: { navigationOnly?: boolean; exactKeys?: readonly string[] } = {},
 ): void {
   expect(expectedIds.length).toBeGreaterThan(0); // non-empty subject: the loop below can fail
   const byId = new Map(observations.map((o) => [o.observation_id, o]));
@@ -315,10 +315,16 @@ function expectRowsMatchObservations(
   for (const row of rows) {
     const observation = byId.get(row.observation_id);
     expect(observation).toBeDefined();
-    // Exact key set for a NAVIGATION catalog: no key outside the navigation set, so detail cannot
-    // leak back in. The OFF projection legitimately carries `structural_data`, so the caller opts in.
+    // EVERY row's key set, not just the first row's, and equality rather than "no extras": a rung
+    // that dropped `location` from every row after index 0, or kept `summary` on every `anchor` row
+    // after index 0, satisfied an extras-only check over the union of all rung keys (cross-family
+    // review, fourth round). `exactKeys` is the chosen rung's own set when the caller knows it;
+    // otherwise the first row's set becomes the expectation for all of them.
     if (options.navigationOnly === true) {
-      expect(Object.keys(row).filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
+      const expectedKeys = [...(options.exactKeys ?? Object.keys(rows[0] ?? {}))].sort();
+      expect(expectedKeys.length).toBeGreaterThan(0);
+      expect(expectedKeys.filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
+      expect(Object.keys(row).sort()).toEqual(expectedKeys);
     }
     for (const key of NAVIGATION_KEYS) {
       if (key in row) expect(row[key]).toBe(observation![key]);
@@ -432,7 +438,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     expect(JSON.stringify(payload.source_observations)).not.toContain("content_excerpt");
 
     expect(payload.source_observation_prompt_policy.selection_basis).toContain(
-      navigationRowFieldsForLevel("one_line"),
+      navigationRowFieldsFromRows(payload.source_observations),
     );
     expect(payload.source_observation_prompt_policy).toMatchObject({
       projection_kind: "maturation_answer_support_navigation_catalog",
@@ -559,7 +565,11 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
-      { navigationOnly: true },
+      {
+        navigationOnly: true,
+        // Whole-file rows at summary_anchor: the source_ref-redundant `location` is gone, summary stays.
+        exactKeys: ["observation_id", "target_material_kind", "source_ref", "summary"],
+      },
     );
 
     const records = author.sourceBreadthFoldDisclosures ?? [];
@@ -578,7 +588,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     expect(payload.source_observations[0]).toHaveProperty("summary");
     // And the policy describes THAT rung's fields, measured with the payload that was dispatched.
     expect(payload.source_observation_prompt_policy.selection_basis).toContain(
-      navigationRowFieldsForLevel("summary_anchor"),
+      navigationRowFieldsFromRows(payload.source_observations),
     );
   });
 
@@ -603,7 +613,11 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
-      { navigationOnly: true },
+      {
+        navigationOnly: true,
+        // `anchor` on whole-file rows: navigation identity only.
+        exactKeys: ["observation_id", "target_material_kind", "source_ref"],
+      },
     );
 
     const records = author.sourceBreadthFoldDisclosures ?? [];
@@ -629,7 +643,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     // where the rung had removed it, i.e. the worker was handed a false input contract precisely when
     // it had least to work with (cross-family review, third round).
     expect(payload.source_observation_prompt_policy.selection_basis).toContain(
-      navigationRowFieldsForLevel("anchor"),
+      navigationRowFieldsFromRows(payload.source_observations),
     );
     expect(payload.source_observation_prompt_policy.selection_basis).not.toContain("summary)");
   });
@@ -640,6 +654,66 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     await authorLedger(author, built);
     expect(dispatched.length).toBe(1);
     expect(author.sourceBreadthFoldDisclosures ?? []).toEqual([]);
+  });
+
+  it("ON: a REGION corpus cannot buy a demotion with a shorter policy sentence", async () => {
+    // The pathology two independent lenses converged on: `summary_anchor` drops `location` only where
+    // it is redundant with `source_ref`, so on region rows (distinct locations) the ROWS are unchanged.
+    // With a rung-keyed policy sentence, that rung measured ~10 bytes smaller purely because the
+    // sentence falsely omitted `location` — so a corpus one byte over budget "demoted" to a rung that
+    // dispatched identical rows, and the disclosure claimed locations were dropped when none were.
+    // Deriving the sentence from the ROWS makes summary_anchor measure EXACTLY what one_line does, so
+    // the ladder walks on to `anchor` — which really does drop something.
+    const REF = "/fixture/one-big-file.ts";
+    const built = fixture({ observationCount: 0 });
+    built.sourceObservations.observations = Array.from({ length: 2_000 }, (_, index) => ({
+      observation_id: `region-${index + 1}`,
+      target_material_kind: "code" as const,
+      adapter_id: "fixture",
+      source_ref: REF,
+      location: `L${index * 10}-${index * 10 + 9}${"z".repeat(300)}`,
+      summary: `Region ${index + 1}`.padEnd(40, "s"),
+      structural_data: {
+        content_excerpt: "x",
+        region_role: "body",
+        region_line_start: index * 10,
+      },
+    }));
+    built.closureFrontier.source_requests[0]!.requested_source_ref = REF;
+    built.closureFrontier.source_requests[0]!.requested_location = REF;
+
+    const { author, dispatched } = capturingAuthor(true);
+    await authorLedger(author, built);
+    expect(dispatched.length).toBe(1);
+    const payload = parsePayload(dispatched);
+
+    const records = author.sourceBreadthFoldDisclosures ?? [];
+    expect(records.length).toBe(1);
+    // summary_anchor is REJECTED, not chosen: it measures exactly what one_line measures here.
+    expect(records[0]!.disclosure.fold_level).toBe("anchor");
+    expect(records[0]!.disclosure.finer_levels_over_budget).toEqual([
+      "one_line",
+      "summary_anchor",
+    ]);
+    // Region rows keep `location` at `anchor` — it is the only sibling discriminator — and lose summary.
+    expectRowsMatchObservations(
+      payload.source_observations,
+      built.sourceObservations.observations as never,
+      expectedCatalogOrder(built),
+      {
+        navigationOnly: true,
+        exactKeys: ["observation_id", "target_material_kind", "source_ref", "location"],
+      },
+    );
+    // The dispatched contract says so: `location` present, `summary` absent.
+    const basis = payload.source_observation_prompt_policy.selection_basis as string;
+    expect(basis).toContain(navigationRowFieldsFromRows(payload.source_observations));
+    expect(basis).toContain("location");
+    expect(basis).not.toContain("summary)");
+    // And the disclosure names the loss that actually happened.
+    expect(answerSupportFoldDisclosureMessage(records[0]!.disclosure)).toContain(
+      breadthFoldRungDetailLoss("anchor"),
+    );
   });
 
   it("ON: when even `anchor` overflows the run fails BEFORE dispatch", async () => {

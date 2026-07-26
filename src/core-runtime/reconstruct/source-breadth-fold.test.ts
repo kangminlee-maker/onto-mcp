@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   breadthFoldRungDetailLoss,
   foldObservationsToBudget,
+  navigationRowFieldsFromRows,
   projectBreadthFoldTailRung,
   SOURCE_BREADTH_FOLD_LEVELS,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
@@ -48,6 +49,59 @@ describe("breadthFoldRungDetailLoss — the R2 disclosure's wording follows the 
     // And the wording matches what the rung key-sets actually declare.
     expect(SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS.summary_anchor).toContain("summary");
     expect(SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS.anchor).not.toContain("summary");
+  });
+});
+
+describe("navigationRowFieldsFromRows — the dispatched field list follows the ROWS", () => {
+  const row = (keys: readonly string[]): Record<string, unknown> =>
+    Object.fromEntries(keys.map((key) => [key, key]));
+
+  it("lists exactly the keys the rows carry, in canonical navigation order", () => {
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref", "location", "summary"]),
+    ])).toBe("observation_id, target_material_kind, source_ref, location, summary");
+    // Whole-file rows at summary_anchor: the source_ref-redundant `location` is gone.
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref", "summary"]),
+    ])).toBe("observation_id, target_material_kind, source_ref, summary");
+    // ...and at anchor the summary goes too.
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref"]),
+    ])).toBe("observation_id, target_material_kind, source_ref");
+  });
+
+  it("keeps `location` when a REGION row keeps it — the case a rung-keyed list got wrong", () => {
+    // projectBreadthFoldTailRung keeps `location` wherever it is not redundant with source_ref, so at
+    // `anchor` a region corpus still carries it. A list keyed on the RUNG said it did not.
+    const regionRows = [
+      row(["observation_id", "target_material_kind", "source_ref", "location"]),
+      row(["observation_id", "target_material_kind", "source_ref", "location"]),
+    ];
+    expect(navigationRowFieldsFromRows(regionRows)).toContain("location");
+    // Cross-check against the real tail projector rather than a hand-written row shape.
+    const projected = projectBreadthFoldTailRung(
+      [{
+        observation_id: "obs-1",
+        target_material_kind: "code",
+        source_ref: "/file.ts",
+        location: "L1-9",
+        summary: "region",
+      }],
+      "anchor",
+    );
+    expect(navigationRowFieldsFromRows(projected)).toContain("location");
+    expect(navigationRowFieldsFromRows(projected)).not.toContain("summary");
+  });
+
+  it("is a UNION over rows and appends unexpected keys instead of dropping them", () => {
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "source_ref"]),
+      row(["observation_id", "source_ref", "summary"]),
+    ])).toBe("observation_id, source_ref, summary");
+    expect(navigationRowFieldsFromRows([row(["observation_id", "zz_new_key"])])).toBe(
+      "observation_id, zz_new_key",
+    );
+    expect(navigationRowFieldsFromRows([])).toBe("");
   });
 });
 

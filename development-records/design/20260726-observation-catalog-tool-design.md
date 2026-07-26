@@ -775,6 +775,28 @@ ON은 **35,096 B(38× 작음)**에 전 관측 제공. 실 행 500개 복제 시 
 - **리뷰어 수치도 가설이다.** C1은 실재하지만 "3a가 만들었다"는 프레이밍은 실측에서 틀렸다(실 코퍼스에서는
   OFF·ON 노출이 동일). 그러나 그 실측이 **더 나쁜 사실**을 드러냈다 — 그 표면은 오늘 이미 천장을 넘는다.
 
+#### 4차 교차검증 — 렌즈 2벌 병렬 (2026-07-27)
+
+렌즈 E = "material이 남아 있는가"(`gpt-5.6-sol`/max, 전체 diff) · 렌즈 F = **3차 수정 자체 공격**
+(`gpt-5.6-sol`/xhigh, 3차 diff 한정). **E 1건(material) · F 6건(material 1). 두 렌즈가 같은 결함에 수렴했고,
+그것은 3차 수정이 만든 것이었다.**
+
+| 발견 | 재현 | 처분 |
+|---|---|---|
+| **E1 = F1/F3 (수렴, medium) — 3차의 등급-키 정책 문구가 region 행에서 거짓이다.** `projectBreadthFoldTailRung`은 `location`이 `source_ref`와 중복이 **아닌 행에서는 유지**하는데(모든 region 행), 등급으로 키를 정한 문구는 `summary_anchor`/`anchor`에서 `location`을 빼고 말한다. **더 나쁜 것**: 그 거짓 문구가 예산 선택에 참여한다 — 렌즈 E가 2,000 region(고유 location)에서 one_line이 1바이트 초과일 때 `summary_anchor`가 **행은 바이트 동일한데** 문구가 10바이트 짧아서 "강등"으로 통과하고, 공시는 없었던 location 삭제를 주장한다 | 실측 재현(2,000행·locPad 300) | **수정**: 문구를 **행에서 파생**(`navigationRowFieldsFromRows`). 행이 바이트 동일하면 문구도 동일하므로 `summary_anchor`가 공짜로 통과할 수 없고 사다리는 `anchor`까지 간다(실측: `finer_levels_over_budget = ["one_line","summary_anchor"]`). 등급 파라미터가 사라져 `measure(projection, level)`도 되돌렸다 — **잘못 쓸 수 있는 파라미터를 없앤다** |
+| **F6 material — 팔 F가 OFF를 손으로 slice했다**(3차가 만든 결함). production OFF는 prioritized 우선 후 slice이므로, 앞쪽에 상세가 큰 행이 있으면 F가 OFF를 "이미 초과"로 분류해 **진짜 ON-단독 교차를 통과시킨다**(리뷰어 구성: 128관측·앞 64 대형 supplemental·뒤 64 prioritized) | 확인 | **수정**: OFF 노출을 **정본 `maturationAnswerSupportPromptCatalog`**로 계산. 게다가 팔 F에 **자기 점검**을 넣었다 — prioritized를 뒤에 둔 코퍼스에서 노출이 prioritized로 시작하지 않으면 FAIL(다시 slice로 회귀하면 팔의 판정이 무의미해진다) |
+| **F4 low — "정확한 키 집합" 오라클이 추가 키만 거부했다.** 기대 키를 요구하지 않고, 선택된 등급의 집합이 아니라 전 등급 키의 **합집합**을 썼다 → index 0 이후 행에서 `location`을 빼도 통과 | 확인 | **수정**: 전 행에 대해 `Object.keys(row).sort()`가 **등급의 정확한 집합과 같음**을 요구. 등급별 집합을 테스트에 명시 |
+| **F5 low — probe의 region 행에 `heading` 역할이 없다.** production은 `declaration`과 `heading`을 함께 상위 tier로 두는데 probe는 declaration/body만 만들어, tier에서 heading을 빼는 변경이 green으로 남는다 | 확인 | **수정**: heading 행을 추가하고 음성 대조 확인(heading 제거가 region 팔 digest를 움직인다) |
+| **F2 — 가드/공시 순서는 옳다**(리뷰어가 3상태 전수 확인: 가드 throw 시 공시 없음 · 가드 후 dispatch 실패 시 공시 있음 · 사이에 throw하는 연산 없음) | — | 확인만 |
+| **F3 잔여 — `navigationRowFieldsForLevel`이 detail 등급에 답했다** | 확인 | 함수 자체가 **사라졌다**(행 파생으로 대체) |
+
+**변이 21종 → 21 탐지**(추가: 등급-키 정책 문구 복원 = 새 region 테스트 3개가 잡는다).
+
+**교훈**: **수정이 만든 결함이 2라운드 연속 나왔다**(2차 `finally` → 3차 등급-키 문구). 두 번 다
+"모델을 하나 더 만든" 수정이었고, 두 번 다 처방은 **모델을 없애는 것**이었다 — 공시를 가드 뒤로(순서
+가정 제거), 문구를 행에서 파생(등급 가정 제거), OFF 노출을 정본 함수로(slice 가정 제거).
+**수정 라운드마다 그 수정만 공격하는 렌즈를 붙이는 것이 이 트랙에서 세 번 값을 했다.**
+
 **경계(정직)**:
 - **3a 단독으로 ON은 제품적으로 완성이 아니다** — 상세를 가져올 층이 없으니 ON은 요약만 남은 프롬프트다.
   키가 default OFF인 이유이고, 승격은 3b 이후 별도 결정이다.

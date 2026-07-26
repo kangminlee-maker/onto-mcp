@@ -168,15 +168,35 @@ export function breadthFoldRungDetailLoss(level: BreadthFoldLevel): string {
 }
 
 /**
- * The navigation fields a catalog row CARRIES at a given rung, as the prompt policy should describe
- * them. Derived from the rung key declarations so the dispatched contract cannot claim a field the
- * rung removed — a fixed sentence told the worker `summary` was present at the `anchor` rung, which
- * is precisely where it is not (cross-family review, third round).
+ * The navigation fields the DISPATCHED rows actually carry, for the prompt policy that describes them.
+ *
+ * Derived from the rows, not from the rung: `projectBreadthFoldTailRung` keeps `location` on any row
+ * where it is NOT redundant with `source_ref` — every region row — so a rung-keyed field list is false
+ * for a region corpus at `summary_anchor`/`anchor` (cross-family review, fourth round, after a
+ * rung-keyed version replaced a fixed one that was false at `anchor`). A list read off the rows cannot
+ * disagree with the rows.
+ *
+ * Keys render in canonical navigation order; anything unexpected is appended rather than dropped, so a
+ * new key shows up in the contract instead of vanishing from it.
  */
-export function navigationRowFieldsForLevel(level: BreadthFoldLevel | null): string {
-  if (level === "anchor") return "id, source_ref";
-  if (level === "summary_anchor") return "id, source_ref, summary";
-  return "id, source_ref, location, summary";
+export function navigationRowFieldsFromRows(rows: readonly unknown[]): string {
+  const CANONICAL_ORDER = [
+    "observation_id",
+    "target_material_kind",
+    "source_ref",
+    "location",
+    "summary",
+  ];
+  const present = new Set<string>();
+  for (const row of rows) {
+    if (row === null || typeof row !== "object") continue;
+    for (const key of Object.keys(row as Record<string, unknown>)) present.add(key);
+  }
+  const ordered = [
+    ...CANONICAL_ORDER.filter((key) => present.has(key)),
+    ...[...present].filter((key) => !CANONICAL_ORDER.includes(key)).sort(),
+  ];
+  return ordered.join(", ");
 }
 
 /**
@@ -296,11 +316,11 @@ export interface FoldObservationsToBudgetArgs {
   /** Deterministic projection of the catalog at a given rung (all N observations, demoted detail). */
   projectAtLevel: (level: BreadthFoldLevel) => unknown[];
   /**
-   * Deterministic byte measurement of the FULL dispatch payload built around `projection`. Receives
-   * the rung too, because a caller whose payload DESCRIBES the rung (a policy block naming the fields
-   * a row carries) must measure the text that rung would actually dispatch.
+   * Deterministic byte measurement of the FULL dispatch payload built around `projection`. A caller
+   * whose payload DESCRIBES the rows (a policy block naming the fields they carry) derives that text
+   * from `projection` here, so what is measured is what is dispatched.
    */
-  measure: (projection: unknown[], level: BreadthFoldLevel) => number;
+  measure: (projection: unknown[]) => number;
   /** Override the ladder (tests / future rungs). Defaults to SOURCE_BREADTH_FOLD_LEVELS. */
   levels?: readonly BreadthFoldLevel[];
 }
@@ -322,7 +342,7 @@ export function foldObservationsToBudget(
   let coarsest: { level: BreadthFoldLevel; projection: unknown[]; measured: number } | null = null;
   for (const level of levels) {
     const projection = args.projectAtLevel(level);
-    const measured = args.measure(projection, level);
+    const measured = args.measure(projection);
     coarsest = { level, projection, measured };
     if (measured <= args.budget) {
       return {

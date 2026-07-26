@@ -207,7 +207,7 @@ import {
 import { SEMANTIC_MAP_ROUTABLE_KINDS } from "./semantic-map-projection.js";
 import type { SemanticMapAnyProjection } from "./semantic-map-projection.js";
 import {
-  navigationRowFieldsForLevel,
+  navigationRowFieldsFromRows,
   OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
@@ -3191,11 +3191,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(promptCatalog);
       const promptObservationIds = promptCatalog.promptObservationIds;
       const promptObservationIdSet = new Set(promptObservationIds);
-      // The policy block is a FUNCTION of the chosen rung, so the fold measures each rung with the
-      // text that rung would actually dispatch, and the dispatched text describes the rows that went
-      // out. A fixed "(id, source_ref, summary)" sentence told the worker summaries were present
-      // exactly when `anchor` had removed them (cross-family review, third round).
-      const answerSupportUserPayloadFor = (level: BreadthFoldLevel | null) => ({
+      // The policy block is a function of the ROWS, so the fold measures each rung with the text that
+      // rung would actually dispatch and the dispatched text describes the rows that went out. A fixed
+      // sentence told the worker summaries were present exactly when `anchor` had removed them; a
+      // rung-keyed one was then false for region rows, which keep `location` at every rung
+      // (cross-family review, third and fourth rounds).
+      const answerSupportUserPayloadFor = (projection: readonly unknown[]) => ({
         round_id: input.roundId,
         question_frontier_ref: input.maturationQuestionFrontierRef,
         question_frontier_validation:
@@ -3212,8 +3213,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             : "maturation_answer_support_bounded_catalog",
           selection_basis: observationCatalogTool
             ? "Runtime projects EVERY consumption-approved source observation as a navigation row " +
-              `(${navigationRowFieldsForLevel(level)}) with no per-observation detail and no slot cap, ` +
-              "closure-prioritized refs first; semantic answer support remains LLM-owned."
+              `(${navigationRowFieldsFromRows(projection)}) with no per-observation detail and no slot ` +
+              "cap, closure-prioritized refs first; semantic answer support remains LLM-owned."
             : "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
           source_observation_count: input.sourceObservations.observations.length,
           prioritized_observation_count:
@@ -3236,7 +3237,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         },
         prompt_visible_observation_ids: promptObservationIds,
       });
-      const answerSupportUserPayloadBase = answerSupportUserPayloadFor(null);
+      const answerSupportUserPayloadBase = answerSupportUserPayloadFor([]);
       // Catalog rungs. `one_line` is the PINNED start (design §6) — the tail rungs exist so an
       // extreme corpus demotes detail rather than dropping observations, exactly as on the two
       // count-scaling surfaces. Tail rows are DERIVED from the one_line rows by dropping keys, so the
@@ -3269,23 +3270,23 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
             catalogObservationCount: promptObservationIds.length,
             projectAtLevel: projectAnswerSupportCatalogAtFoldLevel,
-            measure: (projection, level) =>
+            measure: (projection) =>
               promptPayloadByteCount(ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT, {
-                ...answerSupportUserPayloadFor(level),
+                ...answerSupportUserPayloadFor(projection),
                 source_observations: projection,
               }),
             levels: OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
           })
         : null;
+      const answerSupportProjection = catalogFold
+        ? catalogFold.projection
+        : (projectObservationsForPrompt(input.sourceObservations, {
+            observationIds: promptObservationIds,
+            contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }) as unknown[]);
       const answerSupportUserPayload = {
-        ...answerSupportUserPayloadFor(catalogFold ? catalogFold.level : null),
-        source_observations: catalogFold
-          ? catalogFold.projection
-          : projectObservationsForPrompt(input.sourceObservations, {
-              observationIds: promptObservationIds,
-              contentExcerptCharLimit:
-                POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
-            }),
+        ...answerSupportUserPayloadFor(answerSupportProjection),
+        source_observations: answerSupportProjection,
       };
       if (catalogFold) {
         // Design §6: "even `anchor` does not fit" fails BEFORE the worker starts, with the measured

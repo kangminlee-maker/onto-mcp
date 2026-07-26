@@ -20,11 +20,12 @@
  * all three digests identical in both trees:
  *   real_corpus          1,333,472 chars  8658b612d3cdecaf978d2d6898a37e3a147efd54e139fd59ab9377afdbf3d6fb
  *   scaled_past_cap      1,453,819 chars  2575c57f8651284c28b7fbfc27e83244cb4aa60c0c80a879b9bac05d1fb0a1de
- *   regions_of_one_file    112,153 chars  68ef3e47a205eefb39edcb7ead1054e17eaabc0f7f00b6987ab08aa79395e7df
+ *   regions_of_one_file    112,156 chars  fd7f05cc798068e8be11e63f0b954919ab8c478ae742542c3e46932c3af3ad47
  * Negative controls the same day, each naming the path it covers:
  *   slice 64 -> 63                          moves all three (the cap is also reported in the policy)
  *   region cap 8 -> 7                       moves regions_of_one_file ALONE
  *   region role tier removed                moves regions_of_one_file (the cap's RANKING)
+ *   `heading` dropped from the high tier     moves regions_of_one_file (both high roles are present)
  *   region line-start ranking reversed      moves regions_of_one_file
  *   codexCombinedPrompt separator changed   moves all three (transport assembly)
  * So an unchanged digest is evidence rather than insensitivity.
@@ -229,7 +230,14 @@ const regionsOfOneFile = (count: number): AnyRecord[] => {
     location: `L${index * 10}-${index * 10 + 9}`,
     structural_data: {
       ...(source.structural_data as AnyRecord),
-      region_role: index === count - 1 ? "declaration" : "body",
+      // BOTH high-tier roles appear (production ranks `declaration` AND `heading` above `body`), and
+      // both sit at the END of artifact order: a tier change that kept only one of them moves this
+      // digest, which a declaration-only corpus could not see (cross-family review, fourth round).
+      region_role: index === count - 1
+        ? "declaration"
+        : index === count - 2
+          ? "heading"
+          : "body",
       region_line_start: index * 10,
       region_line_end: index * 10 + 9,
     },
