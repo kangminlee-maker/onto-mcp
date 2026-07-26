@@ -26,6 +26,8 @@
 import { createHash } from "node:crypto";
 import { parse as parseYaml } from "yaml";
 import { assertArrayField } from "../artifact-io.js";
+import type { ReconstructSourceSafetyLedgerArtifact } from "./artifact-types.js";
+import { sourceSafetyRowIdForObservationId } from "./source-safety-validation.js";
 
 /**
  * Contract cap on ids per request (design §4.1). The request shape is `{observation_ids[1..16]}` XOR
@@ -34,6 +36,16 @@ import { assertArrayField } from "../artifact-io.js";
  * merely validated.
  */
 export const OBSERVATION_READ_MAX_REQUEST_IDS = 16;
+
+/**
+ * Longest accepted `observation_ids` element. Real ids are `obs_<16 hex>` (20 chars), so this is generous
+ * by any measure — its job is to bound a CALLER-CONTROLLED failure message. Without it, an unresolvable
+ * 200,000-char id produced a ~200,000-char `unknown_observation_id` error, and the grant layer's
+ * fixed-size charge for a failed call under-counted it by two orders of magnitude while the text still
+ * occupied the worker's context (cross-family review reproduced it). Bounding the input is the fix; the
+ * accounting cannot be honest about an unbounded string.
+ */
+export const OBSERVATION_READ_MAX_ID_CHARS = 128;
 
 /** Cursor payload version. Bumped when the cursor's fields change; an older cursor is then rejected. */
 const OBSERVATION_CURSOR_VERSION = 1;
@@ -51,16 +63,30 @@ const PART_NUMBER_SENTINEL = 9_999_999_999;
  */
 const MIN_PART_ALLOWANCE_CHARS = 6;
 
+/**
+ * Closed failure vocabulary for the whole observation-read contract — the reader below AND the
+ * session-scoped grant layer above it (`observation-read-grant.ts`). Deliberately ONE union rather than
+ * one per module: a worker calling the tool sees a single surface, so it must branch on a single `reason`
+ * set. The comments mark which layer raises which.
+ */
 export type ObservationReadFailureReason =
+  // raised by this module (the pure reader)
   | "artifact_malformed"
   | "duplicate_observation_id"
   | "unknown_observation_id"
   | "request_shape"
   | "cursor_malformed"
   | "snapshot_drift"
-  | "budget_too_small";
+  | "budget_too_small"
+  // raised by the grant layer (session scope + cumulative budget)
+  | "unknown_grant"
+  | "grant_revoked"
+  | "grant_expired"
+  | "fetch_budget_exhausted"
+  | "call_limit_exhausted"
+  | "fetch_budget_unservable";
 
-/** Closed failure vocabulary for the reader, so callers branch on `reason` instead of message text. */
+/** Carries the `reason` above, so callers branch on it instead of on message text. */
 export class ObservationReadError extends Error {
   readonly reason: ObservationReadFailureReason;
 
@@ -90,13 +116,28 @@ export interface ObservationSnapshotEntry {
 }
 
 /**
- * A FIXED snapshot. "Fixed" is enforced, not promised: entries and the entry array are frozen, and the
- * id lookup is a closure over a private Map rather than an exposed one — so `snapshot_digest` cannot
+ * Module-private brand. `ObservationSnapshot` is nominal, not structural: only `sealSnapshot` can produce
+ * a value carrying this symbol, so the ONLY way to hold a snapshot is to have gone through
+ * `fixObservationSnapshot` and therefore through the consumption gate.
+ *
+ * Without it the interface was satisfiable by a hand-written object literal — cross-family review passed
+ * `{ entries: [], lookup: () => withheldEntry }` to `readObservationPage` and got the withheld body back,
+ * with no cast and no constructor. Moving the gate into the constructor is only a constraint if the
+ * constructor is the sole source of the type. An explicit `as ObservationSnapshot` cast still defeats this,
+ * but a cast is a visible, reviewable act rather than an innocent-looking literal.
+ */
+declare const OBSERVATION_SNAPSHOT_BRAND: unique symbol;
+
+/**
+ * A FIXED, GATED snapshot. "Fixed" is enforced, not promised: entries and the entry array are frozen, and
+ * the id lookup is a closure over a private Map rather than an exposed one — so `snapshot_digest` cannot
  * drift from the content it names while a cursor walk is in flight. (Cross-family review found the
  * earlier shape, which exposed mutable entries through a Map, let a caller rewrite a body between pages
  * with `assertObservationSnapshotUnchanged` still reporting clean.)
  */
 export interface ObservationSnapshot {
+  /** Nominal marker — see `OBSERVATION_SNAPSHOT_BRAND`. Never read; its presence is the point. */
+  readonly [OBSERVATION_SNAPSHOT_BRAND]: true;
   readonly session_id: string;
   /**
    * sha256 (hex) over an INJECTIVE encoding of (domain tag, session_id, sorted (observation_id,
@@ -105,8 +146,16 @@ export interface ObservationSnapshot {
    * to it.
    */
   readonly snapshot_digest: string;
-  /** Entries in canonical order (observation_id ascending, code-unit comparison). Frozen. */
+  /**
+   * The ADMITTED entries, canonical order (observation_id ascending, code-unit comparison). Frozen.
+   * Observations the consumption gate withheld are absent, so OBS-2 makes them unreachable.
+   */
   readonly entries: readonly ObservationSnapshotEntry[];
+  /**
+   * Observations present in the artifact that the gate withheld. Non-zero is the evidence the gate did
+   * work; the grant layer surfaces it in the audit receipt.
+   */
+  readonly withheld_observation_count: number;
   /** Resolve an id against the snapshot. The only way in — there is no exposed index to rewrite. */
   readonly lookup: (observationId: string) => ObservationSnapshotEntry | undefined;
 }
@@ -154,6 +203,27 @@ function sha256Hex(text: string): string {
 }
 
 /**
+ * Longest an ARTIFACT- OR CALLER-DERIVED value may be when it appears in a failure message.
+ *
+ * Failure messages are charged against the grant's cumulative budget, so an unbounded interpolation is an
+ * unbounded charge. Cross-family review put a 200,000-char `session_id` in a ledger and the resulting
+ * mismatch message charged 201,116 chars against a 66,560 total — a 134,556 overrun from one legal call.
+ * Every interpolation of a value this module did not itself compute goes through `elide`.
+ */
+const MESSAGE_VALUE_MAX_CHARS = 96;
+
+/** Exported for the grant layer, whose messages interpolate artifact values under the same bound. */
+export function elideMessageValue(value: string): string {
+  return elide(value);
+}
+
+function elide(value: string): string {
+  return value.length <= MESSAGE_VALUE_MAX_CHARS
+    ? value
+    : `${value.slice(0, MESSAGE_VALUE_MAX_CHARS)}…(${value.length} chars)`;
+}
+
+/**
  * Rejects the values a YAML parse can produce that JSON cannot represent faithfully — a non-finite
  * number would serialize to `null` and a bigint would throw deep inside `JSON.stringify`. Used as a
  * replacer so the check rides along on the serialization pass already being made (no extra walk), which
@@ -186,19 +256,30 @@ function rejectNonJsonRepresentable(_key: string, value: unknown): unknown {
 
 /**
  * Fix a snapshot from the artifact text: parse, project each observation to its canonical body, hash it,
- * and derive the content digest. Fails loud on a malformed artifact, a blank/absent observation_id, or a
- * duplicate id (a duplicate would make `{observation_ids}` ambiguous — the reader must never guess).
+ * APPLY THE CONSUMPTION GATE, and derive the content digest over what survives. Fails loud on a malformed
+ * artifact, a blank/absent observation_id, a duplicate id (a duplicate would make `{observation_ids}`
+ * ambiguous — the reader must never guess), or a ledger belonging to a different session.
  *
- * Deterministic: the same text always yields the same bodies, hashes and digest.
+ * The ledger is a REQUIRED parameter, not an option (design §3.1). This is the only constructor of an
+ * `ObservationSnapshot` and `readObservationPage` reads nothing else, so **there is no ungated snapshot
+ * type and no reader entry point that skips the gate** — the bypass is unrepresentable rather than
+ * forbidden. Cross-family review found the earlier shape, where an ungated `fixObservationSnapshot(text)`
+ * was exported alongside the reader, and demonstrated that a future façade could pair the two and serve a
+ * withheld observation while satisfying every type.
+ *
+ * Deterministic: the same text and ledger always yield the same bodies, hashes and digest.
  */
-export function fixObservationSnapshot(artifactText: string): ObservationSnapshot {
+export function fixObservationSnapshot(
+  artifactText: string,
+  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact,
+): ObservationSnapshot {
   let document: unknown;
   try {
     document = parseYaml(artifactText) as unknown;
   } catch (error) {
     throw new ObservationReadError(
       "artifact_malformed",
-      `source-observations is not parseable YAML: ${(error as Error).message}`,
+      `source-observations is not parseable YAML: ${elide((error as Error).message)}`,
     );
   }
   if (!document || typeof document !== "object" || Array.isArray(document)) {
@@ -208,6 +289,16 @@ export function fixObservationSnapshot(artifactText: string): ObservationSnapsho
   const sessionId = record.session_id;
   if (typeof sessionId !== "string" || !sessionId.trim()) {
     throw new ObservationReadError("artifact_malformed", "source-observations has no session_id");
+  }
+  if (sourceSafetyLedger.session_id !== sessionId) {
+    // The ledger validator classifies this as `session_id_mismatch` and `run.ts` asserts the validation
+    // before use — but a snapshot constructor that merely ASSUMES validation ran is a gate keyed to the
+    // wrong session's decisions. Cross-family review built exactly that: session A's observations with a
+    // type-correct session B ledger whose rows share the id format, and the withheld observation served.
+    throw new ObservationReadError(
+      "artifact_malformed",
+      `source-safety ledger belongs to session ${elide(sourceSafetyLedger.session_id)}, not ${elide(sessionId)}`,
+    );
   }
   try {
     // Reuse the shared artifact shape guard (a torn write leaves a parseable file whose required array
@@ -219,7 +310,7 @@ export function fixObservationSnapshot(artifactText: string): ObservationSnapsho
   }
 
   const entries: ObservationSnapshotEntry[] = [];
-  const index = new Map<string, ObservationSnapshotEntry>();
+  const seenIds = new Set<string>();
   for (const raw of record.observations as unknown[]) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new ObservationReadError("artifact_malformed", "observation entry is not a mapping");
@@ -231,44 +322,103 @@ export function fixObservationSnapshot(artifactText: string): ObservationSnapsho
         "observation entry has no observation_id",
       );
     }
-    if (index.has(observationId)) {
+    if (seenIds.has(observationId)) {
       throw new ObservationReadError(
         "duplicate_observation_id",
-        `${observationId} appears more than once; an id must resolve to exactly one observation`,
+        `${elide(observationId)} appears more than once; an id must resolve to exactly one observation`,
       );
     }
     const body = JSON.stringify(raw, rejectNonJsonRepresentable);
     // Frozen at construction: a snapshot that can be edited in place is not fixed, and a mid-walk edit
     // would leave `snapshot_digest` naming content the reader is no longer serving.
-    const entry: ObservationSnapshotEntry = Object.freeze({
-      observation_id: observationId,
-      observation_content_sha256: sha256Hex(body),
-      body,
-    });
-    entries.push(entry);
-    index.set(observationId, entry);
+    entries.push(
+      Object.freeze({
+        observation_id: observationId,
+        observation_content_sha256: sha256Hex(body),
+        body,
+      }),
+    );
+    seenIds.add(observationId);
   }
 
-  entries.sort((a, b) =>
+  const admitted = promptContextAdmittedObservationIds({
+    observationIds: entries.map((entry) => entry.observation_id),
+    ledger: sourceSafetyLedger,
+  });
+  return sealSnapshot(
+    sessionId,
+    entries.filter((entry) => admitted.has(entry.observation_id)),
+    entries.length - admitted.size,
+  );
+}
+
+/**
+ * Which of `observationIds` the source-safety ledger admits for `prompt_context` consumption — the gate
+ * `fixObservationSnapshot` applies (design §3.1).
+ *
+ * Mirrors `sourceObservationsForPrompt` exactly — the row is looked up BY THE CANDIDATE'S ID, admitted
+ * only on `visibility_tier: "consumption_allowed"`, and a missing row withholds (fail-closed). Candidates
+ * are passed in rather than derived from the ledger's rows so the result is a set of OBSERVATION ids: a
+ * row id is a different identifier, and returning one where the other is expected is how a gate quietly
+ * admits nothing (or everything). The key format itself has one authority,
+ * `sourceSafetyRowIdForObservationId`.
+ *
+ * Duplicate row ids resolve LAST-WINS, matching the push gate's `new Map(rows.map(...))`. The ledger
+ * validator rejects duplicates (`duplicate_id`) and `run.ts` asserts the validation before use, so this
+ * cannot arise on the live path — but a first-wins or any-wins rule here would make the two gates
+ * silently disagree on a [allowed, denied] pair, and "mirrors exactly" is the claim this function makes.
+ */
+export function promptContextAdmittedObservationIds(args: {
+  observationIds: readonly string[];
+  ledger: ReconstructSourceSafetyLedgerArtifact;
+}): ReadonlySet<string> {
+  const tierByRowId = new Map(
+    args.ledger.safety_rows.map((row) => [row.safety_row_id, row.visibility_tier] as const),
+  );
+  return new Set(
+    args.observationIds.filter(
+      (observationId) =>
+        tierByRowId.get(sourceSafetyRowIdForObservationId(observationId, "prompt_context")) ===
+          "consumption_allowed",
+    ),
+  );
+}
+
+/**
+ * Seal entries into a fixed snapshot: canonical order, frozen entries, closure lookup, content digest.
+ * The ONE construction path — `fixObservationSnapshot` and `restrictObservationSnapshot` both go through
+ * it, so a restricted snapshot cannot end up with a digest derived by a second, drifting rule.
+ *
+ * The digest preimage is an INJECTIVE encoding: JSON of a structured tuple, not a delimiter-joined
+ * string. A separator-joined encoding is ambiguous — a session_id (or observation_id) carrying the
+ * separator plus a hash-shaped tail can reproduce another snapshot's preimage exactly, making a removed
+ * observation invisible and that snapshot's cursors acceptable here. (Cross-family review reproduced it.)
+ */
+function sealSnapshot(
+  sessionId: string,
+  entries: readonly ObservationSnapshotEntry[],
+  withheldCount: number,
+): ObservationSnapshot {
+  const ordered = [...entries].sort((a, b) =>
     a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0,
   );
-  // INJECTIVE preimage: JSON of a structured tuple, not a delimiter-joined string. A separator-joined
-  // encoding is ambiguous — a session_id (or observation_id) carrying the separator plus a hash-shaped
-  // tail can reproduce another snapshot's preimage exactly, making a removed observation invisible and
-  // that snapshot's cursors acceptable here. (Cross-family review reproduced it.)
+  const index = new Map(ordered.map((entry) => [entry.observation_id, entry] as const));
   const digestPreimage = JSON.stringify([
     "onto-observation-snapshot/1",
     sessionId,
-    entries.map((entry) => [entry.observation_id, entry.observation_content_sha256]),
+    ordered.map((entry) => [entry.observation_id, entry.observation_content_sha256]),
   ]);
-
+  // The brand is a PHANTOM property: it exists only in the type system, so there is nothing to attach at
+  // runtime and this cast is the one place that mints the nominal type. Keeping the cast here — and nowhere
+  // else — is what makes "only this function produces a snapshot" checkable by grep.
   return Object.freeze({
     session_id: sessionId,
     snapshot_digest: sha256Hex(digestPreimage),
-    entries: Object.freeze(entries) as readonly ObservationSnapshotEntry[],
+    entries: Object.freeze(ordered) as readonly ObservationSnapshotEntry[],
+    withheld_observation_count: withheldCount,
     lookup: (observationId: string): ObservationSnapshotEntry | undefined =>
       index.get(observationId),
-  });
+  }) as unknown as ObservationSnapshot;
 }
 
 /**
@@ -279,12 +429,28 @@ export function fixObservationSnapshot(artifactText: string): ObservationSnapsho
 export function assertObservationSnapshotUnchanged(
   snapshot: ObservationSnapshot,
   artifactText: string,
+  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact,
 ): void {
-  const current = fixObservationSnapshot(artifactText);
-  if (current.snapshot_digest !== snapshot.snapshot_digest) {
+  assertObservationSnapshotDigestUnchanged(
+    snapshot,
+    fixObservationSnapshot(artifactText, sourceSafetyLedger),
+  );
+}
+
+/**
+ * The drift rule itself, over two snapshots rather than a snapshot and a text. Exists so the grant layer
+ * — whose live snapshot is a GATED projection, not `fixObservationSnapshot(text)` — enforces drift by the
+ * same single rule instead of restating it. A second copy of "compare digests, else throw snapshot_drift"
+ * is exactly how the two paths would come to disagree about what drift means.
+ */
+export function assertObservationSnapshotDigestUnchanged(
+  expected: ObservationSnapshot,
+  current: ObservationSnapshot,
+): void {
+  if (current.snapshot_digest !== expected.snapshot_digest) {
     throw new ObservationReadError(
       "snapshot_drift",
-      `source-observations changed under the fixed snapshot (${snapshot.snapshot_digest} → ${current.snapshot_digest})`,
+      `source-observations changed under the fixed snapshot (${expected.snapshot_digest} → ${current.snapshot_digest})`,
     );
   }
 }
@@ -430,8 +596,15 @@ function assertRequestedIds(ids: readonly string[]): void {
     if (!id.trim()) {
       throw new ObservationReadError("request_shape", "observation_ids carries a blank id");
     }
+    if (id.length > OBSERVATION_READ_MAX_ID_CHARS) {
+      // The id is NOT echoed — echoing it is the very thing this bound exists to prevent.
+      throw new ObservationReadError(
+        "request_shape",
+        `observation_ids carries a ${id.length}-char id, above the ${OBSERVATION_READ_MAX_ID_CHARS} cap`,
+      );
+    }
     if (seen.has(id)) {
-      throw new ObservationReadError("request_shape", `observation_ids repeats ${id}`);
+      throw new ObservationReadError("request_shape", `observation_ids repeats ${elide(id)}`);
     }
     seen.add(id);
   }
@@ -524,7 +697,7 @@ export function readObservationPage(args: {
     if (!entry) {
       // OBS-2: an id outside the snapshot is refused identically whether it never existed or belongs to
       // another session — the reader never discloses that a different snapshot holds it.
-      throw new ObservationReadError("unknown_observation_id", `${id} is not in the fixed snapshot`);
+      throw new ObservationReadError("unknown_observation_id", `${elide(id)} is not in the fixed snapshot`);
     }
     return entry;
   });

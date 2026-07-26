@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import type { ReconstructSourceSafetyLedgerArtifact } from "./artifact-types.js";
 import {
   assertObservationSnapshotUnchanged,
   fixObservationSnapshot,
   jsonStringContentCost,
+  OBSERVATION_READ_MAX_ID_CHARS,
   OBSERVATION_READ_MAX_REQUEST_IDS,
   ObservationReadError,
   readObservationPage,
@@ -35,7 +37,78 @@ const artifact = parseYaml(artifactText) as {
   session_id: string;
   observations: Array<Record<string, unknown>>;
 };
-const snapshot = fixObservationSnapshot(artifactText);
+
+/**
+ * A source-safety ledger admitting every observation the given artifact carries.
+ *
+ * `fixObservationSnapshot` requires a ledger — the consumption gate is part of constructing a snapshot, so
+ * an ungated one cannot be built (design §3.1). These tests are about the READER, so they hand it a ledger
+ * that withholds nothing; the gate's own behaviour is exercised in `observation-read-grant.test.ts` and by
+ * the one withholding case below. Derived from the artifact rather than hard-coded so it stays correct as
+ * fixtures change, and tolerant of malformed input because several tests below feed exactly that.
+ */
+function admitAll(text: string): ReconstructSourceSafetyLedgerArtifact {
+  let document: unknown;
+  try {
+    document = parseYaml(text) as unknown;
+  } catch {
+    document = undefined;
+  }
+  const record = (document ?? {}) as { session_id?: unknown; observations?: unknown };
+  const ids = Array.isArray(record.observations)
+    ? record.observations.flatMap((observation) => {
+      const id = (observation as { observation_id?: unknown } | null)?.observation_id;
+      return typeof id === "string" ? [id] : [];
+    })
+    : [];
+  return admittingLedger(
+    typeof record.session_id === "string" ? record.session_id : "session",
+    ids,
+  );
+}
+
+function admittingLedger(
+  sessionId: string,
+  admittedIds: readonly string[],
+  withheldIds: readonly string[] = [],
+): ReconstructSourceSafetyLedgerArtifact {
+  const row = (
+    id: string,
+    tier: "consumption_allowed" | "no_prompt_use",
+  ): ReconstructSourceSafetyLedgerArtifact["safety_rows"][number] => ({
+    safety_row_id: `source_safety:${id}:prompt_context`,
+    subject_ref: `/tmp/${id}.ts`,
+    subject_kind: "source_ref",
+    lifecycle_state: "active",
+    authorization_state: "authorized",
+    proof_sufficiency_state: "sufficient_for_claim",
+    replay_state: "replay_allowed",
+    visibility_tier: tier,
+    visibility_derivation: {
+      intended_consumption: "prompt_context",
+      derived_from_axes: ["lifecycle_state"],
+      derivation_rule_ref: "test",
+    },
+    authorization_scope_ref: null,
+    tombstone: { tombstone_ref: null, reason: null, retired_at: null, downstream_refs: [] },
+    limitation_refs: [],
+  });
+  return {
+    schema_version: "1",
+    session_id: sessionId,
+    created_at: "2026-07-26T00:00:00.000Z",
+    source_observations_ref: null,
+    safety_rows: [
+      ...admittedIds.map((id) => row(id, "consumption_allowed")),
+      ...withheldIds.map((id) => row(id, "no_prompt_use")),
+    ],
+  };
+}
+
+const fixSnapshotAdmittingAll = (text: string): ObservationSnapshot =>
+  fixObservationSnapshot(text, admitAll(text));
+
+const snapshot = fixSnapshotAdmittingAll(artifactText);
 const allIds = artifact.observations.map((observation) => observation.observation_id as string);
 
 /** A realistic per-response ceiling, small enough that the corpus needs many pages. */
@@ -248,7 +321,7 @@ describe("snapshot integrity — a mid-run rewrite must fail, not silently switc
   });
 
   it("rejects a cursor issued against a different snapshot", () => {
-    const drifted = fixObservationSnapshot(mutatedText);
+    const drifted = fixSnapshotAdmittingAll(mutatedText);
     expect(drifted.snapshot_digest).not.toBe(snapshot.snapshot_digest);
     expect(
       reasonOf(() =>
@@ -278,10 +351,10 @@ describe("snapshot integrity — a mid-run rewrite must fail, not silently switc
     const reformatted = stringifyYaml(artifact, { lineWidth: 40 });
     // Precondition: the reformat really did change the bytes, so the tolerance is not vacuous.
     expect(reformatted).not.toBe(artifactText);
-    expect(reasonOf(() => assertObservationSnapshotUnchanged(snapshot, reformatted))).toBe("no-error");
-    expect(reasonOf(() => assertObservationSnapshotUnchanged(snapshot, mutatedText))).toBe(
-      "snapshot_drift",
-    );
+    expect(reasonOf(() => assertObservationSnapshotUnchanged(snapshot, reformatted, admitAll(reformatted))))
+      .toBe("no-error");
+    expect(reasonOf(() => assertObservationSnapshotUnchanged(snapshot, mutatedText, admitAll(mutatedText))))
+      .toBe("snapshot_drift");
   });
 });
 
@@ -333,6 +406,38 @@ describe("request shape — safety by unrepresentability, checked at the boundar
           request: { observation_ids: ["obs_not_in_this_snapshot"] },
           pageCharBudget: PAGE_BUDGET,
         }),
+      ),
+    ).toBe("unknown_observation_id");
+  });
+
+  it("caps an id's length, and does not echo the oversized id back", () => {
+    // Without the cap, an unresolvable 200,000-char id produced a ~200,000-char failure message, which the
+    // grant layer charged as a fixed 1,024 while the text still occupied the worker's context
+    // (cross-family review). The bound makes the message small AND keeps the accounting honest.
+    const oversized = "z".repeat(OBSERVATION_READ_MAX_ID_CHARS + 1);
+    const attempt = (): unknown =>
+      readObservationPage({
+        snapshot,
+        request: { observation_ids: [oversized] },
+        pageCharBudget: PAGE_BUDGET,
+      });
+    expect(reasonOf(attempt)).toBe("request_shape");
+    let message = "";
+    try {
+      attempt();
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).not.toContain(oversized);
+    expect(message.length).toBeLessThan(200);
+    // Contrast: an id AT the cap is a shape-legal request that fails only because it resolves to nothing.
+    expect(
+      reasonOf(() =>
+        readObservationPage({
+          snapshot,
+          request: { observation_ids: ["z".repeat(OBSERVATION_READ_MAX_ID_CHARS)] },
+          pageCharBudget: PAGE_BUDGET,
+        })
       ),
     ).toBe("unknown_observation_id");
   });
@@ -442,50 +547,83 @@ describe("fixObservationSnapshot — fail loud on an artifact the reader cannot 
   });
 
   it("accepts a well-formed artifact (the control for the rejections below)", () => {
-    expect(reasonOf(() => fixObservationSnapshot(syntheticArtifact([observation("obs_a"), observation("obs_b")]))))
+    expect(reasonOf(() => fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a"), observation("obs_b")]))))
+      .toBe("no-error");
+  });
+
+  it("applies the consumption gate: a withheld observation never enters the snapshot", () => {
+    // The gate lives in the CONSTRUCTOR (design §3.1), so there is no ungated snapshot for the reader to
+    // be handed. Contrast arm: the same artifact with both ids admitted serves obs_b fine.
+    const text = syntheticArtifact([observation("obs_a"), observation("obs_b")]);
+    const gated = fixObservationSnapshot(text, admittingLedger("session", ["obs_a"], ["obs_b"]));
+    expect(gated.entries.map((entry) => entry.observation_id)).toEqual(["obs_a"]);
+    expect(gated.withheld_observation_count).toBe(1);
+    expect(gated.lookup("obs_b")).toBeUndefined();
+    expect(
+      reasonOf(() =>
+        readObservationPage({
+          snapshot: gated,
+          request: { observation_ids: ["obs_b"] },
+          pageCharBudget: PAGE_BUDGET,
+        })
+      ),
+    ).toBe("unknown_observation_id");
+
+    const ungated = fixSnapshotAdmittingAll(text);
+    expect(ungated.entries.map((entry) => entry.observation_id)).toEqual(["obs_a", "obs_b"]);
+    expect(ungated.withheld_observation_count).toBe(0);
+    // The gate rotates the digest, so a cursor from one projection is refused by the other.
+    expect(gated.snapshot_digest).not.toBe(ungated.snapshot_digest);
+  });
+
+  it("rejects a ledger from a different session instead of gating on its decisions", () => {
+    const text = syntheticArtifact([observation("obs_a")]);
+    expect(reasonOf(() => fixObservationSnapshot(text, admittingLedger("other-session", ["obs_a"]))))
+      .toBe("artifact_malformed");
+    expect(reasonOf(() => fixObservationSnapshot(text, admittingLedger("session", ["obs_a"]))))
       .toBe("no-error");
   });
 
   it("rejects a duplicate observation_id — an id must resolve to exactly one observation", () => {
     expect(
-      reasonOf(() => fixObservationSnapshot(syntheticArtifact([observation("obs_a"), observation("obs_a")]))),
+      reasonOf(() => fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a"), observation("obs_a")]))),
     ).toBe("duplicate_observation_id");
   });
 
   it("rejects a missing session_id, a blank id, a non-mapping document and a non-array observations", () => {
     expect(
-      reasonOf(() => fixObservationSnapshot(syntheticArtifact([observation("obs_a")], { session_id: "" }))),
+      reasonOf(() => fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a")], { session_id: "" }))),
     ).toBe("artifact_malformed");
-    expect(reasonOf(() => fixObservationSnapshot(syntheticArtifact([observation(" ")])))).toBe(
+    expect(reasonOf(() => fixSnapshotAdmittingAll(syntheticArtifact([observation(" ")])))).toBe(
       "artifact_malformed",
     );
-    expect(reasonOf(() => fixObservationSnapshot("- a\n- b\n"))).toBe("artifact_malformed");
-    expect(reasonOf(() => fixObservationSnapshot("session_id: s\nobservations: 3\n"))).toBe(
+    expect(reasonOf(() => fixSnapshotAdmittingAll("- a\n- b\n"))).toBe("artifact_malformed");
+    expect(reasonOf(() => fixSnapshotAdmittingAll("session_id: s\nobservations: 3\n"))).toBe(
       "artifact_malformed",
     );
   });
 
   it("rejects a value with no faithful JSON projection instead of serving it as null", () => {
     expect(
-      reasonOf(() => fixObservationSnapshot(syntheticArtifact([observation("obs_a", { count: NaN })]))),
+      reasonOf(() => fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a", { count: NaN })]))),
     ).toBe("artifact_malformed");
     expect(
       reasonOf(() =>
-        fixObservationSnapshot(syntheticArtifact([observation("obs_a", { count: Infinity })])),
+        fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a", { count: Infinity })])),
       ),
     ).toBe("artifact_malformed");
     // -0 survives YAML and dies in JSON: the served body would say 0, and flipping the artifact from
     // -0 to 0 would not rotate the digest. Positive zero must still pass (contrast control).
     expect(
-      reasonOf(() => fixObservationSnapshot(syntheticArtifact([observation("obs_a", { count: -0 })]))),
+      reasonOf(() => fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a", { count: -0 })]))),
     ).toBe("artifact_malformed");
     expect(
-      reasonOf(() => fixObservationSnapshot(syntheticArtifact([observation("obs_a", { count: 0 })]))),
+      reasonOf(() => fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a", { count: 0 })]))),
     ).toBe("no-error");
   });
 
   it("cannot be edited in place once fixed — the snapshot is frozen, not merely promised", () => {
-    const fixed = fixObservationSnapshot(syntheticArtifact([observation("obs_a")]));
+    const fixed = fixSnapshotAdmittingAll(syntheticArtifact([observation("obs_a")]));
     const entry = fixed.lookup("obs_a") as { body: string };
     // A writable entry would let a caller swap a body between pages while snapshot_digest — and
     // assertObservationSnapshotUnchanged, which compares that stored scalar — still reported clean.
@@ -500,12 +638,12 @@ describe("fixObservationSnapshot — fail loud on an artifact the reader cannot 
     // Negative control for the digest preimage: snapshot B's session_id reproduces snapshot A's
     // "<session>\n<id> <hash>" line, so a delimiter-joined preimage would make the two indistinguishable
     // and let A's cursors read B. Reproduced by cross-family review against the earlier encoding.
-    const twoEntries = fixObservationSnapshot(
+    const twoEntries = fixSnapshotAdmittingAll(
       syntheticArtifact([observation("obs_a"), observation("obs_b")]),
     );
     const hashOfA = twoEntries.entries.find((e) => e.observation_id === "obs_a")
       ?.observation_content_sha256 as string;
-    const forged = fixObservationSnapshot(
+    const forged = fixSnapshotAdmittingAll(
       syntheticArtifact([observation("obs_b")], { session_id: `session\nobs_a ${hashOfA}` }),
     );
     expect(forged.snapshot_digest).not.toBe(twoEntries.snapshot_digest);
@@ -514,14 +652,14 @@ describe("fixObservationSnapshot — fail loud on an artifact the reader cannot 
   });
 
   it("digests content, not artifact order — stable on reorder, rotated on change", () => {
-    const forward = fixObservationSnapshot(
+    const forward = fixSnapshotAdmittingAll(
       syntheticArtifact([observation("obs_a"), observation("obs_b")]),
     );
-    const reversed = fixObservationSnapshot(
+    const reversed = fixSnapshotAdmittingAll(
       syntheticArtifact([observation("obs_b"), observation("obs_a")]),
     );
     expect(reversed.snapshot_digest).toBe(forward.snapshot_digest);
-    const changed = fixObservationSnapshot(
+    const changed = fixSnapshotAdmittingAll(
       syntheticArtifact([observation("obs_a"), observation("obs_b", { k: "w" })]),
     );
     expect(changed.snapshot_digest).not.toBe(forward.snapshot_digest);
@@ -567,7 +705,7 @@ describe("serialized-cost model — the arithmetic the page budget rests on", ()
     // length from one that sizes them by SERIALIZED cost. Here every character costs 2 (measured below:
     // 120,163 chars → 220,193 serialized), so a raw-length reader would overflow every page.
     const nasty = '"\\\n'.repeat(20_000);
-    const nastySnapshot = fixObservationSnapshot(
+    const nastySnapshot = fixSnapshotAdmittingAll(
       stringifyYaml({
         schema_version: "1",
         session_id: "session",
@@ -601,7 +739,7 @@ describe("serialized-cost model — the arithmetic the page budget rests on", ()
 
   it("never tears a surrogate pair across parts", () => {
     const text = "🙂".repeat(200) + '"\\\n' + "🧬".repeat(200);
-    const astralSnapshot = fixObservationSnapshot(
+    const astralSnapshot = fixSnapshotAdmittingAll(
       stringifyYaml({
         schema_version: "1",
         session_id: "session",

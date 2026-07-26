@@ -893,6 +893,20 @@ async function callOpenAIResponses(
 export const CODEX_PROMPT_INPUT_CHAR_LIMIT = 1_048_576;
 
 /**
+ * The exact string `callCodexCli` writes to the worker's stdin, from the two parts it is given.
+ *
+ * Extracted so anything that must MEASURE the dispatched prompt derives it from the same code that
+ * dispatches it. The observation-read grant sizes its fetch budget as this ceiling minus the pushed
+ * prompt's length; cross-family review showed that with the length supplied independently, passing the
+ * user prompt alone under-measured by the system prompt plus separator (a 100k system + 900k user prompt
+ * granted 140,384 fetch chars while codex dispatched 1,000,007). A caller can still pass the wrong PARTS,
+ * but it can no longer disagree about how they combine.
+ */
+export function codexCombinedPrompt(systemPrompt: string, userPrompt: string): string {
+  return `${systemPrompt}\n\n---\n\n${userPrompt}`;
+}
+
+/**
  * Total-size backstop for the codex stdin route — the ONE place every prompt-bearing surface passes
  * through. Per-surface budgets (e.g. the source-observation breadth fold) fold BEFORE dispatch and are
  * the operator's remedy; this guard exists because those are wired surface-by-surface, so a surface
@@ -980,7 +994,7 @@ async function callCodexCli(
   if (serviceTier) args.push("-c", `service_tier="${serviceTier}"`);
   args.push("-");
 
-  const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+  const combinedPrompt = codexCombinedPrompt(systemPrompt, userPrompt);
   // BEFORE spawn: a doomed call must not leave a child process to tear down.
   assertCodexPromptWithinInputLimit(combinedPrompt);
 
