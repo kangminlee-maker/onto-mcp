@@ -13,6 +13,12 @@ import {
   validateComprehensionArtifact,
   type ComprehensionArtifact,
 } from "./comprehension-artifact.js";
+import { assertArrayField } from "../artifact-io.js";
+import type {
+  ReconstructSourceInventoryArtifact,
+  ReconstructSourceObservationsArtifact,
+  ReconstructTargetMaterialProfileArtifact,
+} from "./artifact-types.js";
 
 export interface ReconstructSourceObservation {
   observation_id: string;
@@ -362,4 +368,56 @@ export function validateSourceObservationBoundary(
     valid: violations.length === 0,
     violations,
   };
+}
+
+/**
+ * The zero-observation diagnostic (shared by the crash path and the graceful blocked terminal so
+ * both carry the same honest "why": target kind, support status, unsupported reason, and the merged
+ * set of skipped refs). A ref that vanishes between detection and re-observation lands on BOTH
+ * surfaces — observeInventoryUnitDeep demotes its inventory unit to `skipped` *and* returns a
+ * skipped_refs row — so the merge mostly dedups; it still matters for refs discovered mid-run that
+ * never became inventory units, which reach skipped_refs alone.
+ *
+ * `deferred_admitted_refs` counts inventory units still `admitted` at the terminal: material the run
+ * held back rather than failed to read. Emitted only when non-zero, so runs without admission
+ * selection keep the pre-existing message byte-for-byte.
+ */
+export function buildZeroObservationDiagnostic(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): string {
+  const inventorySkipped = args.sourceInventory.inventory_units
+    .filter((unit) => unit.scan_status === "skipped")
+    .map((unit) =>
+      `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
+    );
+  assertArrayField(args.sourceObservations.skipped_refs, "source-observations", "skipped_refs");
+  const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
+    `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
+  );
+  const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
+  const deferredAdmitted = args.sourceInventory.inventory_units.filter(
+    (unit) => unit.scan_status === "admitted",
+  ).length;
+  return [
+    "reconstruct semantic authoring requires at least one runtime source observation",
+    `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
+    `support_status=${args.targetMaterialProfile.support_status}`,
+    `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
+    `skipped_refs=${skipped.join(", ") || "none"}`,
+    ...(deferredAdmitted > 0 ? [`deferred_admitted_refs=${deferredAdmitted}`] : []),
+  ].join("; ");
+}
+
+// Exported (Core Stage 2 inter-document breadth design 20260722-inter-document-breadth-stage2 §4
+// PR-2b): direct unit testing that the admission-selection stage's floor policy populates
+// `sourceObservations` before this gate would otherwise crash (design §4/§7 gate-ordering).
+export function assertSemanticAuthoringHasObservedEvidence(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): void {
+  if (args.sourceObservations.observations.length > 0) return;
+  throw new Error(buildZeroObservationDiagnostic(args));
 }

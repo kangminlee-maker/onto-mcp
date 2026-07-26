@@ -43,34 +43,50 @@ import type {
   ReconstructSourceScoutPackValidationArtifact,
   ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
+import { runReconstruct } from "./run.js";
+import { appendFinalOutputUnresolvedRevisionSection } from "./final-output-assembly.js";
 import {
-  createDirectCallReconstructConfirmationProvider,
-  createDirectCallReconstructDirectiveAuthor,
-  MAX_PROJECTED_REGIONS_PER_FILE,
-  observationPromptPayload,
-  recomputeCodeInventoryProjectionTruncations,
-  recomputeWorkbookInventoryProjectionTruncations,
-  sourceObservationsReuseSha256,
-  assessmentEvidenceObservationIds,
-  runReconstruct,
-  singleDocumentProjectionTruncation,
-  stopDecisionAllowedDecisions,
-  boundEvidenceBySerializedSize,
-  deriveCompetencyAssessmentEvidenceReserveChars,
-  assessmentOmittedObservationCount,
-  shouldDispatchSingleCompetencyAssessment,
-  appendFinalOutputUnresolvedRevisionSection,
   reuseMatchArtifactHash,
+  sourceObservationsReuseSha256,
+} from "./authored-artifact-reuse.js";
+import {
   authoringPromptContractSha256,
   AUTHORING_PROMPT_CONTRACT_VERSION,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+} from "./authoring-llm-call.js";
+import {
+  MAX_PROJECTED_REGIONS_PER_FILE,
+  observationPromptPayload,
+  assessmentEvidenceObservationIds,
+  stopDecisionAllowedDecisions,
+  shouldDispatchSingleCompetencyAssessment,
+} from "./authoring-prompt-payloads.js";
+import {
   SEMANTIC_MAP_PROMPT_NOTE,
   SEMANTIC_MAP_SEED_PROMPT_NOTE,
   SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
   SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
-} from "./run.js";
-import type { DocumentExcerptProjectionTruncation } from "./run.js";
-import type { ReconstructConfirmationProvider } from "./run.js";
+} from "./authoring-system-prompts.js";
+import {
+  createDirectCallReconstructConfirmationProvider,
+} from "./direct-call-confirmation-provider.js";
+import {
+  createDirectCallReconstructDirectiveAuthor,
+} from "./direct-call-directive-author.js";
+import {
+  boundEvidenceBySerializedSize,
+  deriveCompetencyAssessmentEvidenceReserveChars,
+  assessmentOmittedObservationCount,
+} from "./prompt-payload-budget.js";
+import type {
+  ReconstructConfirmationProvider,
+} from "./confirmation-provider-contract.js";
+import {
+  recomputeCodeInventoryProjectionTruncations,
+  recomputeWorkbookInventoryProjectionTruncations,
+  singleDocumentProjectionTruncation,
+} from "./projection-truncation.js";
+import type { DocumentExcerptProjectionTruncation } from "./projection-truncation.js";
 import { reconstructTerminalStatus } from "./record.js";
 import {
   ontologySeedClaimProjections,

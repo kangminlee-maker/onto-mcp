@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { callLlm } from "./llm-caller.js";
-import { isLlmTimeoutError } from "../reconstruct/run.js";
+import {
+  isLlmTimeoutError,
+} from "../reconstruct/authoring-llm-call.js";
 import { disableReviewMockRealizationEnv } from "../review/test-fixtures/mock-realization.js";
 
 // Each SDK mock rejects the request with its own APIConnectionTimeoutError —

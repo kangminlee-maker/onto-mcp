@@ -21,7 +21,7 @@ import type {
 import {
   isZeroObservationGracefulTerminalEligible,
   SEED_READINESS_TERMINAL_ROUTE,
-} from "./run.js";
+} from "./graceful-terminal.js";
 import {
   assertReconstructTerminalDispositionCoherent,
   reconstructTerminalStatus,

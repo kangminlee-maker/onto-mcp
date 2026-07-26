@@ -26,7 +26,7 @@ import type { CodeSemanticSeedProjection } from "../core-runtime/reconstruct/com
 import {
   renderSemanticMapProjection,
   semanticMapRenderCharBudget,
-} from "../core-runtime/reconstruct/run.js";
+} from "../core-runtime/reconstruct/semantic-map-authoring.js";
 
 const tmpRoots: string[] = [];
 

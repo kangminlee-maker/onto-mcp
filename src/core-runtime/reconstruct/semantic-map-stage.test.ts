@@ -4,31 +4,41 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { prepareSemanticMapResumeContext } from "./semantic-map-resume.js";
 import {
   authoringPromptContractSha256,
-  buildSemanticMapBridgeCallbacks,
   CODE_RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+  codeAuthoringPromptContractSha256,
+  RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+} from "./authoring-llm-call.js";
+import {
+  observationPromptPayload,
+} from "./authoring-prompt-payloads.js";
+import {
+  SEMANTIC_MAP_PROMPT_NOTE,
+  SEMANTIC_MAP_SEED_PROMPT_NOTE,
+} from "./authoring-system-prompts.js";
+import {
+  semanticMapRenderCharBudget,
+  renderSemanticMapProjection,
+} from "./semantic-map-authoring.js";
+import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
+import {
+  buildSemanticMapBridgeCallbacks,
   CODE_SEMANTIC_MAP_MAX_NODES,
   CODE_SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION,
-  CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
-  codeAuthoringPromptContractSha256,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
-  semanticMapRenderCharBudget,
   deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
-  observationPromptPayload,
-  prepareSemanticMapResumeContext,
-  RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
-  renderSemanticMapProjection,
   resolveSemanticMapCapability,
   resolveSemanticMapKinds,
   runSemanticMapStage,
-  SEMANTIC_MAP_PROMPT_NOTE,
-  SEMANTIC_MAP_SEED_PROMPT_NOTE,
-  type ReconstructDirectiveAuthor,
   type SemanticMapStageConfig,
-} from "./run.js";
+} from "./semantic-map-stage.js";
+import {
+  CODE_SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+} from "./semantic-map-projection.js";
 import {
   DispatchBreakerTrippedError,
   dispatchIncompleteArtifactPath,

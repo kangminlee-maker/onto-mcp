@@ -17,7 +17,7 @@ import {
   appendFinalOutputDocumentProjectionTruncationSection,
   appendFinalOutputUnresolvedRevisionSection,
   appendFinalOutputWorkbookInventoryProjectionTruncationSection,
-} from "./run.js";
+} from "./final-output-assembly.js";
 
 const MODULE_HEADINGS = Object.values(FINAL_OUTPUT_SECTION_HEADINGS);
 const HEADING_KEY_BY_VALUE = Object.fromEntries(

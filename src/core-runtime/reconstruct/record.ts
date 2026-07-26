@@ -895,3 +895,255 @@ export async function assembleReconstructRecord(
   await atomicWriteYamlDocument(outputPath, record);
   return record;
 }
+
+export function artifactRefsWithDefaults(args: {
+  refs: Partial<ReconstructRecordArtifactRefs>;
+}): ReconstructRecordArtifactRefs {
+  return {
+    reconstruct_run_control: args.refs.reconstruct_run_control ?? null,
+    reconstruct_run_control_validation:
+      args.refs.reconstruct_run_control_validation ?? null,
+    reconstruct_run_control_pre_publication_validation:
+      args.refs.reconstruct_run_control_pre_publication_validation ?? null,
+    reconstruct_run_bootstrap_diagnostic:
+      args.refs.reconstruct_run_bootstrap_diagnostic ?? null,
+    registry_verification_evidence:
+      args.refs.registry_verification_evidence ?? null,
+    registry_verification_evidence_validation:
+      args.refs.registry_verification_evidence_validation ?? null,
+    target_material_profile: args.refs.target_material_profile ?? null,
+    target_material_profile_validation:
+      args.refs.target_material_profile_validation ?? null,
+    source_inventory: args.refs.source_inventory ?? null,
+    initial_source_frontier: args.refs.initial_source_frontier ?? null,
+    source_observations: args.refs.source_observations ?? null,
+    seed_stage_prompt_source_observations:
+      args.refs.seed_stage_prompt_source_observations ?? null,
+    source_observation_delta: args.refs.source_observation_delta ?? null,
+    source_observation_delta_validation:
+      args.refs.source_observation_delta_validation ?? null,
+    source_observation_reentry_validation:
+      args.refs.source_observation_reentry_validation ?? null,
+    source_observation_lineage_index:
+      args.refs.source_observation_lineage_index ?? null,
+    source_observation_lineage_index_validation:
+      args.refs.source_observation_lineage_index_validation ?? null,
+    leaf_read_census: args.refs.leaf_read_census ?? null,
+    dispatch_incomplete: args.refs.dispatch_incomplete ?? null,
+    semantic_map_census: args.refs.semantic_map_census ?? null,
+    semantic_map_sidecar: args.refs.semantic_map_sidecar ?? null,
+    semantic_map_resume_validation:
+      args.refs.semantic_map_resume_validation ?? null,
+    environment_context_profile:
+      args.refs.environment_context_profile ?? null,
+    source_safety_ledger: args.refs.source_safety_ledger ?? null,
+    source_safety_ledger_validation:
+      args.refs.source_safety_ledger_validation ?? null,
+    source_scout_pack: args.refs.source_scout_pack ?? null,
+    source_scout_pack_validation:
+      args.refs.source_scout_pack_validation ?? null,
+    source_scout_pack_pre_seed:
+      args.refs.source_scout_pack_pre_seed ?? null,
+    source_scout_pack_validation_pre_seed:
+      args.refs.source_scout_pack_validation_pre_seed ?? null,
+    source_scout_pack_post_maturation:
+      args.refs.source_scout_pack_post_maturation ?? null,
+    source_scout_pack_validation_post_maturation:
+      args.refs.source_scout_pack_validation_post_maturation ?? null,
+    post_maturation_gate_projection_validation:
+      args.refs.post_maturation_gate_projection_validation ?? null,
+    source_observation_directive:
+      args.refs.source_observation_directive ?? null,
+    source_observation_directive_validation:
+      args.refs.source_observation_directive_validation ?? null,
+    lens_judgment_index: args.refs.lens_judgment_index ?? null,
+    exploration_synthesis: args.refs.exploration_synthesis ?? null,
+    source_frontier: args.refs.source_frontier ?? null,
+    source_frontier_validation: args.refs.source_frontier_validation ?? null,
+    source_purpose_candidates: args.refs.source_purpose_candidates ?? null,
+    source_purpose_candidates_validation:
+      args.refs.source_purpose_candidates_validation ?? null,
+    purpose_confirmation: args.refs.purpose_confirmation ?? null,
+    purpose_confirmation_validation:
+      args.refs.purpose_confirmation_validation ?? null,
+    material_admission_ledger:
+      args.refs.material_admission_ledger ?? null,
+    material_admission_ledger_validation:
+      args.refs.material_admission_ledger_validation ?? null,
+    candidate_inventory: args.refs.candidate_inventory ?? null,
+    candidate_disposition: args.refs.candidate_disposition ?? null,
+    candidate_disposition_validation:
+      args.refs.candidate_disposition_validation ?? null,
+    seed_authoring_readiness:
+      args.refs.seed_authoring_readiness ?? null,
+    seed_authoring_readiness_validation:
+      args.refs.seed_authoring_readiness_validation ?? null,
+    ontology_seed: args.refs.ontology_seed ?? null,
+    ontology_seed_validation: args.refs.ontology_seed_validation ?? null,
+    claim_realization_map: args.refs.claim_realization_map ?? null,
+    claim_realization_map_validation:
+      args.refs.claim_realization_map_validation ?? null,
+    seed_confirmation: args.refs.seed_confirmation ?? null,
+    seed_confirmation_validation:
+      args.refs.seed_confirmation_validation ?? null,
+    competency_questions: args.refs.competency_questions ?? null,
+    competency_questions_validation:
+      args.refs.competency_questions_validation ?? null,
+    competency_question_assessment:
+      args.refs.competency_question_assessment ?? null,
+    competency_question_assessment_validation:
+      args.refs.competency_question_assessment_validation ?? null,
+    failure_classification: args.refs.failure_classification ?? null,
+    failure_classification_validation:
+      args.refs.failure_classification_validation ?? null,
+    revision_proposal: args.refs.revision_proposal ?? null,
+    revision_proposal_validation:
+      args.refs.revision_proposal_validation ?? null,
+    reconstruct_metrics: args.refs.reconstruct_metrics ?? null,
+    stop_decision: args.refs.stop_decision ?? null,
+    pre_handoff_run_manifest_validation:
+      args.refs.pre_handoff_run_manifest_validation ?? null,
+    post_publication_run_manifest_validation:
+      args.refs.post_publication_run_manifest_validation ?? null,
+    handoff_decision_validation:
+      args.refs.handoff_decision_validation ?? null,
+    maturation_baseline: args.refs.maturation_baseline ?? null,
+    maturation_baseline_validation:
+      args.refs.maturation_baseline_validation ?? null,
+    baseline_actionability_matrix:
+      args.refs.baseline_actionability_matrix ?? null,
+    baseline_actionability_matrix_validation:
+      args.refs.baseline_actionability_matrix_validation ?? null,
+    maturation_value_discharge: args.refs.maturation_value_discharge ?? null,
+    maturation_value_discharge_validation:
+      args.refs.maturation_value_discharge_validation ?? null,
+    maturation_value_discharge_census:
+      args.refs.maturation_value_discharge_census ?? null,
+    actionability_matrix: args.refs.actionability_matrix ?? null,
+    actionability_matrix_validation:
+      args.refs.actionability_matrix_validation ?? null,
+    maturation_question_frontier:
+      args.refs.maturation_question_frontier ?? null,
+    maturation_question_frontier_validation:
+      args.refs.maturation_question_frontier_validation ?? null,
+    maturation_closure_frontier:
+      args.refs.maturation_closure_frontier ?? null,
+    maturation_closure_frontier_validation:
+      args.refs.maturation_closure_frontier_validation ?? null,
+    maturation_authority_response:
+      args.refs.maturation_authority_response ?? null,
+    maturation_authority_response_validation:
+      args.refs.maturation_authority_response_validation ?? null,
+    answer_support_ledger: args.refs.answer_support_ledger ?? null,
+    answer_support_ledger_validation:
+      args.refs.answer_support_ledger_validation ?? null,
+    answer_support_judgment: args.refs.answer_support_judgment ?? null,
+    answer_support_judgment_validation:
+      args.refs.answer_support_judgment_validation ?? null,
+    maturation_answer_claims: args.refs.maturation_answer_claims ?? null,
+    maturation_answer_claims_validation:
+      args.refs.maturation_answer_claims_validation ?? null,
+    ontology_expansion: args.refs.ontology_expansion ?? null,
+    ontology_expansion_validation:
+      args.refs.ontology_expansion_validation ?? null,
+    maturation_source_delta: args.refs.maturation_source_delta ?? null,
+    maturation_source_delta_validation:
+      args.refs.maturation_source_delta_validation ?? null,
+    maturation_convergence_ledger:
+      args.refs.maturation_convergence_ledger ?? null,
+    maturation_convergence_ledger_validation:
+      args.refs.maturation_convergence_ledger_validation ?? null,
+    maturation_continuation_decision:
+      args.refs.maturation_continuation_decision ?? null,
+    maturation_continuation_decision_validation:
+      args.refs.maturation_continuation_decision_validation ?? null,
+    query_proofs: args.refs.query_proofs ?? null,
+    query_proofs_validation: args.refs.query_proofs_validation ?? null,
+    visualization_proofs: args.refs.visualization_proofs ?? null,
+    visualization_proofs_validation:
+      args.refs.visualization_proofs_validation ?? null,
+    graph_exploration_proofs: args.refs.graph_exploration_proofs ?? null,
+    graph_exploration_proofs_validation:
+      args.refs.graph_exploration_proofs_validation ?? null,
+    actionable_ontology: args.refs.actionable_ontology ?? null,
+    actionable_ontology_validation:
+      args.refs.actionable_ontology_validation ?? null,
+    claim_projection: args.refs.claim_projection ?? null,
+    claim_projection_validation:
+      args.refs.claim_projection_validation ?? null,
+    final_output: args.refs.final_output ?? null,
+    final_output_provenance_validation:
+      args.refs.final_output_provenance_validation ?? null,
+    reconstruct_run_manifest: args.refs.reconstruct_run_manifest ?? null,
+  };
+}
+
+/**
+ * 시딩 레코드용 artifact refs — 성숙(maturation) 이후 단계의 ref를 전부 null로 눕히고
+ * run manifest만 pre-handoff 것으로 가리킨다.
+ *
+ * runReconstruct 본문에서 **원문 그대로** 옮겨온 블록이다(분해 설계 20260726 Tier 1). 본문이
+ * 기준본과 바이트 동일함을 `scripts/run-block-identity.mts`가 검사한다 — 파라미터를 원래 지역
+ * 변수 이름(`artifactRefs`·`preHandoffManifestPath`)으로 맨 앞에서 구조분해하는 것도 그 동일성을
+ * 지키기 위해서다. 구조분해 줄과 마지막 return 줄은 그 검사기에 prefix/suffix로 **선언돼 있고**,
+ * 선언하지 않은 코드가 끼면 FAIL한다.
+ */
+export function buildSeedingRecordArtifactRefs(args: {
+  artifactRefs: ReconstructRecordArtifactRefs;
+  preHandoffManifestPath: string;
+}): ReconstructRecordArtifactRefs {
+  const { artifactRefs, preHandoffManifestPath } = args;
+  const seedingRecordArtifactRefs = artifactRefsWithDefaults({
+    refs: {
+      ...artifactRefs,
+      reconstruct_run_control_pre_publication_validation: null,
+      post_publication_run_manifest_validation: null,
+      source_scout_pack_post_maturation: null,
+      source_scout_pack_validation_post_maturation: null,
+      post_maturation_gate_projection_validation: null,
+      maturation_baseline: null,
+      maturation_baseline_validation: null,
+      baseline_actionability_matrix: null,
+      baseline_actionability_matrix_validation: null,
+      maturation_value_discharge: null,
+      maturation_value_discharge_validation: null,
+      maturation_value_discharge_census: null,
+      actionability_matrix: null,
+      actionability_matrix_validation: null,
+      maturation_question_frontier: null,
+      maturation_question_frontier_validation: null,
+      maturation_closure_frontier: null,
+      maturation_closure_frontier_validation: null,
+      maturation_authority_response: null,
+      maturation_authority_response_validation: null,
+      answer_support_ledger: null,
+      answer_support_ledger_validation: null,
+      answer_support_judgment: null,
+      answer_support_judgment_validation: null,
+      maturation_answer_claims: null,
+      maturation_answer_claims_validation: null,
+      ontology_expansion: null,
+      ontology_expansion_validation: null,
+      maturation_source_delta: null,
+      maturation_source_delta_validation: null,
+      maturation_convergence_ledger: null,
+      maturation_convergence_ledger_validation: null,
+      maturation_continuation_decision: null,
+      maturation_continuation_decision_validation: null,
+      query_proofs: null,
+      query_proofs_validation: null,
+      visualization_proofs: null,
+      visualization_proofs_validation: null,
+      graph_exploration_proofs: null,
+      graph_exploration_proofs_validation: null,
+      actionable_ontology: null,
+      actionable_ontology_validation: null,
+      claim_projection: null,
+      claim_projection_validation: null,
+      final_output: null,
+      final_output_provenance_validation: null,
+      reconstruct_run_manifest: preHandoffManifestPath,
+    },
+  });
+  return seedingRecordArtifactRefs;
+}

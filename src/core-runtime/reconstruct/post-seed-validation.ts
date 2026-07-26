@@ -2500,3 +2500,29 @@ export async function writeRevisionProposalValidationArtifact(args: {
   await writeYamlDocument(args.outputPath, validation);
   return validation;
 }
+
+/**
+ * Repair directives for a failed competency-questions validation, mirroring
+ * {@link ontologySeedRepairSections}: each directive is a concrete, human-
+ * readable instruction the re-author must satisfy. Missing-coverage violations
+ * (the dominant author-owned failure — uncovered modeling concerns, coverage
+ * axes, eligible claims, or domain competencies) are surfaced first so the
+ * repair pass biases toward closing coverage; remaining violations follow. The
+ * violation message already names the kind and the offending id, so it is the
+ * directive verbatim. Deduped; a non-empty fallback guarantees the repair pass
+ * always receives actionable context.
+ */
+export function competencyQuestionsRepairDirectives(
+  validation: ReconstructCompetencyQuestionsValidationArtifact,
+): string[] {
+  const coverage: string[] = [];
+  const other: string[] = [];
+  for (const violation of validation.violations) {
+    (violation.code === "missing_required_coverage" ? coverage : other)
+      .push(violation.message);
+  }
+  const directives = [...new Set([...coverage, ...other])];
+  return directives.length > 0
+    ? directives
+    : ["Ensure every required coverage axis, modeling concern, eligible claim, and admitted domain competency is covered by at least one competency question."];
+}

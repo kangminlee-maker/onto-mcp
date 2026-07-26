@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { competencyQuestionsRepairDirectives } from "./run.js";
+import { competencyQuestionsRepairDirectives } from "./post-seed-validation.js";
 import type {
   ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructPostSeedValidationViolation,

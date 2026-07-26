@@ -15,9 +15,9 @@ import type { ReconstructSourceObservation } from "./source-observations.js";
 import {
   observeAcceptedFrontierRefs,
   observeAcceptedMaturationClosureSourceRequests,
-  sourceObservationsReuseSha256,
   validateSourceFrontier,
-} from "./run.js";
+} from "./source-admission-selection-stage.js";
+import { sourceObservationsReuseSha256 } from "./authored-artifact-reuse.js";
 import {
   buildSourceObservationDeltaArtifact,
   sourceObservationHash,

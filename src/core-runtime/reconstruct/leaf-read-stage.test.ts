@@ -4,11 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import {
-  createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
-  runSpreadsheetLeafReadStage,
-  type ReconstructDirectiveAuthor,
-} from "./run.js";
+} from "./authoring-prompt-payloads.js";
+import {
+  createDirectCallReconstructDirectiveAuthor,
+} from "./direct-call-directive-author.js";
+import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
+import { runSpreadsheetLeafReadStage } from "./leaf-read-stage.js";
 import { readStructureLeaf } from "./leaf-reader.js";
 import { callReconstructMockLlm } from "./mock-llm-realization.js";
 

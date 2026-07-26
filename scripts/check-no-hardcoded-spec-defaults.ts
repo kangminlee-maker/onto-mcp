@@ -90,7 +90,7 @@ const WAIVERS: Waiver[] = [
       "onto://usage 리소스의 settings.json 예시 텍스트 — 런타임 기본값이 아닌 사용자 문서.",
   },
   {
-    file: "src/core-runtime/reconstruct/run.ts",
+    file: "src/core-runtime/reconstruct/direct-call-directive-author.ts",
     linePattern: /retryLlmConfig\.reasoning_effort = "medium";/,
     reason:
       "타임아웃 재시도 de-escalation 정책 상수(high→medium minimal-kernel 재시도) — settings 기본값이 아닌 bounded retry 정책. settings 이관은 별도 결정.",

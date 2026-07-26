@@ -17,14 +17,14 @@ import type {
   ReconstructStageId,
 } from "./artifact-types.js";
 import { validateReconstructRunManifest } from "./terminal-validation.js";
+import { buildSourceObservationLineageCensus } from "./source-observation-lineage.js";
+import { artifactRefsWithDefaults } from "./record.js";
+import type { ReconstructConfirmationProvider } from "./confirmation-provider-contract.js";
+import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
 import {
-  artifactRefsWithDefaults,
-  buildSourceObservationLineageCensus,
   createRunManifest,
-  type ReconstructConfirmationProvider,
-  type ReconstructDirectiveAuthor,
   type ReconstructGracefulTerminalManifestInput,
-} from "./run.js";
+} from "./run-manifest.js";
 import type {
   ReconstructRecordArtifactRefs,
   ReconstructRunGoverningSnapshot,

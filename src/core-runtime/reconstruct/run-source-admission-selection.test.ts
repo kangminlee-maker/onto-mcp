@@ -12,19 +12,25 @@ import type {
 } from "./artifact-types.js";
 import {
   applyAdmissionSelectionFloorPolicy,
-  assertSemanticAuthoringHasObservedEvidence,
   capAdmissionSelectionAcceptedRefs,
-  capProjectedRegionsPerFile,
-  deferredSourceRefs,
-  isZeroObservationGracefulTerminalEligible,
-  MAX_PROJECTED_REGIONS_PER_FILE,
   runSourceAdmissionSelectionStage,
   SOURCE_ADMISSION_DEEP_FILE_LIMIT,
   SOURCE_ADMISSION_SELECTION_FLOOR,
   validateSourceFrontier,
+} from "./source-admission-selection-stage.js";
+import {
+  capProjectedRegionsPerFile,
+  deferredSourceRefs,
+  MAX_PROJECTED_REGIONS_PER_FILE,
+} from "./authoring-prompt-payloads.js";
+import {
   type ReconstructSourceAdmissionSelectionAuthorInput,
-} from "./run.js";
-import { validateSourceObservationBoundary } from "./source-observations.js";
+} from "./directive-author-contract.js";
+import { isZeroObservationGracefulTerminalEligible } from "./graceful-terminal.js";
+import {
+  assertSemanticAuthoringHasObservedEvidence,
+  validateSourceObservationBoundary,
+} from "./source-observations.js";
 
 // Spec basis: development-records/design/20260722-inter-document-breadth-stage2-design.md §4-§7,
 // §13 PR-2b. Direct-function-call style (run-source-region-decomposition.test.ts precedent):
