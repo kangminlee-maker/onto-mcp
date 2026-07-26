@@ -178,6 +178,14 @@ export function breadthFoldRungDetailLoss(level: BreadthFoldLevel): string {
  *
  * Keys render in canonical navigation order; anything unexpected is appended rather than dropped, so a
  * new key shows up in the contract instead of vanishing from it.
+ *
+ * BOUND: the ROW projection is non-increasing down the ladder by construction (each tail row is a key
+ * subset of its parent), but this clause can grow by a constant when a rung makes row shapes DIVERGE —
+ * a two-row corpus of one region plus one whole-file row saves ~20 chars of row text at
+ * `summary_anchor` and spends ~25 on ", location on some rows only". So the MEASURED total is not
+ * strictly non-increasing in that corner; a rung can be skipped. The guarantee the fold needs is
+ * unaffected: it dispatches a rung that fits or the caller's guard fails loud, and `anchor` (which
+ * drops `summary` from every row) is always far smaller than the clause is long.
  */
 export function navigationRowFieldsFromRows(rows: readonly unknown[]): string {
   const CANONICAL_ORDER = [
@@ -209,6 +217,9 @@ export function navigationRowFieldsFromRows(rows: readonly unknown[]): string {
   );
   const sometimes = order([...union].filter((key) => !always.includes(key)));
   if (sometimes.length === 0) return always.join(", ");
+  // No key common to every row is not reachable through the real projector (`observation_id` is always
+  // present), but a clause starting with "; " would be malformed if it ever were.
+  if (always.length === 0) return `${sometimes.join(", ")} on some rows only`;
   return `${always.join(", ")}; ${sometimes.join(", ")} on some rows only`;
 }
 

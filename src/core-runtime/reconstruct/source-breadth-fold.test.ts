@@ -114,6 +114,11 @@ describe("navigationRowFieldsFromRows — the dispatched field list follows the 
       "observation_id, zz_new_key",
     );
     expect(navigationRowFieldsFromRows([])).toBe("");
+    // No key shared by every row: unreachable through the real projector (observation_id is always
+    // there), but the clause must still be a sentence rather than one starting with "; ".
+    expect(navigationRowFieldsFromRows([row(["source_ref"]), row(["summary"])])).toBe(
+      "source_ref, summary on some rows only",
+    );
   });
 });
 

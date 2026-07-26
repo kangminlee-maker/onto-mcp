@@ -8,7 +8,9 @@ import {
   answerSupportFoldDisclosureMessage,
   breadthFoldRungDetailLoss,
   navigationRowFieldsFromRows,
+  projectBreadthFoldTailRung,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+  type BreadthFoldLevel,
 } from "./source-breadth-fold.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -286,6 +288,32 @@ function expectedCatalogOrder(built: ReturnType<typeof fixture>): string[] {
 }
 
 /**
+ * The navigation keys a rung keeps FOR ONE OBSERVATION, derived by running the real tail projector over
+ * that observation's one_line row rather than by restating the rule. The one_line shape is the
+ * observation's own navigation fields — which is what the projector emits with includeStructuralData
+ * off, and what the `one_line` test pins explicitly, so the two checks brace each other.
+ */
+function expectedNavigationKeys(
+  observation: Record<string, any>,
+  rung: BreadthFoldLevel,
+): string[] {
+  const oneLineRow = Object.fromEntries(
+    (["observation_id", "target_material_kind", "source_ref", "location", "summary"] as const)
+      .filter((key) => key in observation)
+      .map((key) => [key, observation[key]]),
+  );
+  if (rung === "one_line") return Object.keys(oneLineRow);
+  if (rung === "summary_anchor" || rung === "anchor") {
+    const [projected] = projectBreadthFoldTailRung([oneLineRow], rung) as Record<string, any>[];
+    return Object.keys(projected ?? {});
+  }
+  throw new Error(
+    `expectedNavigationKeys: '${rung}' is not a navigation rung. Pass the DISPATCHED rung (or ` +
+      "`exactKeys` for a homogeneous catalog) — an unpinned row shape checks nothing.",
+  );
+}
+
+/**
  * Row-level identity oracle. Counting rows and reading the separate id LIST is not enough: a
  * projection that emits N copies of one row keeps both numbers right (cross-family review named
  * exactly that surviving defect). This compares each row's identity AND its values against the input
@@ -295,7 +323,14 @@ function expectRowsMatchObservations(
   rows: Record<string, any>[],
   observations: readonly Record<string, any>[],
   expectedIds: readonly string[],
-  options: { navigationOnly?: boolean; exactKeys?: readonly string[] } = {},
+  options: {
+    navigationOnly?: boolean;
+    exactKeys?: readonly string[];
+    /** The dispatched rung. Given instead of `exactKeys`, each row's expected key set is DERIVED from
+     *  the real tail projector for THAT observation — which is the only correct expectation for a mixed
+     *  catalog, where the rung keeps `location` per row. */
+    rung?: BreadthFoldLevel;
+  } = {},
 ): void {
   expect(expectedIds.length).toBeGreaterThan(0); // non-empty subject: the loop below can fail
   const byId = new Map(observations.map((o) => [o.observation_id, o]));
@@ -324,15 +359,17 @@ function expectRowsMatchObservations(
     // does not pin a shape, each row is checked against what the rung keeps for THAT observation
     // rather than against the first row (which would report a false failure on a mixed corpus).
     if (options.navigationOnly === true) {
-      if (options.exactKeys) {
-        const expectedKeys = [...options.exactKeys].sort();
-        expect(expectedKeys.length).toBeGreaterThan(0);
-        expect(expectedKeys.filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
-        expect(Object.keys(row).sort()).toEqual(expectedKeys);
-      } else {
-        expect(Object.keys(row).filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
-        expect(Object.keys(row).length).toBeGreaterThan(0);
-      }
+      // EVERY row's exact key set. `exactKeys` pins a homogeneous catalog; `rung` derives the
+      // expectation per row from the REAL tail projector, which is the only correct expectation for a
+      // mixed catalog (the rung keeps `location` per row). Neither is optional: a "no unknown keys"
+      // relaxation let a projection drop `location` from rows 1..N and still pass (cross-family review,
+      // sixth round — a regression the fifth round's fix introduced).
+      const expectedKeys = options.exactKeys
+        ? [...options.exactKeys].sort()
+        : expectedNavigationKeys(observation!, options.rung!).sort();
+      expect(expectedKeys.length).toBeGreaterThan(0);
+      expect(expectedKeys.filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
+      expect(Object.keys(row).sort()).toEqual(expectedKeys);
     }
     for (const key of NAVIGATION_KEYS) {
       if (key in row) expect(row[key]).toBe(observation![key]);
@@ -433,7 +470,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
-      { navigationOnly: true },
+      { navigationOnly: true, rung: "one_line" },
     );
     expect(payload.prompt_visible_observation_ids).toEqual(expectedCatalogOrder(built));
 
@@ -492,7 +529,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       parsePayload(on.dispatched).source_observations,
       built.sourceObservations.observations as never,
       allRegionIds,
-      { navigationOnly: true },
+      { navigationOnly: true, rung: "one_line" },
     );
     // And OFF's set is a strict subset — the exact 8 the cap kept, not "some 8".
     expect(offIds).toEqual(allRegionIds.slice(0, 8));
@@ -527,7 +564,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
-      { navigationOnly: true },
+      { navigationOnly: true, rung: "one_line" },
     );
   });
 
@@ -548,7 +585,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       onRows,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
-      { navigationOnly: true },
+      { navigationOnly: true, rung: "one_line" },
     );
   });
 
@@ -777,12 +814,13 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     const basis = payload.source_observation_prompt_policy.selection_basis as string;
     expect(basis).toContain(navigationRowFieldsFromRows(payload.source_observations));
     expect(basis).toContain("location on some rows only");
-    // Row identity holds across both shapes (no exactKeys: the catalog is deliberately mixed).
+    // Row identity holds across both shapes: no single exactKeys can describe a mixed catalog, so the
+    // expectation is derived per row from the real tail projector at the dispatched rung.
     expectRowsMatchObservations(
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
-      { navigationOnly: true },
+      { navigationOnly: true, rung: records[0]!.disclosure.fold_level },
     );
   });
 
