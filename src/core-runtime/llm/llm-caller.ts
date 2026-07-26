@@ -894,7 +894,26 @@ async function callCodexCli(
   const { spawn } = await import("node:child_process");
   const workerTimeoutMs = timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
 
-  const args: string[] = ["exec", "--skip-git-repo-check", "--ephemeral"];
+  const args: string[] = [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    // Pin the worker's execution posture instead of inheriting the operator's global codex config.
+    // onto asks this worker to READ material and return text; nothing in either pipeline routes a
+    // file write through the model — the runtime writes every artifact itself. Left unpinned, the
+    // worker ran at whatever `~/.codex/config.toml` said, measured 2026-07-26 as
+    // `approval_policy="never"` + `sandbox_mode="danger-full-access"`: unattended shell and patch
+    // access over the repo. That matters here specifically because ingesting UNTRUSTED source text
+    // is this product's normal operation (reconstruct reads third-party corpora), so instructions
+    // embedded in analyzed material reach a model that could act on them.
+    //
+    // Pinning also makes the posture a property of onto rather than of the host: it no longer
+    // changes when an operator edits their codex config, and it reads the same on every machine.
+    // The claude route already pins its own surface (`--strict-mcp-config` with an empty server
+    // map) — this closes the same gap on the codex route.
+    "-s",
+    "read-only",
+  ];
   if (modelId) args.push("-m", modelId);
   if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
   if (serviceTier) args.push("-c", `service_tier="${serviceTier}"`);
