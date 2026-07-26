@@ -199,9 +199,67 @@ feature 이름은 **LLM 호출 없이** 확정했다 — `--strict-config`가 �
 이로써 §5.2·§5.3의 "설정으로 못 지운다"는 진술은 **정정된다.** `-c mcp_servers={}`가 안 통해서
 내린 결론이었고, 옳은 손잡이는 features 쪽이었다.
 
-**아직 측정하지 않은 것**: `web.run`(네트워크 송출)과 `collaboration.*`(에이전트 생성)이
-`--disable apps` 뒤에도 남는지. 프로브 1에서 이들은 `codex_apps`와 함께 열거됐으나 같은
-서버 소속인지 확인하지 않았다 → 단계 0b에서 확인한다.
+### 5.3.2 MCP만 닫는 것으로는 부족하다 — owner 지적 (2026-07-26)
+
+> owner: *"GitHub은 auth 토큰이 이 기기에 남아있는 거라 안 막히는 것일 수 있어.
+> 이건 bash로 불러내는 걸 막으면 막힐 거야."*
+
+**맞았고, §5.3.1의 "닫을 수 있다"는 결론은 그대로 두면 틀린다.** MCP 도구를 전부 없애도
+워커에는 셸(`functions.exec`)이 남고, 이 기기에는 `gh` CLI와 git 자격증명이 있다. 문이 둘인데
+하나만 닫고 닫혔다고 적은 것이다.
+
+실측(대조군 동반, 읽기 전용 명령만 사용):
+
+| 팔 | 셸 실행 | `gh auth status` |
+|---|---|---|
+| `--disable apps`만 | **실행됨** | `The token in default is invalid` |
+| `+ --disable unified_exec --disable web_search` | **여전히 실행됨** | 동일 |
+
+두 가지가 드러났다.
+
+1. **셸 경로는 열려 있다.** `features.unified_exec`는 설정으로 인식되지만 셸을 끄지 못한다 —
+   **키가 유효한 것과 그것이 원하는 것을 끄는 것은 다르다.**
+2. **토큰은 실제로 쓰이지 않는다.** `gh`는 keyring(macOS 키체인)에 저장돼 있고
+   (`GH_TOKEN` 등 환경변수는 전부 미설정, git credential helper도 `osxkeychain`,
+   `~/.netrc`·`~/.git-credentials` 없음), **키체인 항목 접근은 사용자 인증을 요구하므로
+   운영자가 없으면 열리지 않는다**(owner 확인). 이건 우연이 아니라 실질 보호다.
+
+### 5.3.3 셸 차단 수단 — 발견·검증 (owner 지시로 조사, 2026-07-26)
+
+바이너리 문자열에서 `ConfigToml`의 96개 필드 전체를 추출하고(실체 =
+`codex-aarch64-apple-darwin` 0.145.0), 공식 Configuration Reference로 교차 확인했다.
+
+**`--disable shell_tool`**(= `features.shell_tool=false`)이 답이다.
+
+키 유효성은 `--strict-config`로 판별했다 — 대조군 `features.definitely_not_real` REJECTED /
+**`features.shell_tool` ACCEPTED**. 효과는 대조군과 함께 실측했다:
+
+| 팔 | `echo PROBE_SHELL_RAN` |
+|---|---|
+| A) `--disable apps` | **실행됨** |
+| B) `+ --disable shell_tool` | **`NO_SHELL` — `TypeError: tools.exec_command is not a function`** |
+
+도구가 실제로 사라진다.
+
+**방법론 정정**: `--strict-config` 판별은 **top-level 알려진 필드에만** 유효하다.
+`[permissions.<name>]`은 이름이 자유로운 테이블이라 내부를 검증하지 않는다 — 실제로 존재하지도
+않는 프로파일 이름과 `enabled_tools=[]`가 통과했다. **그 구간의 ACCEPTED는 신호가 아니다.**
+
+### 5.3.4 실측된 강화 세트
+
+| 표면 | 수단 | 상태 |
+|---|---|---|
+| 파일시스템 쓰기(셸·패치) | `-s read-only` | 착지 완료(PR #266) |
+| 사용자 config MCP(`day1-mcp` Workspace 쓰기, `onto` 재귀) | 전용 `CODEX_HOME` | 실측 확인 |
+| 계정 커넥터(GitHub 쓰기·머지, `tool_search`) | `--disable apps` | 실측 확인 |
+| **셸 실행 전체** | **`--disable shell_tool`** | **실측 확인** |
+| GitHub 토큰 실사용 | macOS 키체인 = 사용자 인증 필요 | 별도 층(설정 아님) |
+
+**아직 측정하지 않은 것**:
+- `[permissions.<name>.network] enabled=false` — 네트워크 자체를 끊는 더 강한 후보.
+  셸이 남아도 유출·API 호출이 불가능해진다. `sandbox_mode`와 상호배타이므로 `-s`를 대체한다.
+- **셸을 끈 상태에서 reconstruct 저작이 정상 동작하는지.** 저작 프롬프트는 JSON 산출만
+  요구하므로 셸이 불필요해 보이지만 **확인 전에는 가정이다** → 단계 0b의 필수 검증.
 
 ### 5.4 정확한 프레이밍 (owner, 2026-07-26)
 
@@ -297,7 +355,7 @@ dispatch 시도별 감사 레코드에 **조회한 id + 내용 해시 + 페이�
 | 단계 | 내용 | 검증 |
 |---|---|---|
 | **0a** | ~~잔여 표면 능력 열거~~ — **완료(2026-07-26)**, 결과는 §5.3 | 도구 193개 열거(비어있지 않음 확인). GitHub 쓰기·머지 능력 발견 → §5.2의 "수용" 문안 철회, §5.4로 프레이밍 정정 |
-| **0b** | **전용 `CODEX_HOME` + `--disable apps`로 워커 기동**(§5.3.1) **+ 기동 시 표면 열거·기록** | 적대 프롬프트로 도구 열거 → 결과가 비어있지 않음을 단언(공허 통과 방지). `day1-mcp`·`onto_reconstruct`·`mcp__codex_apps__github._*` **부재를 개별 확인**. `web.run`·`collaboration.*` 잔존 여부를 측정해 기록(§5.3.1 미측정 항목). façade 도입 전이므로 이 단계의 기대 상태는 **MCP 서버 0개**다. **설계 채택과 무관하게 값 있음** |
+| **0b** | **워커 기동 강화 세트 적용**(§5.3.4): 전용 `CODEX_HOME` + `--disable apps` + `--disable shell_tool` (+ `-s read-only` 유지) | ①도구 열거가 비어있지 않음을 단언(공허 통과 방지) ②`day1-mcp`·`onto_reconstruct`·`mcp__codex_apps__github._*`·셸 **부재를 개별 확인** ③**셸을 끈 상태에서 reconstruct 저작이 정상 완주하는지** — 미확인 가정이므로 필수 ④`web.run`·`collaboration.*` 잔존 여부 기록 ⑤네트워크 차단 프로파일(§5.3.4 미측정) 평가. **설계 채택과 무관하게 값 있음** |
 | 1 | 순수 아티팩트 리더 — 스냅샷 고정·해시 검증·결정론적 분할·커서 | 페이지 재조립이 원본과 바이트 동일. 과대 스칼라 음성 대조 |
 | 2 | 세션 범위 결속 + 누적 예산 | 세션 A의 연결이 B의 id를 못 읽음. 만료·재생 커서 거부 |
 | 3 | ledger 표면 적용 (opt-in, default OFF) | 조회 안 하면 실패 / A 조회 후 B 인용하면 실패 / OFF는 byte-identical |
