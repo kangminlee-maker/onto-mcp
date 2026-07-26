@@ -95,3 +95,46 @@ describe("codex worker execution posture", () => {
     expect(args.at(-1)).toBe("-");
   });
 });
+
+/**
+ * The sandbox pin above covers codex's own shell/patch. It does NOT cover MCP servers or the
+ * account connectors — measured 2026-07-26, an `-s read-only` worker still called an MCP tool and
+ * still enumerated GitHub write tools (`_merge_pull_request`, `_create_file`, …). These flags close
+ * those doors; each is pinned here so a later edit cannot quietly reopen one.
+ */
+describe("codex worker tool surface", () => {
+  let restoreMockEnv: (() => void) | undefined;
+
+  beforeEach(() => {
+    restoreMockEnv = disableReviewMockRealizationEnv();
+    workerMock.spawns = [];
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreMockEnv?.();
+    restoreMockEnv = undefined;
+  });
+
+  it("drops the operator's user config, so no user-configured MCP server reaches the worker", async () => {
+    const args = await spawnArgsForCodexCall();
+    expect(args).toContain("--ignore-user-config");
+  });
+
+  it("disables the account connectors and the shell, as adjacent --disable pairs", async () => {
+    const args = await spawnArgsForCodexCall();
+
+    // Pair-wise, not merely "contains the word": `--disable` must actually carry each value.
+    const pairs = args.flatMap((a, i) => (a === "--disable" ? [args[i + 1]] : []));
+    expect(pairs, `--disable pairs in argv: ${args.join(" ")}`).toContain("apps");
+    expect(pairs).toContain("shell_tool");
+  });
+
+  it("keeps the sandbox pin alongside the surface flags — they close different doors", async () => {
+    const args = await spawnArgsForCodexCall();
+
+    expect(args[args.indexOf("-s") + 1]).toBe("read-only");
+    expect(args).toContain("--ignore-user-config");
+  });
+});
