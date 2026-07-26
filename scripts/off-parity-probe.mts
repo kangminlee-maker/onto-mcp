@@ -20,10 +20,14 @@
  * all three digests identical in both trees:
  *   real_corpus          1,333,472 chars  8658b612d3cdecaf978d2d6898a37e3a147efd54e139fd59ab9377afdbf3d6fb
  *   scaled_past_cap      1,453,819 chars  2575c57f8651284c28b7fbfc27e83244cb4aa60c0c80a879b9bac05d1fb0a1de
- *   regions_of_one_file    111,388 chars  fc9a6126c1bd2d92fb020addb22b404a7074fc147f18d32079aa96fb26b1fae8
- * Negative controls the same day: the slice 64->63 moves all three digests (the cap is also reported
- * in the policy block), and the region cap 8->7 moves regions_of_one_file ALONE — the path a
- * single-corpus probe could not see. So an unchanged digest is evidence rather than insensitivity.
+ *   regions_of_one_file    112,153 chars  68ef3e47a205eefb39edcb7ead1054e17eaabc0f7f00b6987ab08aa79395e7df
+ * Negative controls the same day, each naming the path it covers:
+ *   slice 64 -> 63                          moves all three (the cap is also reported in the policy)
+ *   region cap 8 -> 7                       moves regions_of_one_file ALONE
+ *   region role tier removed                moves regions_of_one_file (the cap's RANKING)
+ *   region line-start ranking reversed      moves regions_of_one_file
+ *   codexCombinedPrompt separator changed   moves all three (transport assembly)
+ * So an unchanged digest is evidence rather than insensitivity.
  *
  * (real_corpus is 1.33 M chars — OVER the worker's 1,048,576-char ceiling. The OFF path really does
  * overflow on this corpus; the parity claim is about not CHANGING that, not about it being healthy.)
@@ -34,6 +38,11 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { createDirectCallReconstructDirectiveAuthor } from "../src/core-runtime/reconstruct/direct-call-directive-author.ts";
+// The CANONICAL transport assembler, imported rather than reimplemented: a copied separator matches
+// itself in both trees, so a change to production's assembly would leave the digests identical
+// (cross-family review, third round). It exists at the base commit too, so the probe still compiles
+// in both trees.
+import { codexCombinedPrompt } from "../src/core-runtime/llm/llm-caller.ts";
 
 type AnyRecord = Record<string, any>;
 const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..");
@@ -51,11 +60,6 @@ let lastUserPrompt = "";
 const SESSION_ID = String(artifact.session_id);
 const CREATED_AT = String(artifact.created_at);
 
-// The hash covers the string codex actually receives on stdin — system prompt + the separator
-// callCodexCli inserts + user prompt. Hashing the user prompt alone left every OFF-path system-prompt
-// change invisible (cross-family review, lens B #6).
-const codexCombinedPrompt = (systemPrompt: string, userPrompt: string): string =>
-  `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
 async function offDispatchDigest(observations: AnyRecord[]): Promise<{
   chars: number;
@@ -209,7 +213,13 @@ const scaled = (count: number): AnyRecord[] =>
     };
   });
 
-/** Nine regions of ONE file, so the per-file region cap path is covered. */
+/**
+ * Nine regions of ONE file, so the per-file region cap path is covered — and shaped the way the
+ * producer shapes regions (`region_role`, `region_line_start`, `region_line_end`), because the cap
+ * RANKS by role tier then line start. Rows without those fields all tie at the fallback rank, which
+ * left the ranking itself unexercised (cross-family review, third round). The declaration region is
+ * deliberately LAST in artifact order, so a ranking change moves membership and the digest.
+ */
 const regionsOfOneFile = (count: number): AnyRecord[] => {
   const source = observations[0]!;
   return Array.from({ length: count }, (_, index) => ({
@@ -217,6 +227,12 @@ const regionsOfOneFile = (count: number): AnyRecord[] => {
     observation_id: `${source.observation_id}-region-${index + 1}`,
     source_ref: source.source_ref,
     location: `L${index * 10}-${index * 10 + 9}`,
+    structural_data: {
+      ...(source.structural_data as AnyRecord),
+      region_role: index === count - 1 ? "declaration" : "body",
+      region_line_start: index * 10,
+      region_line_end: index * 10 + 9,
+    },
   }));
 };
 

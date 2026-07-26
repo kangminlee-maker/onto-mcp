@@ -387,11 +387,15 @@ ok(
     `(OFF would have offered ${scaledOffIds.length})`,
 );
 
-// [E] The consumption gate. Arms A-D pass the artifact straight to the author, so none of them
-// exercises the fail-closed gate the run applies upstream — the catalog must be the GATED set and
-// nothing more (C2). The real ledger admits all 59 rows, which alone would be a vacuous check, so a
-// one-row mutation is the contrast: a withheld observation must vanish from the catalog.
-console.log("\n[E] real source-safety ledger — the catalog is the GATED set");
+// [E] The consumption gate FUNCTION over the real ledger, plus the author's fidelity to whatever it
+// returns. Scope stated honestly (cross-family review, third round): the run applies the gate upstream
+// (run.ts passes `promptSourceObservations` into the author), and THAT seam is pinned by a unit test —
+// this arm cannot prove it, because the author is called directly here. What it does prove is that the
+// real ledger's rows drive the gate, and that a non-consumption_allowed row is unreachable through the
+// catalog. The unmutated ledger admits all 59, which alone would be vacuous, so the contrast is a
+// one-row change. That mutated ledger is a GATE input, not a claim about a realizable artifact: the
+// canonical validator owns tier derivation and would reject a tier that its axes do not derive.
+console.log("\n[E] real source-safety ledger — the gate function and the author's fidelity to it");
 const safetyLedger = parseYaml(await fs.readFile(SAFETY_LEDGER_PATH, "utf8")) as AnyRecord;
 const gatedAll = sourceObservationsForPrompt({
   sourceObservations: artifactOf(realObservations) as never,
@@ -436,11 +440,85 @@ if (onWithheldIds.length !== realObservations.length - 1) {
 }
 assertRowsAreTheObservations("E", onWithheld.payload.source_observations as AnyRecord[], gatedMinusOne);
 ok(
-  `[E] gated set ${gatedAll.length} -> ON offers ${onGatedIds.length}; withholding ${withheldId} in the ` +
-    `ledger drops it from the catalog (${onWithheldIds.length} offered, id absent)`,
+  `[E] gated set ${gatedAll.length} -> ON offers ${onGatedIds.length}; a non-consumption_allowed row for ` +
+    `${withheldId} makes the gate withhold it and the catalog cannot reach it ` +
+    `(${onWithheldIds.length} offered, id absent). The run-level seam is pinned separately.`,
+);
+
+// [F] What ON makes newly REACHABLE downstream, and what was already reachable. The judgment stage
+// (writeAnswerSupportJudgment) re-projects the union of the ledger's cited observations WITH detail and
+// has no cap, no fold, and no surface guard of its own. Widening the citable set therefore widens that
+// prompt. This arm measures BOTH exposures and fails only on the crossing 3a would actually own:
+// OFF under the ceiling while ON is over it. On a corpus at or below the OFF cap the two sets are
+// identical, so any overflow there is pre-existing — a fact this arm states rather than assumes.
+console.log("\n[F] downstream judgment prompt — OFF exposure vs ON exposure");
+const judgmentPromptChars = async (cited: AnyRecord[]): Promise<number> => {
+  const dispatched: { systemPrompt: string; userPrompt: string }[] = [];
+  const instance = createDirectCallReconstructDirectiveAuthor({
+    llmCall: (systemPrompt: string, userPrompt: string) => {
+      dispatched.push({ systemPrompt, userPrompt });
+      return Promise.resolve({ text: JSON.stringify({ judgments: [] }) });
+    },
+  } as never);
+  await (instance as AnyRecord).writeAnswerSupportJudgment({
+    sessionId: SESSION_ID,
+    roundId: "maturation-round-1",
+    answerSupportLedgerRef: "answer-support-ledger.yaml",
+    answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+    answerSupportLedger: {
+      schema_version: "1",
+      session_id: SESSION_ID,
+      created_at: CREATED_AT,
+      round_id: "maturation-round-1",
+      evidence_clusters: [{
+        evidence_cluster_id: "cluster-all",
+        question_refs: ["maturation-question-replay"],
+        support_mode: "convergent_source_evidence",
+        proposed_answer_summary: "Every cited observation converges.",
+        evidence_refs: cited.map((observation) => ({
+          observation_id: observation.observation_id,
+          source_ref: observation.source_ref,
+          location: observation.location,
+        })),
+        proof_refs: [],
+        user_confirmation_refs: [],
+        authority_response_refs: [],
+        independence_basis: "replay",
+        contradiction_refs: [],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "replay" },
+    },
+    sourceObservations: artifactOf(cited),
+  });
+  if (dispatched.length !== 1) fail(`F expected one judgment dispatch, got ${dispatched.length}`);
+  const { systemPrompt, userPrompt } = dispatched[0]!;
+  return `${systemPrompt}\n\n---\n\n${userPrompt}`.length;
+};
+// OFF's exposure is the catalog cap; ON's is every approved observation.
+const offExposure = realObservations.slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
+const judgeOff = await judgmentPromptChars(offExposure);
+const judgeOn = await judgmentPromptChars(realObservations);
+if (judgeOff <= 0 || judgeOn <= 0) fail("F measured nothing");
+const overCeiling = (chars: number) => chars > CODEX_PROMPT_INPUT_CHAR_LIMIT;
+if (!overCeiling(judgeOff) && overCeiling(judgeOn)) {
+  fail(
+    `F ON crosses the judgment ceiling where OFF does not (${judgeOff} -> ${judgeOn} chars > ` +
+      `${CODEX_PROMPT_INPUT_CHAR_LIMIT}); the newly citable ids moved the failure downstream`,
+  );
+}
+ok(
+  `[F] judgment prompt citing OFF's exposure (${offExposure.length} ids) = ${judgeOff} chars; citing ON's ` +
+    `(${realObservations.length} ids) = ${judgeOn} chars; ceiling ${CODEX_PROMPT_INPUT_CHAR_LIMIT}. ` +
+    (overCeiling(judgeOff)
+      ? "BOTH exceed it — this surface is unbounded TODAY (the sets coincide at or below the cap), so " +
+        "the overflow is pre-existing and belongs to the class guard (design §9 stage 6), not to this " +
+        "change. It is a hard blocker for enabling the opt-in and for stage 5's live run."
+      : "neither crosses it on this corpus; on a corpus larger than the cap ON exposes more ids than " +
+        "OFF, so the class guard (design §9 stage 6) is what keeps this surface bounded."),
 );
 
 console.log(
   "\n✓ OBSERVATION CATALOG TOOL STAGE 3A REPLAY PASS (A baseline, B collapse, C silent-drop control," +
-    " D coverage, E consumption gate)",
+    " D coverage, E consumption gate, F downstream reach)",
 );

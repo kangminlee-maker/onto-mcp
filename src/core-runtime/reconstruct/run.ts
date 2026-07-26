@@ -226,7 +226,7 @@ import { runSemanticMapStageWithDispatchFallback } from "./semantic-map-dispatch
 import {
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
 } from "./semantic-map-stage.js";
-import { breadthFoldRungDetailLoss } from "./source-breadth-fold.js";
+import { answerSupportFoldDisclosureMessage } from "./source-breadth-fold.js";
 import {
   writeAuthoredArtifactReuseProvenance,
   writeFreshAuthoredYamlDocument,
@@ -3955,21 +3955,15 @@ export async function runReconstruct(
   const drainAnswerSupportFoldDisclosures = (): void => {
     for (const record of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
       if (record.surface !== "maturation_answer_support") continue;
-      const disclosure = record.disclosure;
-      // What THAT rung dropped, from the module that owns the ladder — a message written here would
-      // drift from the rung definitions (cross-family review found exactly that drift).
-      const droppedByRung = breadthFoldRungDetailLoss(disclosure.fold_level);
+      // The WHOLE sentence comes from the module that owns the ladder, so no wording can be written
+      // here that disagrees with the rung (cross-family review: calling the rung helper and then
+      // writing your own sentence passes every "wired" check and still lies).
       appendRuntimeStatusEventSync({
         pipeline: "reconstruct",
         sessionRoot,
         sourceLabel: "source-breadth-fold",
         stageId: "maturation_answer_support",
-        message:
-          `Runtime folded the answer-support navigation catalog to '${disclosure.fold_level}' detail ` +
-          `(${disclosure.catalog_observation_count} observations, ` +
-          `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so every ` +
-          `consumption-approved observation stayed selectable; ${droppedByRung} ` +
-          "(retained in full in source-observations).",
+        message: answerSupportFoldDisclosureMessage(record.disclosure),
       });
     }
   };

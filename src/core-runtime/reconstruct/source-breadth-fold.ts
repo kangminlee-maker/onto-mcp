@@ -168,6 +168,39 @@ export function breadthFoldRungDetailLoss(level: BreadthFoldLevel): string {
 }
 
 /**
+ * The navigation fields a catalog row CARRIES at a given rung, as the prompt policy should describe
+ * them. Derived from the rung key declarations so the dispatched contract cannot claim a field the
+ * rung removed — a fixed sentence told the worker `summary` was present at the `anchor` rung, which
+ * is precisely where it is not (cross-family review, third round).
+ */
+export function navigationRowFieldsForLevel(level: BreadthFoldLevel | null): string {
+  if (level === "anchor") return "id, source_ref";
+  if (level === "summary_anchor") return "id, source_ref, summary";
+  return "id, source_ref, location, summary";
+}
+
+/**
+ * The FULL R2 disclosure sentence for the answer-support navigation catalog, as a pure function of the
+ * disclosure. Assembled here rather than at the emit site so the emitted text IS this function's
+ * output: a call site that invoked `breadthFoldRungDetailLoss` and then wrote its own sentence
+ * satisfied every "wired" check while still saying the wrong thing (cross-family review, third round).
+ * The rung's cost comes from {@link breadthFoldRungDetailLoss}, so it can never disagree with the
+ * ladder.
+ */
+export function answerSupportFoldDisclosureMessage(
+  disclosure: BreadthFoldDisclosure,
+): string {
+  return (
+    `Runtime folded the answer-support navigation catalog to '${disclosure.fold_level}' detail ` +
+    `(${disclosure.catalog_observation_count} observations, ` +
+    `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so every ` +
+    `consumption-approved observation stayed selectable; ` +
+    `${breadthFoldRungDetailLoss(disclosure.fold_level)} ` +
+    "(retained in full in source-observations)."
+  );
+}
+
+/**
  * Project `one_line` rows down to a tail rung by DROPPING KEYS — never by rebuilding rows. Pure, total,
  * order-preserving, value-preserving: each result row carries a subset of its input row's keys, so it is
  * never larger than its input (the structural basis of the ladder's non-increasing invariant). Absent
@@ -262,8 +295,12 @@ export interface FoldObservationsToBudgetArgs {
   catalogObservationCount: number;
   /** Deterministic projection of the catalog at a given rung (all N observations, demoted detail). */
   projectAtLevel: (level: BreadthFoldLevel) => unknown[];
-  /** Deterministic byte measurement of the FULL dispatch payload built around `projection`. */
-  measure: (projection: unknown[]) => number;
+  /**
+   * Deterministic byte measurement of the FULL dispatch payload built around `projection`. Receives
+   * the rung too, because a caller whose payload DESCRIBES the rung (a policy block naming the fields
+   * a row carries) must measure the text that rung would actually dispatch.
+   */
+  measure: (projection: unknown[], level: BreadthFoldLevel) => number;
   /** Override the ladder (tests / future rungs). Defaults to SOURCE_BREADTH_FOLD_LEVELS. */
   levels?: readonly BreadthFoldLevel[];
 }
@@ -285,7 +322,7 @@ export function foldObservationsToBudget(
   let coarsest: { level: BreadthFoldLevel; projection: unknown[]; measured: number } | null = null;
   for (const level of levels) {
     const projection = args.projectAtLevel(level);
-    const measured = args.measure(projection);
+    const measured = args.measure(projection, level);
     coarsest = { level, projection, measured };
     if (measured <= args.budget) {
       return {

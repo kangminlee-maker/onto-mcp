@@ -207,6 +207,7 @@ import {
 import { SEMANTIC_MAP_ROUTABLE_KINDS } from "./semantic-map-projection.js";
 import type { SemanticMapAnyProjection } from "./semantic-map-projection.js";
 import {
+  navigationRowFieldsForLevel,
   OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
@@ -3190,7 +3191,11 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(promptCatalog);
       const promptObservationIds = promptCatalog.promptObservationIds;
       const promptObservationIdSet = new Set(promptObservationIds);
-      const answerSupportUserPayloadBase = {
+      // The policy block is a FUNCTION of the chosen rung, so the fold measures each rung with the
+      // text that rung would actually dispatch, and the dispatched text describes the rows that went
+      // out. A fixed "(id, source_ref, summary)" sentence told the worker summaries were present
+      // exactly when `anchor` had removed them (cross-family review, third round).
+      const answerSupportUserPayloadFor = (level: BreadthFoldLevel | null) => ({
         round_id: input.roundId,
         question_frontier_ref: input.maturationQuestionFrontierRef,
         question_frontier_validation:
@@ -3206,7 +3211,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             ? "maturation_answer_support_navigation_catalog"
             : "maturation_answer_support_bounded_catalog",
           selection_basis: observationCatalogTool
-            ? "Runtime projects EVERY consumption-approved source observation as a navigation row (id, source_ref, summary) with no per-observation detail and no slot cap, closure-prioritized refs first; semantic answer support remains LLM-owned."
+            ? "Runtime projects EVERY consumption-approved source observation as a navigation row " +
+              `(${navigationRowFieldsForLevel(level)}) with no per-observation detail and no slot cap, ` +
+              "closure-prioritized refs first; semantic answer support remains LLM-owned."
             : "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
           source_observation_count: input.sourceObservations.observations.length,
           prioritized_observation_count:
@@ -3228,7 +3235,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             : POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
         },
         prompt_visible_observation_ids: promptObservationIds,
-      };
+      });
+      const answerSupportUserPayloadBase = answerSupportUserPayloadFor(null);
       // Catalog rungs. `one_line` is the PINNED start (design §6) — the tail rungs exist so an
       // extreme corpus demotes detail rather than dropping observations, exactly as on the two
       // count-scaling surfaces. Tail rows are DERIVED from the one_line rows by dropping keys, so the
@@ -3261,16 +3269,16 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
             catalogObservationCount: promptObservationIds.length,
             projectAtLevel: projectAnswerSupportCatalogAtFoldLevel,
-            measure: (projection) =>
+            measure: (projection, level) =>
               promptPayloadByteCount(ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT, {
-                ...answerSupportUserPayloadBase,
+                ...answerSupportUserPayloadFor(level),
                 source_observations: projection,
               }),
             levels: OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
           })
         : null;
       const answerSupportUserPayload = {
-        ...answerSupportUserPayloadBase,
+        ...answerSupportUserPayloadFor(catalogFold ? catalogFold.level : null),
         source_observations: catalogFold
           ? catalogFold.projection
           : projectObservationsForPrompt(input.sourceObservations, {
@@ -3280,16 +3288,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             }),
       };
       if (catalogFold) {
-        // R2 no-silent-truncation disclosure. `one_line` is the pinned start, so recording it would
-        // be noise; anything COARSER means the catalog could not carry summaries and the LM chose
-        // ids with less to choose by — that must be auditable. The ledger artifact has no free-text
-        // channel, so it goes to the run-scoped sink runReconstruct records durably.
-        if (catalogFold.disclosure.fold_level !== "one_line") {
-          sourceBreadthFoldDisclosures.push({
-            surface: "maturation_answer_support",
-            disclosure: catalogFold.disclosure,
-          });
-        }
         // Design §6: "even `anchor` does not fit" fails BEFORE the worker starts, with the measured
         // size — not as codex's opaque nonzero exit. Gated with the mode because an always-on guard
         // here would refuse the narrow band between this budget and the ceiling that OFF runs reach
@@ -3300,6 +3298,23 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           userPayload: answerSupportUserPayload,
           byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
         });
+        // R2 no-silent-truncation disclosure, recorded ONLY AFTER the guard passes. `one_line` is the
+        // pinned start, so recording it would be noise; anything COARSER means the catalog could not
+        // carry summaries and the LM chose ids with less to choose by — that must be auditable. The
+        // ledger artifact has no free-text channel, so it goes to the run-scoped sink runReconstruct
+        // drains.
+        //
+        // Order matters: recorded BEFORE the guard, an over-budget run pushed a disclosure that the
+        // run-level `finally` then emitted as "every observation stayed selectable" for a catalog that
+        // was never dispatched (cross-family review, third round — a defect the `finally` itself
+        // introduced). After the guard, a disclosure existing MEANS the payload it describes went out
+        // or died in dispatch, which is exactly what the drain claims.
+        if (catalogFold.disclosure.fold_level !== "one_line") {
+          sourceBreadthFoldDisclosures.push({
+            surface: "maturation_answer_support",
+            disclosure: catalogFold.disclosure,
+          });
+        }
       }
       const raw = await callJsonAuthor({
         llmCall,

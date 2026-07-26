@@ -4,7 +4,12 @@ import {
   POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
 } from "./authoring-prompt-payloads.js";
 import { createDirectCallReconstructDirectiveAuthor } from "./direct-call-directive-author.js";
-import { SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET } from "./source-breadth-fold.js";
+import {
+  answerSupportFoldDisclosureMessage,
+  breadthFoldRungDetailLoss,
+  navigationRowFieldsForLevel,
+  SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+} from "./source-breadth-fold.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -243,19 +248,40 @@ const parsePayload = (dispatched: Dispatched[]): CapturedPayload =>
 
 /**
  * The order the catalog is expected in, re-derived from the FIXTURE rather than from the code under
- * test: the closure request's ref is prioritized, so its observations come first (artifact order),
- * then everything else in artifact order. Writing this out is what caught the author's real ordering
- * (prioritized-first, not artifact-first) instead of assuming it.
+ * test. Prioritized refs come first in CATEGORY order — question hints, then requested refs, then
+ * member refs, then cross-material refs (the four categories the production rule reads) — and each
+ * category's observations follow artifact order; everything unprioritized follows in artifact order.
+ *
+ * Modelling all four categories, not just the requested ref: with one request and empty hint/member/
+ * cross arrays a one-category oracle AGREES BY COINCIDENCE, so a production defect that ignored hints
+ * or member refs would pass (cross-family review, third round). The multi-category fixture below is
+ * what makes this oracle bind.
  */
 function expectedCatalogOrder(built: ReturnType<typeof fixture>): string[] {
-  const requestedRef = built.closureFrontier.source_requests[0]!.requested_source_ref;
+  const hintRefs = built.questionFrontier.questions.flatMap((question) =>
+    question.closure_frontier_hint_refs.flatMap((hint) =>
+      hint.startsWith("source:") ? [hint.slice("source:".length)] : []
+    )
+  );
+  const requests = built.closureFrontier.source_requests;
+  const categoryRefs = [
+    ...hintRefs,
+    ...requests.map((request) => request.requested_source_ref),
+    ...requests.flatMap((request) => request.member_source_refs),
+    ...requests.flatMap((request) => request.cross_material_ref_refs),
+  ].filter((ref) => ref.length > 0);
   const observations = built.sourceObservations.observations;
-  const prioritized = observations
-    .filter((o) => o.source_ref === requestedRef)
-    .map((o) => o.observation_id);
+  const prioritized: string[] = [];
+  for (const ref of [...new Set(categoryRefs)]) {
+    for (const observation of observations) {
+      if (observation.source_ref === ref && !prioritized.includes(observation.observation_id)) {
+        prioritized.push(observation.observation_id);
+      }
+    }
+  }
   const rest = observations
-    .filter((o) => o.source_ref !== requestedRef)
-    .map((o) => o.observation_id);
+    .map((o) => o.observation_id)
+    .filter((id) => !prioritized.includes(id));
   return [...prioritized, ...rest];
 }
 
@@ -269,17 +295,34 @@ function expectRowsMatchObservations(
   rows: Record<string, any>[],
   observations: readonly Record<string, any>[],
   expectedIds: readonly string[],
+  options: { navigationOnly?: boolean } = {},
 ): void {
   expect(expectedIds.length).toBeGreaterThan(0); // non-empty subject: the loop below can fail
   const byId = new Map(observations.map((o) => [o.observation_id, o]));
   expect(rows.map((row) => row.observation_id)).toEqual([...expectedIds]);
   expect(new Set(rows.map((row) => row.observation_id)).size).toBe(rows.length);
+  // Every navigation key the rung carries is compared against the observation it claims to be —
+  // `location` included. Under region decomposition `location` is the ONLY thing telling siblings of
+  // one file apart, so an oracle that skipped it passed a catalog with one region's location copied
+  // onto every row (cross-family review, third round).
+  const NAVIGATION_KEYS = [
+    "observation_id",
+    "target_material_kind",
+    "source_ref",
+    "location",
+    "summary",
+  ] as const;
   for (const row of rows) {
     const observation = byId.get(row.observation_id);
     expect(observation).toBeDefined();
-    expect(row.source_ref).toBe(observation!.source_ref);
-    if ("summary" in row) expect(row.summary).toBe(observation!.summary);
-    expect(row.target_material_kind).toBe(observation!.target_material_kind);
+    // Exact key set for a NAVIGATION catalog: no key outside the navigation set, so detail cannot
+    // leak back in. The OFF projection legitimately carries `structural_data`, so the caller opts in.
+    if (options.navigationOnly === true) {
+      expect(Object.keys(row).filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
+    }
+    for (const key of NAVIGATION_KEYS) {
+      if (key in row) expect(row[key]).toBe(observation![key]);
+    }
   }
 }
 
@@ -376,6 +419,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
+      { navigationOnly: true },
     );
     expect(payload.prompt_visible_observation_ids).toEqual(expectedCatalogOrder(built));
 
@@ -387,6 +431,9 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     expect(row).not.toHaveProperty("structural_data");
     expect(JSON.stringify(payload.source_observations)).not.toContain("content_excerpt");
 
+    expect(payload.source_observation_prompt_policy.selection_basis).toContain(
+      navigationRowFieldsForLevel("one_line"),
+    );
     expect(payload.source_observation_prompt_policy).toMatchObject({
       projection_kind: "maturation_answer_support_navigation_catalog",
       // null, not 64: reporting a cap that no code applies would misdescribe the projection.
@@ -431,9 +478,43 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       parsePayload(on.dispatched).source_observations,
       built.sourceObservations.observations as never,
       allRegionIds,
+      { navigationOnly: true },
     );
     // And OFF's set is a strict subset — the exact 8 the cap kept, not "some 8".
     expect(offIds).toEqual(allRegionIds.slice(0, 8));
+  });
+
+  it("ON: prioritized refs lead in CATEGORY order — hint, requested, member, cross-material", async () => {
+    // Every other fixture has ONE prioritized category, which makes a one-category oracle agree by
+    // coincidence (cross-family review, third round). This one populates all four so the order is
+    // actually pinned: a production rule that ignored hints or member refs must fail here.
+    const built = fixture({ observationCount: 4 });
+    const refOf = (index: number) => `/fixture/source-${index}.ts`;
+    built.questionFrontier.questions[0]!.closure_frontier_hint_refs = [`source:${refOf(3)}`];
+    built.closureFrontier.source_requests[0]!.member_source_refs = [refOf(1)];
+    built.closureFrontier.source_requests[0]!.cross_material_ref_refs = [refOf(4)];
+
+    const { author, dispatched } = capturingAuthor(true);
+    await authorLedger(author, built);
+    const payload = parsePayload(dispatched);
+
+    // hint(source-3) -> requested(needed.md) -> member(source-1) -> cross(source-4) -> rest(source-2)
+    expect(payload.prompt_visible_observation_ids).toEqual([
+      "obs-3",
+      "obs-needed",
+      "obs-1",
+      "obs-4",
+      "obs-2",
+    ]);
+    // ...and the fixture-derived oracle agrees with that hand-written order, so the two disagree
+    // whenever either drifts.
+    expect(payload.prompt_visible_observation_ids).toEqual(expectedCatalogOrder(built));
+    expectRowsMatchObservations(
+      payload.source_observations,
+      built.sourceObservations.observations as never,
+      expectedCatalogOrder(built),
+      { navigationOnly: true },
+    );
   });
 
   it("ON: the navigation catalog is smaller than OFF's capped detailed one — on MORE observations", async () => {
@@ -453,6 +534,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       onRows,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
+      { navigationOnly: true },
     );
   });
 
@@ -477,6 +559,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
+      { navigationOnly: true },
     );
 
     const records = author.sourceBreadthFoldDisclosures ?? [];
@@ -493,6 +576,10 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     // would drop the summaries and fail here.
     expect(payload.source_observations[0]).not.toHaveProperty("location");
     expect(payload.source_observations[0]).toHaveProperty("summary");
+    // And the policy describes THAT rung's fields, measured with the payload that was dispatched.
+    expect(payload.source_observation_prompt_policy.selection_basis).toContain(
+      navigationRowFieldsForLevel("summary_anchor"),
+    );
   });
 
   it("ON: a still-over-budget catalog demotes to anchor, keeps every observation, discloses the rung", async () => {
@@ -516,6 +603,7 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       payload.source_observations,
       built.sourceObservations.observations as never,
       expectedCatalogOrder(built),
+      { navigationOnly: true },
     );
 
     const records = author.sourceBreadthFoldDisclosures ?? [];
@@ -537,6 +625,13 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     // `anchor` is navigation identity only: both the redundant `location` and the summary are gone.
     expect(payload.source_observations[0]).not.toHaveProperty("location");
     expect(payload.source_observations[0]).not.toHaveProperty("summary");
+    // ...and the dispatched POLICY says so. A fixed sentence claimed `summary` was present exactly
+    // where the rung had removed it, i.e. the worker was handed a false input contract precisely when
+    // it had least to work with (cross-family review, third round).
+    expect(payload.source_observation_prompt_policy.selection_basis).toContain(
+      navigationRowFieldsForLevel("anchor"),
+    );
+    expect(payload.source_observation_prompt_policy.selection_basis).not.toContain("summary)");
   });
 
   it("ON: a catalog that fits the pinned rung discloses NOTHING (a demotion notice is not noise)", async () => {
@@ -556,6 +651,11 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
       /AnswerSupportLedger compact prompt exceeds deterministic prompt budget/,
     );
     expect(dispatched.length).toBe(0); // no worker was started
+
+    // And NOTHING was disclosed: a disclosure recorded before the guard would be drained by
+    // runReconstruct's `finally` as "every observation stayed selectable" for a catalog that never
+    // left the process (cross-family review, third round).
+    expect(author.sourceBreadthFoldDisclosures ?? []).toEqual([]);
 
     // Contrast: the SAME observation count with short refs dispatches fine, so the refusal is about
     // SIZE and not a count threshold (a count-based early reject would pass the assertions above).
@@ -584,7 +684,11 @@ describe("observation catalog tool — production wiring (cross-family review, l
     const forwards = api.match(
       /\.\.\.\(sourceObservationCatalogTool \? \{ sourceObservationCatalogTool: true \} : \{\}\)/g,
     ) ?? [];
-    expect(forwards.length).toBe(2);
+    const constructions = api.match(/createDirectCallReconstructDirectiveAuthor\(/g) ?? [];
+    // EVERY construction forwards it: a third author that omitted the flag would satisfy a
+    // "at least two forwards" check while running production OFF (cross-family review, third round).
+    expect(constructions.length).toBeGreaterThan(0);
+    expect(forwards.length).toBe(constructions.length);
   });
 
   it("the reuse key rotates with the mode — an ON artifact can never key as an OFF one", () => {
@@ -626,6 +730,19 @@ describe("observation catalog tool — production wiring (cross-family review, l
     expect({ ...on, source_observation_catalog_tool: false }).toEqual(off);
   });
 
+  it("run.ts feeds the answer-support author the CONSUMPTION-GATED projection, not the raw artifact", () => {
+    // C2's last hop. The author-level tests and the replay's arm E both receive an already-gated
+    // array, so neither can see run.ts swapping in the ungated `sourceObservations` — the concrete
+    // defect a review named. Lexical, and the weaker for it; the gate function itself is exercised
+    // over the real ledger in scripts/observation-catalog-tool-replay.mts arm E.
+    const run = repoFile("src/core-runtime/reconstruct/run.ts");
+    const call = run.slice(run.indexOf("directiveAuthor.writeAnswerSupportLedger({"));
+    const args = call.slice(0, call.indexOf("}),"));
+    expect(args).toContain("sourceObservations: promptSourceObservations,");
+    // And the gated projection is what the source-safety refresh produces — not a local rebind.
+    expect(run).toContain("promptSourceObservations = sourceObservationsForPrompt({");
+  });
+
   it("run.ts drains the disclosure in a `finally`, so a FAILED authoring still records the demotion", () => {
     // Structural, and honest about it: the drain lives in runReconstruct, and reaching it with a real
     // demoting corpus AND a failing dispatch needs a whole-pipeline fixture. What this pins is the
@@ -637,12 +754,32 @@ describe("observation catalog tool — production wiring (cross-family review, l
     expect(run).toMatch(/\}\s*finally\s*\{\s*\n\s*drainAnswerSupportFoldDisclosures\(\);/);
   });
 
-  it("run.ts derives the demotion wording from the ladder module rather than hard-coding it", () => {
-    // Lens B #5: the new wording unit test lives beside the helper, so a stale hard-coded message at
-    // the call site would leave it green. This asserts the call site actually uses the helper.
+  it("run.ts emits the ladder module's sentence verbatim — no wording is authored at the call site", () => {
+    // The WHOLE message now comes from answerSupportFoldDisclosureMessage, so "called the helper and
+    // then wrote my own sentence" (which satisfied the earlier assertion) is no longer expressible.
     const run = repoFile("src/core-runtime/reconstruct/run.ts");
-    expect(run).toContain("breadthFoldRungDetailLoss(disclosure.fold_level)");
+    expect(run).toContain("message: answerSupportFoldDisclosureMessage(record.disclosure),");
+    expect(run).not.toMatch(/Runtime folded the answer-support navigation catalog/);
     expect(run).not.toMatch(/per-observation summaries were dropped/);
+  });
+
+  it("the disclosure sentence is a pure projection of the disclosure, per rung", () => {
+    const disclosure = {
+      fold_level: "summary_anchor" as const,
+      catalog_observation_count: 1_600,
+      measured_prompt_bytes: 768_857,
+      prompt_byte_budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+      finer_levels_over_budget: ["one_line" as const],
+      over_budget: false,
+    };
+    const message = answerSupportFoldDisclosureMessage(disclosure);
+    expect(message).toContain("'summary_anchor'");
+    expect(message).toContain("1600 observations");
+    expect(message).toContain(`768857/${SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET} bytes`);
+    // The rung's cost comes from the ladder, so the sentence cannot contradict it.
+    expect(message).toContain(breadthFoldRungDetailLoss("summary_anchor"));
+    expect(answerSupportFoldDisclosureMessage({ ...disclosure, fold_level: "anchor" }))
+      .toContain(breadthFoldRungDetailLoss("anchor"));
   });
 });
 
