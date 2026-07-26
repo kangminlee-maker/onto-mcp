@@ -453,6 +453,18 @@ export function maturationAnswerSupportPromptCatalog(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
   maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+  /**
+   * Observation-catalog-tool mode (design 20260726 §6 stage 3a): the prompt carries a NAVIGATION
+   * catalog rather than detail, so the ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT slot cap — which
+   * exists because 64 DETAILED observations are what fits — no longer bounds anything, and keeping
+   * it would silently drop supplemental ids (design §1.2: `omittedPrioritizedObservationIds` has no
+   * supplemental counterpart, so that truncation is invisible today). A MODE flag, not a limit
+   * value: the caller can choose the mode but cannot declare its own cap.
+   *
+   * Lifts `capProjectedRegionsPerFile` too — see the comment at its call site for why keeping it
+   * would reintroduce the same silent-drop defect on the region axis.
+   */
+  observationCatalogTool?: boolean;
 }): MaturationAnswerSupportPromptCatalog {
   // Budget-contention guard (design §8, mirroring writeSourceObservationDirective's identical
   // capProjectedRegionsPerFile call): applied BEFORE grouping, so a decomposed file's N region
@@ -463,15 +475,23 @@ export function maturationAnswerSupportPromptCatalog(args: {
   // assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow and crashes the run. A file at or under
   // MAX_PROJECTED_REGIONS_PER_FILE observations passes through unchanged (no-op), so OFF /
   // one-observation-per-file corpora are byte-identical.
-  const cappedObservations = capProjectedRegionsPerFile(
-    args.sourceObservations.observations,
-    MAX_PROJECTED_REGIONS_PER_FILE,
-  );
+  // In catalog-tool mode the region cap is LIFTED. Its whole justification above is contention for
+  // the ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT slots; with no slots and a fold that bounds size by
+  // demoting DETAIL, it stops being a budget guard and becomes exactly the defect this mode removes —
+  // a silent drop with no counter (cross-family review reproduced it: 9 region observations of one
+  // file, 8 offered, `omitted_prioritized_observation_count: 0`, and the unchanged provenance gate
+  // then refuses a citation of the 9th). Off, it applies exactly as before.
+  const catalogObservations = args.observationCatalogTool === true
+    ? args.sourceObservations.observations
+    : capProjectedRegionsPerFile(
+      args.sourceObservations.observations,
+      MAX_PROJECTED_REGIONS_PER_FILE,
+    );
   const observationsBySourceRef = new Map<
     string,
     ReconstructSourceObservationsArtifact["observations"]
   >();
-  for (const observation of cappedObservations) {
+  for (const observation of catalogObservations) {
     const observations = observationsBySourceRef.get(observation.source_ref) ??
       [];
     observations.push(observation);
@@ -487,14 +507,17 @@ export function maturationAnswerSupportPromptCatalog(args: {
     ),
   ];
   const prioritizedObservationIdSet = new Set(prioritizedObservationIds);
-  const supplementalObservationIds = cappedObservations
+  const supplementalObservationIds = catalogObservations
     .filter((observation) =>
       !prioritizedObservationIdSet.has(observation.observation_id)
     )
     .map((observation) => observation.observation_id);
-  const promptObservationIds = [
+  const selectableObservationIds = [
     ...new Set([...prioritizedObservationIds, ...supplementalObservationIds]),
-  ].slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
+  ];
+  const promptObservationIds = args.observationCatalogTool === true
+    ? selectableObservationIds
+    : selectableObservationIds.slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
   const promptObservationIdSet = new Set(promptObservationIds);
   return {
     prioritizedObservationIds,

@@ -1,0 +1,333 @@
+/**
+ * Deterministic replay of the observation-catalog-tool PUSH layer (design
+ * 20260726-observation-catalog-tool §6, stage 3a) over the REAL 59-observation corpus.
+ *
+ * Fixtures proved the mechanism; this proves it on the real heterogeneous artifact — the same
+ * `openai-node src/` value-bench run stage 1 and stage 2 read (scripts/fixtures/observation-catalog/,
+ * see its PROVENANCE.md). No LLM is dispatched: the author's llmCall is captured, so the measurement
+ * is the payload the worker WOULD have received.
+ *
+ * Four arms, each with what makes it non-vacuous:
+ *   [A] real corpus, OFF  → today's projection: detail present, bytes measured. The baseline the
+ *       other arms are a contrast against.
+ *   [B] real corpus, ON   → navigation rows only. Asserts the byte collapse AND that arm A really
+ *       carried the detail (otherwise "smaller" would prove nothing).
+ *   [C] real observations replicated past the 64 cap, OFF → the §1.2 defect ON REAL DATA: ids are
+ *       dropped and `omitted_prioritized_observation_count` still reports 0, so nothing in the
+ *       artifact says anything went missing.
+ *   [D] same scaled corpus, ON → every observation offered, catalog under budget, rung disclosed
+ *       only if it actually demoted.
+ *
+ * Usage: npx tsx scripts/observation-catalog-tool-replay.mts
+ */
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
+import { createDirectCallReconstructDirectiveAuthor } from "../src/core-runtime/reconstruct/direct-call-directive-author.ts";
+import { ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT } from "../src/core-runtime/reconstruct/authoring-prompt-payloads.ts";
+import { SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET } from "../src/core-runtime/reconstruct/source-breadth-fold.ts";
+import { CODEX_PROMPT_INPUT_CHAR_LIMIT } from "../src/core-runtime/llm/llm-caller.ts";
+
+const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..");
+const OBSERVATIONS_PATH = path.join(
+  REPO_ROOT,
+  "scripts/fixtures/observation-catalog/source-observations.yaml",
+);
+const SCALE_TO = 500;
+
+type AnyRecord = Record<string, any>;
+
+const fail = (message: string): never => {
+  console.error(`\n✗ ${message}`);
+  process.exit(1);
+};
+const ok = (message: string): void => console.log(`  ✓ ${message}`);
+
+const observationsArtifact = parseYaml(
+  await fs.readFile(OBSERVATIONS_PATH, "utf8"),
+) as AnyRecord;
+const realObservations = observationsArtifact.observations as AnyRecord[];
+if (!Array.isArray(realObservations) || realObservations.length === 0) {
+  fail("fixture carries no observations — every assertion below would pass vacuously");
+}
+const withStructuralData = realObservations.filter(
+  (observation) => observation.structural_data &&
+    Object.keys(observation.structural_data as AnyRecord).length > 0,
+).length;
+if (withStructuralData !== realObservations.length) {
+  fail(
+    `fixture has ${realObservations.length - withStructuralData} observations without structural_data —` +
+      " the detail this stage moves out of the prompt is what is being measured",
+  );
+}
+
+function artifactOf(observations: AnyRecord[]): AnyRecord {
+  return { ...observationsArtifact, observations };
+}
+
+/** Replicate the REAL rows (not synthetic ones) past the cap, with unique ids and refs. */
+function scaled(count: number): AnyRecord[] {
+  return Array.from({ length: count }, (_, index) => {
+    const source = realObservations[index % realObservations.length]!;
+    return {
+      ...source,
+      observation_id: `${source.observation_id}-r${Math.floor(index / realObservations.length)}`,
+      source_ref: `${source.source_ref}.r${Math.floor(index / realObservations.length)}`,
+      location: `${source.location}.r${Math.floor(index / realObservations.length)}`,
+    };
+  });
+}
+
+const SESSION_ID = String(observationsArtifact.session_id ?? "observation-catalog-replay");
+const CREATED_AT = String(observationsArtifact.created_at ?? "2026-07-26T00:00:00.000Z");
+
+function questionFrontier(): AnyRecord {
+  return {
+    schema_version: "1",
+    session_id: SESSION_ID,
+    created_at: CREATED_AT,
+    maturation_baseline_ref: "maturation-baseline.yaml",
+    maturation_baseline_validation_ref: "maturation-baseline-validation.yaml",
+    actionability_matrix_ref: "baseline-actionability-matrix.yaml",
+    actionability_matrix_validation_ref: "baseline-actionability-matrix-validation.yaml",
+    questions: [{
+      question_id: "maturation-question-replay",
+      question: "What does the replay corpus prove?",
+      materiality: "blocker",
+      materiality_ref: "matrix-row-replay",
+      actionability_surface_refs: ["dynamic_surface"],
+      maturity_dimension_refs: ["evidence"],
+      purpose_element_refs: ["purpose-replay"],
+      baseline_row_refs: ["baseline-replay"],
+      competency_question_refs: [],
+      competency_assessment_refs: [],
+      domain_competency_trace_refs: [],
+      seed_ref_refs: ["object-replay"],
+      current_answer_status: "unsupported",
+      expected_answer_kind: "explanation",
+      evidence_needed: "Replay evidence.",
+      authority_need: {
+        authority_kind: "none",
+        authority_scope: null,
+        blocking_if_unavailable: true,
+        expected_response_kind: "unavailable_reason",
+      },
+      closure_frontier_hint_refs: [],
+      limitation_refs: [],
+    }],
+    directive_author: { owner: "host_llm", author_id: "replay" },
+  };
+}
+
+function closureFrontier(requestedSourceRef: string): AnyRecord {
+  return {
+    schema_version: "1",
+    session_id: SESSION_ID,
+    created_at: CREATED_AT,
+    round_id: "maturation-round-1",
+    question_frontier_ref: "maturation-question-frontier.yaml",
+    source_requests: [{
+      source_request_id: "source-request-replay",
+      question_refs: ["maturation-question-replay"],
+      member_scope_refs: [],
+      member_source_refs: [],
+      cross_material_ref_refs: [],
+      requested_source_ref: requestedSourceRef,
+      requested_location: requestedSourceRef,
+      target_material_kind: "code",
+      expected_evidence_kind: "replay source",
+      reason: "The replay question needs this source.",
+    }],
+    authority_requests: [],
+    directive_author: { owner: "host_llm", author_id: "replay" },
+  };
+}
+
+const validations = {
+  question: {
+    schema_version: "1",
+    session_id: SESSION_ID,
+    created_at: CREATED_AT,
+    maturation_question_frontier_ref: "maturation-question-frontier.yaml",
+    maturation_baseline_validation_ref: "maturation-baseline-validation.yaml",
+    actionability_matrix_validation_ref: "baseline-actionability-matrix-validation.yaml",
+    validation_status: "valid",
+    question_count: 1,
+    material_frontier_question_count: 1,
+    validation_results: [],
+    violations: [],
+  },
+  closure: {
+    schema_version: "1",
+    session_id: SESSION_ID,
+    created_at: CREATED_AT,
+    maturation_closure_frontier_ref: "maturation-closure-frontier.yaml",
+    maturation_question_frontier_validation_ref: "maturation-question-frontier-validation.yaml",
+    source_inventory_ref: "source-inventory.yaml",
+    source_observations_ref: "source-observations.yaml",
+    validation_status: "valid",
+    source_request_count: 1,
+    authority_request_count: 0,
+    accepted_source_request_ids: ["source-request-replay"],
+    rejected_source_requests: [],
+    validation_results: [],
+    asserted_obligation_ids: [],
+    violations: [],
+  },
+  authorityResponse: {
+    schema_version: "1",
+    session_id: SESSION_ID,
+    created_at: CREATED_AT,
+    closure_frontier_ref: "maturation-closure-frontier.yaml",
+    responses: [],
+  },
+  authorityResponseValidation: {
+    schema_version: "1",
+    session_id: SESSION_ID,
+    created_at: CREATED_AT,
+    maturation_authority_response_ref: "maturation-authority-response.yaml",
+    maturation_closure_frontier_validation_ref: "maturation-closure-frontier-validation.yaml",
+    validation_status: "valid",
+    response_count: 0,
+    provided_response_count: 0,
+    unavailable_response_count: 0,
+    validation_results: [],
+    violations: [],
+  },
+} as const;
+
+async function author(
+  observations: AnyRecord[],
+  catalogTool: boolean,
+): Promise<{
+  payload: AnyRecord;
+  userPromptBytes: number;
+  userPromptChars: number;
+  disclosures: AnyRecord[];
+}> {
+  const dispatched: { systemPrompt: string; userPrompt: string }[] = [];
+  const instance = createDirectCallReconstructDirectiveAuthor({
+    ...(catalogTool ? { sourceObservationCatalogTool: true } : {}),
+    llmCall: (systemPrompt: string, userPrompt: string) => {
+      dispatched.push({ systemPrompt, userPrompt });
+      return Promise.resolve({ text: JSON.stringify({ evidence_clusters: [] }) });
+    },
+  } as never);
+  await (instance as AnyRecord).writeAnswerSupportLedger({
+    sessionId: SESSION_ID,
+    roundId: "maturation-round-1",
+    maturationQuestionFrontier: questionFrontier(),
+    maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+    maturationQuestionFrontierValidation: validations.question,
+    maturationClosureFrontier: closureFrontier(String(observations[0]!.source_ref)),
+    maturationClosureFrontierValidation: validations.closure,
+    maturationAuthorityResponse: validations.authorityResponse,
+    maturationAuthorityResponseValidation: validations.authorityResponseValidation,
+    sourceObservations: artifactOf(observations),
+  });
+  if (dispatched.length !== 1) fail(`expected exactly one dispatch, got ${dispatched.length}`);
+  const { userPrompt } = dispatched[0]!;
+  return {
+    payload: JSON.parse(userPrompt) as AnyRecord,
+    userPromptBytes: Buffer.byteLength(userPrompt, "utf8"),
+    // The provider counts CHARACTERS (design §5: its rejection payload reports max_chars), so the
+    // ceiling comparison below uses chars even though the projection budget is byte-counted.
+    userPromptChars: userPrompt.length,
+    disclosures: ((instance as AnyRecord).sourceBreadthFoldDisclosures ?? []) as AnyRecord[],
+  };
+}
+
+console.log(`
+observation catalog tool — stage 3a replay over the real corpus
+  observations (real): ${realObservations.length}
+  byte budget:         ${SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET}
+  cap (OFF):           ${ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT}
+`);
+
+// [A] + [B] — the real 59-observation corpus.
+console.log("[A/B] real corpus — OFF (detailed, capped) vs ON (navigation, uncapped)");
+const off = await author(realObservations, false);
+const on = await author(realObservations, true);
+
+const offRows = off.payload.source_observations as AnyRecord[];
+const offDetailRows = offRows.filter((row) => row.structural_data).length;
+if (offDetailRows === 0) {
+  fail("A OFF carried no structural_data — the contrast below would be vacuous");
+}
+// The point of arm A is not "OFF is bigger" — it is that on THIS corpus OFF does not survive at all.
+// If that ever stops being true the arm must say so rather than quietly becoming a size comparison.
+const offOverCeiling = off.userPromptChars > CODEX_PROMPT_INPUT_CHAR_LIMIT;
+ok(
+  `[A] OFF dispatches ${off.userPromptBytes} B / ${off.userPromptChars} chars, ${offRows.length} rows, ` +
+    `${offDetailRows} carrying detail — ${
+      offOverCeiling
+        ? `OVER the ${CODEX_PROMPT_INPUT_CHAR_LIMIT}-char worker ceiling (this surface kills the real run today)`
+        : `under the ${CODEX_PROMPT_INPUT_CHAR_LIMIT}-char ceiling`
+    }`,
+);
+
+const onRows = on.payload.source_observations as AnyRecord[];
+if (onRows.length !== realObservations.length) {
+  fail(`B ON offered ${onRows.length} of ${realObservations.length} observations`);
+}
+if (onRows.some((row) => row.structural_data !== undefined)) {
+  fail("B ON leaked structural_data into the navigation catalog");
+}
+if (on.userPromptBytes >= off.userPromptBytes) {
+  fail(`B ON (${on.userPromptBytes} B) is not smaller than OFF (${off.userPromptBytes} B)`);
+}
+if (on.disclosures.length !== 0) {
+  fail("B ON disclosed a demotion on a corpus that fits the pinned rung");
+}
+if (on.userPromptChars > CODEX_PROMPT_INPUT_CHAR_LIMIT) {
+  fail(`B ON still exceeds the worker ceiling: ${on.userPromptChars} chars`);
+}
+ok(
+  `[B] ON dispatches ${on.userPromptBytes} B (${(off.userPromptBytes / on.userPromptBytes).toFixed(1)}× smaller), ` +
+    `all ${onRows.length} observations offered, zero detail rows, nothing to disclose` +
+    (offOverCeiling ? " — the overflow in [A] becomes a bounded dispatch" : ""),
+);
+
+// [C] + [D] — the same REAL rows scaled past the cap.
+console.log(`\n[C/D] real rows replicated to ${SCALE_TO} observations`);
+const scaledObservations = scaled(SCALE_TO);
+const scaledOff = await author(scaledObservations, false);
+const scaledOffIds = scaledOff.payload.prompt_visible_observation_ids as string[];
+if (scaledOffIds.length !== ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT) {
+  fail(`C OFF offered ${scaledOffIds.length} ids, expected the cap ${ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT}`);
+}
+const omittedCounter =
+  (scaledOff.payload.source_observation_prompt_policy as AnyRecord).omitted_prioritized_observation_count;
+if (omittedCounter !== 0) {
+  fail(`C the omission counter reported ${omittedCounter} — the defect is that it reports nothing`);
+}
+ok(
+  `[C] OFF drops ${SCALE_TO - scaledOffIds.length} of ${SCALE_TO} observations and the only omission ` +
+    `counter still reads ${omittedCounter} — silent (design §1.2)`,
+);
+
+const scaledOn = await author(scaledObservations, true);
+const scaledOnRows = scaledOn.payload.source_observations as AnyRecord[];
+const scaledOnIds = scaledOn.payload.prompt_visible_observation_ids as string[];
+if (scaledOnRows.length !== SCALE_TO || scaledOnIds.length !== SCALE_TO) {
+  fail(`D ON offered ${scaledOnIds.length} ids / ${scaledOnRows.length} rows, expected ${SCALE_TO}`);
+}
+if (new Set(scaledOnIds).size !== SCALE_TO) fail("D duplicate ids — the scaled corpus collapsed");
+if (scaledOn.userPromptBytes > SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET) {
+  fail(`D ON dispatched ${scaledOn.userPromptBytes} B over the ${SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET} B budget`);
+}
+const rung = scaledOn.disclosures.length > 0
+  ? String((scaledOn.disclosures[0]!.disclosure as AnyRecord).fold_level)
+  : "one_line (pinned, no demotion)";
+if (scaledOn.disclosures.length > 0 && scaledOn.disclosures[0]!.surface !== "maturation_answer_support") {
+  fail(`D disclosure attributed to ${scaledOn.disclosures[0]!.surface}`);
+}
+ok(
+  `[D] ON offers all ${SCALE_TO} at rung '${rung}', ${scaledOn.userPromptBytes} B ≤ budget ` +
+    `(OFF would have offered ${scaledOffIds.length})`,
+);
+
+console.log(
+  "\n✓ OBSERVATION CATALOG TOOL STAGE 3A REPLAY PASS (A baseline, B collapse, C silent-drop control, D coverage)",
+);

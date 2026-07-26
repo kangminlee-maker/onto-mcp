@@ -94,6 +94,11 @@ export interface AuthoredArtifactReuseMatch {
   // authored directive's detail rung on an overflowing candidate catalog, so — like the projection
   // budget above — it invalidates reuse even when the captured observations are byte-identical.
   source_breadth_fold: boolean;
+  // Observation-catalog-tool push layer (design 20260726 §6, stage 3a): flipping it changes the
+  // answer-support ledger's authored prompt (navigation catalog of every approved observation vs a
+  // capped detailed one), so — like source_breadth_fold above — a resume across a flag change must
+  // regenerate rather than reuse an artifact authored in the other mode.
+  source_observation_catalog_tool: boolean;
   // P1-C2-A (R2/R8): the order-independent aggregate of the per-observation leaf-read
   // llm_touch_fingerprints (ⓐ+ⓑ). Folding the fingerprint VALUE — never the leaf-read OUTPUT —
   // rotates the seed key when the leaf-reader model/prompt or a low-confidence region changes, so a
@@ -364,6 +369,11 @@ export function authoredArtifactReuseMatch(args: {
     // flag change must regenerate rather than silently reuse the other rung's selection. Always-present
     // boolean (over-rotates every key ONCE at upgrade — the documented safe direction).
     source_breadth_fold: args.directiveAuthor.sourceBreadthFold === true,
+    // Stage 3a: an answer-support prompt-projection knob, same treatment and same reason as the
+    // fold above. Always-present boolean (over-rotates every key ONCE at upgrade — the documented
+    // safe direction).
+    source_observation_catalog_tool:
+      args.directiveAuthor.sourceObservationCatalogTool === true,
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
     // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —

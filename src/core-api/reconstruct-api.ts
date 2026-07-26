@@ -1223,6 +1223,12 @@ export function createOntoReconstructCoreApi(
       // than threaded through the run params. Absent = off, byte-identical.
       const sourceBreadthFold =
         settings.reconstruct?.execution?.source_breadth_fold === true;
+      // Observation catalog tool — push layer (design 20260726 §6, stage 3a). Same shape as the fold
+      // above: an author-level projection knob (it lives entirely inside writeAnswerSupportLedger),
+      // so it rides the directive-author construction args rather than the run params. Absent = off,
+      // byte-identical.
+      const sourceObservationCatalogTool =
+        settings.reconstruct?.execution?.source_observation_catalog_tool === true;
       const authorProviderBefore =
         baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
       const authorProviderAfter =
@@ -1449,6 +1455,9 @@ export function createOntoReconstructCoreApi(
             projectRoot,
             // PR-3: the fallback directive author folds identically (same author-level projection knob).
             ...(sourceBreadthFold ? { sourceBreadthFold: true } : {}),
+            // Stage 3a: and projects the same answer-support catalog — a fallback dispatch must not
+            // silently author the ledger in the other mode.
+            ...(sourceObservationCatalogTool ? { sourceObservationCatalogTool: true } : {}),
             semanticMapSynthesizeLlmConfig: fallbackLlmConfig,
             enableSemanticMapAuthoring: true,
             semanticMapDispatchCapabilities: {
@@ -1540,6 +1549,9 @@ export function createOntoReconstructCoreApi(
           projectRoot,
           // PR-3: projection-layer breadth fold (design 20260723 §8) — author-level knob, off = byte-parity.
           ...(sourceBreadthFold ? { sourceBreadthFold: true } : {}),
+          // Stage 3a: observation-catalog-tool push layer (design 20260726 §6) — author-level knob,
+          // off = byte-parity.
+          ...(sourceObservationCatalogTool ? { sourceObservationCatalogTool: true } : {}),
           ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
           // Production opt-in + per-role synthesize override (design §5.5/§5.2)
           // from the single wiring seam. Opt-in absent/false = pair not

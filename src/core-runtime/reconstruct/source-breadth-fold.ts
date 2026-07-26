@@ -99,6 +99,23 @@ export const SOURCE_BREADTH_FOLD_LEVELS: readonly BreadthFoldLevel[] = [
   "anchor",
 ];
 
+/**
+ * Ladder for the observation-catalog-tool surface (design 20260726 §6, stage 3a). Same rungs, same
+ * order, same projector — it just STARTS at `one_line` instead of `full`.
+ *
+ * The two finer rungs are absent by design rather than by budget: in tool mode the prompt's job is
+ * navigation (pick ids), and the detail those rungs carry is what the pull layer fetches on demand.
+ * Pinning the start makes this prompt MORE deterministic than today's, where the rung is chosen by
+ * whatever the corpus happens to measure. The tail rungs stay reachable so an extreme corpus demotes
+ * instead of dropping observations, and `over_budget` at `anchor` is the pre-dispatch fail-loud
+ * (design §6: "최소 anchor조차 안 들어가면 워커 기동 전에 실패한다").
+ */
+export const OBSERVATION_CATALOG_TOOL_FOLD_LEVELS: readonly BreadthFoldLevel[] = [
+  "one_line",
+  "summary_anchor",
+  "anchor",
+];
+
 /** The rungs BELOW `one_line`, which are derived from its rows rather than re-projected (PR-4b). */
 export type BreadthFoldTailLevel = Extract<BreadthFoldLevel, "summary_anchor" | "anchor">;
 
@@ -125,6 +142,29 @@ export const SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS: Readonly<
 function locationIsRedundantWithSourceRef(row: Record<string, unknown>): boolean {
   if (!("location" in row)) return true;
   return row.location === row.source_ref;
+}
+
+/**
+ * What a rung costs the reader, in one clause, for the R2 disclosure. Lives here because the ladder
+ * owns which keys each rung drops: a disclosure written at a call site drifts from the ladder the
+ * moment a rung changes, and a cross-family review caught exactly that — one message that said
+ * "summaries were dropped" for BOTH tail rungs, when `summary_anchor` keeps `summary` and drops only
+ * a `location` that repeated `source_ref`. Total over BreadthFoldLevel so a new rung fails the
+ * exhaustiveness test rather than silently reporting the fallback.
+ */
+export function breadthFoldRungDetailLoss(level: BreadthFoldLevel): string {
+  switch (level) {
+    case "full":
+      return "no detail was dropped";
+    case "inventory_skeleton":
+      return "per-observation code inventory was tightened to a skeleton";
+    case "one_line":
+      return "per-observation structural detail was dropped";
+    case "summary_anchor":
+      return "per-observation `location` was dropped where it merely repeated `source_ref`";
+    case "anchor":
+      return "per-observation summaries were dropped — the catalog carries navigation identity only";
+  }
 }
 
 /**

@@ -95,6 +95,21 @@ import type { DocumentExcerptProjectionTruncation } from "./projection-truncatio
 import type { SemanticMapAnyProjection } from "./semantic-map-projection.js";
 import type { BreadthFoldDisclosure } from "./source-breadth-fold.js";
 
+/**
+ * A breadth-fold demotion plus the prompt surface it happened on. The fold module owns the
+ * measurement; which catalog was demoted is a wiring fact, so it is named here rather than pushed
+ * into the pure module. runReconstruct branches on `surface` to write an honest status event —
+ * without it the answer-support surface's demotions would be recorded as admission's.
+ */
+export type BreadthFoldSurface =
+  | "source_admission_selection"
+  | "maturation_answer_support";
+
+export interface BreadthFoldDisclosureRecord {
+  readonly surface: BreadthFoldSurface;
+  readonly disclosure: BreadthFoldDisclosure;
+}
+
 // Maturation value-read cut (design §13.3/§13.5). Stage-internal types for the value-read
 // capability: a deterministic trigger builds candidates (limitation-backed material rows whose
 // value-dependent limitations could be cleared by reading authorized runtime-target cells), the
@@ -153,6 +168,15 @@ export interface ReconstructDirectiveAuthor {
    */
   readonly sourceBreadthFold?: boolean;
   /**
+   * Observation-catalog-tool opt-in (design 20260726 §6, stage 3a — push layer). When ON, the
+   * maturation answer-support prompt carries a NAVIGATION catalog of every consumption-approved
+   * observation pinned at the `one_line` rung instead of 64 detailed ones. Folded into the resume
+   * reuse key for the same reason as sourceBreadthFold: the authored ledger differs between the two
+   * modes, so a resume across a flag change must regenerate rather than reuse the other mode's
+   * artifact. Absent/false = today's capped detailed projection, byte-identical.
+   */
+  readonly sourceObservationCatalogTool?: boolean;
+  /**
    * Run-scoped sink (deduped by observation) of documents whose captured excerpt a
    * seed prompt's projection budget sliced. Populated during authoring; read by
    * runReconstruct after authoring to record the truncation durably and surface it.
@@ -161,12 +185,18 @@ export interface ReconstructDirectiveAuthor {
   readonly documentExcerptProjectionTruncations?: DocumentExcerptProjectionTruncation[];
   /**
    * Run-scoped sink (mirroring documentExcerptProjectionTruncations) of breadth-fold demotions on the
-   * ADMISSION-selection surface. The directive surface discloses its fold in-artifact on
-   * `open_questions`; the admission-selection artifact (a source-frontier) has no free-text channel,
-   * so its disclosure lands here and runReconstruct records it durably as a runtime status event —
-   * a demoted rung is never silent (R2). Empty unless the fold actually demoted a rung.
+   * surfaces whose artifact has no free-text channel of its own — the ADMISSION-selection frontier and
+   * (stage 3a) the maturation ANSWER-SUPPORT ledger. The directive surface discloses its fold
+   * in-artifact on `open_questions` and does not appear here. runReconstruct records each entry
+   * durably as a runtime status event — a demoted rung is never silent (R2). Empty unless a fold
+   * actually demoted a rung.
+   *
+   * Each entry names its `surface` because the two differ in what a rung MEANS: admission demotes
+   * from `full`, answer-support starts pinned at `one_line` and demoting means it could not even
+   * carry summaries. One sink, discriminated — not two sinks — so a future surface joins by adding a
+   * name rather than another array.
    */
-  readonly sourceBreadthFoldDisclosures?: BreadthFoldDisclosure[];
+  readonly sourceBreadthFoldDisclosures?: BreadthFoldDisclosureRecord[];
   /**
    * Canonical authoring-model identity ("<provider>/<model_id>") folded into the
    * resume reuse key (DET-1/CG-2). Resuming under a DIFFERENT authoring model must

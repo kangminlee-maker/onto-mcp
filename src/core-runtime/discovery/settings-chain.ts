@@ -553,6 +553,19 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // the budget the fold reproduces today's full projection byte-for-byte. Absent = off — the flat
   // full projection + the always-on guard exactly as today, byte-identical.
   "source_breadth_fold",
+  // Observation catalog tool — PUSH layer opt-in (design 20260726-observation-catalog-tool §6,
+  // stage 3a). When true, the maturation answer-support prompt projects a NAVIGATION catalog of
+  // every consumption-approved observation (id + source_ref + summary, pinned at the `one_line`
+  // rung, no slot cap) instead of at most 64 observations carrying detail — which today drops
+  // supplemental ids past the cap with no counterpart to
+  // omitted_prioritized_observation_count (§1.2). Demotes down the tail rungs only if the catalog
+  // itself would overflow, and fails loud pre-dispatch when even `anchor` does not fit, so a large
+  // corpus never becomes an opaque worker exit. Projection-only: mints/mutates no observation, and
+  // the catalog is built from the SAME consumption-gated projection the prompt already uses, so no
+  // observation becomes visible that push does not already allow. The pull side (facade + grant
+  // token + citation⊆served) lands in stage 3b; until then this key is push-only and stays default
+  // OFF. Absent = off — today's capped detailed projection, byte-identical.
+  "source_observation_catalog_tool",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];

@@ -18,7 +18,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
-import { createDirectCallReconstructDirectiveAuthor } from "../src/core-runtime/reconstruct/run.ts";
+// Import from the module that DEFINES the factory, not from run.ts: the run.ts decomposition track
+// (PR #264) stopped re-exporting it, which left this replay unrunnable at HEAD. Sibling replays
+// (source-breadth-fold-replay-dw3b.mts) already import it from here.
+import { createDirectCallReconstructDirectiveAuthor } from "../src/core-runtime/reconstruct/direct-call-directive-author.ts";
 import { SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET } from "../src/core-runtime/reconstruct/source-breadth-fold.ts";
 
 const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..");
@@ -154,8 +157,12 @@ console.log(`\n[B/C] real units replicated to ${SCALE_TO} admitted refs (measure
   if (new Set(rows.map((row) => row.source_ref)).size !== SCALE_TO) {
     fail("C duplicate refs — the scaled corpus collapsed");
   }
-  const disclosure = (author.sourceBreadthFoldDisclosures ?? [])[0];
-  if (!disclosure) fail("C no fold disclosure recorded — a demoted rung would be silent");
+  const disclosureRecord = (author.sourceBreadthFoldDisclosures ?? [])[0];
+  if (!disclosureRecord) fail("C no fold disclosure recorded — a demoted rung would be silent");
+  if (disclosureRecord.surface !== "source_admission_selection") {
+    fail(`C disclosure attributed to the wrong surface: ${disclosureRecord.surface}`);
+  }
+  const disclosure = disclosureRecord.disclosure;
   if (disclosure.fold_level === "full") fail("C disclosed 'full' — nothing was actually demoted");
   if (selection.frontier_refs.length !== 1) fail("C selection did not parse through the real path");
   if (JSON.stringify(scaledInventory) !== before) fail("C MUTATED the inventory — not projection-only");

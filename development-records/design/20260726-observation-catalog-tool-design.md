@@ -1,7 +1,7 @@
 # 관측 카탈로그 도구 — 설계 (2026-07-26)
 
 > 상태: **승인 완료**(핸드오프 `20260726-observation-catalog-tool-stage1-start-here.md` 기록) ·
-> **단계 0a·0b·1·2 착지.** 다음 = 단계 3(ledger 표면 opt-in flip).
+> **단계 0a·0b·1·2·3a 착지.** 다음 = 단계 3b(가져가는 층 배선).
 > 계기: owner 지시 "입력하지 않고 직접 가져가게 할 수는 없나?" (2026-07-26)
 > 방법: 블라인드 패킷 1벌 → **이종 계열 독립 설계 2벌**(Codex gpt-5.6-sol/max hermetic ·
 > Claude opus, 저장소 열람 허용) → 주 세션이 실코드로 재검증 후 종합. 초안 원문은
@@ -359,6 +359,55 @@ feature 이름은 **LLM 호출 없이** 확정했다 — `--strict-config`가 �
 > 이 단계는 여전히 **관측 도구 설계의 채택 여부와 무관하게** 값이 있다 — §5.1의 실제 위험
 > 두 건이 여기서 닫힌다.
 
+### 5.5 façade 도달·토큰 전달 실측 (단계 3 선행, 2026-07-27)
+
+§12가 단계 3의 선행 조건으로 남겨둔 세 질문에 답한다. **측정 조건은 production 배선 그대로**이며
+(`callCodexCli`, `llm-caller.ts:944-995`), 모든 팔이 대조군을 동반한다.
+증거·재현 절차는 `benchmark/observation-facade-probe/`.
+
+| 팔 | 추가 | 결과 |
+|---|---|---|
+| A 대조군 | 없음 | `SERVERS: NONE` · `SHELL: NO` · façade 프로세스 미기동 |
+| B | façade 등록(`-c mcp_servers.*`) | **서버 기동 + `initialize` + `tools/list`** (계측기 자신의 사이드 로그) |
+| C | B + 호출 지시 | `user cancelled MCP tool call` |
+| E | C + `approval_policy="never"` | 동일 실패 — exec 기본값이 이미 `never`다 |
+| H | C + `default_tools_approval_mode="auto"` | 동일 실패 |
+| **F·G** | C + `default_tools_approval_mode="approve"` / 도구별 `approval_mode="approve"` | **호출 완료** |
+| I | F + **350,000자 프롬프트** | **완료** |
+| J·K | F + **65,535자 도구 응답** | **완료·무손실**(0/25/50/75/99% 마커 전수 수신) |
+
+1. **façade는 강화 세트 하에서 등록된다.** `--ignore-user-config`는 사용자 config만 무시하고 `-c`
+   오버라이드는 살아 있다. §12의 "명시 등록 서버가 살아남는가"는 **살아남는다**로 닫힌다.
+2. **`--disable shell_tool` 하에서 MCP 호출이 산다** — 셸과 MCP가 다른 경로라는 가정이 확인됐다.
+3. **승인 지렛대가 새로 필요하다.** 비대화형이라 승인 요청은 자동 거부된다. 듣는 키는
+   `mcp_servers.<name>.default_tools_approval_mode="approve"`(또는 도구별 `tools.<tool>.approval_mode`)
+   뿐이고 **우리가 등록한 서버로 범위가 한정된다** — 전역 승인 완화가 아니다. 유효값
+   `auto|prompt|writes|approve`는 잘못된 값의 serde 에러로 **LLM 없이** 열거했다.
+4. **`spawn` env는 상속되지 않는다.** codex가 MCP 자식에게 주는 env는 10개뿐이다. 토큰 경로는
+   `mcp_servers.<name>.env.*` 또는 `args`이며 **둘 다 도달**한다. §4.1의 "환경에 구워 넣는다"는
+   **codex config를 경유**하는 형태로만 성립한다.
+5. **토큰은 모델 입력에 없다.** codex가 상류로 보내는 실제 요청 본문을 포획해(6회 × 89,049자) 두 비밀
+   문자열·façade 경로·node 경로가 **0회**임을 확인했다. 공허하지 않음의 근거는 본문이 파싱되고
+   프롬프트·지시·도구 선언을 모두 담고 있다는 것이다. **경계**: 첫 턴만 포획했다.
+   → §4.1의 "모델 입력에 세션 식별자가 없다"는 전제가 유지된다.
+
+**설계에 영향 있는 부수 발견**
+
+- **codex는 MCP 도구를 모델에게 직접 광고하지 않는다.** 요청에 실리는 도구는 `exec`(V8 격리 JS) ·
+  `wait` · `request_user_input` 셋이고, MCP 도구는 그 샌드박스 안에서 `tools.mcp__<server>__<tool>()`로
+  노출돼 `ALL_TOOLS`로 찾게 되어 있다. **단계 3의 프롬프트가 façade 이름과 호출 방법을 명시해야 한다** —
+  발견을 모델의 탐색에 맡기지 않는다(성공한 팔이 전부 그 방식이다).
+- **`exec`의 `max_output_tokens` 기본값이 10,000 토큰이다.** 65,535자 페이지가 무손실로 온 것은 모델이
+  샌드박스에서 프로그램적으로 훑을 수 있기 때문일 수 있고, 그 크기가 모델 맥락에 그대로 들어간다는
+  뜻은 아니다. 누적 회계는 **과다 과금 방향**이라 천장은 안전하다. 단계 5가 볼 것은 "모델이 실제로 무엇을
+  읽었나"다.
+- **세션 프레이밍 실측치가 상수와 자릿수가 다르다.** 첫 요청 89,049자 = 도구 선언 12,342 + codex 지시
+  18,088 + 권한 지시 21,390 + **cwd의 AGENTS.md 53,047** + 우리 프롬프트 146. `OBSERVATION_READ_SESSION_
+  RESERVE_CHARS = 8,192`와 비교되지만 **같은 저울이 아니다** — 설계가 모델링하는 천장은 stdin 한계이고
+  이 프레이밍은 상류 방향이다. §12의 "같은 천장인가" 가정에 처음으로 숫자가 붙었다.
+- **모델이 도구를 안 부르는 일이 실제로 일어난다.** 동일 배선 2회 중 1회(D)가 호출을 시도조차 하지 않고
+  "tool unavailable"이라 답했다(luna/low 관측). §8의 "모델이 도구를 안 씀" 행은 이론이 아니다.
+
 ## §6. 밀어넣는 층
 
 모든 관측의 **상세 없는 카탈로그**를 유지한다. 목표 표현은 기존 fold의 `one_line` 등급
@@ -424,7 +473,8 @@ dispatch 시도별 감사 레코드에 **조회한 id + 내용 해시 + 페이�
 | **0b** | **워커 기동 강화 세트 적용**(§5.3.4): 전용 `CODEX_HOME` + `--disable apps` + `--disable shell_tool` (+ `-s read-only` 유지) | ①도구 열거가 비어있지 않음을 단언(공허 통과 방지) ②`day1-mcp`·`onto_reconstruct`·`mcp__codex_apps__github._*`·셸 **부재를 개별 확인** ③**셸을 끈 상태에서 reconstruct 저작이 정상 완주하는지** — 미확인 가정이므로 필수 ④`web.run`·`collaboration.*` 잔존 여부 기록 ⑤네트워크 차단 프로파일(§5.3.4 미측정) 평가. **설계 채택과 무관하게 값 있음** |
 | **1** | ~~순수 아티팩트 리더~~ — **완료(2026-07-26)**, `src/core-runtime/reconstruct/observation-read.ts` (inert, 소비자=테스트뿐) | §9.1 참조 — done-when 4/4 + 교차검증 반영 |
 | **2** | ~~세션 범위 결속 + 누적 예산~~ — **완료(2026-07-26)**, `observation-read-grant.ts` (inert, 소비자=테스트뿐). owner 결정으로 **§3.1 소비 권한 게이트 포함** | §9.2 참조 — done-when 8/8 + 변이 13종 검증 |
-| 3 | ledger 표면 적용 (opt-in, default OFF) | 조회 안 하면 실패 / A 조회 후 B 인용하면 실패 / OFF는 byte-identical |
+| **3a** | ~~ledger 표면 **밀어넣는 층**~~ — **완료(2026-07-27)**, opt-in `source_observation_catalog_tool` default OFF. owner 결정으로 3b와 분리 착지 | §9.3 참조 — done-when 4/4 + 변이 9종 검증 |
+| 3b | ledger 표면 **가져가는 층**: façade + 토큰 + `인용 ⊆ 조회` (같은 opt-in) | 조회 안 하면 실패 / A 조회 후 B 인용하면 실패 / OFF는 byte-identical |
 | 4 | 감사 + 사후 지문 | 조회 후 크래시해도 조회 기록 유지. 감사 실패 시 상세 미반출 |
 | 5 | 실측 — 59파일 코퍼스 재실행 | 크기 거부 없이 완주 · 인용 100% 해석 · 인용 ⊆ 조회 |
 | 6 | 클래스 가드 — 모든 규모-반응 투영을 공용 상세 예산 층으로 | AST 인벤토리 재실행 전 **대상 집합 비어있지 않음** 단언 + 의도적 위반 fixture가 잡히는지 확인 |
@@ -615,6 +665,66 @@ id 상한을 올리면 하한 테스트가 실패하는 결속이 실측으로 �
 **게이트**: `check:*` 15 green + 2 rc=1(베이스라인과 동일, gitignored 세션 잔해 2파일 `ignored=yes tracked=no`,
 `src/`·`scripts/` 실위반 0 확인) · vitest **221파일 3,777 pass · 1 todo**(단계 1의 220/3,727에서 +50테스트).
 
+### §9.3 단계 3a 착지 기록 (2026-07-27)
+
+**owner 결정(2026-07-27)**: 단계 3을 3a(밀어넣는 층)와 3b(가져가는 층)로 **분리 착지**한다.
+토큰 채널은 **codex config `env`**(§5.5 실측 4)로 정한다 — 3b에서 쓴다.
+
+**산출**: 신규 파일은 테스트 하나(`observation-catalog-tool.test.ts`, 7 테스트). 나머지는 배선이다 —
+`authoring-prompt-payloads.ts`(캡 제거 모드) · `source-breadth-fold.ts`(`OBSERVATION_CATALOG_TOOL_FOLD_LEVELS`) ·
+`direct-call-directive-author.ts`(투영·폴드·가드·공시) · `directive-author-contract.ts`(플래그 + 공시 레코드) ·
+`run.ts`(공시 소비) · `authored-artifact-reuse.ts`(재사용 키) · `reconstruct-api.ts`·`settings-chain.ts`(설정 키).
+
+**계약 요약**: `source_observation_catalog_tool: true`면 maturation answer-support 프롬프트가
+**소비 승인된 전 관측**을 `one_line` 등급 항해 행으로 싣는다(캡 없음, 상세 없음). 카탈로그 자체가
+예산을 넘으면 tail 등급으로만 강등하고(관측은 안 버린다), `anchor`조차 안 맞으면 **dispatch 전에** 실패한다.
+OFF는 오늘의 캡 64 + 상세 투영 그대로다.
+
+| done-when | 결과 |
+|---|---|
+| OFF byte-identical | **두 트리 대조**로 증명 — `scripts/off-parity-probe.mts`는 신규 플래그를 언급하지 않아 base(`23a00f3`) worktree와 브랜치 양쪽에서 컴파일된다. 실 59관측 코퍼스 OFF 페이로드가 양쪽 모두 **1,331,365자 · sha256 `bebb095a…`**. 음성 대조(인접 키 2개 순서 교환)에서 digest가 `eee936a4…`로 바뀌므로 무감각이 아니다. 여기에 단위 테스트의 키 순서·policy 값 오라클 + 전체 스위트 회귀 0 |
+| §1.2 조용한 절단 제거 | OFF는 71개 중 64개만 싣고 `omitted_prioritized_observation_count: 0`(= 안 보임)을 실측으로 재현, ON은 71개 전부 + OFF가 버린 `obs-70` 존재 |
+| 강등은 상세만, 폭은 유지 | 3,000관측 코퍼스에서 tail 등급으로 강등하고 행 수 3,000 유지 · 예산 이하 · 공시 1건. **region 축도 확인** — 한 파일 9 region에서 OFF 8 / ON 9 |
+| anchor도 안 맞으면 기동 전 실패 | 4,000관측 × 긴 경로에서 `assertPromptPayloadByteLimit` throw, **dispatch 0회** |
+
+**실 코퍼스 replay**(`scripts/observation-catalog-tool-replay.mts`, LLM 미호출): OFF는 실 59관측에서
+**1,331,438자 — 워커 천장 1,048,576자 초과**(이 표면이 실제로 런을 죽인다), ON은 **32,989 B(40.4× 작음)**에
+전 관측 제공. 실 행을 500개로 복제하면 OFF는 64개만 싣고 누락 카운터는 **0을 보고**(§1.2 결함을 실데이터로
+재현), ON은 500개 전부를 고정 등급에서 예산 이하로 싣는다.
+
+**변이 9종 → 9 탐지**(모드 플래그 무시 · 캡을 계속 적용 · 사다리 시작을 `full`로 · 바이트 가드 제거 ·
+공시 제거 · 공시 표면 오귀속 · 캡 값 오보고 · OFF policy 문구 드리프트 · 강등 없어도 공시).
+
+**변이가 잡은 결함 1건**: 사다리 시작을 `full`로 되돌리는 변이가 **거짓 공시**를 만들었다 —
+투영기는 `full`을 요청받아도 one_line 행을 돌려주므로 폴드가 `fold_level: "full"`이라고 **없던 등급을**
+기록한다. 테스트는 잡았지만(공시 대조) 원인이 아니라 증상을 잡은 것이라, 투영기가 구현하지 않은 등급에
+대해 **fail-loud**하도록 고쳤다. 재실행하니 같은 변이가 5개 테스트를 명시적 에러로 실패시킨다.
+
+**교차검증**(codex `gpt-5.6-sol`/xhigh, hermetic read-only, 주장 6개 적대 공격): **5건. 2건 수정, 1건 주장 정정,
+2건 경계 명시.** 리뷰어가 `C2`(전 관측 제공)·`C3`(조용한 드롭 없음)·`C5`(재사용)를 반박했다.
+
+| 발견 | 재현 | 처분 |
+|---|---|---|
+| **F1 high** — ON에서도 `capProjectedRegionsPerFile`이 걸린다. 한 파일의 region 관측 9개 중 **8개만** 나가고, 누락 카운터는 0이며, 인용 게이트가 9번째 인용을 거부한다. **그리고 내 테스트는 이 경로에 공허했다** — fixture의 모든 관측이 서로 다른 `source_ref`를 갖는다 | **재현**: `catalogTool=true in=9 out=8` | **수정**: catalog-tool 모드에서 region 캡을 **해제**했다. 그 캡의 근거는 64 슬롯 경쟁인데 슬롯이 없어지면 근거가 사라지고 **바로 그 §1.2 결함이 region 축에서 재발**한다. region 형제 9개 테스트 추가(OFF 8 / ON 9 대조) |
+| **F2 medium** — 플래그를 뒤집고 resume하면 "재생성"이 아니라 `resume provenance mismatch`로 **실패**한다 | 확인(`authored-artifact-reuse.ts:458-464`) | **주장 정정**: 성질은 "다른 모드의 산출물을 재사용하지 않는다"이고 그 강제 방식은 **fail-loud**다. 안전한 방향이며 `source_breadth_fold`와 동일 메커니즘 |
+| **F3 medium** — 강등 공시는 저작이 **실패하면** 유실된다(push는 dispatch 전, drain은 저작 성공 후, 다음 런이 sink를 비운다) | 확인(`run.ts:1221`·drain 위치) | **경계 명시**: admission 표면과 동일한 형태다. 저작이 죽은 런은 산출물이 없으므로 "LM이 무엇으로 골랐나"의 공시 대상도 없다. 고치려면 저작기에 sessionRoot를 통과시켜야 하고 3a 범위 밖 |
+| **F4 low** — `summary_anchor` 공시 문구가 **틀렸다**. 그 등급은 `summary`를 유지하고 중복 `location`만 버리는데 메시지는 항상 "요약을 버렸다"고 말했다 | 확인(`SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS`) | **수정**: 문구를 사다리 소유 모듈로 옮겨 등급별로 파생(`breadthFoldRungDetailLoss`) + 등급별 문구가 서로 다르고 키 선언과 일치하는지 테스트 |
+| **F5 low** — `measured_prompt_bytes`가 `codexCombinedPrompt` 구분자 **7자**를 안 센다 | 확인(산술 정확) | **미수정·경계 명시**: `promptPayloadByteCount`는 세 표면이 공유하는 측정 규약이고, 예산이 천장보다 ~8 KiB 낮은 이유가 바로 이 구분자+codex 프레이밍이다. 여기만 바꾸면 나머지 두 표면과 갈린다 |
+
+**수정 후 변이 11종 → 11 탐지**(기존 9 + region 캡 재적용 + 두 tail 등급이 같은 문구).
+**교훈: 내 fixture가 한 축에서만 다양했다** — 모든 관측에 서로 다른 `source_ref`를 준 탓에 region 축이
+통째로 미검증이었고, "전 관측"이라는 문장은 그 축에서 거짓이었다.
+
+**경계(정직)**:
+- **3a 단독으로 ON은 제품적으로 완성이 아니다** — 상세를 가져올 층이 없으니 ON은 요약만 남은 프롬프트다.
+  키가 default OFF인 이유이고, 승격은 3b 이후 별도 결정이다.
+- **재사용 키가 도는 것과 resume이 이어지는 것은 다르다.** 플래그를 뒤집은 채 기존 세션을 resume하면
+  `resume provenance mismatch`로 **실패**한다(다른 모드의 산출물을 쓰지 않는다는 성질은 지켜진다).
+  모드를 바꾸려면 새 세션이 필요하다.
+- **표면 가드는 모드에 게이팅했다.** 항상-켬으로 두면 예산과 천장 사이 좁은 대역에서 OFF 런의 동작이
+  바뀌어 byte-identical이 깨진다. 그 대역의 안전망은 PR #265의 dispatch 백스톱이 계속 진다.
+- IMPLEMENTATION_MAP.html은 이 트랙 전체가 아직 갱신하지 않았다(단계 1·2도 동일). 3b 착지 때 한 번에.
+
 ## §10. 두 초안이 갈린 곳과 종합 판단
 
 | 쟁점 | Codex | Claude | 채택 |
@@ -638,8 +748,8 @@ id 상한을 올리면 하한 테스트가 실패하는 결속이 실측으로 �
 
 ## §12. 미해결 (정직)
 
-- **큰 페이로드와 함께일 때도 워커 도구가 살아 있는가** — 미측정. 프로브는 작은 프롬프트였다.
-  단계 0에서 실측한다.
+- ~~큰 페이로드와 함께일 때도 워커 도구가 살아 있는가~~ — **확인 완료(2026-07-27, §5.5 팔 I)**.
+  350,000자 프롬프트와 함께 façade 호출이 완주했다.
 - ~~codex가 상속 MCP 설정을 완전히 대체할 수 있는가~~ — **확인 완료(2026-07-26)**. 사용자 설정
   서버는 제거 가능, `codex_apps`는 불가 → §5.2로 요구를 개정했다. 출하 차단 조건은 해소됐으나
   **정확 일치 요구는 기각**됐다.
@@ -652,10 +762,14 @@ id 상한을 올리면 하한 테스트가 실패하는 결속이 실측으로 �
   (`OBSERVATION_READ_EXCHANGE_FRAMING_CHARS=1,024` · `OBSERVATION_READ_SESSION_RESERVE_CHARS=8,192`)는
   보수적 **모델**이지 측정값이 아니다. 단계 5에서 실측한다. **반증 조건**: 실측 프레이밍이 예비를
   넘으면 오버플로우가 codex 내부로 돌아가므로 상수를 올려야 한다.
+  **부분 진전(2026-07-27, §5.5)**: 상류 요청의 세션 프레이밍을 실측했다 — codex 자체 51,820자 +
+  cwd AGENTS.md 53,047자. 다만 이는 stdin 저울이 아니라 **다음 항목의 가정**에 붙는 숫자다.
+  교환당 프레이밍은 여전히 미측정(포획한 것이 첫 턴뿐이다).
 - **누적 예산이 codex의 실제 제약과 같은 천장을 쓰는가** — `CODEX_PROMPT_INPUT_CHAR_LIMIT`은 **stdin
   입력** 한계로 실측된 값이고(`input_too_large` 페이로드), 턴이 쌓인 대화에 같은 한계가 적용된다는 것은
   §4.2의 **모델링 가정**이다. 보수적 방향(실제가 더 크면 덜 쓸 뿐)이지만 가정임을 명기한다.
-- **`--disable shell_tool` 하에서 façade MCP 서버를 등록할 수 있는가** — §5.3.1의 `--disable apps`가
-  MCP 서버 목록을 비웠는데, 그 팔에는 애초에 사용자 설정 서버가 없었다. 명시 등록한 서버가 살아남는지는
-  **미측정**이며 단계 3의 선행 검증이다. 현 PR #268 배선은 `--ignore-user-config`이므로 워커에서
-  `onto`가 사라진 상태다 — 단계 3은 façade를 다시 들여놓는 경로를 찾아야 한다.
+- ~~`--disable shell_tool` 하에서 façade MCP 서버를 등록할 수 있는가~~ — **확인 완료(2026-07-27, §5.5)**.
+  등록되고, 호출되며, 토큰은 codex config 경유로만 도달하고, 모델 입력에는 나타나지 않는다.
+  **새로 열린 항목**: 승인 지렛대(`default_tools_approval_mode="approve"`)가 워커 배선에 추가돼야 하고,
+  토큰을 `env`로 줄지 `args`로 줄지는 단계 3의 결정 사안이다(둘 다 codex의 argv에 남으므로 **동일 사용자의
+  다른 프로세스에게는 보인다** — 모델 노출과는 다른 층이다. 세션 파일 0600 + 경로만 넘기는 대안이 있다).

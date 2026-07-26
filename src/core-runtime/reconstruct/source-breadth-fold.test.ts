@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  breadthFoldRungDetailLoss,
   foldObservationsToBudget,
   projectBreadthFoldTailRung,
   SOURCE_BREADTH_FOLD_LEVELS,
@@ -32,6 +33,23 @@ import type { CodeSymbolSpan } from "../code-structure-observer.js";
 // is tested directly.
 
 const pretty = (value: unknown): number => JSON.stringify(value, null, 2).length;
+
+describe("breadthFoldRungDetailLoss — the R2 disclosure's wording follows the ladder", () => {
+  it("names a DISTINCT loss for every rung, and never says summaries went at summary_anchor", () => {
+    const losses = SOURCE_BREADTH_FOLD_LEVELS.map((level) => breadthFoldRungDetailLoss(level));
+    expect(losses.length).toBeGreaterThan(0); // the ladder is not empty: the checks below can fail
+    for (const loss of losses) expect(loss.length).toBeGreaterThan(0);
+    expect(new Set(losses).size).toBe(losses.length); // no two rungs share a description
+    // The exact drift a cross-family review caught: summary_anchor keeps `summary` (only a
+    // source_ref-redundant `location` goes), anchor is the rung that costs the summaries.
+    expect(breadthFoldRungDetailLoss("summary_anchor")).toContain("location");
+    expect(breadthFoldRungDetailLoss("summary_anchor")).not.toContain("summaries");
+    expect(breadthFoldRungDetailLoss("anchor")).toContain("summaries");
+    // And the wording matches what the rung key-sets actually declare.
+    expect(SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS.summary_anchor).toContain("summary");
+    expect(SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS.anchor).not.toContain("summary");
+  });
+});
 
 describe("foldObservationsToBudget — pick the finest rung that fits (pure selection)", () => {
   // A monotone ladder: each rung projects a smaller payload than the finer one. `measure` returns the
@@ -716,9 +734,10 @@ describe("PR-4a — the fold reaches the ADMISSION surface (the count-scaling su
     // R2 disclosure: the demoted rung landed on the run-scoped sink runReconstruct records durably.
     const disclosures = author.sourceBreadthFoldDisclosures ?? [];
     expect(disclosures.length).toBe(1);
-    expect(disclosures[0]!.fold_level).not.toBe("full");
-    expect(disclosures[0]!.catalog_observation_count).toBe(2500);
-    expect(disclosures[0]!.over_budget).toBe(false);
+    expect(disclosures[0]!.surface).toBe("source_admission_selection");
+    expect(disclosures[0]!.disclosure.fold_level).not.toBe("full");
+    expect(disclosures[0]!.disclosure.catalog_observation_count).toBe(2500);
+    expect(disclosures[0]!.disclosure.over_budget).toBe(false);
     expect(JSON.stringify(inventory)).toBe(beforeSnapshot);
   });
 

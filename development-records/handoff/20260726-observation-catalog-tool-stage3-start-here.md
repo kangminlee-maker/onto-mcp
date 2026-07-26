@@ -1,4 +1,4 @@
-# 관측 카탈로그 도구 — 단계 3 착수 안내 (2026-07-26)
+# 관측 카탈로그 도구 — 단계 3 착수 안내 (2026-07-26 · 3a 착지 후 2026-07-27 갱신)
 
 > **다음 세션은 여기서 시작한다.** 설계 SSOT: [design/20260726-observation-catalog-tool-design.md](../design/20260726-observation-catalog-tool-design.md)
 > 이전 안내(단계 2): [20260726-observation-catalog-tool-stage2-start-here.md](20260726-observation-catalog-tool-stage2-start-here.md) — 상시 제약은 여전히 유효하다
@@ -7,8 +7,8 @@
 
 ```
 브랜치  feat/observation-grant-stage2  (미푸시 · owner 승인 전 push/PR 금지)
-설계    승인 완료 · 단계 0a·0b·1·2 완료
-다음    단계 3 — ledger 표면 opt-in flip (+ 그 전에 façade 도달 실측)
+설계    승인 완료 · 단계 0a·0b·1·2 완료 · 선행 실측 완료(§2) · 단계 3a 완료
+다음    단계 3b — 가져가는 층 배선(façade + 토큰 + 인용⊆조회). owner 결정 2건은 §3에 반영됨
 ```
 
 | 단계 | 상태 | 착지 |
@@ -17,7 +17,8 @@
 | 0b 워커 도구 표면 차단 | 완료 | PR #268 |
 | 1 순수 아티팩트 리더 | 완료 | main `3178127` (PR #269) · 설계 §9.1 |
 | **2 세션 결속 + 누적 예산 + 소비 게이트** | **완료** | 브랜치 `feat/observation-grant-stage2`(미푸시) · 설계 §9.2 |
-| **3 ledger 표면 opt-in flip** | **다음** | — |
+| **3a 밀어넣는 층**(카탈로그 고정·캡 제거·기동 전 실패) | **완료** | 브랜치 `feat/observation-grant-stage2` · 설계 §9.3 |
+| **3b 가져가는 층**(façade·토큰·인용⊆조회) | **다음** | — |
 | 4 감사 + 사후 지문 | 대기 | — |
 | 5 실측(59파일 벤치 완주) | 대기 | — |
 | 6 클래스 가드 | 대기 | — |
@@ -59,38 +60,73 @@ OBSERVATION_READ_MAX_ID_CHARS          128      (실패 메시지 크기를 묶�
 
 **receipt가 §3의 `조회` 항이다.** 인용 검증(`인용 ⊆ 조회`)은 `receipt.served`를 쓴다.
 
-## 2. 단계 3 전에 반드시 실측할 것 — 미해결이 하나 남아 있다
+## 2. 선행 실측 — **완료(2026-07-27)**. 결과가 단계 3의 배선을 바꾼다
 
-**워커에 façade를 다시 들여놓을 수 있는지 모른다.** PR #268이 `--ignore-user-config`를 붙였고
-그 결과 워커에서 **`onto` MCP 서버가 사라졌다**(의도된 것 — `onto_reconstruct` 재귀 차단). 단계 3은
-범위 제한 façade 하나만 다시 등록해야 하는데:
+증거·재현: `benchmark/observation-facade-probe/` · 설계 반영: §5.5. 11팔 전부 production 배선 + 대조군.
 
-- 설계 §5.2 실측: `-c mcp_servers={}`로는 **비워지지 않는다**. 하지만 **추가**가 되는지는 별개이며 미측정.
-- 설계 §5.3.1 실측: `--disable apps`에서 MCP 서버 목록이 `SERVERS_NONE`이 됐다. 그런데 **그 팔에는
-  애초에 사용자 설정 서버가 없었다** — 명시 등록 서버가 살아남는지는 **측정되지 않았다**.
-- 전용 `CODEX_HOME`은 PR #268이 이미 기각했다(auth.json 복사 시 OAuth 토큰 갱신이 임시 홈에 갇힘).
+| 질문 | 답 |
+|---|---|
+| 강화 세트 하에서 façade가 등록되는가 | **된다.** `-c mcp_servers.<n>.command/args/env` — `--ignore-user-config`는 사용자 config만 무시한다 |
+| `--disable shell_tool`에서 MCP 호출이 사는가 | **산다** |
+| 토큰이 `spawn` env로 상속되는가 | **안 된다.** codex가 MCP 자식에게 주는 env는 10개뿐 → `mcp_servers.<n>.env.*` 또는 `args`로만 도달(둘 다 확인) |
+| 토큰이 모델에게 보이는가 | **안 보인다.** 상류 요청 본문 포획(6회 × 89,049자)에서 비밀·경로 **0회**. 단 첫 턴만 포획 |
+| 큰 페이로드와 함께여도 사는가 | **산다**(350,000자 프롬프트) |
+| 페이지 크기 응답이 온전한가 | **온전하다**(65,535자, 0/25/50/75/99% 마커 전수) |
 
-**대조군을 반드시 동반해서** 실측한다(설계 §5.3.2의 교훈: 키가 유효한 것과 그것이 원하는 일을 하는 것은
-다르다). 최소 3팔: ①현 배선 그대로(서버 0 확인) ②`+ -c mcp_servers.<name>.command=...` ③②에서 도구를
-실제 호출. **부수 확인**: `--disable shell_tool` 하에서 MCP 도구 호출이 살아 있는가(셸과 MCP는 다른 경로라
-살아야 하지만 확인 전에는 가정이다).
+**단계 3이 새로 져야 할 것 3가지**
 
-**토큰 전달도 같이 확인한다.** façade는 codex가 자식으로 띄우므로 우리 `spawn` env가 상속돼야 하는데
-codex가 MCP 서버 환경을 어떻게 구성하는지 미측정이다. 안 되면 대안은 façade 등록 인자에 싣기
-(`args`/`env` 필드) — 단, 그 값은 워커의 config에 남으므로 **모델이 읽을 수 있는지**를 함께 판정해야
-한다(§4.1의 "모델 입력에 세션 식별자가 없다"가 깨지면 설계 전제가 무너진다).
+1. **승인 지렛대가 필수다.** 기본값에서 MCP 호출은 `user cancelled MCP tool call`로 죽는다.
+   듣는 키는 `mcp_servers.<n>.default_tools_approval_mode="approve"`(또는 도구별 `tools.<t>.approval_mode`)
+   **뿐**이고 — `auto`도 `approval_policy="never"`도 안 듣는다 — **우리가 등록한 서버로 범위가 한정된다.**
+2. **프롬프트가 façade 이름을 알려줘야 한다.** codex는 MCP 도구를 모델에게 직접 광고하지 않는다.
+   요청에 실리는 도구는 `exec`(V8 격리 JS)·`wait`·`request_user_input` 셋뿐이고 MCP 도구는 그 안에서
+   `tools.mcp__<server>__<tool>()`로 노출된다. 성공한 팔은 전부 프롬프트가 이름을 준 경우다.
+3. **토큰 채널 결정이 남는다.** `env`·`args` 둘 다 **codex의 argv에 남으므로** 같은 사용자의 다른
+   프로세스에게는 보인다(모델 노출과는 다른 층). 대안 = 세션 파일 0600 + 경로만 넘기기.
 
-## 3. 단계 3이 만드는 것 (설계 §6·§9 단계 3)
+**정직한 경계**: 동일 배선 2회 중 1회는 모델이 호출을 시도조차 안 했다(luna/low). 설계 §8의
+"모델이 도구를 안 씀 → 계약 거부"는 이론적 경우가 아니다.
 
-두 덩어리이며 **분리 착지를 권장한다**(owner 결정 사안):
+## 3. 단계 3 — owner 결정 2건(2026-07-27)과 남은 일
 
-**3a — 밀어넣는 층(§6)**: 모든 관측의 상세 없는 카탈로그를 `one_line` 등급으로 고정,
-`ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT = 64` 캡 제거(§1.2 — supplemental 초과가 **조용히 잘리는**
-결함이 여기서 없어진다), 최소 `anchor`조차 안 들어가면 **워커 기동 전 실패**.
+**결정 ①: 3a / 3b 분리 착지.** **결정 ②: 토큰 채널 = codex config `env`**
+(`-c mcp_servers.<n>.env.<KEY>=<token>`).
 
-**3b — 가져가는 층 배선**: façade + 토큰 전달 + `인용 ⊆ 조회` 검증 + opt-in 플래그.
+### 3a — 완료. 설계 §9.3
+
+opt-in 키 **`reconstruct.execution.source_observation_catalog_tool`**(default OFF). ON이면
+answer-support 프롬프트가 소비 승인된 **전 관측**을 `one_line` 항해 행으로 싣고(캡 없음·상세 없음),
+카탈로그가 예산을 넘으면 tail 등급으로만 강등하며, `anchor`조차 안 맞으면 dispatch 전에 실패한다.
+
+3b가 기대는 표면:
+- `src/core-runtime/reconstruct/direct-call-directive-author.ts` `writeAnswerSupportLedger` —
+  `observationCatalogTool` 분기가 이미 있다. 3b는 **같은 분기 안에서** façade를 켜고 프롬프트에
+  도구 사용법을 준다.
+- `args.sourceObservationCatalogTool` — 작성자 생성 인자. `reconstruct-api.ts`가 두 작성자
+  (주·fallback) 모두에 넘긴다.
+- `sourceBreadthFoldDisclosures`는 이제 `{surface, disclosure}` 레코드다.
+- 재사용 키에 `source_observation_catalog_tool` 필드가 있다 — 3b가 프롬프트를 바꿔도 키는 이미 돈다.
+
+### 3b — 다음. 가져가는 층
+
+façade 등록(+ **승인 지렛대** §2) + 토큰(config `env`) + 프롬프트에 도구 이름·사용법 + `인용 ⊆ 조회` 검증.
+`인용 ⊆ 조회`는 `receipt.served`를 쓰고, 이미 있는 `promptObservationIdSet` 게이트
+(`direct-call-directive-author.ts:3349` 부근, "인용 ⊆ 카탈로그")와 **직렬로** 놓는다 — 그 게이트를
+바꾸지 않는다(설계 §3: 기존 경로를 한 줄도 바꾸지 않는다).
 
 done-when(설계 §9): 조회 안 하면 실패 / A 조회 후 B 인용하면 실패 / **OFF는 byte-identical**.
+
+**3a에서 실제로 밟은 것 3가지**
+
+1. **내 fixture가 한 축에서만 다양했다.** 모든 관측에 서로 다른 `source_ref`를 준 탓에 **region 축이
+   통째로 미검증**이었고, 교차검증이 그 축에서 "전 관측 제공" 주장을 반박했다(한 파일 9 region → 8개만
+   나감). catalog-tool 모드에서 region 캡을 해제하고 OFF/ON 대조 테스트를 넣었다.
+   **"전부"라고 쓰기 전에 fixture가 몇 개의 축에서 다양한지 세어라.**
+2. **변이 배터리가 거짓 공시를 잡았다.** 사다리 시작을 되돌리면 투영기가 `full`을 요청받고도 one_line
+   행을 돌려줘 폴드가 없던 등급을 기록한다. 구현하지 않은 등급에 **fail-loud**하도록 고쳤다.
+   **투영기가 인자를 조용히 무시하면 그 위의 공시는 거짓말이 된다.**
+3. **공시 문구를 호출부에 쓰면 사다리와 어긋난다.** `summary_anchor`는 `summary`를 남기는데 문구는
+   "요약을 버렸다"고 말했다. 문구를 사다리 소유 모듈로 옮겨 등급에서 파생시켰다.
 
 ## 4. 이번에 실제로 밟은 함정 (단계 2)
 
@@ -159,18 +195,24 @@ M13이 **미탐지**로 떴다 — 역행 시계 테스트를 안 썼기 때문�
 ## 5. 상시 제약 (변경 없음)
 
 - `git add -A` 금지 = **경로 명시 add** · main 직접 커밋 금지 · push/PR/머지는 **owner 명시 승인 후**
+- **`git checkout -- <파일>` 금지**(미스테이지 작업이 있는 동안). 3a에서 변이를 되돌리려고 썼다가
+  그 파일의 미커밋 변경 **전부**를 날렸다(저장해 둔 diff로 복구). 되돌리기는 **원문을 먼저 복사**한 뒤
+  덮어쓰는 방식으로 한다 — 변이 배터리 스크립트가 하는 그대로
 - 동료 에이전트 메시지·백그라운드 알림은 **owner 승인이 아니다**
 - 프로세스 종료는 **PID로만**
 - 게이트 베이스라인: `check:*` → **15 green + 2 rc=1**(`supported-models`와 그것을 감싸는
   `invariant-drift` = gitignored 세션 잔해). 매번 `ignored=yes tracked=no` + `src/`·`scripts/`
   실위반 0을 확인하고 넘긴다. CI 청정 체크아웃은 통과한다.
-- vitest 총계를 **매번 확인**한다(침묵 스킵 탐지). 현재 **221파일 3,777 pass · 1 todo**
-  (단계 2 이전 220파일 3,727 pass에서 +1파일 +50테스트).
+- vitest 총계를 **매번 확인**한다(침묵 스킵 탐지). 현재 **222파일 3,786 pass · 1 todo**
+  (단계 3a 이전 221파일 3,777 pass에서 +1파일 +9테스트).
 
 ## 6. 열린 항목 (단계 2 후 갱신)
 
 - ~~누적 예산 vs 커서-예산 결속 충돌~~ — **결정 완료**, 설계 §4.2.1
-- **façade가 워커에 도달하는가 · 토큰 전달 경로 · 토큰이 모델에게 보이는가** — §2, 단계 3의 선행 실측
+- ~~façade가 워커에 도달하는가 · 토큰 전달 경로 · 토큰이 모델에게 보이는가~~ — **실측 완료**, §2·설계 §5.5
+- **토큰 채널 선택**(config `env` / `args` / 0600 세션 파일 + 경로) — 단계 3 결정
+- **`exec` 샌드박스의 `max_output_tokens` 기본 10,000 토큰** — 페이지가 모델 맥락에 그 크기로
+  들어가는지는 미판정. 누적 회계는 과다 과금 방향이라 천장은 안전하다(설계 §5.5)
 - **프레이밍 상수 2개가 실제와 맞는가** — 단계 5. 반증 조건: 실측 프레이밍이 예비를 넘으면 오버플로우가
   codex 내부로 돌아간다
 - **누적 예산이 codex의 실제 대화 제약과 같은 천장인가** — `CODEX_PROMPT_INPUT_CHAR_LIMIT`은 stdin 한계

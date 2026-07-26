@@ -171,7 +171,10 @@ import type {
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
 import { CODE_SET_TIER_SEED_PROMPT_NOTE } from "./comprehension-set-tier.js";
-import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
+import type {
+  BreadthFoldDisclosureRecord,
+  ReconstructDirectiveAuthor,
+} from "./directive-author-contract.js";
 import { createReconstructExecutionTelemetryCollector } from "./execution-telemetry.js";
 import type { ReconstructExecutionTelemetryCollector } from "./execution-telemetry.js";
 import { isGracefulTerminalSignal } from "./graceful-terminal.js";
@@ -204,12 +207,13 @@ import {
 import { SEMANTIC_MAP_ROUTABLE_KINDS } from "./semantic-map-projection.js";
 import type { SemanticMapAnyProjection } from "./semantic-map-projection.js";
 import {
+  OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
   foldObservationsToBudget,
   projectBreadthFoldTailRung,
 } from "./source-breadth-fold.js";
-import type { BreadthFoldDisclosure, BreadthFoldLevel } from "./source-breadth-fold.js";
+import type { BreadthFoldLevel } from "./source-breadth-fold.js";
 
 export function createDirectCallReconstructDirectiveAuthor(args: {
   llmConfig?: Partial<LlmCallConfig>;
@@ -246,6 +250,22 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * treatment as documentExcerptProjectionBudget).
    */
   sourceBreadthFold?: boolean;
+  /**
+   * Observation-catalog-tool opt-in (design 20260726-observation-catalog-tool §6, stage 3a — the
+   * PUSH layer), resolved from reconstruct.execution.source_observation_catalog_tool. Default
+   * undefined/false = today's answer-support projection: at most
+   * ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT (64) observations WITH detail, supplemental ids past the
+   * cap dropped silently (design §1.2). Explicit true switches that prompt to a navigation catalog —
+   * EVERY consumption-approved observation, pinned at the `one_line` rung, no cap — and demotes down
+   * the tail rungs only if the catalog itself would overflow, failing loud pre-dispatch when even
+   * `anchor` does not fit. Projection-only: mints/mutates no observation. It changes the authored
+   * ledger, so it is folded into the resume reuse key like sourceBreadthFold.
+   *
+   * Stage 3a lands the push layer ALONE: with this on and no pull layer yet, the prompt carries ids
+   * and summaries but not the detail the fetch tool will serve. That is why the key stays default
+   * OFF until stage 3b wires the facade.
+   */
+  sourceObservationCatalogTool?: boolean;
   /**
    * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
    * (observation replace + seed payload) — absolute code node_ref.file paths label as
@@ -313,10 +333,11 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // it after authoring (and clears it per run, like executionTelemetry).
   const documentExcerptProjectionTruncations: DocumentExcerptProjectionTruncation[] =
     [];
-  // Run-scoped sink for admission-surface breadth-fold demotions (the admission artifact has no
-  // in-artifact free-text channel the directive's open_questions provides). runReconstruct reads it
-  // after the admission stage and clears it per run, exactly like the truncation sink above.
-  const sourceBreadthFoldDisclosures: BreadthFoldDisclosure[] = [];
+  // Run-scoped sink for breadth-fold demotions on the surfaces whose artifact has no in-artifact
+  // free-text channel the directive's open_questions provides — admission-selection and (stage 3a)
+  // maturation answer-support. Each entry names its surface. runReconstruct reads it after the
+  // producing stage and clears it per run, exactly like the truncation sink above.
+  const sourceBreadthFoldDisclosures: BreadthFoldDisclosureRecord[] = [];
   const recordDocumentExcerptProjectionTruncation = (
     truncation: DocumentExcerptProjectionTruncation,
   ): void => {
@@ -509,6 +530,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
     sourceBreadthFold: args.sourceBreadthFold === true,
+    sourceObservationCatalogTool: args.sourceObservationCatalogTool === true,
     documentExcerptProjectionTruncations,
     sourceBreadthFoldDisclosures,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
@@ -1137,7 +1159,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // open_questions channel, so the disclosure goes to the run-scoped sink runReconstruct records
       // durably. `full` = no demotion → nothing recorded (byte-parity intact).
       if (admissionBreadthFold && admissionBreadthFold.disclosure.fold_level !== "full") {
-        sourceBreadthFoldDisclosures.push(admissionBreadthFold.disclosure);
+        sourceBreadthFoldDisclosures.push({
+          surface: "source_admission_selection",
+          disclosure: admissionBreadthFold.disclosure,
+        });
       }
       // Always-on total-size safety net (design 20260723 §7, Alt-5b): the admitted-outline catalog
       // scales with the admitted file count — the second count-scaling dispatch surface. Same codex
@@ -3150,14 +3175,132 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeAnswerSupportLedger(input) {
+      // Stage 3a (design 20260726 §6): in catalog-tool mode this prompt carries NAVIGATION for every
+      // consumption-approved observation instead of detail for at most 64 of them. Off = today's
+      // capped detailed projection, byte-identical.
+      const observationCatalogTool = args.sourceObservationCatalogTool === true;
       const promptCatalog = maturationAnswerSupportPromptCatalog({
         sourceObservations: input.sourceObservations,
         maturationQuestionFrontier: input.maturationQuestionFrontier,
         maturationClosureFrontier: input.maturationClosureFrontier,
+        ...(observationCatalogTool ? { observationCatalogTool: true } : {}),
       });
+      // No-op in catalog-tool mode by construction (nothing is omitted when nothing is capped); kept
+      // unconditional so the OFF path is untouched and the invariant is asserted either way.
       assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(promptCatalog);
       const promptObservationIds = promptCatalog.promptObservationIds;
       const promptObservationIdSet = new Set(promptObservationIds);
+      const answerSupportUserPayloadBase = {
+        round_id: input.roundId,
+        question_frontier_ref: input.maturationQuestionFrontierRef,
+        question_frontier_validation:
+          input.maturationQuestionFrontierValidation,
+        questions: input.maturationQuestionFrontier.questions,
+        closure_frontier: input.maturationClosureFrontier,
+        closure_frontier_validation: input.maturationClosureFrontierValidation,
+        authority_response: input.maturationAuthorityResponse,
+        authority_response_validation:
+          input.maturationAuthorityResponseValidation,
+        source_observation_prompt_policy: {
+          projection_kind: observationCatalogTool
+            ? "maturation_answer_support_navigation_catalog"
+            : "maturation_answer_support_bounded_catalog",
+          selection_basis: observationCatalogTool
+            ? "Runtime projects EVERY consumption-approved source observation as a navigation row (id, source_ref, summary) with no per-observation detail and no slot cap, closure-prioritized refs first; semantic answer support remains LLM-owned."
+            : "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
+          source_observation_count: input.sourceObservations.observations.length,
+          prioritized_observation_count:
+            promptCatalog.prioritizedObservationIds.length,
+          prompt_observation_count: promptObservationIds.length,
+          prompt_visible_prioritized_observation_count:
+            promptCatalog.promptVisiblePrioritizedObservationIds.length,
+          prompt_visible_supplemental_observation_count:
+            promptCatalog.promptVisibleSupplementalObservationIds.length,
+          omitted_prioritized_observation_count:
+            promptCatalog.omittedPrioritizedObservationIds.length,
+          // null, not the constant: in catalog-tool mode there IS no slot cap, and reporting one
+          // would tell the reader a bound applies that no code applies.
+          observation_limit: observationCatalogTool
+            ? null
+            : ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
+          content_excerpt_char_limit: observationCatalogTool
+            ? null
+            : POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+        },
+        prompt_visible_observation_ids: promptObservationIds,
+      };
+      // Catalog rungs. `one_line` is the PINNED start (design §6) — the tail rungs exist so an
+      // extreme corpus demotes detail rather than dropping observations, exactly as on the two
+      // count-scaling surfaces. Tail rows are DERIVED from the one_line rows by dropping keys, so the
+      // ladder stays non-increasing structurally (see projectBreadthFoldTailRung).
+      const projectAnswerSupportCatalogAtFoldLevel = (
+        level: BreadthFoldLevel,
+      ): unknown[] => {
+        if (level === "summary_anchor" || level === "anchor") {
+          return projectBreadthFoldTailRung(
+            projectAnswerSupportCatalogAtFoldLevel("one_line"),
+            level,
+          );
+        }
+        // Fail loud instead of silently serving one_line rows under a finer rung's NAME: the fold's
+        // disclosure and the reader would then both be told a rung that never ran. Reachable only by
+        // handing this projector a ladder it does not implement.
+        if (level !== "one_line") {
+          throw new Error(
+            `AnswerSupportLedger navigation catalog has no projection for fold level '${level}'. ` +
+              "The catalog ladder is pinned at 'one_line' (OBSERVATION_CATALOG_TOOL_FOLD_LEVELS).",
+          );
+        }
+        return projectObservationsForPrompt(input.sourceObservations, {
+          observationIds: promptObservationIds,
+          includeStructuralData: false,
+        }) as unknown[];
+      };
+      const catalogFold = observationCatalogTool
+        ? foldObservationsToBudget({
+            budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+            catalogObservationCount: promptObservationIds.length,
+            projectAtLevel: projectAnswerSupportCatalogAtFoldLevel,
+            measure: (projection) =>
+              promptPayloadByteCount(ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT, {
+                ...answerSupportUserPayloadBase,
+                source_observations: projection,
+              }),
+            levels: OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
+          })
+        : null;
+      const answerSupportUserPayload = {
+        ...answerSupportUserPayloadBase,
+        source_observations: catalogFold
+          ? catalogFold.projection
+          : projectObservationsForPrompt(input.sourceObservations, {
+              observationIds: promptObservationIds,
+              contentExcerptCharLimit:
+                POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            }),
+      };
+      if (catalogFold) {
+        // R2 no-silent-truncation disclosure. `one_line` is the pinned start, so recording it would
+        // be noise; anything COARSER means the catalog could not carry summaries and the LM chose
+        // ids with less to choose by — that must be auditable. The ledger artifact has no free-text
+        // channel, so it goes to the run-scoped sink runReconstruct records durably.
+        if (catalogFold.disclosure.fold_level !== "one_line") {
+          sourceBreadthFoldDisclosures.push({
+            surface: "maturation_answer_support",
+            disclosure: catalogFold.disclosure,
+          });
+        }
+        // Design §6: "even `anchor` does not fit" fails BEFORE the worker starts, with the measured
+        // size — not as codex's opaque nonzero exit. Gated with the mode because an always-on guard
+        // here would refuse the narrow band between this budget and the ceiling that OFF runs reach
+        // today; that band is covered by the always-on dispatch backstop in llm-caller (PR #265).
+        assertPromptPayloadByteLimit({
+          artifactName: "AnswerSupportLedger",
+          systemPrompt: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+          userPayload: answerSupportUserPayload,
+          byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+        });
+      }
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -3165,42 +3308,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         artifactName: "AnswerSupportLedger",
         maxTokens: 3800,
         systemPrompt: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
-        userPayload: {
-          round_id: input.roundId,
-          question_frontier_ref: input.maturationQuestionFrontierRef,
-          question_frontier_validation:
-            input.maturationQuestionFrontierValidation,
-          questions: input.maturationQuestionFrontier.questions,
-          closure_frontier: input.maturationClosureFrontier,
-          closure_frontier_validation: input.maturationClosureFrontierValidation,
-          authority_response: input.maturationAuthorityResponse,
-          authority_response_validation:
-            input.maturationAuthorityResponseValidation,
-          source_observation_prompt_policy: {
-            projection_kind: "maturation_answer_support_bounded_catalog",
-            selection_basis:
-              "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
-            source_observation_count: input.sourceObservations.observations.length,
-            prioritized_observation_count:
-              promptCatalog.prioritizedObservationIds.length,
-            prompt_observation_count: promptObservationIds.length,
-            prompt_visible_prioritized_observation_count:
-              promptCatalog.promptVisiblePrioritizedObservationIds.length,
-            prompt_visible_supplemental_observation_count:
-              promptCatalog.promptVisibleSupplementalObservationIds.length,
-            omitted_prioritized_observation_count:
-              promptCatalog.omittedPrioritizedObservationIds.length,
-            observation_limit: ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
-            content_excerpt_char_limit:
-              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
-          },
-          prompt_visible_observation_ids: promptObservationIds,
-          source_observations: projectObservationsForPrompt(input.sourceObservations, {
-            observationIds: promptObservationIds,
-            contentExcerptCharLimit:
-              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
-          }),
-        },
+        userPayload: answerSupportUserPayload,
       });
       return {
         schema_version: "1",

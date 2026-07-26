@@ -226,6 +226,7 @@ import { runSemanticMapStageWithDispatchFallback } from "./semantic-map-dispatch
 import {
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
 } from "./semantic-map-stage.js";
+import { breadthFoldRungDetailLoss } from "./source-breadth-fold.js";
 import {
   writeAuthoredArtifactReuseProvenance,
   writeFreshAuthoredYamlDocument,
@@ -1593,7 +1594,11 @@ export async function runReconstruct(
   // R2 disclosure for the admission surface's breadth fold: record the demoted rung durably right
   // after the stage that produced it (the source-frontier artifact has no free-text channel of its
   // own). Empty on every off / fitting run, so nothing is emitted unless detail was actually demoted.
-  for (const disclosure of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+  // Answer-support entries (stage 3a) are produced LATER in the run and drained at their own site;
+  // filtering by surface here keeps each stage's event next to the stage that caused it.
+  for (const record of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+    if (record.surface !== "source_admission_selection") continue;
+    const disclosure = record.disclosure;
     appendRuntimeStatusEventSync({
       pipeline: "reconstruct",
       sessionRoot,
@@ -3951,6 +3956,30 @@ export async function runReconstruct(
       sourceObservations: promptSourceObservations,
     }),
   );
+  // R2 disclosure for the answer-support navigation catalog (design 20260726 §6, stage 3a). The
+  // catalog is PINNED at `one_line`, so an entry here means the corpus was large enough that even
+  // summaries had to go — the LM chose ids with less to choose by, which must not be silent. Empty
+  // on every OFF run and on every ON run that fit the pinned rung. Reuse (a resumed ledger) authors
+  // nothing, so it discloses nothing — matching the artifact that was actually used.
+  for (const record of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+    if (record.surface !== "maturation_answer_support") continue;
+    const disclosure = record.disclosure;
+    // What THAT rung dropped, from the module that owns the ladder — a message written here would
+    // drift from the rung definitions (cross-family review found exactly that drift).
+    const droppedByRung = breadthFoldRungDetailLoss(disclosure.fold_level);
+    appendRuntimeStatusEventSync({
+      pipeline: "reconstruct",
+      sessionRoot,
+      sourceLabel: "source-breadth-fold",
+      stageId: "maturation_answer_support",
+      message:
+        `Runtime folded the answer-support navigation catalog to '${disclosure.fold_level}' detail ` +
+        `(${disclosure.catalog_observation_count} observations, ` +
+        `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so every ` +
+        `consumption-approved observation stayed selectable; ${droppedByRung} ` +
+        "(retained in full in source-observations).",
+    });
+  }
   const answerSupportLedgerValidation =
     await writeAnswerSupportLedgerValidationArtifact({
       answerSupportLedgerPath,
