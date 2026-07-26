@@ -36,6 +36,7 @@
  * root but only ~1.11× at a realistic 30-char one, and the multi-repo axis it is pitched for shortens the
  * shared root further — the margin approaches zero exactly where it would have to pay.
  */
+import { CODEX_PROMPT_INPUT_CHAR_LIMIT } from "../llm/llm-caller.js";
 
 /**
  * Ordered detail ladder, finest → coarsest. Every rung projects ALL N observations (breadth invariant);
@@ -153,12 +154,16 @@ export function projectBreadthFoldTailRung(
 }
 
 /**
- * The codex worker's stdin input ceiling, in UTF-8 bytes: 1 MiB (2^20). Established by the value bench,
- * which observed a real codex rejection at 1,349,907 bytes against this limit (no literal in src — it is
- * codex-CLI-internal). A live-CLI binary-search probe could confirm the exact boundary (design 20260723
- * DW-2c); deferred because the guard budget below sits safely under it either way.
+ * The codex worker's stdin input ceiling: 1 MiB (2^20). Single-sourced from the codex adapter, which
+ * owns the provider's contract and enforces it as the total-size backstop on every dispatch.
+ *
+ * UNIT CORRECTION (2026-07-26, measured): the provider counts CHARACTERS, not UTF-8 bytes — its raw
+ * rejection payload is `{"max_chars":1048576,"actual_chars":1361154}`. The earlier note here recorded
+ * the bench's observed count as bytes; for the ASCII source corpora measured so far the two coincide,
+ * which is why the misattribution was invisible. Re-exported under the historical name because this
+ * module's budget below is deliberately BYTE-counted (see there).
  */
-export const CODEX_PROMPT_STDIN_BYTE_LIMIT = 1_048_576;
+export const CODEX_PROMPT_STDIN_BYTE_LIMIT = CODEX_PROMPT_INPUT_CHAR_LIMIT;
 
 /**
  * Byte budget for a source-observation SELECTION prompt payload — shared by both count-scaling dispatch

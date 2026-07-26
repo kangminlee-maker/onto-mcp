@@ -883,6 +883,39 @@ async function callOpenAIResponses(
  *   --skip-git-repo-check lets the worker run from non-repo cwd. No -C/-s/-o:
  *   this is single-turn, no agentic scaffold.
  */
+/**
+ * The codex worker's stdin input ceiling, in CHARACTERS. The provider reports this rejection with its
+ * own units — the raw payload is
+ * `{"input_error_code":"input_too_large","max_chars":1048576,"actual_chars":1361154}` — so this guard
+ * counts characters, not UTF-8 bytes. That distinction only matters for non-ASCII corpora (where bytes
+ * exceed characters): a byte-counted block would refuse prompts codex WOULD accept.
+ */
+export const CODEX_PROMPT_INPUT_CHAR_LIMIT = 1_048_576;
+
+/**
+ * Total-size backstop for the codex stdin route — the ONE place every prompt-bearing surface passes
+ * through. Per-surface budgets (e.g. the source-observation breadth fold) fold BEFORE dispatch and are
+ * the operator's remedy; this guard exists because those are wired surface-by-surface, so a surface
+ * nobody budgeted overflows at the provider with an opaque exit. Measured 2026-07-26: two guarded
+ * surfaces let the run reach dispatch 74 before a THIRD, unguarded post-maturation surface hit the same
+ * ceiling — an instance-by-instance defect that only a single chokepoint closes.
+ *
+ * Held at the provider's EXACT limit in the provider's OWN unit, deliberately with no safety margin: the
+ * guard then fires only on prompts codex would also reject, so no currently-succeeding call changes
+ * behavior. It trades an opaque worker exit for a deterministic error naming the actual size. It is a
+ * backstop, not a completeness guarantee — codex adds its own framing, so a prompt just under the limit
+ * can still be rejected downstream exactly as it is today.
+ */
+function assertCodexPromptWithinInputLimit(combinedPrompt: string): void {
+  if (combinedPrompt.length <= CODEX_PROMPT_INPUT_CHAR_LIMIT) return;
+  throw new Error(
+    `codex prompt exceeds the worker stdin input limit: ${combinedPrompt.length} characters > ` +
+      `${CODEX_PROMPT_INPUT_CHAR_LIMIT}. The dispatched projection must be reduced before the call ` +
+      `(for the source-observation surfaces, enable source_breadth_fold; otherwise split or narrow the ` +
+      `projection that scales with input count).`,
+  );
+}
+
 async function callCodexCli(
   systemPrompt: string,
   userPrompt: string,
@@ -901,6 +934,8 @@ async function callCodexCli(
   args.push("-");
 
   const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+  // BEFORE spawn: a doomed call must not leave a child process to tear down.
+  assertCodexPromptWithinInputLimit(combinedPrompt);
 
   emitModelCallLog(
     `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${workerTimeoutMs}`,
