@@ -501,24 +501,34 @@ const judgmentPromptChars = async (cited: AnyRecord[]): Promise<number> => {
 // name a different 64 — and with detail-heavy rows at the front it measured OFF as already over the
 // ceiling, which would have let a genuine ON-only crossing pass (cross-family review, fourth round:
 // the defect this arm itself introduced).
-const offExposureIds = new Set(
-  maturationAnswerSupportPromptCatalog({
-    sourceObservations: artifactOf(realObservations) as never,
+//
+// ONE function, called by both the arm and its self-check below: a self-check that re-derives the
+// exposure independently would stay green while THIS code regressed to a slice, which is exactly what
+// the fifth round pointed out about its first version.
+function offExposureFor(observations: AnyRecord[], requestedRef: string): AnyRecord[] {
+  const exposedIds = maturationAnswerSupportPromptCatalog({
+    sourceObservations: artifactOf(observations) as never,
     maturationQuestionFrontier: questionFrontier() as never,
-    maturationClosureFrontier: closureFrontier(String(realObservations[0]!.source_ref)) as never,
-  }).promptObservationIds,
-);
-const offExposure = realObservations.filter((observation) =>
-  offExposureIds.has(String(observation.observation_id))
-);
-if (offExposure.length === 0) fail("F OFF exposure came out empty — the measurement would be vacuous");
-if (offExposure.length > ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT) {
-  fail(`F OFF exposure ${offExposure.length} exceeds the cap ${ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT}`);
+    maturationClosureFrontier: closureFrontier(requestedRef) as never,
+  }).promptObservationIds;
+  const byId = new Map(observations.map((observation) => [
+    String(observation.observation_id),
+    observation,
+  ]));
+  // Mapped over the catalog's OWN id order, not filtered out of artifact order: the exposure is the
+  // production selection including its ordering, and the self-check below asserts that ordering. (A
+  // filter returned artifact order and the self-check caught it — which is the point of sharing this
+  // function with the check.)
+  return exposedIds.flatMap((id) => {
+    const observation = byId.get(id);
+    return observation ? [observation] : [];
+  });
 }
-// Self-check of THIS arm's rule, on the shape that broke its first version: 128 observations whose
-// prioritized ones sit at the END of artifact order. A hand-slice would name the first 64; the real
-// catalog names the prioritized ones. If this ever regresses, the arm's OFF baseline is wrong and its
-// verdict is meaningless.
+
+// Self-check of the function the arm actually uses, on the shape that broke the arm's first version:
+// 128 observations whose prioritized ones sit at the END of artifact order. A hand-slice would name the
+// first 64 (all supplemental); the real selection puts prioritized ones first. Asserted as a PREFIX,
+// not just the first id.
 {
   const prioritizedRef = "/fixture/prioritized.ts";
   const probeObservations = [
@@ -533,24 +543,43 @@ if (offExposure.length > ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT) {
       observation_id: `probe-prioritized-${index + 1}`,
       source_ref: prioritizedRef,
       location: `L${index * 10}-${index * 10 + 9}`,
+      structural_data: {
+        ...(realObservations[index % realObservations.length]!.structural_data as AnyRecord),
+        region_role: "body",
+        region_line_start: index * 10,
+      },
     })),
   ];
-  const probeExposure = maturationAnswerSupportPromptCatalog({
-    sourceObservations: artifactOf(probeObservations) as never,
-    maturationQuestionFrontier: questionFrontier() as never,
-    maturationClosureFrontier: closureFrontier(prioritizedRef) as never,
-  }).promptObservationIds;
-  const prioritizedFirst = probeExposure[0] ?? "";
-  if (!prioritizedFirst.startsWith("probe-prioritized-")) {
+  const probeExposure = offExposureFor(probeObservations, prioritizedRef);
+  const ids = probeExposure.map((observation) => String(observation.observation_id));
+  if (ids.length === 0) fail("F self-check: exposure came out empty");
+  const prioritizedCount = ids.filter((id) => id.startsWith("probe-prioritized-")).length;
+  if (prioritizedCount === 0) {
+    fail("F self-check: no prioritized id survived — the arm is modelling OFF as an artifact-order slice");
+  }
+  // Prioritized ids form a PREFIX: every one of them precedes every supplemental id.
+  const lastPrioritized = ids.reduce(
+    (last, id, index) => (id.startsWith("probe-prioritized-") ? index : last),
+    -1,
+  );
+  const firstSupplemental = ids.findIndex((id) => id.startsWith("probe-supplemental-"));
+  if (firstSupplemental !== -1 && lastPrioritized > firstSupplemental) {
     fail(
-      `F self-check: OFF exposure starts with ${prioritizedFirst}, not a prioritized id — the arm is ` +
-        "modelling OFF as an artifact-order slice again, which makes its verdict meaningless",
+      `F self-check: prioritized ids are not a prefix (last prioritized at ${lastPrioritized}, first ` +
+        `supplemental at ${firstSupplemental}) — OFF's ordering is not the production one`,
     );
   }
   ok(
-    `[F self-check] OFF exposure on a prioritized-last corpus starts with '${prioritizedFirst}' ` +
-      "(prioritized first, then the cap) — the arm's baseline is the real selection, not a slice",
+    `[F self-check] OFF exposure on a prioritized-last corpus = ${prioritizedCount} prioritized (a ` +
+      `prefix; the per-file region cap keeps ${prioritizedCount} of 64 same-ref candidates) + ` +
+      `${ids.length - prioritizedCount} supplemental — the real selection, not a slice`,
   );
+}
+
+const offExposure = offExposureFor(realObservations, String(realObservations[0]!.source_ref));
+if (offExposure.length === 0) fail("F OFF exposure came out empty — the measurement would be vacuous");
+if (offExposure.length > ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT) {
+  fail(`F OFF exposure ${offExposure.length} exceeds the cap ${ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT}`);
 }
 const judgeOff = await judgmentPromptChars(offExposure);
 const judgeOn = await judgmentPromptChars(realObservations);

@@ -187,16 +187,29 @@ export function navigationRowFieldsFromRows(rows: readonly unknown[]): string {
     "location",
     "summary",
   ];
-  const present = new Set<string>();
-  for (const row of rows) {
-    if (row === null || typeof row !== "object") continue;
-    for (const key of Object.keys(row as Record<string, unknown>)) present.add(key);
-  }
-  const ordered = [
-    ...CANONICAL_ORDER.filter((key) => present.has(key)),
-    ...[...present].filter((key) => !CANONICAL_ORDER.includes(key)).sort(),
-  ];
-  return ordered.join(", ");
+  const order = (keys: Iterable<string>): string[] => {
+    const set = new Set(keys);
+    return [
+      ...CANONICAL_ORDER.filter((key) => set.has(key)),
+      ...[...set].filter((key) => !CANONICAL_ORDER.includes(key)).sort(),
+    ];
+  };
+  const records = rows.filter(
+    (row): row is Record<string, unknown> => row !== null && typeof row === "object",
+  );
+  const union = new Set<string>();
+  for (const row of records) for (const key of Object.keys(row)) union.add(key);
+  // A MIXED catalog really does have rows of different shapes: the tail rungs keep `location`
+  // per-row, only where it is not redundant with `source_ref`, so one corpus can hold region rows
+  // that kept it beside whole-file rows that did not. A bare union would then name a field some rows
+  // lack, and an intersection would hide a field some rows carry — both are false contracts. Split
+  // them: what EVERY row has, and what only SOME have.
+  const always = order(
+    [...union].filter((key) => records.every((row) => key in row)),
+  );
+  const sometimes = order([...union].filter((key) => !always.includes(key)));
+  if (sometimes.length === 0) return always.join(", ");
+  return `${always.join(", ")}; ${sometimes.join(", ")} on some rows only`;
 }
 
 /**

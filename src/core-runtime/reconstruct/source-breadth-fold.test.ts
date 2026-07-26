@@ -93,11 +93,23 @@ describe("navigationRowFieldsFromRows — the dispatched field list follows the 
     expect(navigationRowFieldsFromRows(projected)).not.toContain("summary");
   });
 
-  it("is a UNION over rows and appends unexpected keys instead of dropping them", () => {
+  it("separates what EVERY row carries from what only SOME do, and never drops an unknown key", () => {
+    // A MIXED catalog is real: the tail rungs keep `location` per-row (only where it is not redundant
+    // with `source_ref`), so region rows that kept it can sit beside whole-file rows that did not. A
+    // bare union would name a field some rows lack; an intersection would hide one some rows carry.
     expect(navigationRowFieldsFromRows([
       row(["observation_id", "source_ref"]),
       row(["observation_id", "source_ref", "summary"]),
-    ])).toBe("observation_id, source_ref, summary");
+    ])).toBe("observation_id, source_ref; summary on some rows only");
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref", "location"]),
+      row(["observation_id", "target_material_kind", "source_ref"]),
+    ])).toBe("observation_id, target_material_kind, source_ref; location on some rows only");
+    // Homogeneous rows keep the plain list — no "on some rows only" noise.
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "source_ref"]),
+      row(["observation_id", "source_ref"]),
+    ])).toBe("observation_id, source_ref");
     expect(navigationRowFieldsFromRows([row(["observation_id", "zz_new_key"])])).toBe(
       "observation_id, zz_new_key",
     );

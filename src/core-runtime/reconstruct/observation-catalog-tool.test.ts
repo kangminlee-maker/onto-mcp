@@ -315,16 +315,24 @@ function expectRowsMatchObservations(
   for (const row of rows) {
     const observation = byId.get(row.observation_id);
     expect(observation).toBeDefined();
-    // EVERY row's key set, not just the first row's, and equality rather than "no extras": a rung
-    // that dropped `location` from every row after index 0, or kept `summary` on every `anchor` row
-    // after index 0, satisfied an extras-only check over the union of all rung keys (cross-family
-    // review, fourth round). `exactKeys` is the chosen rung's own set when the caller knows it;
-    // otherwise the first row's set becomes the expectation for all of them.
+    // EVERY row's key set, and equality rather than "no extras": a rung that dropped `location` from
+    // every row after index 0, or kept `summary` on every `anchor` row after index 0, satisfied an
+    // extras-only check over the union of all rung keys (cross-family review, fourth round).
+    //
+    // `exactKeys` pins a HOMOGENEOUS catalog's shape. A mixed catalog is legitimate — the tail rungs
+    // keep `location` per row, only where it is not redundant with `source_ref` — so when the caller
+    // does not pin a shape, each row is checked against what the rung keeps for THAT observation
+    // rather than against the first row (which would report a false failure on a mixed corpus).
     if (options.navigationOnly === true) {
-      const expectedKeys = [...(options.exactKeys ?? Object.keys(rows[0] ?? {}))].sort();
-      expect(expectedKeys.length).toBeGreaterThan(0);
-      expect(expectedKeys.filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
-      expect(Object.keys(row).sort()).toEqual(expectedKeys);
+      if (options.exactKeys) {
+        const expectedKeys = [...options.exactKeys].sort();
+        expect(expectedKeys.length).toBeGreaterThan(0);
+        expect(expectedKeys.filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
+        expect(Object.keys(row).sort()).toEqual(expectedKeys);
+      } else {
+        expect(Object.keys(row).filter((key) => !NAVIGATION_KEYS.includes(key as never))).toEqual([]);
+        expect(Object.keys(row).length).toBeGreaterThan(0);
+      }
     }
     for (const key of NAVIGATION_KEYS) {
       if (key in row) expect(row[key]).toBe(observation![key]);
@@ -713,6 +721,68 @@ describe("observation catalog tool — stage 3a push layer (design 20260726 §6)
     // And the disclosure names the loss that actually happened.
     expect(answerSupportFoldDisclosureMessage(records[0]!.disclosure)).toContain(
       breadthFoldRungDetailLoss("anchor"),
+    );
+  });
+
+  it("ON: a MIXED catalog's contract is true of every row — `location` only where the rung kept it", async () => {
+    // Region rows keep `location` at the tail rungs; whole-file rows lose it. So one dispatched
+    // catalog legitimately holds rows of two shapes, and a single field list — union or intersection —
+    // would be false for one of them (cross-family review, fifth round).
+    const REGION_REF = "/fixture/decomposed.ts";
+    const built = fixture({ observationCount: 0 });
+    built.sourceObservations.observations = [
+      // Region rows: `location` differs from `source_ref`, so the rung keeps it.
+      ...Array.from({ length: 1_000 }, (_, index) => ({
+        observation_id: `region-${index + 1}`,
+        target_material_kind: "code" as const,
+        adapter_id: "fixture",
+        source_ref: REGION_REF,
+        location: `L${index * 10}-${index * 10 + 9}${"z".repeat(300)}`,
+        summary: `Region ${index + 1}`.padEnd(40, "s"),
+        structural_data: { content_excerpt: "x", region_role: "body", region_line_start: index * 10 },
+      })),
+      // Whole-file rows: `location` IS the path, so the rung drops it.
+      ...Array.from({ length: 1_000 }, (_, index) => ({
+        observation_id: `whole-${index + 1}`,
+        target_material_kind: "code" as const,
+        adapter_id: "fixture",
+        source_ref: `/fixture/${"w".repeat(300)}whole-${index + 1}.ts`,
+        location: `/fixture/${"w".repeat(300)}whole-${index + 1}.ts`,
+        summary: `Whole ${index + 1}`.padEnd(40, "s"),
+        structural_data: { content_excerpt: "x" },
+      })),
+    ];
+    built.closureFrontier.source_requests[0]!.requested_source_ref = REGION_REF;
+    built.closureFrontier.source_requests[0]!.requested_location = REGION_REF;
+
+    const { author, dispatched } = capturingAuthor(true);
+    await authorLedger(author, built);
+    expect(dispatched.length).toBe(1);
+    const payload = parsePayload(dispatched);
+    const records = author.sourceBreadthFoldDisclosures ?? [];
+    expect(records.length).toBe(1); // this corpus demotes; otherwise the shapes never diverge
+
+    const regionRows = payload.source_observations.filter((row) =>
+      String(row.observation_id).startsWith("region-")
+    );
+    const wholeRows = payload.source_observations.filter((row) =>
+      String(row.observation_id).startsWith("whole-")
+    );
+    expect(regionRows.length).toBe(1_000);
+    expect(wholeRows.length).toBe(1_000);
+    // The two shapes really do differ — otherwise the assertion below is vacuous.
+    expect(regionRows[0]).toHaveProperty("location");
+    expect(wholeRows[0]).not.toHaveProperty("location");
+    // ...and the contract says exactly that, rather than claiming `location` for all or for none.
+    const basis = payload.source_observation_prompt_policy.selection_basis as string;
+    expect(basis).toContain(navigationRowFieldsFromRows(payload.source_observations));
+    expect(basis).toContain("location on some rows only");
+    // Row identity holds across both shapes (no exactKeys: the catalog is deliberately mixed).
+    expectRowsMatchObservations(
+      payload.source_observations,
+      built.sourceObservations.observations as never,
+      expectedCatalogOrder(built),
+      { navigationOnly: true },
     );
   });
 
