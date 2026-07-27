@@ -42,9 +42,9 @@ interface Waiver {
 const WAIVERS: Waiver[] = [
   {
     file: "src/core-runtime/llm/model-switcher.ts",
-    linePattern: /if \(provider === "openai"\) return "oauth";/,
+    linePattern: /^return "oauth";$/,
     reason:
-      "INV-AUTH-1 수용 기준이 명시한 정규화: provider=openai의 auth 생략은 OAuth다 (invariant 테스트로 고정).",
+      "INV-AUTH-1 수용 기준이 명시한 정규화: openai·anthropic의 auth 생략은 구독 워커 경로(OAuth)다 — 종량은 좌석이 명시할 때만 (invariant 테스트로 고정).",
   },
   {
     file: "src/core-runtime/llm/model-switcher.ts",
@@ -54,7 +54,8 @@ const WAIVERS: Waiver[] = [
   {
     file: "src/core-runtime/llm/model-switcher.ts",
     linePattern: /return "api_key";$/,
-    reason: "defaultAuthFor의 나머지 provider 정규화 (스위처 명세).",
+    reason:
+      "defaultAuthForProvider의 종량 경로 정규화 (스위처 명세): 종량은 명시로만 선택된다 — 구독 경로가 없는 grok, 그리고 api_key_env 를 명시한 좌석.",
   },
   {
     file: "src/core-runtime/review/review-execution-route.ts",

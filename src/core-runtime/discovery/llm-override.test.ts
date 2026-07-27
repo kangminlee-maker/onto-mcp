@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { OntoSettings, PerCallLlmOverride } from "./settings-chain.js";
+import { OntoSettingsValidationError } from "./settings-chain.js";
 import {
   applyReconstructLlmOverride,
+  applyReconstructLlmOverrideWithReport,
   applyReviewLlmOverride,
+  applyReviewLlmOverrideWithReport,
+  assertLlmOverrideReachedSeats,
   parsePerCallLlmOverrideArg,
 } from "./llm-override.js";
 import { resolveReviewExecutionProfile } from "../review/review-execution-profile.js";
@@ -495,24 +499,67 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
 
   it("restating a DEFAULTED auth is not a route change — transport survives (PR #199 codex P2)", () => {
     // A block that omits `auth` still dispatches on defaultAuthForProvider()
-    // (anthropic → api_key). An override restating that effective auth must not
-    // be read as a switch, or it discards the block's still-valid credential env.
+    // (anthropic → oauth, the subscription worker). An override restating that
+    // effective auth must not be read as a switch, or it discards transport the
+    // block still owns.
     const settings = reviewSettingsWith({
       provider: "anthropic",
       model: "claude-opus-4-8",
-      api_key_env: "ANTHROPIC_API_KEY",
-      // auth intentionally omitted → defaults to api_key
+      // auth intentionally omitted → defaults to oauth (subscription worker)
     });
     const overlaid = applyReviewLlmOverride(settings, {
-      auth: "api_key",
+      auth: "oauth",
       model: "claude-fable-5",
     });
     const teamlead = overlaid.review?.execution?.teamlead?.llm;
     expect(teamlead?.model).toBe("claude-fable-5");
-    expect(teamlead?.api_key_env).toBe("ANTHROPIC_API_KEY"); // NOT dropped
-    // Positive control: a real switch away from the defaulted auth still cleans.
-    const switched = applyReviewLlmOverride(settings, { auth: "oauth" });
-    expect(switched.review?.execution?.teamlead?.llm?.api_key_env).toBeUndefined();
+    expect(teamlead?.provider).toBe("anthropic"); // block preserved, not replaced
+  });
+
+  it("an auth switch keeps the credential env when the DESTINATION is the api route", () => {
+    // Cleaning removes the fields scoped to the route being LEFT. api_key_env
+    // belongs to the direct-call route, so switching INTO it must keep the env
+    // the seat configured — dropping it would silently fall back to the default
+    // variable name and fail loud on a custom one.
+    const settings = reviewSettingsWith({
+      provider: "anthropic",
+      auth: "oauth", // explicit, so `auth: api_key` IS a route change here
+      model: "claude-opus-4-8",
+      api_key_env: "CUSTOM_ANTHROPIC_KEY",
+    });
+    const toApiKey = applyReviewLlmOverride(settings, { auth: "api_key" });
+    expect(toApiKey.review?.execution?.teamlead?.llm?.api_key_env).toBe(
+      "CUSTOM_ANTHROPIC_KEY",
+    );
+
+    // ...but an ENDPOINT never rides along. A base_url that lies dormant on the
+    // worker route would otherwise be activated by a caller who only asked to
+    // change auth, and the direct-call path forwards it into the SDK client —
+    // sending the seat's real credential to a settings-chosen host.
+    const dormantEndpoint = reviewSettingsWith({
+      provider: "openai",
+      auth: "oauth",
+      model: "gpt-5.5",
+      api_key_env: "CUSTOM_OPENAI_KEY",
+      base_url: "https://dormant.invalid/v1",
+    });
+    const woken = applyReviewLlmOverride(dormantEndpoint, { auth: "api_key" });
+    expect(woken.review?.execution?.teamlead?.llm?.base_url).toBeUndefined();
+    expect(woken.review?.execution?.teamlead?.llm?.api_key_env).toBe(
+      "CUSTOM_OPENAI_KEY",
+    );
+    // Negative control, the direction the cleaning exists for: switching TO the
+    // OAuth worker route must NOT carry an api-key endpoint into it.
+    const apiKeySettings = reviewSettingsWith({
+      provider: "anthropic",
+      auth: "api_key",
+      model: "claude-opus-4-8",
+      api_key_env: "CUSTOM_ANTHROPIC_KEY",
+      base_url: "https://example.invalid/v1",
+    });
+    const toOauth = applyReviewLlmOverride(apiKeySettings, { auth: "oauth" });
+    expect(toOauth.review?.execution?.teamlead?.llm?.api_key_env).toBeUndefined();
+    expect(toOauth.review?.execution?.teamlead?.llm?.base_url).toBeUndefined();
   });
 
   it("judges a provider-less UNIT on its inherited route, not its partial block (ultracode)", () => {
@@ -576,5 +623,221 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     if (after.type !== "resolved") return;
     expect(after.profile.worker_executor).toBe("claude_code");
     expect(after.profile.provider).toBe("anthropic");
+  });
+});
+
+// ── seat report + zero-reach fail-closed ────────────────────────────────────
+
+describe("llmOverride seat report", () => {
+  it("records the seats a REPLACE reached and the unit seats it dropped", () => {
+    const settings = reviewSettingsWith(openAiOauthActor);
+    (settings.review!.execution as Record<string, unknown>).units = {
+      lens: { llm: { model: "gpt-5.5", effort: "medium" } },
+      finding_ledger: { llm: { model: "gpt-5.5", effort: "low" } },
+      issue_stance_matrix: { timeout_ms: 300000 }, // no llm — neither reached nor dropped
+    };
+    const { report } = applyReviewLlmOverrideWithReport(settings, {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    });
+    expect(report.reached).toEqual([
+      "review.execution.teamlead.llm",
+      "review.execution.lens.llm",
+      "review.execution.synthesize.llm",
+    ]);
+    // The two llm-bearing units are dropped to inherit the replaced actor; the
+    // llm-less unit is untouched, so it appears in neither list.
+    expect([...report.dropped].sort()).toEqual([
+      "review.execution.units.finding_ledger.llm",
+      "review.execution.units.lens.llm",
+    ]);
+  });
+
+  it("records every seat an OVERLAY reached and drops none (same route)", () => {
+    const settings = reviewSettingsWith(openAiOauthActor);
+    (settings.review!.execution as Record<string, unknown>).units = {
+      lens: { llm: { model: "gpt-5.5", effort: "medium" } },
+    };
+    const { report } = applyReviewLlmOverrideWithReport(settings, { effort: "high" });
+    expect(report.reached).toEqual([
+      "review.execution.teamlead.llm",
+      "review.execution.lens.llm",
+      "review.execution.synthesize.llm",
+      "review.execution.units.lens.llm",
+    ]);
+    expect(report.dropped).toEqual([]);
+  });
+
+  it("counts a salvage transcription only when the switched-in provider can express it", () => {
+    const withSalvage = (): OntoSettings => {
+      const settings = reviewSettingsWith(openAiOauthActor);
+      (settings.review!.execution as Record<string, unknown>).retry = {
+        salvage: {
+          enabled: true,
+          transcription_llm: { provider: "anthropic", model: "claude-haiku" },
+        },
+      };
+      return settings;
+    };
+    const salvagePath = "review.execution.retry.salvage.transcription_llm";
+    const applied = applyReviewLlmOverrideWithReport(withSalvage(), {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    });
+    // Salvage is RECOVERY-ONLY: reported, but never counted as a primary seat.
+    expect(applied.report.recovery).toContain(salvagePath);
+    expect(applied.report.reached).not.toContain(salvagePath);
+    // grok/lmstudio cannot be expressed in the restricted salvage shape, so the
+    // seat is left inert — it must not be counted as reached at all.
+    const inert = applyReviewLlmOverrideWithReport(withSalvage(), {
+      provider: "grok",
+      model: "grok-4",
+    });
+    expect(inert.report.recovery).not.toContain(salvagePath);
+    expect(inert.report.reached).not.toContain(salvagePath);
+  });
+
+  it("does not let a salvage-only reach satisfy the primary-seat guard", () => {
+    // Regression: a chain with no actor/unit llm but a configured salvage
+    // transcription used to produce reached=[salvage], pass the guard, and
+    // resolve the REVIEW to codex/codex with no model pin while the caller had
+    // asked for anthropic — the exact family collapse the guard exists to stop.
+    const salvageOnly = {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          teamlead: { seat: "main" },
+          lens: { seat: "worker" },
+          synthesize: { seat: "worker" },
+          retry: {
+            salvage: {
+              enabled: true,
+              transcription_llm: { provider: "anthropic", model: "claude-opus-4-8" },
+            },
+          },
+        },
+      },
+    } as unknown as OntoSettings;
+    const override = {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-fable-5",
+    } as PerCallLlmOverride;
+    const { report } = applyReviewLlmOverrideWithReport(salvageOnly, override);
+    expect(report.reached).toEqual([]);
+    expect(report.recovery).toEqual([
+      "review.execution.retry.salvage.transcription_llm",
+    ]);
+    let thrown: unknown;
+    try {
+      assertLlmOverrideReachedSeats({ scope: "review", report, override });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(OntoSettingsValidationError);
+    // The error names the recovery seat, so the cause is diagnosable.
+    expect((thrown as OntoSettingsValidationError).message).toContain("recovery-only");
+    expect(
+      (thrown as OntoSettingsValidationError).failureRecord.details,
+    ).toMatchObject({
+      recovery_only_seats: ["review.execution.retry.salvage.transcription_llm"],
+    });
+  });
+
+  it("reaches nothing when the settings chain configures no review seat", () => {
+    const noExecution = {
+      schema_version: "settings.json/v3",
+      review: { mode: "full" },
+    } as unknown as OntoSettings;
+    const noLlmBlocks = {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          teamlead: { seat: "main" },
+          lens: { seat: "worker" },
+          synthesize: { seat: "worker" },
+          units: { issue_stance_matrix: { timeout_ms: 300000 } },
+        },
+      },
+    } as unknown as OntoSettings;
+    const override: PerCallLlmOverride = {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    } as PerCallLlmOverride;
+    for (const settings of [noExecution, noLlmBlocks]) {
+      const { settings: after, report } = applyReviewLlmOverrideWithReport(
+        settings,
+        override,
+      );
+      expect(report.reached).toEqual([]);
+      // The overlay is a no-op on this input — which is exactly why the caller
+      // cannot tell success from silence without the report.
+      expect(after.review?.execution?.teamlead?.llm).toBeUndefined();
+    }
+  });
+
+  it("records the reconstruct actor seats it reached, including the effort-only fallback", () => {
+    const { report } = applyReconstructLlmOverrideWithReport(
+      reconstructSettingsWith({ authorLlm: openAiApiAuthor, dispatchFallback: true }),
+      { effort: "high" },
+    );
+    expect(report.reached).toEqual([
+      "reconstruct.execution.actors.semantic_author.llm",
+      "reconstruct.execution.actors.confirmation_provider.llm",
+    ]);
+    // dispatch_fallback runs only after a primary dispatch fails.
+    expect(report.recovery).toEqual([
+      "reconstruct.execution.dispatch_fallback.llm",
+    ]);
+    expect(report.dropped).toEqual([]);
+  });
+
+  it("reaches nothing when the chain configures no reconstruct actor", () => {
+    const { report } = applyReconstructLlmOverrideWithReport(
+      { schema_version: "settings.json/v3", review: { mode: "full" } } as unknown as OntoSettings,
+      { effort: "high" },
+    );
+    expect(report.reached).toEqual([]);
+  });
+});
+
+describe("assertLlmOverrideReachedSeats", () => {
+  const override = { provider: "anthropic", model: "claude-opus-4-8" } as PerCallLlmOverride;
+
+  it("fails loud when the override reached no seat", () => {
+    for (const scope of ["review", "reconstruct"] as const) {
+      let thrown: unknown;
+      try {
+        assertLlmOverrideReachedSeats({
+          scope,
+          report: { reached: [], recovery: [], dropped: [] },
+          override,
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(OntoSettingsValidationError);
+      const error = thrown as OntoSettingsValidationError;
+      expect(error.failureRecord.reason_code).toBe("llm_override_reached_no_seat");
+      // Actionable: names the settings paths that would give the override a seat.
+      expect(error.message).toContain(`${scope}.execution.actors`);
+      expect(error.failureRecord.details).toMatchObject({
+        override_scope: scope,
+        reached_seats: [],
+      });
+    }
+  });
+
+  it("is silent when at least one seat was reached", () => {
+    expect(() =>
+      assertLlmOverrideReachedSeats({
+        scope: "review",
+        report: { reached: ["review.execution.teamlead.llm"], recovery: [], dropped: [] },
+        override,
+      }),
+    ).not.toThrow();
   });
 });

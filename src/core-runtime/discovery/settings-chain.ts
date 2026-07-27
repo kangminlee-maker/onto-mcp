@@ -1869,12 +1869,13 @@ export function collectEffectiveModelRoutes(
  * Runtime gate (INV-MODEL-1): throws if any effective model route in `settings`
  * is not benchmark-verified in the authority registry. Deliberately separate
  * from {@link resolveSettingsChain} — resolution is a pure projection, this is a
- * gate. Its current live call site is the reconstruct live execution boundary
- * (where real, paid provider calls begin; review-side runtime enforcement is a
- * noted follow-up); it is also called by the G7 CI guard on the committed
- * config, so the runtime and the guard validate through one function and cannot
- * disagree. Mock/test paths that resolve settings without making real calls
- * never invoke it.
+ * gate. Its live call sites are the reconstruct live execution boundary (where
+ * real, paid provider calls begin) and the review invocation seam when a
+ * per-call `llmOverride` is present (scoped to the review seats — see
+ * resolveReviewInvokeSetup); it is also called by the G7 CI guard on the
+ * committed config, so the runtime and the guard validate through one function
+ * and cannot disagree. Mock/test paths that resolve settings without making
+ * real calls never invoke it.
  */
 export function assertSettingsModelsSupported(
   settings: OntoSettings,

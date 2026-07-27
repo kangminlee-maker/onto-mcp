@@ -61,14 +61,60 @@ describe("normalizeLlmModelSwitcher", () => {
     });
   });
 
-  it("defaults anthropic (no auth) to api_key direct model-call", () => {
+  // An omitted auth must never select a metered route: per_token bills on the
+  // first call, so it is the caller's choice to state, not a default's to make.
+  it("defaults anthropic (no auth, no credential env) to the subscription worker route", () => {
     const selection = normalizeLlmModelSwitcher({
       provider: "anthropic",
       model: "claude-sonnet-4-6",
     });
+    expect(selection?.auth).toBe("oauth");
+    expect(selection?.execution_route).toBe("external_oauth_worker");
+    expect(selection?.execution_adapter).toBe("claude_code");
+    expect(selection?.billing_mode).toBe("subscription");
+  });
+
+  it("defaults openai (no auth, no credential env) to the subscription worker route", () => {
+    const selection = normalizeLlmModelSwitcher({ provider: "openai", model: "gpt-5.5" });
+    expect(selection?.auth).toBe("oauth");
+    expect(selection?.billing_mode).toBe("subscription");
+  });
+
+  it("reads a NAMED credential env as the seat stating the metered route", () => {
+    // Naming `api_key_env` is a written declaration that this seat calls the
+    // paid API — the same class of statement as `auth: "api_key"`, and distinct
+    // from inferring auth from a key being present in the environment (which is
+    // what INV-AUTH-1 forbids). Symmetric across both providers.
+    for (const [provider, model, keyEnv, adapter] of [
+      ["anthropic", "claude-sonnet-4-6", "ANTHROPIC_API_KEY", "anthropic_sdk"],
+      ["openai", "gpt-5.5", "OPENAI_API_KEY", "openai_sdk"],
+    ] as const) {
+      const selection = normalizeLlmModelSwitcher({
+        provider,
+        model,
+        api_key_env: keyEnv,
+      });
+      expect(selection?.auth).toBe("api_key");
+      expect(selection?.execution_route).toBe("direct_model_call");
+      expect(selection?.execution_adapter).toBe(adapter);
+      expect(selection?.billing_mode).toBe("per_token");
+    }
+  });
+
+  it("keeps the metered route reachable by stating auth explicitly", () => {
+    const selection = normalizeLlmModelSwitcher({
+      provider: "anthropic",
+      auth: "api_key",
+      model: "claude-sonnet-4-6",
+    });
     expect(selection?.auth).toBe("api_key");
-    expect(selection?.execution_route).toBe("direct_model_call");
-    expect(selection?.execution_adapter).toBe("anthropic_sdk");
+    expect(selection?.billing_mode).toBe("per_token");
+  });
+
+  it("keeps grok on api_key — it has no subscription route to default to", () => {
+    const selection = normalizeLlmModelSwitcher({ provider: "grok", model: "grok-4" });
+    expect(selection?.auth).toBe("api_key");
+    expect(selection?.billing_mode).toBe("per_token");
   });
 
   it("keeps openai+oauth on the codex_cli worker route (regression)", () => {

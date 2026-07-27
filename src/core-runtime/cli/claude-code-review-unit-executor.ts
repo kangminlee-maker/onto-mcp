@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { claudeOauthWorkerEnv } from "../llm/claude-oauth-worker-env.js";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { awaitChildExit } from "../child-process-exit.js";
@@ -389,6 +390,10 @@ async function runClaudeWorker(args: {
   const child = spawn(CLAUDE_BIN, claudeArgs, {
     cwd: args.projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
+    // The worker route is declared subscription-billed; an inherited ambient
+    // credential would make that label false (in `-p` an API key is always used
+    // when present), so the child gets an environment it cannot spend from.
+    env: claudeOauthWorkerEnv(process.env),
   });
   const runtimeSourceBase = {
     kind: "process" as const,
