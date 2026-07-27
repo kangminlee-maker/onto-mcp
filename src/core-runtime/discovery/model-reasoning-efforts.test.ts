@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   acceptedReasoningEfforts,
   assertReasoningEffortAccepted,
@@ -13,12 +16,15 @@ const entry = (over: Partial<{
   model: string;
   efforts: string[];
   provenance: string;
+  verification: string;
+  evidence_ref: string;
 }> = {}) => ({
   execution_adapter: "codex_cli",
   provider: "openai",
   model: "gpt-5.6-sol",
   efforts: ["low", "high"],
   provenance: "test citation",
+  verification: "documented",
   ...over,
 });
 
@@ -46,6 +52,14 @@ describe("reasoning-effort authority shape", () => {
   it("accepts an empty effort set as a recorded fact, not a malformed entry", () => {
     const registry = registryOf(entry({ efforts: [] }));
     expect(registry.entries[0]?.efforts).toEqual([]);
+  });
+
+  it("requires evidence for a measured claim and refuses it for a documented one", () => {
+    expect(() => registryOf(entry({ verification: "measured" })))
+      .toThrow(/measured requires evidence_ref/);
+    expect(() =>
+      registryOf(entry({ verification: "documented", evidence_ref: "x/" }))
+    ).toThrow(/documented must not carry evidence_ref/);
   });
 });
 
@@ -134,6 +148,10 @@ describe("reasoning-effort membership", () => {
  */
 describe("shipped reasoning-effort authority", () => {
   const registry = loadModelReasoningEffortRegistry();
+  const repoRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../..",
+  );
   const accepts = (
     executionAdapter: string,
     provider: string,
@@ -166,6 +184,13 @@ describe("shipped reasoning-effort authority", () => {
     expect(accepts("openai_sdk", "openai", "gpt-5.6-sol", "ultra")).toBe(false);
     // `ultracode` is undocumented in `claude --help` but accepted by the CLI.
     expect(accepts("claude_code", "anthropic", "claude-opus-5", "ultracode")).toBe(true);
+    // Measured on three more models: it is a CLI-level value, not model-gated.
+    expect(accepts("claude_code", "anthropic", "claude-opus-4-8", "ultracode")).toBe(true);
+    expect(accepts("claude_code", "anthropic", "claude-sonnet-5", "ultracode")).toBe(true);
+    // gpt-5.5 refuses `ultra` — its rejection names 'max', showing the CLI maps
+    // ultra->max and 5.5 has no `max`. Same vocabulary, different model ceiling.
+    expect(accepts("codex_cli", "openai", "gpt-5.5", "ultra")).toBe(false);
+    expect(accepts("codex_cli", "openai", "gpt-5.5", "max")).toBe(false);
     expect(accepts("anthropic_sdk", "anthropic", "claude-opus-5", "ultracode")).toBe(false);
   });
 
@@ -178,6 +203,49 @@ describe("shipped reasoning-effort authority", () => {
       }),
     ).toEqual([]);
     expect(accepts("claude_code", "anthropic", "claude-haiku-4-5", "high")).toBe(true);
+  });
+
+  it("backs every measured claim with evidence that is actually on disk", () => {
+    const measured = registry.entries.filter(
+      (e) => e.verification === "measured",
+    );
+    expect(measured.length).toBeGreaterThan(0);
+    for (const e of measured) {
+      expect(e.evidence_ref, `${e.execution_adapter}/${e.model}`).toBeDefined();
+      expect(
+        fs.existsSync(path.join(repoRoot, e.evidence_ref as string)),
+        `${e.execution_adapter}/${e.model} cites ${e.evidence_ref}`,
+      ).toBe(true);
+    }
+  });
+
+  /**
+   * RATCHET, one-directional. The pinned pairs are the ones no probe has
+   * exercised on that surface — the direct-API surfaces (no metered credential
+   * in this environment) plus the CLI pairs left unmeasured, each named in its
+   * own `provenance`. Anything OUTSIDE the pin must be `measured`, so a newly
+   * added doc-only entry fails here. Converting a pinned entry to `measured`
+   * does NOT fail — the list may shrink freely, which is the direction that
+   * closes the gap. Shrink it as probes land; never extend it.
+   */
+  it("admits documentation-only sets only where nothing has been measured yet", () => {
+    const documentedByChoice = new Set([
+      "openai_sdk/gpt-5.5",
+      "openai_sdk/gpt-5.6-sol",
+      "openai_sdk/gpt-5.6-terra",
+      "openai_sdk/gpt-5.6-luna",
+      "anthropic_sdk/claude-fable-5",
+      "anthropic_sdk/claude-opus-5",
+      "anthropic_sdk/claude-opus-4-8",
+      "anthropic_sdk/claude-sonnet-5",
+      "anthropic_sdk/claude-haiku-4-5",
+      "claude_code/claude-fable-5",
+    ]);
+    const unpinnedDocumented = registry.entries
+      .filter((e) => e.verification === "documented")
+      .map((e) => `${e.execution_adapter}/${e.model}`)
+      .filter((key) => !documentedByChoice.has(key));
+    expect(unpinnedDocumented).toEqual([]);
   });
 
   it("covers every model the reasoning-effort survey named, on both of its surfaces", () => {

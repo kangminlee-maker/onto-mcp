@@ -4,6 +4,15 @@ Evidence for `.onto/authority/model-reasoning-efforts.yaml`. Every row is a real
 dispatch of the prompt `Reply with exactly: ok` against the installed CLI; raw
 stdout/stderr for each is in `raw/`.
 
+Re-run any of it with `scripts/probe-reasoning-effort.mts`, which encodes the
+per-surface verdict rule below and refuses to report anything until its own
+controls come out different:
+
+```
+npx tsx scripts/probe-reasoning-effort.mts --surface codex_cli --model gpt-5.6-sol --effort ultra
+npx tsx scripts/probe-reasoning-effort.mts --surface claude_code --model claude-opus-5 --self-test
+```
+
 ## Why the negative controls decide everything
 
 The two surfaces fail in opposite ways, so `rc=0` means different things on each.
@@ -32,6 +41,24 @@ the authority file is keyed by execution surface and not by model alone.
 | gpt-5.6-terra | `high` | 0 | full review dispatch, `benchmark/reconciliation-review-r2/terra-high/` |
 | gpt-5.6-sol | `max` | 0 | full review dispatch, `benchmark/reconciliation-review-r2/sol-max/` |
 | gpt-5.6-luna | `high` | 0 | full review dispatch, `benchmark/reconciliation-review-r2/luna-high/` |
+| gpt-5.5 | `none`, `xhigh` | 0 | `raw/codex_cli-gpt-5.5-{none,xhigh}.*` |
+| gpt-5.5 | `max` | **1** | `Invalid value: 'max'. Supported values are: 'none', 'minimal', 'low', 'medium', 'high', and 'xhigh'.` |
+| gpt-5.5 | `ultra` | **1** | `raw/codex_cli-gpt-5.5-ultra.err` — rejection names **'max'**, not 'ultra' |
+| gpt-5.5 | `minimal` | **1** | `The following tools cannot be used with reasoning.effort 'minimal': web_search.` |
+
+### The `ultra` → `max` mapping, caught directly
+
+Asking gpt-5.5 for `ultra` produces a rejection of **`max`**. The CLI translates
+its own vocabulary before the request leaves, so what the provider sees — and
+names in the error — is the mapped value. That is why `ultra` can be valid on a
+surface whose API enum has never contained it, and why gpt-5.5 refuses `ultra`
+for the same reason it refuses `max`: the model has no `max`.
+
+`minimal` on gpt-5.5 is refused for an unrelated reason worth not conflating: it
+is a valid enum value that this surface's tool set forbids (`web_search`), not an
+unknown one. The authority leaves it out either way — the entry records what the
+surface accepts as configured — but the provenance says which kind of refusal it
+was.
 
 Note the deployment id in the `minimal` rejection: the model served behind the
 codex CLI is `gpt-5.6-sol-1p-codexswic-ev3`, and the set it names excludes both
@@ -48,6 +75,11 @@ not a contradiction.
 | claude-opus-5 | `banana` | 0 | **yes** (`raw/neg-claude.err`) | rejected → default |
 | claude-haiku-4-5 | `high` | 0 | none¹ | accepted by the CLI |
 | claude-haiku-4-5 | `ultracode` | 0 | none¹ | accepted by the CLI |
+| claude-opus-4-8 | `ultracode`, `xhigh` | 0 | none | accepted |
+| claude-sonnet-5 | `ultracode`, `xhigh` | 0 | none | accepted |
+
+`ultracode` was accepted on every model probed (opus-5, opus-4-8, sonnet-5,
+haiku-4-5), so it reads as a CLI-level value rather than a model-gated one.
 
 ¹ The stderr on these two rows carries only an unrelated `no stdin data received`
 warning, not an effort warning.
@@ -59,11 +91,13 @@ in the authority file: `anthropic_sdk` + `claude-haiku-4-5` is an empty set, whi
 
 ## Not probed
 
-- `gpt-5.5` on either surface (doc set used).
 - `ultracode` on `claude-fable-5` — under a monthly spend limit in this environment.
-- `ultracode` on `claude-opus-4-8` / `claude-sonnet-5`.
 - Direct-API (`openai_sdk` / `anthropic_sdk`) acceptance for any model: no metered
-  API key is configured here, so those entries rest on vendor documentation.
+  credential exists here, and every seat in this install is `auth: oauth`, so those
+  surfaces are never dispatched on from this repo. Their entries rest on vendor
+  documentation and are marked `verification: documented`.
 
-Each omission is carried into the authority entry's `provenance` rather than
-guessed at, and the affected values are left out of the accepted set.
+Both gaps are structural in the authority (`verification` + `evidence_ref`) rather
+than prose, and a test pins the documented-only set so a new one cannot be added
+quietly. Closing either is one harness run — the direct-API surfaces additionally
+need a metered key, which the harness refuses to fake.

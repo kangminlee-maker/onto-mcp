@@ -32,6 +32,7 @@
     "exactOptionalPropertyTypes": false
   },
   "include": [
+    "scripts/probe-reasoning-effort.mts",
     "scripts/m3-defect-spectrum.ts",
     "scripts/m3-attribution-judge.ts",
     "scripts/m3-run.ts",

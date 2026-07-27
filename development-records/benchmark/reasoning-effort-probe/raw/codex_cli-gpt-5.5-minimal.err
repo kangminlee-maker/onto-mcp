@@ -1,0 +1,32 @@
+Reading prompt from stdin...
+OpenAI Codex v0.145.0
+--------
+workdir: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/codex-run-DE876r/workspace
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: minimal
+reasoning summaries: none
+session id: 019fa4b2-bd44-76f2-a173-92bcd0116d6e
+--------
+user
+Reply with exactly: ok
+ERROR: {
+  "type": "error",
+  "error": {
+    "type": "invalid_request_error",
+    "message": "The following tools cannot be used with reasoning.effort 'minimal': web_search.",
+    "param": "tools"
+  },
+  "status": 400
+}
+ERROR: {
+  "type": "error",
+  "error": {
+    "type": "invalid_request_error",
+    "message": "The following tools cannot be used with reasoning.effort 'minimal': web_search.",
+    "param": "tools"
+  },
+  "status": 400
+}

@@ -37,6 +37,7 @@ export {
   type ReconstructTerminalStatus,
 } from "../core-runtime/reconstruct/record.js";
 import { runReconstruct } from "../core-runtime/reconstruct/run.js";
+import { ReasoningEffortAuthorityError } from "../core-runtime/discovery/model-reasoning-efforts.js";
 import type {
   ReconstructDispatchFallbackRuntime,
   ReconstructRunResult,
@@ -1050,7 +1051,13 @@ export async function tryCreateEligiblePrimarySealedDispatchCapability(args: {
   }
   try {
     return await createSealedDispatchCapability(args);
-  } catch {
+  } catch (error) {
+    // An effort the model cannot take is a MISCONFIGURATION, not an absent
+    // capability. Swallowing it here would report "this operation has no sealed
+    // primary" for a config typo and quietly route elsewhere — the same silent
+    // downgrade the reasoning-effort authority exists to prevent, reintroduced
+    // one layer up. Everything else keeps the probe semantics this helper is for.
+    if (error instanceof ReasoningEffortAuthorityError) throw error;
     return undefined;
   }
 }
