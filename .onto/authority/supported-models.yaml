@@ -3,13 +3,15 @@
 # Only models whose support has been verified by a benchmark (a benchmark record
 # shows the model completing a pipeline run end to end) may be listed here.
 # settings.json model selection is validated against this registry by the
-# supported-model gate (assertSettingsModelsSupported): at the reconstruct live
-# execution boundary (real provider calls) and by the `check:supported-models`
-# (G7) guard on the committed config (every seat). Review-side runtime
-# enforcement is a noted follow-up, so the runtime gate is wired on the
-# reconstruct live path only today. A (provider, model) pair not listed here is
-# rejected fail-loud at those gate points. Settings resolution itself is a pure
-# projection and does not enforce this gate.
+# supported-model gate (assertSettingsModelsSupported) at three points: the
+# reconstruct live execution boundary (real provider calls), the review
+# invocation seam when a per-call `llmOverride` is present (scoped to the review
+# seats that this run can dispatch), and the `check:supported-models` (G7) guard
+# on the committed config (every seat). The review-side runtime gate stays
+# scoped to override-bearing runs, so a committed config without an override is
+# validated by G7 rather than at review runtime. A (provider, model) pair not
+# listed here is rejected fail-loud at those gate points. Settings resolution
+# itself is a pure projection and does not enforce this gate.
 #
 # To add a model: run the benchmark, confirm a completed run, then add an entry
 # citing the benchmark record under benchmark_evidence_refs. Curated by humans;

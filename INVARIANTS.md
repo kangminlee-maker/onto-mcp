@@ -10,10 +10,10 @@
 ---
 
 ## INV-AUTH-1 — 기본 인증은 항상 OAuth
-- **규칙**: review 실행의 기본 인증(auth)은 항상 `oauth`다. `api_key`·`local`은 사용자가 명시적으로 지정했을 때만 쓴다.
-- **근거**: 보안·인증 경계 값이 편의로 바뀌면 조용한 drift가 장기간 미검출될 수 있다.
-- **강제**: 역량 경계(보호 경로 승인제) + 검증 게이트. `↔ AGENTS §0-2, §0-3`
-- **검증**: `auth` 생략 시 `provider=openai`가 OAuth/Codex 경로로 해석되는지 테스트로 고정한다. 관련 코드: [src/core-runtime/llm/model-switcher.ts](src/core-runtime/llm/model-switcher.ts).
+- **규칙**: 기본 인증(auth)은 항상 `oauth`다. 구독 워커 경로가 있는 provider는 auth 생략 시 그 경로로 해석한다(openai → codex_cli, anthropic → claude_code). `api_key`는 좌석이 **명시**할 때만 쓰며, 명시의 형태는 둘이다 — `auth: "api_key"`를 쓰거나, 그 좌석이 호출할 `api_key_env`를 지정하거나(2026-07-27 owner 지시: "종량은 사용하는 즉시 과금이 생기기 때문에, 명시적으로 요청하는 경우에만 종량으로 진행해야 해" + "api_key_env도 호출시에 api_key_env를 언급하는 것이라면 명시적 언급에 해당해"). 설정 필드를 읽는 것과 **환경에 키 값이 존재하는 것으로부터 추론**하는 것은 다르다 — 후자는 계속 금지이며, 부트스트랩은 그래서 `{provider, model}`에서만 auth를 유도한다. 구독 경로가 없는 provider(grok)와 로컬 전용(lmstudio)은 provider 선택이 곧 경로 선택이다.
+- **근거**: 보안·인증 경계 값이 편의로 바뀌면 조용한 drift가 장기간 미검출될 수 있다. 종량(`per_token`)은 첫 호출부터 과금되므로 기본값이 대신 골라서는 안 된다.
+- **강제**: 역량 경계(보호 경로 승인제) + 검증 게이트. 선언만으로는 부족하다 — 구독 워커 spawn은 자식 환경에서 그 세션을 앞지르는 자격증명(`ANTHROPIC_API_KEY` 등)을 제거해 `billing_mode: subscription`을 구성으로 참이게 한다([claude-oauth-worker-env.ts](src/core-runtime/llm/claude-oauth-worker-env.ts)). `↔ AGENTS §0-2, §0-3`
+- **검증**: `auth` 생략 시 openai·anthropic 모두 구독 워커 경로로, `api_key` 명시 또는 `api_key_env` 명시일 때만 종량 경로로 해석되는지 테스트로 고정한다. 관련 코드: [src/core-runtime/llm/model-switcher.ts](src/core-runtime/llm/model-switcher.ts), [model-switcher.test.ts](src/core-runtime/llm/model-switcher.test.ts).
 
 ## INV-CFG-1 — 스펙 경계 값은 settings.json이 유일 권위 (코드 기본값 금지)
 - **규칙**: 인증 방식, 기본 모델/provider, reasoning effort, retry 횟수 등 "스펙 경계 값"은 [.onto/settings.json](.onto/settings.json)(및 settings chain) 한 곳에서만 나온다. 코드에 기본 상수를 두지 않는다. 값이 없으면 조용히 기본값으로 가지 말고 즉시 멈춘다(fail-loud).

@@ -39,14 +39,19 @@ const OntoReviewToolInputBaseSchema = z.object({
   prepareOnly: z.boolean().optional(),
   returnRunningAfterMs: z.number().int().min(0).optional(),
   // Per-call LLM override: ephemeral settings-`llm` overlay applied to every
-  // review dispatch seat (all actors + units) for this invocation. Omit → settings
-  // unchanged (default-off, byte-identical). See tool-schemas import.
+  // CONFIGURED review dispatch seat (each actor/unit that carries its own `llm`
+  // block) for this invocation. A seat with no `llm` block has nothing to
+  // overlay, so an override that reaches ZERO seats fails loud at the invocation
+  // seam rather than succeeding as a silent no-op. Omit → settings unchanged
+  // (default-off, byte-identical). See tool-schemas import.
   llmOverride: PerCallLlmOverrideSchema.optional(),
 }).strict();
 
 // A provider switch needs an explicit model (the switched-in provider has no
-// default model to inherit); `auth` stays optional — the model-switcher
-// normalizer defaults it per provider, matching settings behavior.
+// default model to inherit); `auth` stays optional because omitting it cannot
+// pick a costly route — the model-switcher normalizer defaults to the
+// provider's SUBSCRIPTION worker route and reaches metered api_key only when the
+// seat states it (auth, or a named api_key_env), matching settings behavior.
 const requireModelWhenOverrideProvider = (input: {
   llmOverride?: { provider?: string | undefined; model?: string | undefined } | undefined;
 }): boolean => !(input.llmOverride?.provider && !input.llmOverride.model);

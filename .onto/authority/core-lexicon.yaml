@@ -316,7 +316,7 @@ provisional_terms:
         - "src/core-runtime/discovery/host-detection.ts (canonical seat)"
       notes:
         - "Host/team capability matrix는 canonical runtime path에서 제거했다. Review route는 auth_mode + model_provider + model_id + execution_adapter 축으로 표현해야 하며, 특정 brand host_runtime이 route 이름을 점유하면 안 된다."
-        - "현재 operational external-worker adapter 예시는 oauth+openai+codex_cli 이다. oauth+anthropic+claude_code 는 reserved/future 경로로 두며, 별도 패치에서 wire-up 한다."
+        - "현재 operational external-worker adapter 는 oauth+openai+codex_cli 와 oauth+anthropic+claude_code 두 가지다(wire-up 완료: src/core-runtime/review/review-execution-profile.ts 의 worker 해소, llm/model-switcher.ts 의 정규화). auth 를 생략한 openai/anthropic 블록의 기본 경로가 곧 이 구독 워커 경로다 — 생략된 auth 는 종량(api_key) 경로를 고르지 않는다."
         - "api_key+openai/anthropic 는 settings-driven target capability로 분류한다. local+lmstudio+model_id 는 reserved/future 경로로 두며 이번 runtime naming migration 의 필수 구현·검증 범위에서 제외한다."
 
     main_worker_llm_axis:

@@ -146,6 +146,13 @@ export async function bootstrapProviderFromEnv(
   // (the SAME auth the model-switcher would derive) and pass it explicitly so
   // BOTH review and reconstruct actors materialize. This does not infer
   // api_key from key presence.
+  //
+  // The derivation route deliberately OMITS the `api_key_env` this run may write.
+  // The switcher treats a named credential env as the seat declaring the metered
+  // route, but here that name would come from this code noticing a key VALUE in
+  // the install env — key-presence inference, which is exactly what INV-AUTH-1
+  // bars. An installer that wants the paid API route states it as
+  // ONTO_BOOTSTRAP_AUTH=api_key.
   let auth = readBootstrapEnv(env, BOOTSTRAP_ENV.auth);
   if (auth === undefined) {
     try {

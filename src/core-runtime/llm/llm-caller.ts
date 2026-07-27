@@ -14,12 +14,14 @@
  */
 
 import crypto from "node:crypto";
+import { claudeOauthWorkerEnv } from "./claude-oauth-worker-env.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import {
   DEFAULT_GROK_BASE_URL,
   DEFAULT_LMSTUDIO_BASE_URL,
+  defaultAuthForProvider,
   isExternalOauthWorkerSelection,
   normalizeLlmModelSwitcher,
   type LlmModelSwitcherConfig,
@@ -180,6 +182,65 @@ export interface LlmProviderCliOverrides {
  *
  * This is the canonical seat where OntoConfig translates to provider resolution input.
  */
+/**
+ * The switcher selection a CLI-driven call resolves to.
+ *
+ * CLI route fields are normalized WITH the settings block, not patched onto the
+ * result afterwards. `auth` is an INPUT to normalization — it decides
+ * execution_route / execution_adapter / billing_mode — so a bridge that
+ * normalizes settings first and then overlays CLI scalars has nowhere to put it:
+ * `--auth` was parsed, validated, and then silently dropped, leaving the adapter
+ * to come from the settings block alone.
+ *
+ * That mattered because the executor child re-reads settings from DISK while the
+ * parent passes its EFFECTIVE (per-call-overridden) route as flags. Measured:
+ * disk `anthropic/oauth` + `--provider anthropic --auth api_key --model X`
+ * resolved to `execution_adapter: "claude_code"`, so a caller who explicitly
+ * asked for the metered API route dispatched on the Claude Code subscription
+ * worker while the baked actor profile recorded the API route.
+ *
+ * Inheritance from the settings block follows the same rule the per-call overlay
+ * uses when a route changes (see discovery/llm-override):
+ * - `service_tier` / `base_url` are never inherited across a stated route —
+ *   an endpoint that lay dormant on one route must not be woken by another.
+ * - `api_key_env` is inherited only when the destination is a direct-call route,
+ *   where it is the credential name that route needs.
+ * - `auth` is inherited only when the provider is unchanged.
+ * - `model` / `effort` are route-agnostic and always inherit.
+ */
+function normalizeCliAwareSelection(
+  block: LlmModelSwitcherConfig | undefined,
+  cli: LlmProviderCliOverrides,
+): NormalizedLlmSelection | null {
+  // `codex` is the legacy DISPATCH key (provider="codex"), not a switcher
+  // provider — feeding it to the normalizer would resolve nothing. Keep the
+  // settings-only derivation for that path.
+  if (cli.provider === "codex") return normalizeLlmModelSwitcher(block);
+  const statesRoute = cli.provider !== undefined || cli.auth !== undefined;
+  if (!statesRoute) return normalizeLlmModelSwitcher(block);
+  const provider = cli.provider ?? block?.provider;
+  if (provider === undefined) return normalizeLlmModelSwitcher(block);
+  const providerChanged = block?.provider !== undefined && provider !== block.provider;
+  const auth = cli.auth ?? (providerChanged ? undefined : block?.auth);
+  const destinationIsDirectCall =
+    auth === "api_key" ||
+    auth === "local" ||
+    (auth === undefined && defaultAuthForProvider(provider) !== "oauth");
+  const apiKeyEnv =
+    cli.api_key_env ?? (destinationIsDirectCall ? block?.api_key_env : undefined);
+  return normalizeLlmModelSwitcher({
+    provider,
+    ...(auth ? { auth } : {}),
+    ...(cli.model ?? block?.model ? { model: cli.model ?? block?.model } : {}),
+    ...(cli.reasoning_effort ?? block?.effort
+      ? { effort: cli.reasoning_effort ?? block?.effort }
+      : {}),
+    ...(cli.base_url ? { base_url: cli.base_url } : {}),
+    ...(apiKeyEnv ? { api_key_env: apiKeyEnv } : {}),
+    ...(cli.service_tier ? { service_tier: cli.service_tier } : {}),
+  });
+}
+
 export function resolveLlmProviderConfig(args: {
   config?: LlmProviderConfigInputs;
   cliOverrides?: LlmProviderCliOverrides;
@@ -187,7 +248,7 @@ export function resolveLlmProviderConfig(args: {
   const config = args.config ?? {};
   const cli = args.cliOverrides ?? {};
 
-  const selection = normalizeLlmModelSwitcher(config.llm);
+  const selection = normalizeCliAwareSelection(config.llm, cli);
   const provider = cli.provider ?? selection?.provider;
 
   const model_id = cli.model ?? selection?.model_id;
@@ -1245,7 +1306,9 @@ function parseClaudeResultEvent(stdout: string): Record<string, unknown> {
 /**
  * Invoke the Claude Code CLI (`claude -p … --output-format json`) as an
  * Anthropic OAuth worker for a single-turn prompt → text response. Uses the
- * host's logged-in Claude Code OAuth session (no `ANTHROPIC_API_KEY`) — the
+ * host's logged-in Claude Code OAuth session — the child environment is stripped
+ * of every credential that outranks it, so `no ANTHROPIC_API_KEY` is enforced
+ * rather than assumed (see claude-oauth-worker-env) — the
  * reconstruct/direct-call analog of `callCodexCli` for openai OAuth. Mirrors the
  * proven claude invocation in `claude-code-review-unit-executor.ts`: the prompt
  * is the positional arg (piped stdin is not treated as the prompt), and no
@@ -1272,7 +1335,12 @@ async function callClaudeCli(
   );
 
   const claudeBin = resolveClaudeBin();
-  const child = spawn(claudeBin, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(claudeBin, args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    // Subscription route: strip the credentials that would outrank the logged-in
+    // session (see claude-oauth-worker-env) so the declared billing mode holds.
+    env: claudeOauthWorkerEnv(process.env),
+  });
   const claudeStreamSourceBase = {
     kind: "process" as const,
     label: "claude-cli",

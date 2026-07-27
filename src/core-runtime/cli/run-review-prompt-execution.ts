@@ -120,6 +120,7 @@ import {
   resolveRequiredParticipatingLensCount,
 } from "../review/lens-completion-policy.js";
 import { assertRuntimeOrchestratedSession } from "../review/orchestration-owner.js";
+import { emitReviewRunnerWarning } from "../review/review-runner-warning.js";
 import {
   REVIEW_EXECUTION_STEP_IDS,
   REVIEW_PROGRESS_TOTAL_STEPS,
@@ -2608,7 +2609,7 @@ async function invokeExecutor(
   }
 
   if (stderr.trim().length > 0) {
-    console.warn(`[review runner warning] ${dispatch.unit_id}: ${stderr.trim()}`);
+    emitReviewRunnerWarning(`${dispatch.unit_id}: ${stderr.trim()}`);
   }
 
   await validateUnitOutputFile({

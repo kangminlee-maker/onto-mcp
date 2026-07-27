@@ -19,6 +19,7 @@ import {
   type ReviewInvokeRouteSummary,
 } from "./review-invoke.js";
 import { executeReviewPromptExecution } from "./run-review-prompt-execution.js";
+import { withReviewRunnerWarnings } from "../review/review-runner-warning.js";
 import { startReviewSession } from "./start-review-session.js";
 import { spawnWatcherPane } from "./spawn-watcher.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
@@ -148,6 +149,13 @@ export interface RunReviewInvocationResult {
   output: ReviewInvocationCliOutput;
   stdout: string[];
   stderr: string[];
+  /**
+   * Non-fatal runner warnings from THIS invocation, collected in its own async
+   * scope — the durable, attributable channel the session artifact is written
+   * from (see review/review-runner-warning). `stderr` above stays a display
+   * mirror and is not the evidence source.
+   */
+  warnings: string[];
 }
 
 export interface ReviewInvocationEquivalenceProjection {
@@ -255,15 +263,25 @@ function executorRealizationFromRequest(
 export async function prepareReviewInvocationRequest(
   request: ReviewInvocationRequest,
   options: RunReviewInvocationOptions,
-): Promise<PrepareOnlyResult> {
+): Promise<{ result: PrepareOnlyResult; warnings: string[] }> {
   const argv = appendReviewInvocationRequestArgs([], request, {
     ontoHome: options.ontoHome,
   });
   try {
-    const { result } = await withCapturedInvocationConsole(() =>
-      prepareReviewInvocationArgv(argv, options.progressObserver),
-    );
-    return result;
+    // Runner warnings are RETURNED, not discarded: the invocation seam emits its
+    // non-fatal disclosures (which seats a per-call llmOverride reached, the
+    // billing route it resolved) and the caller harvests them into the session's
+    // environment-warnings artifact. Dropping them here made the prepare-only
+    // entrypoint silently lose a disclosure the run entrypoint delivers. They
+    // come from an invocation-scoped collector, not the global console, so
+    // overlapping reviews cannot harvest each other's evidence.
+    const { result, warnings } = await withReviewRunnerWarnings(async () => {
+      const captured = await withCapturedInvocationConsole(() =>
+        prepareReviewInvocationArgv(argv, options.progressObserver),
+      );
+      return captured.result;
+    });
+    return { result, warnings };
   } catch (error) {
     await emitFailureProgress(options.progressObserver, "prepare", null, error);
     throw error;
@@ -280,13 +298,16 @@ export async function runReviewInvocation(
     { ontoHome: options.ontoHome },
   );
   try {
-    const captured = await withCapturedInvocationConsole(() =>
-      runReviewInvocationArgv(argv, options.progressObserver),
+    const { result: captured, warnings } = await withReviewRunnerWarnings(() =>
+      withCapturedInvocationConsole(() =>
+        runReviewInvocationArgv(argv, options.progressObserver),
+      ),
     );
     return {
       output: captured.result,
       stdout: captured.stdout,
       stderr: captured.stderr,
+      warnings,
     };
   } catch (error) {
     await emitFailureProgress(options.progressObserver, "execute", null, error);
