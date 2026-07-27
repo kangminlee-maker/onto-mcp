@@ -61,7 +61,8 @@
     "scripts/observation-read-pull-live.mts",
     "scripts/observation-catalog-tool-replay.mts",
     "scripts/off-parity-probe.mts",
-    "scripts/probe-facade-socket-reach.mts"
+    "scripts/probe-facade-socket-reach.mts",
+    "scripts/probe-tool-result-truncation.mts"
   ],
   "exclude": []
 }
