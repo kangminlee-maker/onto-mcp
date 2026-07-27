@@ -63,7 +63,8 @@
     "scripts/off-parity-probe.mts",
     "scripts/probe-facade-socket-reach.mts",
     "scripts/probe-tool-result-truncation.mts",
-    "scripts/probe-mcp-result-field-authority.mts"
+    "scripts/probe-mcp-result-field-authority.mts",
+    "scripts/probe-ack-roundtrip.mts"
   ],
   "exclude": []
 }
