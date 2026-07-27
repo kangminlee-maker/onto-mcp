@@ -112,8 +112,18 @@ const buildPayload = (size: number, fillerName: string, nonces: string[]): strin
   return out.join("");
 };
 
+/**
+ * Forces one filler for every payload. Holding SIZE constant while changing token density is what
+ * separates a byte-denominated cap from a token-denominated one: hex tokenizes to far more tokens per
+ * character than prose, so if only hex is trimmed at a size prose survives, the cap counts tokens.
+ */
+const forcedFiller = argOf("filler");
+if (forcedFiller !== undefined && !(forcedFiller in FILLERS)) {
+  fail(`--filler=${forcedFiller} is not one of: ${Object.keys(FILLERS).join(", ")}`);
+}
+
 const payloads = sizes.map((size, k) => {
-  const fillerName = k % 2 === 0 ? "alpha" : "hex";
+  const fillerName = forcedFiller ?? (k % 2 === 0 ? "alpha" : "hex");
   const nonces = Array.from({ length: QUANTILES }, () => randomBytes(5).toString("hex"));
   const text = buildPayload(size, fillerName, nonces);
   return { index: k, requested_size: size, filler: fillerName, nonces, text };
