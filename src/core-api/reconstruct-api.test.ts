@@ -947,7 +947,10 @@ describe("resolveJudgeLlmConfig", () => {
 // ─── INV-MODEL-1 role-aware B3: semantic-map synthesize wiring seam (§5.4/§5.5) ───
 import { resolveSemanticMapSynthesizeWiring } from "./reconstruct-api.js";
 import type { OntoSettings } from "../core-runtime/discovery/settings-chain.js";
-import { applyReconstructLlmOverride } from "../core-runtime/discovery/llm-override.js";
+import {
+  applyReconstructLlmOverride,
+  canonicalizePerCallLlmOverride,
+} from "../core-runtime/discovery/llm-override.js";
 
 describe("resolveSemanticMapSynthesizeWiring", () => {
   const haikuSeat = {
@@ -1054,5 +1057,17 @@ describe("resolveSemanticMapSynthesizeWiring", () => {
       mockRealizationEnabled: false,
     });
     expect(wiring.semanticMapSynthesizeLlmConfig?.reasoning_effort).toBe("high");
+  });
+});
+
+describe("per-call llmOverride admission (empty override is an omission)", () => {
+  it("canonicalizes {} so the zero-reach guard does not reject a no-op override", () => {
+    // `{}` is schema-valid and the overlay treats it as identity. If it survived
+    // as a truthy value, the override-only guard would run over a report that is
+    // empty by construction and reject a request that expressed no override.
+    expect(canonicalizePerCallLlmOverride({})).toBeUndefined();
+    expect(canonicalizePerCallLlmOverride(undefined)).toBeUndefined();
+    const real = { effort: "high" } as const;
+    expect(canonicalizePerCallLlmOverride(real)).toBe(real);
   });
 });

@@ -31,9 +31,11 @@ import {
   type ReviewExecutionUnitId,
 } from "../discovery/settings-chain.js";
 import {
-  applyReviewLlmOverride,
+  applyReviewLlmOverrideWithReport,
+  assertLlmOverrideReachedSeats,
   parsePerCallLlmOverrideArg,
 } from "../discovery/llm-override.js";
+import { emitReviewRunnerWarning } from "../review/review-runner-warning.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   isPathInsideRoot,
@@ -2987,10 +2989,23 @@ export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewIn
   const llmOverride = parsePerCallLlmOverrideArg(
     readSingleOptionValueFromArgv(argv, "llm-override"),
   );
-  const ontoConfig = llmOverride
-    ? applyReviewLlmOverride(resolvedOntoConfig, llmOverride)
-    : resolvedOntoConfig;
-  if (llmOverride) {
+  const overlay = llmOverride
+    ? applyReviewLlmOverrideWithReport(resolvedOntoConfig, llmOverride)
+    : undefined;
+  const ontoConfig = overlay?.settings ?? resolvedOntoConfig;
+  if (llmOverride && overlay) {
+    // FAIL CLOSED before the model-support gate: the overlay only edits `llm`
+    // blocks that exist, so on a settings chain that configures none it reaches
+    // zero seats and returns the input unchanged. The support gate below cannot
+    // catch that — it walks the same empty seat set and passes vacuously — so a
+    // caller who pinned a provider would get a review on the unconfigured
+    // default route and a success result. Zero-reach is a deterministic count,
+    // so it is enforced here rather than documented as a caveat.
+    assertLlmOverrideReachedSeats({
+      scope: "review",
+      report: overlay.report,
+      override: llmOverride,
+    });
     // Gate ONLY the review dispatch seats. The shared gate walks every seat in
     // the object it is handed, so passing the whole config would fail a review
     // because of an unrelated reconstruct model the review never dispatches.
@@ -3043,6 +3058,55 @@ export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewIn
     host_runtime: effectiveRoute.artifact_host_runtime,
     review_execution_profile: effectiveReviewExecutionProfile,
   };
+  if (overlay) {
+    // Disclose what the override actually did, on the route the run resolved.
+    // Two things a caller cannot otherwise see at call time: which seats it
+    // reached (the independence claim rests on that set being the dispatch set)
+    // and the seats a provider switch dropped to inherit the replaced actor —
+    // their per-unit tuning went with them. `billing_mode` rides along because a
+    // provider switch that omits `auth` defaults it per provider, which can move
+    // the run between subscription and metered billing without the caller
+    // naming either. Read from the resolved route, so this reports what will
+    // dispatch rather than re-deriving it.
+    // `auth_mode` is null on a direct-call route whose block states no auth —
+    // which is exactly the case worth disclosing, because the default is then
+    // what picks the billing route. Fill it from the SEAT's own normalized
+    // selection (the same call dispatch resolves on), not from a re-derived
+    // rule: a block that states no `auth` but names an `api_key_env` resolves to
+    // api_key, and re-deriving from the provider alone would print `oauth` next
+    // to `billing_mode=per_token`.
+    const seatLlm = effectiveReviewExecutionProfile.teamlead.llm;
+    const seatSelection = seatLlm ? normalizeLlmModelSwitcher(seatLlm) : null;
+    const routeProvider = effectiveRoute.model_provider;
+    // `profile.provider` is set only when every configured actor seat shares one
+    // route; absent means the seats resolved to different direct-call providers.
+    const hasCommonActorRoute = effectiveReviewExecutionProfile.provider !== undefined;
+    const effectiveAuth = effectiveRoute.auth_mode ?? seatSelection?.auth ?? null;
+    const authWasStated =
+      llmOverride?.auth !== undefined || seatLlm?.auth !== undefined;
+    emitReviewRunnerWarning(
+      [
+        `llmOverride applied to ${overlay.report.reached.length} review seat(s): `,
+        `[${overlay.report.reached.join(", ")}]`,
+        overlay.report.dropped.length > 0
+          ? `; ${overlay.report.dropped.length} unit seat(s) dropped to inherit the switched actor (per-unit tuning lost): [${overlay.report.dropped.join(", ")}]`
+          : "",
+        overlay.report.recovery.length > 0
+          ? `; also reached ${overlay.report.recovery.length} recovery-only seat(s) [${overlay.report.recovery.join(", ")}]`
+          : "",
+        // The aggregate route describes ONE route. Actor seats may legitimately
+        // resolve to different direct-call providers, and then the projection
+        // reports whichever came first — so say the set is mixed instead of
+        // presenting one seat's route as the run's.
+        hasCommonActorRoute
+          ? `; effective route provider=${String(routeProvider)}`
+          : `; effective route provider=<mixed — actor seats resolve to different direct-call providers; see routeVisibility per seat>`,
+        ` model=${String(effectiveRoute.model_id ?? "<worker default>")}`,
+        ` auth=${String(effectiveAuth)}${authWasStated ? "" : " (defaulted — not stated by the override or the seat)"}`,
+        ` billing_mode=${effectiveRoute.billing_mode}`,
+      ].join(""),
+    );
+  }
   const maxConcurrentLenses = resolveMaxConcurrentLenses({
     plannedLensCount: resolvedInvokeInputs.resolvedLensIds.length,
     reviewExecutionProfile: effectiveReviewExecutionProfile,

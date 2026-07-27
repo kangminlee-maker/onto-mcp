@@ -23,7 +23,7 @@
 
 - `scripts/check-no-hardcoded-spec-defaults.ts`로 운영 코드(테스트·fixture 제외)의 effort/auth/모델 리터럴 기본값을 탐지한다.
 - `package.json`에 `check:spec-defaults`를 추가한다. 탐지 시 비-0 종료.
-- **수용 기준**: [src/core-runtime/llm/model-switcher.ts](../../src/core-runtime/llm/model-switcher.ts)에서 `provider=openai` auth 생략이 OAuth로 정규화되고, effort/auth 기본값이 [.onto/settings.json](../../.onto/settings.json)에서만 흘러온다.
+- **수용 기준**: [src/core-runtime/llm/model-switcher.ts](../../src/core-runtime/llm/model-switcher.ts)에서 `provider=openai`·`provider=anthropic` 모두 auth 생략이 구독 워커 경로(OAuth)로 정규화되고 — 종량 과금 경로는 좌석이 명시할 때만 선택된다(`auth: api_key` 또는 `api_key_env` 명시) — effort/auth 기본값이 [.onto/settings.json](../../.onto/settings.json)에서만 흘러온다.
 
 ## G3. 불변식 테스트  (INV-AUTH-1, INV-SCHEMA-1, INV-TEST-1)
 

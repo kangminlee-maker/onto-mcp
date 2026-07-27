@@ -160,6 +160,13 @@ export interface PreparedReview {
   sessionId: string;
   sessionRoot: string;
   executionPlan: ReviewExecutionPlan;
+  /**
+   * Non-fatal runner warnings harvested from THIS preparation (same artifact and
+   * writer the run path uses), so a prepare-only caller sees disclosures the run
+   * path delivers — notably which seats a per-call `llmOverride` reached, which
+   * unit seats a provider switch dropped, and the billing route it resolved.
+   */
+  environmentWarnings?: ReviewEnvironmentWarningProjection[];
   routeVisibility?: ReviewRouteVisibility | null;
   llmPresentation: LlmPresentationPrompts;
 }
@@ -1236,7 +1243,6 @@ const ACTIVE_REVIEW_ATTEMPT_FILENAME = "active-review-attempt.yaml";
 const ENVIRONMENT_WARNINGS_FILENAME = "environment-warnings.yaml";
 const REVIEW_CANCEL_REQUEST_FILENAME = "review-cancel-request.yaml";
 const DEFAULT_ACTIVE_ATTEMPT_STALE_AFTER_SECONDS = 1_200;
-const REVIEW_RUNNER_WARNING_PREFIX = "[review runner warning]";
 
 interface ReviewActiveAttemptArtifact {
   schema_version: "1";
@@ -1525,14 +1531,21 @@ async function readEnvironmentWarnings(
   return artifact?.warnings ?? [];
 }
 
-async function writeEnvironmentWarningsFromStderr(args: {
+/**
+ * Persist an invocation's runner warnings into its session artifact.
+ *
+ * The messages arrive from the invocation-scoped collector
+ * (review/review-runner-warning), NOT by re-parsing captured console output:
+ * overlapping reviews share one process-global console, so a prefix scan over
+ * captured stderr could file one session's billing route as another session's
+ * evidence. Deduplicated by message against what the session already holds.
+ */
+async function writeReviewRunnerWarnings(args: {
   sessionRoot: string;
-  stderr: string[];
+  warnings: string[];
 }): Promise<ReviewEnvironmentWarningProjection[]> {
-  const warningLines = args.stderr
+  const warningLines = args.warnings
     .map((line) => line.trim())
-    .filter((line) => line.startsWith(REVIEW_RUNNER_WARNING_PREFIX))
-    .map((line) => line.slice(REVIEW_RUNNER_WARNING_PREFIX.length).trim())
     .filter((line) => line.length > 0);
   if (warningLines.length === 0) return [];
 
@@ -4082,8 +4095,18 @@ export function createOntoReviewCoreApi(
   const api: OntoReviewCoreApi = {
     async prepareReview(request: PrepareReviewRequest): Promise<PreparedReview> {
       await validateRequestedDomainForDispatch(request, ontoHome);
-      const result = await prepareReviewInvocationRequest(request, { ontoHome });
+      const { result, warnings } = await prepareReviewInvocationRequest(request, {
+        ontoHome,
+      });
       const sessionRoot = path.resolve(result.session_root);
+      // Harvest the invocation's runner warnings through the SAME writer the run
+      // path uses, so a prepared session carries the per-call override
+      // disclosure (seats reached/dropped, resolved billing route) rather than
+      // only sessions that ran to completion.
+      const environmentWarnings = await writeReviewRunnerWarnings({
+        sessionRoot,
+        warnings,
+      });
       const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
         path.join(sessionRoot, "execution-plan.yaml"),
       );
@@ -4093,6 +4116,7 @@ export function createOntoReviewCoreApi(
         sessionId: executionPlan.session_id,
         sessionRoot,
         executionPlan,
+        ...(environmentWarnings.length > 0 ? { environmentWarnings } : {}),
         routeVisibility: await buildReviewRouteVisibilityFromSession(sessionRoot),
         llmPresentation: {
           openingBrief: buildOpeningBriefPresentation(openingBriefInput),
@@ -4245,9 +4269,9 @@ export function createOntoReviewCoreApi(
           const resolvedResultSessionRoot = path.resolve(result.session_root);
           noteSessionRoot(resolvedResultSessionRoot);
           await activeAttemptWrite;
-          await writeEnvironmentWarningsFromStderr({
+          await writeReviewRunnerWarnings({
             sessionRoot: resolvedResultSessionRoot,
-            stderr: invocation.stderr,
+            warnings: invocation.warnings,
           });
           await updateActiveAttemptTerminal({
             sessionRoot: resolvedResultSessionRoot,

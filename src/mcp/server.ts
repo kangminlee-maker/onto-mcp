@@ -113,7 +113,7 @@ const LLM_OVERRIDE_PROPERTY_SCHEMA: JsonValue = {
   then: { required: ["model"] },
   dependentRequired: { provider: ["model"] },
   description:
-    "Optional per-call LLM override: an ephemeral settings-llm overlay applied to this invocation's dispatch seats (provider switch replaces the actor block; a partial block field-overlays same-provider). Transport (base_url/api_key_env/timeout) stays settings-owned. Omit → settings unchanged (byte-identical default-off).",
+    "Optional per-call LLM override: an ephemeral settings-llm overlay applied to this invocation's configured dispatch seats (provider switch replaces the actor block; a partial block field-overlays same-provider). Only seats that carry their own settings llm block can be overridden, so an override that reaches ZERO seats fails loud instead of running on the unconfigured default route. Omitting auth selects the provider's SUBSCRIPTION route (openai → Codex worker, anthropic → Claude Code worker); metered per-token billing happens only when the seat states it — auth as api_key, or a named api_key_env. Transport (base_url/api_key_env/timeout) stays settings-owned. Omit → settings unchanged (byte-identical default-off).",
 };
 
 const REVIEW_INPUT_SCHEMA: JsonValue = {
@@ -864,9 +864,12 @@ configured. For review, set full actor \`llm\` blocks in
       }
     }
 
-Switcher axes: auth oauth+openai -> external OAuth worker; api_key+openai|anthropic|grok ->
-that provider API. local+lmstudio+model_id is reserved/future and not advertised
-as a current MCP review path. Review execution may be left as \`auto\` and is
+Switcher axes: auth oauth+openai -> Codex OAuth worker; oauth+anthropic -> Claude Code
+OAuth worker; api_key+openai|anthropic|grok -> that provider API (metered per token).
+Omitting \`auth\` selects the SUBSCRIPTION worker route for openai/anthropic — metered
+billing is never chosen by default; a seat opts into it by stating its auth as
+api_key or by naming the \`api_key_env\` it calls the paid API with. local+lmstudio+model_id is reserved/future and not
+advertised as a current MCP review path. Review execution may be left as \`auto\` and is
 reported through canonical route visibility. Listing tools needs no provider.
 
 ## Review — happy path

@@ -71,7 +71,11 @@ import {
   type OntoSettings,
   type PerCallLlmOverride,
 } from "../core-runtime/discovery/settings-chain.js";
-import { applyReconstructLlmOverride } from "../core-runtime/discovery/llm-override.js";
+import {
+  applyReconstructLlmOverrideWithReport,
+  assertLlmOverrideReachedSeats,
+  canonicalizePerCallLlmOverride,
+} from "../core-runtime/discovery/llm-override.js";
 import { assertDispatchFallbackSessionAdmission } from "../core-runtime/reconstruct/dispatch-fallback-artifacts.js";
 import {
   normalizeLlmModelSwitcher,
@@ -1182,10 +1186,11 @@ export function createOntoReconstructCoreApi(
       // API is also called programmatically, where a static type enforces
       // nothing at runtime — so re-parse here, at admission, and overlay ONLY
       // the parsed value.
-      const llmOverride =
+      const llmOverride = canonicalizePerCallLlmOverride(
         request.llmOverride === undefined
           ? undefined
-          : PerCallLlmOverrideSchema.parse(request.llmOverride);
+          : PerCallLlmOverrideSchema.parse(request.llmOverride),
+      );
       const baseSettings = await resolveSettingsChain(
         ontoHome ?? projectRoot,
         projectRoot,
@@ -1195,7 +1200,8 @@ export function createOntoReconstructCoreApi(
       // the judge would silently resolve (or degrade) on the switched-in
       // provider, reintroducing the "believe X, run Y" failure the override
       // contract forbids. Reject at the handler, before any dispatch.
-      const settings = applyReconstructLlmOverride(baseSettings, llmOverride);
+      const overlay = applyReconstructLlmOverrideWithReport(baseSettings, llmOverride);
+      const settings = overlay.settings;
       // FD1 (Phase 1b): resolve the three code opt-ins ONCE — the shared resolver enforces the
       // set-tier ∧ capture precondition fail-loud before any session work.
       const runOptIns = resolveCodeObservationOptIns(settings);
@@ -1250,6 +1256,21 @@ export function createOntoReconstructCoreApi(
       // options are bench-harness plumbing (B7 role-expansion allowance),
       // forwarded opaquely; the MCP/product construction passes none.
       if (!mockRealizationEnabled) {
+        // FAIL CLOSED on an override that reached no actor seat, for the same
+        // reason the support gate runs here: this is the live boundary where a
+        // real, paid call would begin on a route the caller did not choose. The
+        // overlay only edits `llm` blocks that exist, so a chain without
+        // reconstruct actor llm settings silently ignores the override — and the
+        // support gate walks that same empty set and passes vacuously. Mock
+        // realization is exempt on both counts: it dispatches to no provider, so
+        // there is no route claim to falsify.
+        if (llmOverride) {
+          assertLlmOverrideReachedSeats({
+            scope: "reconstruct",
+            report: overlay.report,
+            override: llmOverride,
+          });
+        }
         assertSettingsModelsSupported(settings, options.supportedModelGateOptions);
       }
       // Mock realization needs no provider config: actor llm settings stay

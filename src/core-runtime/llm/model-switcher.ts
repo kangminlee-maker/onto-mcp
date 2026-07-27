@@ -67,11 +67,36 @@ export const DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1";
  * that reason about ROUTE IDENTITY (e.g. the per-call llmOverride overlay) must
  * compare the DEFAULTED auth, not the raw field — a block without `auth` still
  * dispatches on this route, so an override restating it is not a route change.
+ *
+ * METERED BILLING IS ONLY EVER CHOSEN EXPLICITLY. `per_token` starts charging on
+ * the first call, so nothing may default into it: both providers that offer a
+ * subscription route (openai → codex_cli, anthropic → claude_code) default to
+ * that route, and `api_key` is reached only when the block SAYS SO — either by
+ * `auth: "api_key"` or by naming the credential env (`api_key_env`) for the seat,
+ * which is a written statement that this seat calls the paid API.
+ *
+ * Reading the `api_key_env` FIELD is not what INV-AUTH-1 forbids. That rule
+ * ("auth is never inferred from key presence", see onboard/bootstrap-provider)
+ * bars deriving auth from a secret being present in the environment; this reads
+ * a configuration field the author typed. The distinction is the difference
+ * between sniffing for a key and honoring a declaration.
+ *
+ * grok has no subscription route at all, so naming grok IS the explicit metered
+ * choice (the schema rejects every other auth for it). lmstudio is local and
+ * bills nothing.
  */
-export function defaultAuthForProvider(provider: LlmProviderName): LlmAuthMode {
-  if (provider === "openai") return "oauth";
+export function defaultAuthForProvider(
+  provider: LlmProviderName,
+  block?: { api_key_env?: string | undefined },
+): LlmAuthMode {
   if (provider === "lmstudio") return "local";
-  return "api_key";
+  // grok has no subscription route; every other auth is rejected for it.
+  if (provider === "grok") return "api_key";
+  // Written as statements, not a ternary: the INV-AUTH-1 scanner
+  // (check:spec-defaults) matches `return "<auth>";` lines, so a ternary would
+  // hide the very defaults this guard exists to hold under review.
+  if (block?.api_key_env) return "api_key";
+  return "oauth";
 }
 
 export function normalizeLlmModelSwitcher(
@@ -80,7 +105,7 @@ export function normalizeLlmModelSwitcher(
   if (!config || config.provider === undefined) return null;
 
   const provider = config.provider;
-  const auth = config.auth ?? defaultAuthForProvider(provider);
+  const auth = config.auth ?? defaultAuthForProvider(provider, config);
 
   if (auth === "oauth" && provider !== "openai" && provider !== "anthropic") {
     throw new Error(
