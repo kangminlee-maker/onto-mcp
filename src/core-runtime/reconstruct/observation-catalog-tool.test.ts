@@ -292,6 +292,14 @@ function expectedCatalogOrder(built: ReturnType<typeof fixture>): string[] {
  * that observation's one_line row rather than by restating the rule. The one_line shape is the
  * observation's own navigation fields — which is what the projector emits with includeStructuralData
  * off, and what the `one_line` test pins explicitly, so the two checks brace each other.
+ *
+ * Deliberate limit: because the expectation runs the SAME tail projector the catalog used, this oracle
+ * cannot catch a defect INSIDE projectBreadthFoldTailRung — it catches the author using it wrongly, or
+ * not at all. The projector's own key-dropping rules (strict subsets, `location` kept exactly where it
+ * is not redundant with `source_ref`) are pinned directly in source-breadth-fold.test.ts. Note the
+ * production projector emits all five navigation keys unconditionally, so a key absent from the
+ * observation arrives as `undefined` and JSON drops it — which is why reconstructing from `key in
+ * observation` matches the parsed row.
  */
 function expectedNavigationKeys(
   observation: Record<string, any>,
