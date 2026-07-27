@@ -1,15 +1,18 @@
 # 관측 카탈로그 도구 — 단계 3 착수 안내 (2026-07-26 · 3a 착지 후 2026-07-27 갱신)
 
-> **다음 세션은 여기서 시작한다.** 설계 SSOT: [design/20260726-observation-catalog-tool-design.md](../design/20260726-observation-catalog-tool-design.md)
+> **이 문서는 단계 3의 기록이다. 다음 세션의 진입점은
+> [20260727-observation-catalog-tool-stage3b-crossverify-start-here.md](20260727-observation-catalog-tool-stage3b-crossverify-start-here.md)** —
+> 3a·3b 모두 착지했고 다음 작업은 3b 교차검증이다.
+>
+> (이하 원문) 설계 SSOT: [design/20260726-observation-catalog-tool-design.md](../design/20260726-observation-catalog-tool-design.md)
 > 이전 안내(단계 2): [20260726-observation-catalog-tool-stage2-start-here.md](20260726-observation-catalog-tool-stage2-start-here.md) — 상시 제약은 여전히 유효하다
 
 ## 0. 지금 어디인가
 
 ```
 브랜치  feat/observation-grant-stage2  (미푸시 · owner 승인 전 push/PR 금지)
-설계    승인 완료 · 단계 0a·0b·1·2 완료 · 선행 실측 완료(§2) · 단계 3a 완료
-        교차검증 7라운드 → **material 0**(설계 §9.3). 커밋 6개(10fbf05 3a · 이후 5개 리뷰 반영)
-다음    단계 3b — 가져가는 층 배선(façade + 토큰 + 인용⊆조회). owner 결정 2건은 §3에 반영됨
+설계    단계 3a 완료 · 교차검증 7라운드 → material 0(설계 §9.3) · 커밋 7개
+        **3b도 착지**(설계 §9.4) — 진입점은 위 링크의 3b 교차검증 안내
 차단    **opt-in 활성화 전에 하류 판정 프롬프트를 유계로 만들어야 한다** — 아래 §6
 ```
 

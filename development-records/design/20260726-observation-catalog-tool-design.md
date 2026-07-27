@@ -1,7 +1,7 @@
 # 관측 카탈로그 도구 — 설계 (2026-07-26)
 
 > 상태: **승인 완료**(핸드오프 `20260726-observation-catalog-tool-stage1-start-here.md` 기록) ·
-> **단계 0a·0b·1·2·3a 착지.** 다음 = 단계 3b(가져가는 층 배선).
+> **단계 0a·0b·1·2·3a·3b 착지.** 다음 = **3b 교차검증** → 단계 4(감사·사후 지문).
 > 계기: owner 지시 "입력하지 않고 직접 가져가게 할 수는 없나?" (2026-07-26)
 > 방법: 블라인드 패킷 1벌 → **이종 계열 독립 설계 2벌**(Codex gpt-5.6-sol/max hermetic ·
 > Claude opus, 저장소 열람 허용) → 주 세션이 실코드로 재검증 후 종합. 초안 원문은
@@ -474,7 +474,7 @@ dispatch 시도별 감사 레코드에 **조회한 id + 내용 해시 + 페이�
 | **1** | ~~순수 아티팩트 리더~~ — **완료(2026-07-26)**, `src/core-runtime/reconstruct/observation-read.ts` (inert, 소비자=테스트뿐) | §9.1 참조 — done-when 4/4 + 교차검증 반영 |
 | **2** | ~~세션 범위 결속 + 누적 예산~~ — **완료(2026-07-26)**, `observation-read-grant.ts` (inert, 소비자=테스트뿐). owner 결정으로 **§3.1 소비 권한 게이트 포함** | §9.2 참조 — done-when 8/8 + 변이 13종 검증 |
 | **3a** | ~~ledger 표면 **밀어넣는 층**~~ — **완료(2026-07-27)**, opt-in `source_observation_catalog_tool` default OFF. owner 결정으로 3b와 분리 착지 | §9.3 참조 — done-when 4/4 + 변이 9종 검증 |
-| 3b | ledger 표면 **가져가는 층**: façade + 토큰 + `인용 ⊆ 조회` (같은 opt-in) | 조회 안 하면 실패 / A 조회 후 B 인용하면 실패 / OFF는 byte-identical |
+| **3b** | ~~ledger 표면 **가져가는 층**~~ — **완료(2026-07-27)**, façade + `인용 ⊆ 조회`, 같은 opt-in | §9.4 참조 — done-when 3/3 + **라이브 실측 PASS**. **교차검증 미실시** |
 | 4 | 감사 + 사후 지문 | 조회 후 크래시해도 조회 기록 유지. 감사 실패 시 상세 미반출 |
 | 5 | 실측 — 59파일 코퍼스 재실행 | 크기 거부 없이 완주 · 인용 100% 해석 · 인용 ⊆ 조회 |
 | 6 | 클래스 가드 — 모든 규모-반응 투영을 공용 상세 예산 층으로 | AST 인벤토리 재실행 전 **대상 집합 비어있지 않음** 단언 + 의도적 위반 fixture가 잡히는지 확인 |
@@ -869,6 +869,60 @@ ON은 **35,096 B(38× 작음)**에 전 관측 제공. 실 행 500개 복제 시 
 - **표면 가드는 모드에 게이팅했다.** 항상-켬으로 두면 예산과 천장 사이 좁은 대역에서 OFF 런의 동작이
   바뀌어 byte-identical이 깨진다. 그 대역의 안전망은 PR #265의 dispatch 백스톱이 계속 진다.
 - IMPLEMENTATION_MAP.html은 이 트랙 전체가 아직 갱신하지 않았다(단계 1·2도 동일). 3b 착지 때 한 번에.
+
+### §9.4 단계 3b 착지 기록 (2026-07-27)
+
+**산출**: `observation-read-facade.ts`(로직) + `observation-read-facade-server.ts`(프로세스 엔트리) +
+테스트 2벌(façade 16 · pull 11) + 라이브 하니스 `scripts/observation-read-pull-live.mts`.
+배선은 `llm-caller.ts`(codex 라우트) · `direct-call-directive-author.ts` · `directive-author-contract.ts` ·
+`run.ts`. **단계 3a와 같은 opt-in 하나**가 밀어넣는 층과 가져가는 층을 함께 켠다.
+
+**아키텍처 — §5.5 실측이 형태를 강제했다.** codex가 MCP 서버를 **자기가 띄우므로** grant를 런타임
+프로세스에서 서빙할 수 없고(소켓·HTTP를 새로 만들지 않는 한), 열린 채널은 `command`/`args`/`env`
+셋뿐인데 argv는 메가바이트 프롬프트를 못 싣는다.
+
+```
+런타임  → 디스크립터 파일(sources · 디스패치될 프롬프트 두 조각 · receipt 경로 · ttl)
+codex   → <loader> <server> --descriptor=... , env에 launch 토큰
+façade  → 자기 grant를 mint하고 stdio로 서빙 · 시도마다 receipt 재작성
+런타임  → 워커 종료 후 receipt를 읽어 `인용 ⊆ 조회` 판정(없으면 fail-closed)
+```
+
+- **디스크립터를 codex 라우트가 쓴다**: 프롬프트 두 조각이 stdin에 쓸 바로 그 값이므로, 단계 2가
+  제거한 "디스패치되지 않은 문자열로 예산 산출"(F6)이 **구조적으로 재발 불가**다. 예산을 계산해
+  넘겼다면 façade가 검사할 수 없는 숫자를 받는 셈이 된다
+- **launch 토큰은 capability가 아니라 handshake다**(정직): 디스크립터도 토큰도 런타임이 쓰고, 관측을
+  원하는 로컬 프로세스는 아티팩트를 직접 읽으면 된다. 하는 일은 **이 디스크립터를 이 launch에 결속**하는
+  것 — 교차된 짝은 서빙 대신 거부한다. grant 자신의 토큰은 façade 안에서 mint되어 밖으로 안 나간다
+- **승인 지렛대가 함께 등록된다**: `default_tools_approval_mode="approve"`는 §5.5 실측상 **필수**이고
+  우리 서버로 **범위가 한정**된다(전역 `approval_policy`를 건드리지 않는다)
+- **프롬프트가 도구 이름을 준다**: codex는 MCP 도구를 모델에게 광고하지 않는다(§5.5). 시스템 프롬프트가
+  아니라 **payload**에 넣었다 — 시스템 프롬프트 sha가 재사용 키를 키므로, 아무도 켜지 않은 opt-in 때문에
+  OFF 런의 키까지 회전시킬 이유가 없다
+- **`인용 ⊆ 조회`는 기존 게이트와 직렬**이다. "인용 ⊆ 카탈로그"는 한 줄도 바뀌지 않았고(§3), 인용 가능
+  집합은 좁아지기만 한다. receipt가 없거나 깨졌으면 served 공집합 = **fail closed**
+
+| done-when | 결과 |
+|---|---|
+| 조회 안 하면 실패 | 워커가 아무것도 안 가져가면 모든 인용 거부 · **receipt 자체가 없어도** 거부(fail closed) |
+| A 조회 후 B 인용하면 실패 | B는 **카탈로그에는 있는** id라 기존 게이트는 통과한다 — 거부하는 것은 served 검사다 |
+| OFF는 byte-identical | parity probe 3 digest 두 트리 불변(3a와 동일 값) · pull 없으면 served 검사 미적용 |
+
+**라이브 실측 PASS**(`scripts/observation-read-pull-live.mts`, 실 codex 워커 · 전 강화 세트 · 실 59관측):
+워커가 façade를 띄워 **관측 2건 수신**(1콜 · 16,155자 과금) · **receipt가 서빙 id를 정확히 기록** ·
+워커가 인용한 본문 접두사가 실제 관측 본문과 일치 · **launch 토큰이 트랜스크립트에 없다**.
+
+**라이브가 실 결함을 잡았다 — in-process 테스트 26개가 전부 못 본 것.** 첫 실행이 FAIL했다: 등록 명령이
+`process.execPath`인데 소스 로딩 런타임의 엔트리는 `.ts`라 codex가 서버를 띄우자마자 죽었고, 워커는
+`onto_observation_read unavailable`이라고 답했다. 테스트는 엔트리를 **읽을 수 있는 로더로 직접 spawn**하니
+이 짝을 검사하지 않는다. 실행기를 엔트리 확장자에서 **파생**하도록 고치고(로더 부재 시 fail loud),
+그 짝이 실제로 실행되는지 테스트가 **실행해서** 확인한다.
+
+**교훈**: **"우리가 직접 띄우는 테스트"는 "codex가 띄우는 것"을 증명하지 않는다.** 두 spawn은 명령줄이
+다르고, 다른 쪽만 production 경로다. 프로세스 경계를 넘는 배선은 그 경계를 실제로 넘는 실측이 유일한 증거다.
+
+**미실시**: **교차검증 0라운드.** 3a는 7라운드에서 material 20건이 나왔고 그중 3라운드는 "직전 수정이 만든
+결함"이었다. 3b는 그 과정을 아직 거치지 않았다.
 
 ## §10. 두 초안이 갈린 곳과 종합 판단
 
