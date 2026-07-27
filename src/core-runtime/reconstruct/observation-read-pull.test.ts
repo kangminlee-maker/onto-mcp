@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -379,7 +380,7 @@ describe("observation read pull layer — the codex launch it produces", () => {
   };
 
   it("registers the server, the launch token, and the REQUIRED approval lever", () => {
-    const args = observationReadFacadeCodexArgs(launch, "/usr/bin/node");
+    const args = observationReadFacadeCodexArgs(launch);
     const joined = args.join(" ");
     expect(joined).toContain(observationReadFacadeServerEntry());
     expect(joined).toContain("--descriptor=/session/descriptor.json");
@@ -394,15 +395,31 @@ describe("observation read pull layer — the codex launch it produces", () => {
     expect(joined).not.toContain("approval_policy=");
   });
 
+  it("names a command that can actually RUN the resolved entry", async () => {
+    // A live probe registered `process.execPath` against a `.ts` entry: codex launched it, node died
+    // instantly, and the worker reported the tool as unavailable. The command and the entry have to
+    // match, so this executes the pair rather than trusting the pairing.
+    const args = observationReadFacadeCodexArgs(launch);
+    const command = /mcp_servers\.onto_observation\.command="(.+)"/.exec(args.join("\n"))?.[1];
+    expect(command).toBeTruthy();
+    const entry = observationReadFacadeServerEntry();
+    const probe = await new Promise<number | null>((resolve) => {
+      // No descriptor: the entry must still START and refuse deliberately (exit 2), which proves the
+      // command executes it. A command that cannot run it exits 1 with a loader error.
+      const child = spawn(command!, [entry], { stdio: ["ignore", "ignore", "pipe"] });
+      child.on("exit", (code) => resolve(code));
+    });
+    expect(probe).toBe(2);
+  }, 60_000);
+
   it("quotes every value it injects into codex config", () => {
     const spaced: ObservationReadFacadeLaunch = {
       ...launch,
       descriptorPath: "/tmp/a dir/descriptor.json",
     };
-    const args = observationReadFacadeCodexArgs(spaced, "/usr/local/my node/bin/node");
+    const args = observationReadFacadeCodexArgs(spaced);
     // A path with a space must survive as one TOML string, not split the config value.
     expect(args.join(" ")).toContain('"--descriptor=/tmp/a dir/descriptor.json"');
-    expect(args.join(" ")).toContain('"/usr/local/my node/bin/node"');
   });
 });
 

@@ -1035,9 +1035,7 @@ async function callCodexCli(
       systemPrompt,
       userPrompt,
     });
-    args.push(
-      ...observationReadFacadeCodexArgs(options.observationReadFacade, process.execPath),
-    );
+    args.push(...observationReadFacadeCodexArgs(options.observationReadFacade));
   }
   args.push("-");
 

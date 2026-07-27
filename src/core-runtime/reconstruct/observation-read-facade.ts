@@ -135,6 +135,30 @@ export function writeObservationReadFacadeDescriptor(args: {
 }
 
 /**
+ * The executable that can actually RUN the resolved entry — derived, not passed.
+ *
+ * The shipped package resolves a compiled `.js`, which `process.execPath` runs. A source-loaded runtime
+ * resolves the `.ts` beside it, which plain node cannot: a live probe registered exactly that pair and
+ * codex reported the tool as unavailable, because the server died the instant it started. Deriving the
+ * command from the entry's extension removes the mismatch, and an absent loader fails loud here rather
+ * than as "the model never called the tool" three minutes later.
+ */
+function observationReadFacadeServerCommand(serverEntry: string): string {
+  if (serverEntry.endsWith(".js")) return process.execPath;
+  const loader = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../../node_modules/.bin/tsx",
+  );
+  if (!existsSync(loader)) {
+    throw new Error(
+      `observation-read facade entry ${serverEntry} needs a TypeScript loader and none is installed ` +
+        `at ${loader}. The shipped package resolves a compiled entry; a source-loaded runtime needs tsx.`,
+    );
+  }
+  return loader;
+}
+
+/**
  * The codex CLI arguments that register this facade — single-sourced here so the measured launch
  * contract lives beside the server it launches.
  *
@@ -143,14 +167,12 @@ export function writeObservationReadFacadeDescriptor(args: {
  * `user cancelled MCP tool call` without it, and neither `auto` nor a global `approval_policy="never"`
  * changes that. Its scope is this server alone — it approves nothing else the worker might reach.
  */
-export function observationReadFacadeCodexArgs(
-  launch: ObservationReadFacadeLaunch,
-  nodeExecutable: string,
-): string[] {
+export function observationReadFacadeCodexArgs(launch: ObservationReadFacadeLaunch): string[] {
   const server = observationReadFacadeServerEntry();
+  const command = observationReadFacadeServerCommand(server);
   return [
     "-c",
-    `mcp_servers.onto_observation.command=${JSON.stringify(nodeExecutable)}`,
+    `mcp_servers.onto_observation.command=${JSON.stringify(command)}`,
     "-c",
     `mcp_servers.onto_observation.args=[${JSON.stringify(server)},${
       JSON.stringify(`--descriptor=${launch.descriptorPath}`)
