@@ -6,7 +6,11 @@
   // Scope is the typecheck-clean subset: the M3 model-characteristic benchmark
   // scripts + the review-cert harness (so the cert↔settingsForCase knob contract
   // — the run_controls mechanical probe — fails at COMPILE, not only at runtime;
-  // review-cert-run.mts HIGH-1). Other scripts/ files carry pre-existing type
+  // review-cert-run.mts HIGH-1) + the observation-catalog verification harnesses.
+  // The last group was added after a runtime signature change (binding the facade
+  // receipt to its launch) silently broke the live probe's call: the harness that
+  // is supposed to be the last line of defense was outside every gate, so it would
+  // have failed on the operator's real dispatch. Other scripts/ files carry type
   // errors that only surface under strict tsc; add a script here once it is made
   // clean. Test files are intentionally omitted, mirroring tsconfig.json's
   // exclusion of src/**/*.test.ts (tests are exercised by vitest at runtime).
@@ -53,7 +57,11 @@
     "scripts/run-block-identity.mts",
     "scripts/run-reconstruct-equivalence.mts",
     "scripts/unwired-code-scan.mts",
-    "scripts/observation-snapshot-nominal-guard.mts"
+    "scripts/observation-snapshot-nominal-guard.mts",
+    "scripts/observation-read-pull-live.mts",
+    "scripts/observation-catalog-tool-replay.mts",
+    "scripts/off-parity-probe.mts",
+    "scripts/probe-facade-socket-reach.mts"
   ],
   "exclude": []
 }

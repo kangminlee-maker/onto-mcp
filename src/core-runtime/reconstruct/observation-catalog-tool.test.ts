@@ -15,7 +15,10 @@ import {
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { authoredArtifactReuseMatch } from "./authored-artifact-reuse.js";
+import {
+  AUTHORED_OUTPUT_CONTRACT_VERSION,
+  authoredArtifactReuseMatch,
+} from "./authored-artifact-reuse.js";
 import type {
   ReconstructMaturationClosureFrontierArtifact,
   ReconstructMaturationQuestionFrontierArtifact,
@@ -917,7 +920,20 @@ describe("observation catalog tool — production wiring (cross-family review, l
     // by serialization, which is what reuseMatchHash hashes.
     expect(JSON.stringify(on)).not.toBe(JSON.stringify(off));
     // Non-vacuous: everything ELSE about the two keys is identical, so the difference is the mode.
-    expect({ ...on, source_observation_catalog_tool: false }).toEqual(off);
+    const { authored_output_contract_version: _onlyOn, ...onWithoutOnOnlyFields } = on;
+    expect({ ...onWithoutOnOnlyFields, source_observation_catalog_tool: false }).toEqual(off);
+
+    // The reuse key also carries what the AUTHOR will ACCEPT, not only what it was given. Every other
+    // field describes input, on the premise that identical input means the artifact is still
+    // admissible — and a rule living only in the parser breaks that premise: the answer-claims author
+    // now bounds a claim's supporting evidence to its own cited clusters, nothing about the input
+    // changed, and a resume handed back a pre-rule artifact that skipped the rule entirely.
+    expect(on.authored_output_contract_version).toBe(AUTHORED_OUTPUT_CONTRACT_VERSION);
+    expect(AUTHORED_OUTPUT_CONTRACT_VERSION).toBeGreaterThan(1); // bumped for that boundary
+    // ...and ABSENT when the opt-in is off. A rotated key is not a regeneration here — a resume with a
+    // mismatched hash throws — so an always-present field would have failed every historical OFF resume
+    // for a rule that never applied to it.
+    expect("authored_output_contract_version" in off).toBe(false);
   });
 
   it("run.ts feeds the answer-support author the CONSUMPTION-GATED projection, not the raw artifact", () => {

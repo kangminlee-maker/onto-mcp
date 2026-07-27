@@ -305,12 +305,19 @@ export async function callJsonAuthor(args: {
     throw new Error(initialErrorMessage);
   }
   const repairSink: JsonOutputSink = { parsed: null, failureMessage: null };
+  // The repair turn drops the per-dispatch capability. Its prompt is a JSON fixer — no catalog, no tool
+  // announcement — so a worker on it has nothing to fetch and no way to know it could. Carrying the
+  // capability across is not merely useless: `observation_read_facade` names ONE launch, with one
+  // descriptor and one receipt path, so a second dispatch through it restarts the facade over the first
+  // dispatch's receipt and erases the served set the run is about to be judged against. Every citation
+  // is then rejected as "never served" — a correct run failed by its own evidence check.
+  const { observation_read_facade: _repairDropsTheFacade, ...repairConfig } = args.llmConfig;
   await callLlmRecorded({
     telemetry: args.telemetry,
     artifactName: args.artifactName,
     kind: "parse_repair",
     llmCall: args.llmCall,
-    llmConfig: args.llmConfig,
+    llmConfig: repairConfig,
     systemPrompt: authoringJsonRepairSystemPrompt(args.artifactName),
     userPrompt: JSON.stringify({
       artifact_name: args.artifactName,

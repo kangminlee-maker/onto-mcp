@@ -83,6 +83,7 @@ import type {
   ReconstructSourceSafetyLedgerValidationArtifact,
 } from "./artifact-types.js";
 import {
+  type ObservationReadFailureReason,
   assertObservationSnapshotDigestUnchanged,
   elideMessageValue,
   fixObservationSnapshot,
@@ -153,6 +154,21 @@ export const OBSERVATION_READ_SESSION_RESERVE_CHARS = 8_192;
  * cannot be pulled whole. The tool reallocates the ceiling between push and pull; it does not raise it.
  */
 export const OBSERVATION_READ_MAX_CALLS = 32;
+
+/**
+ * Whether a failure ends the session — no later call under this grant can succeed.
+ *
+ * Declared HERE because this module owns the lifecycle that makes them terminal: expiry and revocation
+ * latch, and the two exhaustion reasons are checked before any state changes. A consumer that listed
+ * them itself would be a second declaration of the same rule, and the first attempt at one listed only
+ * the two exhaustion reasons — leaving an expired grant answering indefinitely.
+ */
+export function isTerminalObservationReadFailure(
+  reason: ObservationReadFailureReason,
+): boolean {
+  return reason === "call_limit_exhausted" || reason === "fetch_budget_exhausted" ||
+    reason === "grant_expired" || reason === "grant_revoked" || reason === "unknown_grant";
+}
 
 /**
  * WHERE the grant's artifacts live. Paths, not contents, and deliberately so: this module re-reads them on
@@ -338,6 +354,19 @@ export interface ObservationReadServedRecord {
   readonly observation_content_sha256: string;
   /** 1-based part indexes served, ascending. A whole observation appears as `[1]`. */
   readonly part_indexes: readonly number[];
+  /**
+   * How many parts the observation splits into. Without it `part_indexes` cannot say whether the worker
+   * received the WHOLE observation or only its opening page — and a citation names the observation, not
+   * the fragment, so the consumer needs to know the difference.
+   */
+  readonly part_count: number;
+  /**
+   * The decomposition these indexes belong to. Persisted because `part_count` does not identify one:
+   * two requests can split the same body into the same number of parts at different boundaries, so a
+   * receipt that recorded only the count could not say whether its indexes describe one partition or
+   * two. Reading it also makes the accumulator's reset observable rather than inferred.
+   */
+  readonly part_allowance: number;
 }
 
 /**
@@ -384,7 +413,10 @@ interface ObservationReadGrantState {
   expired: boolean;
   callsServed: number;
   charsServed: number;
-  readonly served: Map<string, { sha256: string; parts: Set<number> }>;
+  readonly served: Map<
+    string,
+    { sha256: string; parts: Set<number>; partCount: number; partAllowance: number }
+  >;
 }
 
 function sha256Hex(text: string): string {
@@ -538,6 +570,47 @@ export class ObservationReadGrantRegistry {
    * The three checks BEFORE the charge are the ones with nothing to charge: an unregistered token has no
    * state, and a revoked or expired grant's session is already over.
    */
+  /**
+   * Charge a `tools/call` that was refused before it could become a request — the malformed MCP
+   * `arguments` objects the typed surface above cannot express.
+   *
+   * It goes through the SAME meters as a served call because it is the same thing to the worker: a
+   * round trip whose response text lands in its conversation. Metering it anywhere else made the
+   * dispatch limit bypassable — 32 refusals against one counter left `serve`'s counter at zero, so the
+   * "terminal" limit was terminal for nothing.
+   *
+   * Separate from `serve` only so the receipt can still report which attempts never reached the reader.
+   * Throws the same exhaustion error, so a dispatch that has spent its round trips gets one answer
+   * whether or not the call that spent them was well formed.
+   */
+  chargeRejectedCall(args: { token: string; messageChars: number }): void {
+    const state = this.#resolve(args.token);
+    if (state.callsServed >= state.budget.max_calls) {
+      throw new ObservationReadError(
+        "call_limit_exhausted",
+        `this session has served its ${state.budget.max_calls} observation-read calls`,
+      );
+    }
+    // Admission on the EXACT cost, not `serve`'s worst case: a refusal's response is already written,
+    // so its size is known and reserving a whole page against it would refuse refusals long before the
+    // ceiling. Charging without admitting was the defect — a near-full budget plus one malformed call
+    // pushed `chars_served` past the very total it was derived from, breaking this module's one promise.
+    //
+    // Exactness is also why this path carries no postcondition where `serve` needs one: `serve` admits a
+    // worst-case page and then charges the real size, so its total can still surprise it. If this ever
+    // becomes a worst-case reservation, it needs `serve`'s postcondition back.
+    const cost = OBSERVATION_READ_EXCHANGE_FRAMING_CHARS + args.messageChars;
+    if (state.charsServed + cost > state.budget.total_fetch_char_budget) {
+      throw new ObservationReadError(
+        "fetch_budget_exhausted",
+        `this session has ${state.budget.total_fetch_char_budget - state.charsServed} of ` +
+          `${state.budget.total_fetch_char_budget} fetch chars left, below the ${cost} this refusal costs`,
+      );
+    }
+    state.callsServed += 1;
+    state.charsServed += cost;
+  }
+
   serve(args: { token: string; request: ObservationReadRequest }): ObservationReadPage {
     const state = this.#resolve(args.token);
 
@@ -588,8 +661,26 @@ export class ObservationReadGrantRegistry {
       );
     }
     for (const entry of page.entries) {
-      const record = state.served.get(entry.observation_id) ??
-        { sha256: entry.observation_content_sha256, parts: new Set<number>() };
+      // A part index means nothing outside the decomposition that produced it. The split is a pure
+      // function of (body, partAllowance), and `partAllowance` is derived from the REQUEST's id list —
+      // the page envelope reserves worst-case cursor and entry framing for exactly those ids — so the
+      // same observation splits into a different number of parts when it is fetched alone than when it
+      // is fetched alongside fifteen others. Unioning indexes across requests therefore assembled a
+      // "complete" set out of two different partitions and authorized an observation whose tail was
+      // never served (measured). Keyed on the ALLOWANCE, not on `part_count`: the split is a pure
+      // function of (body, allowance), so the allowance names the partition exactly, while two different
+      // partitions can share a count — a grouped part 1/2 ending at char 64,774 and a solo part 2/2
+      // starting at 65,068 both report count 2, and merging them claimed complete coverage across a
+      // 293-char hole (measured). A different allowance means the earlier indexes describe a partition
+      // this one is not part of, so they are dropped rather than merged — the only direction that
+      // cannot invent coverage.
+      const existing = state.served.get(entry.observation_id);
+      const record = existing && existing.partAllowance === entry.part_allowance ? existing : {
+        sha256: entry.observation_content_sha256,
+        parts: new Set<number>(),
+        partCount: entry.part_count,
+        partAllowance: entry.part_allowance,
+      };
       record.parts.add(entry.part_index);
       state.served.set(entry.observation_id, record);
     }
@@ -685,6 +776,8 @@ function receiptOf(state: ObservationReadGrantState): ObservationReadReceipt {
             observation_id: observationId,
             observation_content_sha256: record.sha256,
             part_indexes: Object.freeze([...record.parts].sort((a, b) => a - b)),
+            part_count: record.partCount,
+            part_allowance: record.partAllowance,
           })
         ),
     ),

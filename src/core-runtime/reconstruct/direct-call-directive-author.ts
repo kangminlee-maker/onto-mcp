@@ -17,6 +17,7 @@ import { readStructuredDispatchFailureEvidence } from "../llm/structured-dispatc
 import { readTargetedCellValues } from "../spreadsheet-structure-observer.js";
 import { TARGET_MATERIAL_KINDS } from "../target-material-kind.js";
 import type {
+  ReconstructAnswerSupportLedgerArtifact,
   ReconstructCandidateInventoryArtifact,
   ReconstructClaimRealizationStance,
   ReconstructCompetencyQuestionAnswerStatus,
@@ -221,6 +222,7 @@ import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
 import {
   observationIdsServed,
   OBSERVATION_READ_TOOL_NAME,
+  prepareObservationReadFacadeLaunch,
   readObservationReadFacadeReceipt,
 } from "./observation-read-facade.js";
 import type { BreadthFoldLevel } from "./source-breadth-fold.js";
@@ -3356,7 +3358,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // descriptor (so its prompt parts are the dispatched ones by construction) and this reads the
       // receipt back — the `조회` term of `인용 ⊆ 조회 ⊆ 스냅샷`.
       const facadeLaunch = pull
-        ? {
+        ? prepareObservationReadFacadeLaunch({
           sources: {
             observationsPath: pull.observationsPath,
             safetyLedgerPath: pull.safetyLedgerPath,
@@ -3373,7 +3375,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           // The grant must not outlive its worker. The worker's own timeout is that lifetime, so it is
           // read from the config this dispatch will use rather than restated as a second number.
           ttlMs: llmConfig.timeout_ms ?? DEFAULT_WORKER_TIMEOUT_MS,
-        }
+        })
         : undefined;
       const raw = await callJsonAuthor({
         llmCall,
@@ -3390,7 +3392,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // is gone by now. FAIL-CLOSED — a missing or torn receipt yields an empty served set, which makes
       // every citation inadmissible rather than unchecked.
       const servedObservationIds = facadeLaunch
-        ? observationIdsServed(readObservationReadFacadeReceipt(facadeLaunch.receiptPath))
+        ? observationIdsServed(
+          readObservationReadFacadeReceipt(facadeLaunch.receiptPath, facadeLaunch.launchToken),
+        )
         : null;
       return {
         schema_version: "1",
@@ -3603,6 +3607,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeMaturationAnswerClaims(input) {
+      // Same opt-in as the ledger's catalog/pull layer — see the boundary note at the resolution site.
+      const observationCatalogTool = args.sourceObservationCatalogTool === true;
       if (input.answerSupportLedger.evidence_clusters.length === 0) {
         return {
           schema_version: "1",
@@ -3634,7 +3640,49 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         created_at: isoNow(),
         round_id: input.roundId,
         answer_claims: records(raw.answer_claims ?? [], "answer_claims")
-          .map((claim, index) => ({
+          .map((claim, index) => {
+            const evidenceClusterRefs = stringArray(
+              claim.evidence_cluster_refs,
+              `answer_claims[${index}].evidence_cluster_refs`,
+            );
+            // The observations THIS claim's own cited clusters carry — the citable boundary under the
+            // opt-in, and also the KNOWABLE one: the claims prompt shows the model its clusters and no
+            // observation catalog, so the set it could NAME was wider than the set it could SEE and the
+            // difference could only be guessed at. Under the pull layer an id outside them is
+            // additionally content no dispatch fetched, which `인용 ⊆ 조회` refuses one artifact upstream.
+            //
+            // Gated on the SAME opt-in as the pull layer: the mismatch exists with the flag off too, but
+            // narrowing there would change a default-path contract that
+            // `.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md` does not require
+            // and no validator enforces.
+            const citedObservationIds = new Set<string>();
+            if (observationCatalogTool) {
+              const cited = new Set(evidenceClusterRefs);
+              for (const cluster of input.answerSupportLedger.evidence_clusters) {
+                if (!cited.has(cluster.evidence_cluster_id)) continue;
+                for (const ref of cluster.evidence_refs) citedObservationIds.add(ref.observation_id);
+              }
+            }
+            const supportingObservationIds = stringArray(
+              claim.supporting_evidence_observation_ids ?? [],
+              `answer_claims[${index}].supporting_evidence_observation_ids`,
+            );
+            // REJECT the whole list, do not resolve what is left of it. `evidenceRefsFromIds` drops
+            // unknown ids whenever at least one resolves, so narrowing the set alone turned a partly
+            // outside citation into a silently SHORTENED one — the claim survived carrying materially
+            // different evidence, and validation only ever saw the altered list. Design §8: the runtime
+            // rejects a citation, it does not repair it.
+            const outsideClusterIds = supportingObservationIds.filter((observationId) =>
+              !citedObservationIds.has(observationId)
+            );
+            if (observationCatalogTool && outsideClusterIds.length > 0) {
+              throw new Error(
+                `answer_claims[${index}].supporting_evidence_observation_ids names observations ` +
+                  `outside the evidence clusters it cites: ${outsideClusterIds.join(", ")}. A claim's ` +
+                  "supporting evidence must come from the clusters it names.",
+              );
+            }
+            return {
             answer_claim_id: optionalString(claim.answer_claim_id) ??
               `maturation-answer-claim-${index + 1}`,
             question_id: stringValue(
@@ -3658,15 +3706,23 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               ] as const,
               `answer_claims[${index}].support_mode`,
             ),
-            evidence_cluster_refs: stringArray(
-              claim.evidence_cluster_refs,
-              `answer_claims[${index}].evidence_cluster_refs`,
-            ),
+            evidence_cluster_refs: evidenceClusterRefs,
+            // Resolved against the observations THIS claim's own cited clusters carry, not against
+            // every approved observation.
+            //
+            // The claims payload above shows the model its clusters and NO observation catalog, so the
+            // set it can name was always wider than the set it can see, and the difference could only
+            // be filled by guessing. Under the pull layer it is worse than a guess: an id outside the
+            // clusters is content no dispatch ever fetched, which is exactly what design §3's
+            // `인용 ⊆ 조회` refuses one artifact upstream.
+            //
+            // Narrowing the resolution SET rather than adding a validation rule keeps the treatment the
+            // consumption gate already established: an id this author may not use is simply an id that
+            // does not exist (design §3.1). Widening it later is the other coherent option, but it has
+            // to bring the pull tool with it — a catalog without a way to READ what it lists would
+            // institutionalise the citing-what-you-never-read that this stage exists to stop.
             supporting_evidence_refs: evidenceRefsFromIds({
-              observationIds: stringArray(
-                claim.supporting_evidence_observation_ids ?? [],
-                `answer_claims[${index}].supporting_evidence_observation_ids`,
-              ),
+              observationIds: supportingObservationIds,
               sourceObservations: input.sourceObservations,
               fieldName:
                 `answer_claims[${index}].supporting_evidence_observation_ids`,
@@ -3687,7 +3743,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               claim.limitation_refs ?? [],
               `answer_claims[${index}].limitation_refs`,
             ),
-          })),
+            };
+          }),
         directive_author: { owner: "host_llm", author_id: authorId },
       };
     },

@@ -47,6 +47,14 @@ export const OBSERVATION_READ_MAX_REQUEST_IDS = 16;
  */
 export const OBSERVATION_READ_MAX_ID_CHARS = 128;
 
+/**
+ * The character set an observation id may use, published in the tool schema and enforced here so the
+ * two cannot drift. Minted ids are `obs_` + 16 hex chars; this is deliberately wider than that so a
+ * future id scheme does not silently become unrequestable, and narrow enough that one character is one
+ * UTF-16 unit is one byte.
+ */
+export const OBSERVATION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
 /** Cursor payload version. Bumped when the cursor's fields change; an older cursor is then rejected. */
 const OBSERVATION_CURSOR_VERSION = 1;
 
@@ -174,6 +182,16 @@ export interface ObservationReadPageEntry {
   part_index: number;
   /** Total parts the observation's body splits into at this budget. `1` when it fits whole. */
   part_count: number;
+  /**
+   * The per-part character allowance this page was built under — the DECOMPOSITION'S IDENTITY.
+   *
+   * The split is a pure function of (body, allowance), and the allowance is derived from the request's
+   * id list, so the same observation splits differently in different requests. `part_count` alone does
+   * not identify a partition: two requests can produce the same count with different boundaries, and
+   * merging their indexes assembled "complete" coverage with a gap in the middle (measured). A consumer
+   * accumulating parts across calls must merge only within one allowance.
+   */
+  part_allowance: number;
   /** Slice of the observation body. Concatenate parts 1..part_count to recover it exactly. */
   body: string;
 }
@@ -538,6 +556,7 @@ function entryFramingChars(
     observation_content_sha256: contentSha256,
     part_index: partIndex,
     part_count: partCount,
+    part_allowance: PART_NUMBER_SENTINEL,
     body: "",
   }).length;
 }
@@ -593,14 +612,26 @@ function assertRequestedIds(ids: readonly string[]): void {
   }
   const seen = new Set<string>();
   for (const id of ids) {
-    if (!id.trim()) {
-      throw new ObservationReadError("request_shape", "observation_ids carries a blank id");
-    }
+    // Length FIRST and in UTF-16 units, which is safe because the charset check below admits only
+    // single-unit characters — so for any id that can pass, this count equals the code-point count the
+    // published schema's `maxLength` uses. Measuring code points here instead would have meant spreading
+    // an arbitrarily long attacker-chosen string into an array before rejecting it.
     if (id.length > OBSERVATION_READ_MAX_ID_CHARS) {
       // The id is NOT echoed — echoing it is the very thing this bound exists to prevent.
       throw new ObservationReadError(
         "request_shape",
         `observation_ids carries a ${id.length}-char id, above the ${OBSERVATION_READ_MAX_ID_CHARS} cap`,
+      );
+    }
+    // The ids this runtime mints are `obs_` plus 16 hex characters (`materialize-preparation.ts:99`),
+    // so the accepted charset is published rather than merely assumed. Declaring it removes two problems
+    // at once: the schema's code-point `maxLength` and this UTF-16 count can no longer disagree, and the
+    // grant's minimum page budget — measured against ASCII ids — cannot be broken by a shape-legal
+    // request full of four-byte characters.
+    if (!OBSERVATION_ID_PATTERN.test(id)) {
+      throw new ObservationReadError(
+        "request_shape",
+        "observation_ids carries an id outside the published character set",
       );
     }
     if (seen.has(id)) {
@@ -793,6 +824,7 @@ export function readObservationPage(args: {
       observation_content_sha256: part.entry.observation_content_sha256,
       part_index: part.partIndex + 1,
       part_count: part.partCount,
+      part_allowance: partAllowance,
       body: part.body,
     });
     used += cost;

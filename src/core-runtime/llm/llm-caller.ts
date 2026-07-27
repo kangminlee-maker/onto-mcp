@@ -1546,10 +1546,15 @@ export async function callLlm(
 
   // Stage 3b: the facade only exists on the codex route. Mirrors the headroom guard above — a per-call
   // capability that reached an unsupported route fails loud instead of being dropped.
+  //
+  // The provider is derived with the SAME precedence dispatch uses: a plan wins outright (see the
+  // `config.plan` branch immediately below), so consulting both fields disjunctively would let
+  // `provider: "codex"` vouch for a plan that routes to anthropic — the guard passes, the plan branch
+  // drops the facade, and the run fails much later as a missing fetch. One field decides here because
+  // one field decides there.
   if (
     config?.observation_read_facade !== undefined &&
-    config.plan?.provider_identity !== "codex" &&
-    config.provider !== "codex"
+    (config.plan ? config.plan.provider_identity : config.provider) !== "codex"
   ) {
     throw new Error(
       "the observation-read facade reached a non-codex dispatch route. It is served by an MCP server " +

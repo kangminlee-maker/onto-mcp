@@ -39,6 +39,15 @@ import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js"
 import { isRecord, isoNow, sha256File } from "./run-primitives.js";
 import { exists, readYamlDocument, readYamlDocumentIfPresent } from "./semantic-map-resume.js";
 
+/**
+ * Bumped when an authored artifact's ACCEPTANCE rules change without its inputs changing — a parser or
+ * validator rule, not a prompt. Reuse otherwise keys on input alone and would hand back an artifact the
+ * current rules would refuse.
+ *
+ * 2 — the answer-claims author bounds a claim's supporting evidence to its own cited clusters.
+ */
+export const AUTHORED_OUTPUT_CONTRACT_VERSION = 2;
+
 export interface AuthoredArtifactReuseMatch {
   session_id: string;
   intent_sha256: string;
@@ -99,6 +108,9 @@ export interface AuthoredArtifactReuseMatch {
   // capped detailed one), so — like source_breadth_fold above — a resume across a flag change must
   // regenerate rather than reuse an artifact authored in the other mode.
   source_observation_catalog_tool: boolean;
+  // Rotates when an opt-in author's acceptance rules change with its inputs unchanged (see the
+  // constant). ABSENT when that opt-in is off, so keys for runs the rule cannot reach never move.
+  authored_output_contract_version?: number;
   // P1-C2-A (R2/R8): the order-independent aggregate of the per-observation leaf-read
   // llm_touch_fingerprints (ⓐ+ⓑ). Folding the fingerprint VALUE — never the leaf-read OUTPUT —
   // rotates the seed key when the leaf-reader model/prompt or a low-confidence region changes, so a
@@ -374,6 +386,22 @@ export function authoredArtifactReuseMatch(args: {
     // safe direction).
     source_observation_catalog_tool:
       args.directiveAuthor.sourceObservationCatalogTool === true,
+    // What the AUTHOR will accept from the model, versioned — and present ONLY under the opt-in whose
+    // acceptance rule it versions.
+    //
+    // Every other field here describes the author's INPUT — prompts, flags, artifacts — on the premise
+    // that identical input means an identical artifact is still admissible. A rule that lives only in
+    // the parser breaks that premise: the answer-claims author now rejects supporting evidence outside
+    // the clusters a claim cites, and nothing about the input changed, so a resume reused a pre-rule
+    // artifact and skipped the rule entirely.
+    //
+    // Always-present would have rotated OFF keys too, and a rotated key is not a regeneration here — a
+    // resume with a mismatched hash THROWS. So an ON-only rule would have made every historical OFF
+    // resume fail for a rule that never applied to it. Bump the constant when an ON acceptance rule
+    // changes; scope any future one to the flag that gates it.
+    ...(args.directiveAuthor.sourceObservationCatalogTool === true
+      ? { authored_output_contract_version: AUTHORED_OUTPUT_CONTRACT_VERSION }
+      : {}),
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
     // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —

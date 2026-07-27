@@ -223,6 +223,121 @@ function mintOver(
   });
 }
 
+describe("charging a refused call — it spends the same ceiling a served page does", () => {
+  it("refuses rather than charging past the total it was derived from", () => {
+    // The facade meters malformed calls here so the dispatch limit binds. The first version checked
+    // only the CALL limit and then charged blindly, so a nearly spent budget plus one refusal pushed
+    // chars_served above the very total it came from — the promise `serve` enforces at :607.
+    const registry = new ObservationReadGrantRegistry();
+    const { token, receipt } = mintOver(registry, writeSources(smallText));
+    const total = receipt.budget.total_fetch_char_budget;
+    expect(total).toBeGreaterThan(0); // non-empty subject: the invariant below could fail
+
+    // Each refusal costs a third of the budget, so exhaustion arrives before the 32-call limit does and
+    // the arm tests the CHAR admission rather than the call one.
+    const messageChars = Math.ceil(total / 3);
+    let charged = 0;
+    let refused: ObservationReadError | null = null;
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      try {
+        registry.chargeRejectedCall({ token, messageChars });
+        charged += 1;
+      } catch (error) {
+        refused = error as ObservationReadError;
+        break;
+      }
+      expect(registry.receipt(token).chars_served, `after refusal ${attempt}`)
+        .toBeLessThanOrEqual(total);
+    }
+    expect(charged).toBeGreaterThan(0); // it really did charge some, so the refusal is not vacuous
+    expect(refused?.reason).toBe("fetch_budget_exhausted");
+    expect(registry.receipt(token).chars_served).toBeLessThanOrEqual(total);
+    // A refusal that was denied must not have spent a call either.
+    expect(registry.receipt(token).calls_served).toBe(charged);
+  });
+});
+
+describe("part indexes are only meaningful inside the decomposition that produced them", () => {
+  it("does not assemble a complete observation out of two different partitions", () => {
+    // `partAllowance` is derived from the REQUEST's id list (the page envelope reserves worst-case
+    // cursor framing for exactly those ids), so one observation splits differently when fetched alone
+    // than when fetched alongside others. Unioning indexes across requests built a "complete" set from
+    // two partitions and authorized an observation whose tail was never served.
+    const registry = new ObservationReadGrantRegistry();
+    const sources = writeSources(OBSERVATIONS_TEXT);
+    const { token } = mintOver(registry, sources, { pageCharBudget: 8_192 });
+    const big = [...fullArtifact.observations]
+      .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
+
+    const solo = registry.serve({ token, request: { observation_ids: [big] } });
+    const soloCount = solo.entries[0]!.part_count;
+    const grouped = registry.serve({
+      token,
+      request: { observation_ids: [big, ...allIds.filter((id) => id !== big).slice(0, 15)] },
+    });
+    const groupedEntry = grouped.entries.find((e) => e.observation_id === big)!;
+    // Non-vacuous: the two requests really do decompose the same body differently.
+    expect(groupedEntry.part_count).not.toBe(soloCount);
+
+    const record = registry.receipt(token).served.find((r) => r.observation_id === big)!;
+    // The record describes ONE partition — the latest — and holds only the parts served under it.
+    expect(record.part_count).toBe(groupedEntry.part_count);
+    expect([...record.part_indexes]).toEqual([groupedEntry.part_index]);
+    // ...so it cannot read as complete on the strength of an index from the other partition.
+    expect(record.part_indexes.length).toBeLessThan(record.part_count);
+  });
+
+  it("does not merge two partitions that share a part_count but not a boundary", () => {
+    // `part_count` is NOT a partition identity: two requests can split the same body into the same
+    // NUMBER of parts at different boundaries, and merging their indexes claims complete coverage
+    // across a hole. The allowance names the partition exactly, because the split is a pure function of
+    // (body, allowance). Search for a budget that actually produces the colliding-count case — asserting
+    // it rather than assuming it is what makes this arm distinguish the two keying rules.
+    const big = [...fullArtifact.observations]
+      .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
+    const others = allIds.filter((id) => id !== big).slice(0, 15);
+    let collision:
+      | {
+        registry: ObservationReadGrantRegistry;
+        token: string;
+        grouped: number;
+        soloAllowance: number;
+        groupedAllowance: number;
+      }
+      | null = null;
+    for (const pageCharBudget of [8_192, 10_240, 12_288, 16_384, 20_480, 24_576, 32_768, 49_152]) {
+      const registry = new ObservationReadGrantRegistry();
+      const { token } = mintOver(registry, writeSources(OBSERVATIONS_TEXT), { pageCharBudget });
+      const solo = registry.serve({ token, request: { observation_ids: [big] } }).entries[0]!;
+      const grouped = registry
+        .serve({ token, request: { observation_ids: [big, ...others] } })
+        .entries.find((entry) => entry.observation_id === big);
+      if (!grouped) continue;
+      if (solo.part_count !== grouped.part_count) continue;
+      if (solo.part_allowance === grouped.part_allowance) continue;
+      collision = {
+        registry,
+        token,
+        grouped: grouped.part_index,
+        soloAllowance: solo.part_allowance,
+        groupedAllowance: grouped.part_allowance,
+      };
+      break;
+    }
+    // The colliding case must exist, or this arm proves nothing about the keying rule.
+    expect(collision, "no budget produced equal part_count with different allowances").not.toBeNull();
+
+    const record = collision!.registry.receipt(collision!.token).served
+      .find((r) => r.observation_id === big)!;
+    // The record names the LATEST decomposition. Keyed on `part_count`, the equal counts would have made
+    // the accumulator reuse the earlier record and keep the earlier allowance while merging into it —
+    // the state from which two partitions assemble a complete-looking set.
+    expect(record.part_allowance).toBe(collision!.groupedAllowance);
+    expect(record.part_allowance).not.toBe(collision!.soloAllowance);
+    expect([...record.part_indexes]).toEqual([collision!.grouped]);
+  });
+});
+
 describe("fixture preconditions — nothing is concluded from an empty or all-permissive subject set", () => {
   it("carries 59 real observations and a prompt_context safety row for every one of them", () => {
     expect(fullArtifact.observations.length).toBe(59);

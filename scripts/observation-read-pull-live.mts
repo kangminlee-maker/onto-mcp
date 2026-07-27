@@ -46,7 +46,10 @@ const CODEX_BIN = "/opt/homebrew/bin/codex";
 const MODEL = process.env.ONTO_PULL_LIVE_MODEL ?? "gpt-5.6-luna";
 const EFFORT = process.env.ONTO_PULL_LIVE_EFFORT ?? "low";
 
-const fail = (message: string): never => {
+// Annotated on the CONST, not just on the arrow: TypeScript only treats a call as control-flow
+// terminating when the callee's `never` is on an explicit variable type, so without this the narrowing
+// after `if (!receiptFile) fail(...)` does not happen and the checks below read as nullable.
+const fail: (message: string) => never = (message) => {
   console.error(`\n✗ ${message}`);
   process.exit(1);
 };
@@ -169,8 +172,9 @@ writeFileSync(
 
 if (result.code !== 0) fail(`codex exited ${result.code}. See ${outDir}/worker.json`);
 
-// --- The receipt is the authority: it is what the runtime reads back.
-const receiptFile = readObservationReadFacadeReceipt(launch.receiptPath);
+// --- The receipt is the authority: it is what the runtime reads back — bound to THIS launch, exactly
+// as the runtime binds it, so a leftover file from an earlier probe run cannot fake a pass.
+const receiptFile = readObservationReadFacadeReceipt(launch.receiptPath, launch.launchToken);
 if (!receiptFile) fail(`no usable receipt at ${launch.receiptPath} — the facade never served`);
 const served = observationIdsServed(receiptFile);
 if (served.size === 0) {

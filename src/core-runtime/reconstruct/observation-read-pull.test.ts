@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -244,6 +244,7 @@ function authorWithWorker(options: {
             },
             session,
           )!.result as { isError: boolean };
+          session.commit(); // the process shell publishes after delivery; the stub plays that role too
           if (result.isError) throw new Error("fixture worker's fetch failed");
         }
       }
@@ -363,6 +364,169 @@ describe("observation read pull layer — 인용 ⊆ 조회 (design §3, stage 3
     expect(descriptor.user_prompt).toBe(dispatched[0]!.userPrompt);
     expect(descriptor.sources.observationsPath).toBe(pull.observationsPath);
     expect(descriptor.ttl_ms).toBeGreaterThan(0);
+  });
+});
+
+describe("observation read pull layer — receipt lifecycle across dispatches", () => {
+  /**
+   * PROBE 1 — the parse-repair dispatch. `callJsonAuthor` dispatches a SECOND time with the SAME
+   * llmConfig when the first output is not parseable JSON, so the facade is registered again with the
+   * same receipt path and its session constructor rewrites that receipt as "granted, served nothing".
+   * The worker really did fetch; the repair only reformats its JSON. Rejecting here fails a correct run.
+   */
+  it("keeps the served evidence when the JSON parse-repair dispatch runs", async () => {
+    const pull = writePullSources();
+    const fetched = allObservationIds.slice(0, 2);
+    let dispatchIndex = 0;
+    const dispatched: { config: Record<string, any> }[] = [];
+    const author = createDirectCallReconstructDirectiveAuthor({
+      sourceObservationCatalogTool: true,
+      llmCall: (systemPrompt: string, userPrompt: string, config?: Record<string, any>) => {
+        dispatchIndex += 1;
+        dispatched.push({ config: config ?? {} });
+        const launch = config?.observation_read_facade as ObservationReadFacadeLaunch | undefined;
+        if (launch) {
+          writeObservationReadFacadeDescriptor({ launch, systemPrompt, userPrompt });
+          const session = new ObservationReadFacadeSession({
+            descriptor: parseObservationReadFacadeDescriptor(
+              readFileSync(launch.descriptorPath, "utf8"),
+            ),
+          });
+          // Only the FIRST dispatch carries the catalog and the tool announcement, so only it fetches.
+          // The repair prompt is a JSON fixer; a worker on it has nothing to fetch.
+          if (dispatchIndex === 1) {
+            handleFacadeMessage(
+              {
+                jsonrpc: "2.0",
+                id: 1,
+                method: "tools/call",
+                params: {
+                  name: OBSERVATION_READ_TOOL_NAME,
+                  arguments: { observation_ids: fetched },
+                },
+              },
+              session,
+            );
+            session.commit();
+          }
+        }
+        if (dispatchIndex === 1) return Promise.resolve({ text: "{ not json" });
+        return Promise.resolve({
+          text: JSON.stringify({
+            evidence_clusters: [{
+              evidence_cluster_id: "cluster-repair",
+              question_refs: ["q-pull"],
+              support_mode: "convergent_source_evidence",
+              proposed_answer_summary: "The fetched observations converge.",
+              evidence_observation_ids: fetched,
+              proof_refs: [],
+              user_confirmation_refs: [],
+              authority_response_refs: [],
+              independence_basis: "fixture",
+              contradiction_refs: [],
+              limitation_refs: [],
+            }],
+          }),
+        });
+      },
+    } as never);
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(dispatchIndex).toBe(2);
+    expect(ledger.evidence_clusters[0].evidence_refs.length).toBe(2);
+    // The repair dispatch must lose the facade and NOTHING ELSE: a strip that also dropped the model,
+    // effort or timeout would still make this test pass on the citation alone.
+    const [initial, repair] = dispatched;
+    expect(Object.keys(initial!.config)).toContain("observation_read_facade");
+    expect(Object.keys(repair!.config)).not.toContain("observation_read_facade");
+    const droppedKeys = Object.keys(initial!.config).filter((key) =>
+      !Object.keys(repair!.config).includes(key)
+    );
+    expect(droppedKeys).toEqual(["observation_read_facade"]);
+    for (const key of Object.keys(repair!.config)) {
+      if (key === "max_tokens") continue; // callJsonAuthor sizes the repair turn separately
+      expect(repair!.config[key], key).toEqual(initial!.config[key]);
+    }
+  });
+
+  it("starts each dispatch from an empty receipt path, without relying on the token check", async () => {
+    // The launch token binding refuses a stale receipt, but a binding is a comparison and a comparison
+    // can be wrong — it was. Clearing the path removes the precondition instead of detecting it, so the
+    // two defences fail independently. This arm proves the CLEAR happens: the stale file is one the
+    // token check would have accepted, because it carries this dispatch's own token.
+    const pull = writePullSources();
+    const stalePath = path.join(pull.workDir, "observation-read-receipt-maturation-round-1.json");
+    let observedLaunchToken: string | undefined;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      sourceObservationCatalogTool: true,
+      llmCall: (_s: string, _u: string, config?: Record<string, any>) => {
+        const launch = config?.observation_read_facade as ObservationReadFacadeLaunch | undefined;
+        observedLaunchToken = launch?.launchToken;
+        // The facade never starts — the failure mode this exists for. Nothing writes a receipt now, so
+        // whatever survives at the path is what the runtime will read.
+        return Promise.resolve({
+          text: JSON.stringify({
+            evidence_clusters: [{
+              evidence_cluster_id: "cluster-stale",
+              question_refs: ["q-pull"],
+              support_mode: "convergent_source_evidence",
+              proposed_answer_summary: "Cited without fetching.",
+              evidence_observation_ids: [allObservationIds[0]!],
+              proof_refs: [],
+              user_confirmation_refs: [],
+              authority_response_refs: [],
+              independence_basis: "fixture",
+              contradiction_refs: [],
+              limitation_refs: [],
+            }],
+          }),
+        });
+      },
+    } as never);
+    // Seed the path, then let the author build its launch — which must clear it.
+    writeFileSync(stalePath, "placeholder");
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /never served/,
+    );
+    expect(observedLaunchToken).toBeTruthy();
+    expect(existsSync(stalePath)).toBe(false);
+  });
+
+  /**
+   * PROBE 2 — a receipt left at the same path by an EARLIER dispatch or run. The path is derived from
+   * the session root and a literal roundId, so a resumed run reuses it. Nothing binds the file to this
+   * launch, so if this dispatch's facade never starts — the exact failure the live probe hit, where
+   * codex launched a server that died instantly — the runtime reads the stale file and admits citations
+   * for content this worker never read. That is the inverse of fail-closed.
+   */
+  it("refuses a receipt left behind by another dispatch", async () => {
+    const pull = writePullSources();
+    const stalePath = path.join(pull.workDir, "observation-read-receipt-maturation-round-1.json");
+    writeFileSync(
+      stalePath,
+      JSON.stringify({
+        schema_version: "observation-read-facade-receipt/v1",
+        receipt: {
+          grant_id: "grant-from-a-previous-run",
+          snapshot_digest: "stale",
+          admitted_observation_count: 1,
+          withheld_observation_count: 0,
+          budget: {},
+          calls_served: 1,
+          chars_served: 10,
+          served: [{ observation_id: allObservationIds[0]!, chars: 10 }],
+        },
+        rejected_before_grant: 0,
+      }),
+    );
+    // The facade never runs in this dispatch: the worker had no tool and fetched nothing.
+    const { author } = authorWithWorker({
+      fetchIds: [],
+      citeIds: [allObservationIds[0]!],
+      skipFacade: true,
+    });
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /never served/,
+    );
   });
 });
 
