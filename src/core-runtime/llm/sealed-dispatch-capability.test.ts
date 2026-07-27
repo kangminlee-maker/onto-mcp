@@ -44,7 +44,7 @@ describe("sealed dispatch capability", () => {
       llm: {
         provider: "openai",
         auth: "api_key",
-        model: "test-model",
+        model: "gpt-5.5",
         effort: "medium",
         api_key_env: "TEST_OPENAI_KEY",
       },
@@ -81,7 +81,7 @@ describe("sealed dispatch capability", () => {
       llm: {
         provider: "openai" as const,
         auth: "api_key" as const,
-        model: "test-model",
+        model: "gpt-5.5",
         effort: "medium",
         api_key_env: "TEST_OPENAI_KEY",
       },
@@ -104,7 +104,7 @@ describe("sealed dispatch capability", () => {
       llm: {
         provider: "openai",
         auth: "api_key",
-        model: "test-model",
+        model: "gpt-5.5",
         effort: "medium",
         api_key_env: "TEST_OPENAI_KEY",
       },
@@ -128,11 +128,15 @@ describe("sealed dispatch capability", () => {
   it.each([
     {
       provider: "openai" as const,
+      // Each arm names a model its own provider actually serves: the effort gate
+      // resolves the accepted set per (adapter, provider, model), so a
+      // cross-provider pair is now a load-time rejection rather than a silent pass.
+      model: "gpt-5.5",
       keyEnv: "TEST_OPENAI_KEY",
       response: {
         object: "response",
         status: "completed",
-        model: "test-model",
+        model: "gpt-5.5",
         output: [{
           type: "message",
           content: [{ type: "output_text", text: '{"ok":true}' }],
@@ -142,12 +146,13 @@ describe("sealed dispatch capability", () => {
     },
     {
       provider: "anthropic" as const,
+      model: "claude-opus-4-8",
       keyEnv: "TEST_ANTHROPIC_KEY",
       response: {
         id: "msg_test",
         type: "message",
         role: "assistant",
-        model: "test-model",
+        model: "claude-opus-4-8",
         content: [{ type: "text", text: '{"ok":true}' }],
         stop_reason: "end_turn",
         stop_sequence: null,
@@ -156,6 +161,7 @@ describe("sealed dispatch capability", () => {
     },
   ])("returns one counted successful $provider SDK response", async ({
     provider,
+    model,
     keyEnv,
     response,
   }) => {
@@ -170,7 +176,7 @@ describe("sealed dispatch capability", () => {
       llm: {
         provider,
         auth: "api_key",
-        model: "test-model",
+        model,
         effort: "medium",
         api_key_env: keyEnv,
       },
@@ -195,7 +201,7 @@ describe("sealed dispatch capability", () => {
         llm: {
           provider: "openai",
           auth: "api_key",
-          model: "test-model",
+          model: "gpt-5.5",
           effort: "medium",
           api_key_env: "TEST_OPENAI_KEY",
         },
@@ -211,7 +217,7 @@ describe("sealed dispatch capability", () => {
       new Response(JSON.stringify({
         object: "response",
         status: "completed",
-        model: "test-model",
+        model: "gpt-5.5",
         output: [{
           type: "message",
           content: [{ type: "output_text", text: '{"ok":true}' }],
@@ -227,7 +233,7 @@ describe("sealed dispatch capability", () => {
       llm: {
         provider: "openai",
         auth: "api_key",
-        model: "test-model",
+        model: "gpt-5.5",
         effort: "medium",
         api_key_env: "TEST_OPENAI_KEY",
       },
@@ -259,7 +265,7 @@ describe("sealed dispatch capability", () => {
       return new Response(JSON.stringify({
         object: "response",
         status: "completed",
-        model: "test-model",
+        model: "gpt-5.5",
         output: [{
           type: "message",
           content: [{ type: "output_text", text: '{"ok":true}' }],
@@ -274,7 +280,7 @@ describe("sealed dispatch capability", () => {
       llm: {
         provider: "openai",
         auth: "api_key",
-        model: "test-model",
+        model: "gpt-5.5",
         effort: "medium",
         api_key_env: "TEST_OPENAI_KEY",
       },
@@ -297,8 +303,8 @@ describe("sealed dispatch capability", () => {
 
     expect(requestHeaders.get("x-ambient-route")).toBeNull();
     expect(requestHeaders.get("authorization")).toBe("Bearer test-only");
-    expect(requestBody.model).toBe("test-model");
-    expect(capability.public_descriptor.model_id).toBe("test-model");
+    expect(requestBody.model).toBe("gpt-5.5");
+    expect(capability.public_descriptor.model_id).toBe("gpt-5.5");
   });
 
   it("keeps post-preflight Anthropic custom headers out of the request", async () => {
@@ -310,7 +316,7 @@ describe("sealed dispatch capability", () => {
         id: "msg_test",
         type: "message",
         role: "assistant",
-        model: "test-model",
+        model: "claude-opus-4-8",
         content: [{ type: "text", text: '{"ok":true}' }],
         stop_reason: "end_turn",
         stop_sequence: null,
@@ -324,7 +330,7 @@ describe("sealed dispatch capability", () => {
       llm: {
         provider: "anthropic",
         auth: "api_key",
-        model: "test-model",
+        model: "claude-opus-4-8",
         effort: "medium",
         api_key_env: "TEST_ANTHROPIC_KEY",
       },

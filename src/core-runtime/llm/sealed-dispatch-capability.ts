@@ -19,6 +19,10 @@ import {
   StructuredDispatchError,
   type StructuredDispatchFailureEvidence,
 } from "./structured-dispatch-error.js";
+import {
+  assertReasoningEffortAccepted,
+  loadModelReasoningEffortRegistry,
+} from "../discovery/model-reasoning-efforts.js";
 
 export type SemanticMapDispatchOperation =
   | "semantic_map_synthesize"
@@ -155,10 +159,13 @@ const ROUTE_AFFECTING_ENV = {
   ],
 } as const;
 
-const ACCEPTED_REASONING_EFFORTS = {
-  openai: new Set(["none", "minimal", "low", "medium", "high", "xhigh"]),
-  anthropic: new Set(["low", "medium", "high", "xhigh", "max"]),
-} as const;
+// Accepted efforts are NOT a per-provider constant: the same model takes a
+// different vocabulary through a CLI worker than through the SDK, because the
+// CLI maps its own values onto the API enum before dispatch (measured — see
+// .onto/authority/model-reasoning-efforts.yaml). The set this replaced was wrong
+// in both directions here: it accepted `minimal`, which the gpt-5.6 deployments
+// reject with a 400, and refused `max`, which they accept. The authority is keyed
+// on (execution_adapter, provider, model) and each entry cites its source.
 
 function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -295,13 +302,16 @@ export async function createSealedDispatchCapability(args: {
   if (!selection.model_id || !selection.api_key_env || !selection.reasoning_effort) {
     throw new Error("dispatch fallback requires model, api_key_env, and effort in settings.");
   }
-  if (
-    !ACCEPTED_REASONING_EFFORTS[selection.model_provider].has(
-      selection.reasoning_effort,
-    )
-  ) {
-    throw new Error(`dispatch fallback rejects unsupported effort '${selection.reasoning_effort}'.`);
-  }
+  assertReasoningEffortAccepted({
+    registry: loadModelReasoningEffortRegistry(),
+    lookup: {
+      executionAdapter: selection.execution_adapter,
+      provider: selection.model_provider,
+      model: selection.model_id,
+    },
+    effort: selection.reasoning_effort,
+    context: "dispatch fallback",
+  });
   assertSealedEnvironment(selection.model_provider);
   const credential = readCapturedCredential(selection.api_key_env);
   const modelId = selection.model_id;

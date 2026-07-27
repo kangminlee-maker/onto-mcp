@@ -59,7 +59,7 @@ describe("createOntoReconstructCoreApi", () => {
           llm: {
             provider: "openai",
             auth: "api_key",
-            model: "test-model",
+            model: "gpt-5.5",
             effort: "medium",
             api_key_env: "TEST_PRIMARY_KEY",
           },
@@ -69,7 +69,7 @@ describe("createOntoReconstructCoreApi", () => {
           llm: {
             provider: "openai",
             auth: "api_key",
-            model: "test-model",
+            model: "gpt-5.5",
           },
           operation: "semantic_map_verify",
         }),

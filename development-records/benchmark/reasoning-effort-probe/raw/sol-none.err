@@ -1,0 +1,19 @@
+Reading prompt from stdin...
+OpenAI Codex v0.145.0
+--------
+workdir: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/codex-run-M8ZxyN/workspace
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: none
+reasoning summaries: none
+session id: 019fa491-ab9b-7803-93a3-61598b9f546b
+--------
+user
+Reply with exactly: ok
+
+codex
+ok
+tokens used
+14,999
