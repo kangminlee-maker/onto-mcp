@@ -159,12 +159,13 @@ const ROUTE_AFFECTING_ENV = {
   ],
 } as const;
 
-// Accepted efforts are NOT a per-provider constant: the same model takes a
-// different vocabulary through a CLI worker than through the SDK, because the
-// CLI maps its own values onto the API enum before dispatch (measured — see
-// .onto/authority/model-reasoning-efforts.yaml). The set this replaced was wrong
-// in both directions here: it accepted `minimal`, which the gpt-5.6 deployments
-// reject with a 400, and refused `max`, which they accept. The authority is keyed
+// Accepted efforts are NOT a per-provider constant: the set depends on the model
+// (`max`/`ultra` are GPT-5.6-era levels; gpt-5.5 stops at xhigh) AND on the
+// surface (the codex CLI accepts values the endpoint's own schema-enum message
+// does not list — measured, see .onto/authority/model-reasoning-efforts.yaml).
+// The set this replaced could express neither dimension and was wrong in both
+// directions: it accepted `minimal`, which the gpt-5.6 deployments reject with a
+// 400, and refused `max`, which they accept. The authority is keyed
 // on (execution_adapter, provider, model) and each entry cites its source.
 
 function canonicalJson(value: unknown): string {

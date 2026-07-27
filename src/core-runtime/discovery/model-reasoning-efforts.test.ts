@@ -177,21 +177,24 @@ describe("shipped reasoning-effort authority", () => {
     expect(accepts("openai_sdk", "openai", "gpt-5.6-sol", "max")).toBe(true);
   });
 
-  it("scopes the CLI-only vocabularies to the CLI surfaces", () => {
-    // `ultra` is absent from the provider's reasoning.effort schema enum; the
-    // codex CLI maps it before dispatch, so it is valid there and only there.
+  it("keeps values to the surface they were measured on", () => {
+    // `ultra` is a GPT-5.6-era level. MEASURED accepted through the codex CLI;
+    // left out of the direct-API entry, which nothing has exercised here — the
+    // asymmetry records where the evidence is, not a claim that the API lacks it.
     expect(accepts("codex_cli", "openai", "gpt-5.6-sol", "ultra")).toBe(true);
     expect(accepts("openai_sdk", "openai", "gpt-5.6-sol", "ultra")).toBe(false);
-    // `ultracode` is undocumented in `claude --help` but accepted by the CLI.
+    // `ultracode` is absent from `claude --help` but accepted by the CLI on every
+    // model probed — so it is not model-gated.
     expect(accepts("claude_code", "anthropic", "claude-opus-5", "ultracode")).toBe(true);
-    // Measured on three more models: it is a CLI-level value, not model-gated.
     expect(accepts("claude_code", "anthropic", "claude-opus-4-8", "ultracode")).toBe(true);
     expect(accepts("claude_code", "anthropic", "claude-sonnet-5", "ultracode")).toBe(true);
-    // gpt-5.5 refuses `ultra` — its rejection names 'max', showing the CLI maps
-    // ultra->max and 5.5 has no `max`. Same vocabulary, different model ceiling.
+    expect(accepts("anthropic_sdk", "anthropic", "claude-opus-5", "ultracode")).toBe(false);
+    // The MODEL dimension, separate from the surface one: `max` and `ultra`
+    // arrived with GPT-5.6 and gpt-5.5 stops at xhigh, so the SAME CLI that takes
+    // both for 5.6 refuses both for 5.5.
     expect(accepts("codex_cli", "openai", "gpt-5.5", "ultra")).toBe(false);
     expect(accepts("codex_cli", "openai", "gpt-5.5", "max")).toBe(false);
-    expect(accepts("anthropic_sdk", "anthropic", "claude-opus-5", "ultracode")).toBe(false);
+    expect(accepts("codex_cli", "openai", "gpt-5.5", "xhigh")).toBe(true);
   });
 
   it("records that claude-haiku-4-5 takes no effort on the direct API but does through the CLI", () => {

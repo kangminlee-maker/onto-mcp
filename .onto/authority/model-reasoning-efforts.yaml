@@ -2,15 +2,19 @@
 # actually accepts.
 #
 # WHY THIS IS KEYED BY EXECUTION SURFACE, NOT BY MODEL ALONE
-# The accepted effort vocabulary is a property of the (execution_adapter, model)
-# pair, not of the model. Measured 2026-07-28: `gpt-5.6-sol` accepts `ultra`
-# through the codex CLI, while the provider's own schema enum for
-# `reasoning.effort` does not contain `ultra` at all — the CLI owns a vocabulary
-# of its own and maps it onto the API enum before dispatch. The same holds on the
-# Anthropic side for `ultracode`. A single per-provider set cannot express this,
-# and the one this file replaced was wrong in both directions: it accepted
-# `minimal` (which the gpt-5.6 deployments reject with a 400) and refused `max`
-# (which they accept).
+# The accepted effort set is a property of the (execution_adapter, model) pair.
+# `max` and `ultra` arrived as GPT-5.6-era levels — max deepens a single agent,
+# ultra runs sub-agents in parallel — and gpt-5.5 tops out at `xhigh`; so far
+# that is a model dimension. The SURFACE dimension is separate and measured:
+# `ultra` is accepted through the codex CLI on all three 5.6 variants, while the
+# `reasoning.effort` schema enum that same endpoint quotes when it rejects an
+# unknown value lists only none/minimal/low/medium/high/xhigh/max. Whatever
+# reconciles those two facts sits below this file; what it records is per-surface
+# acceptance, which is what a gate can act on. On the Anthropic side `ultracode`
+# is likewise accepted by Claude Code but absent from its `--help` enum.
+# A single per-provider set cannot express any of this, and the one this file
+# replaced was wrong in both directions: it accepted `minimal` (which the gpt-5.6
+# deployments reject) and refused `max` (which they accept).
 #
 # WHY A GATE IS NEEDED AT ALL
 # The two CLI surfaces fail in opposite ways on a bad value. The codex CLI fails
@@ -91,9 +95,10 @@ entries:
       accepted (rc=0), `medium` accepted as the harness control, and the provider
       enumerated the rest in its own rejection: "Supported values are: 'none',
       'minimal', 'low', 'medium', 'high', and 'xhigh'." REFUSED here: `max` (absent
-      from that list) and `ultra` — whose rejection names 'max', which is DIRECT
-      evidence that the codex CLI maps `ultra` onto `max` before dispatch, the
-      mapping the sol entry infers. `minimal` is refused too but for a different
+      from that list) and `ultra` — note the rejection names 'max', not 'ultra',
+      so a request for ultra resolves to max somewhere below this file for a model
+      that has neither; both are GPT-5.6-era levels and 5.5 stops at xhigh, which
+      is exactly the set recorded here. `minimal` is refused too but for a different
       reason worth keeping distinct: "The following tools cannot be used with
       reasoning.effort 'minimal': web_search" — a valid enum value this surface's
       tool set forbids, not an unknown one.
@@ -112,8 +117,11 @@ entries:
       'medium', 'high', and 'xhigh'." NEGATIVE CONTROL: `--effort banana`
       returned rc=1 with the schema enum error, which is what makes an rc=0 here
       evidence of acceptance rather than of a silently ignored flag. `max` and
-      `ultra` are accepted although absent from that deployment list because the
-      CLI maps its own vocabulary onto the API enum before dispatch.
+      `ultra` are accepted even though neither appears in the list that rejection
+      quotes — the two are GPT-5.6-era levels (ultra runs sub-agents in parallel,
+      max deepens one), and this surface takes both. The quoted list is not a
+      complete account of what the endpoint accepts, which is precisely why this
+      entry records measured acceptance instead of citing that message as a set.
   - execution_adapter: codex_cli
     provider: openai
     model: gpt-5.6-terra

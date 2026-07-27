@@ -25,8 +25,9 @@ Running the controls first is what makes the rest of the table readable.
 
 `ultra` does not appear in the provider's schema enum yet is accepted through the
 codex CLI, and `ultracode` does not appear in `claude --help` yet is accepted by
-Claude Code. Both CLIs own a vocabulary and map it before dispatch — which is why
-the authority file is keyed by execution surface and not by model alone.
+Claude Code. Neither listing is a complete account of what its surface takes,
+which is why the authority records measured acceptance per surface rather than
+quoting either one.
 
 ## codex CLI (`codex-run --profile hermetic --sandbox read-only`)
 
@@ -46,13 +47,16 @@ the authority file is keyed by execution surface and not by model alone.
 | gpt-5.5 | `ultra` | **1** | `raw/codex_cli-gpt-5.5-ultra.err` — rejection names **'max'**, not 'ultra' |
 | gpt-5.5 | `minimal` | **1** | `The following tools cannot be used with reasoning.effort 'minimal': web_search.` |
 
-### The `ultra` → `max` mapping, caught directly
+### gpt-5.5 stops below the GPT-5.6 levels
 
-Asking gpt-5.5 for `ultra` produces a rejection of **`max`**. The CLI translates
-its own vocabulary before the request leaves, so what the provider sees — and
-names in the error — is the mapped value. That is why `ultra` can be valid on a
-surface whose API enum has never contained it, and why gpt-5.5 refuses `ultra`
-for the same reason it refuses `max`: the model has no `max`.
+`max` and `ultra` are GPT-5.6-era levels — max deepens a single agent, ultra runs
+sub-agents in parallel — and gpt-5.5 has neither; its ceiling is `xhigh`, which is
+exactly the set measured here. Worth noting for whoever reads the raw file: asking
+5.5 for `ultra` produces a rejection naming **`max`**, so a request for ultra
+resolves to max somewhere below this harness for a model that lacks it. The
+resolution point is not established by anything measured here, and the authority
+does not assert one — it records that this surface refuses both for 5.5 and
+accepts both for 5.6.
 
 `minimal` on gpt-5.5 is refused for an unrelated reason worth not conflating: it
 is a valid enum value that this surface's tool set forbids (`web_search`), not an
