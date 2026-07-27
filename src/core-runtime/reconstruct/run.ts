@@ -3985,6 +3985,21 @@ export async function runReconstruct(
         maturationAuthorityResponse,
         maturationAuthorityResponseValidation,
         sourceObservations: promptSourceObservations,
+        // Stage 3b PULL layer, opt-in only. PATHS, so the facade re-reads and re-checks drift itself;
+        // `workDir` is the session root, which the runtime owns — the author never picks a location.
+        // The grant must not outlive the dispatch, so its ttl is the worker's own timeout.
+        // The AUTHOR's own mode decides, not a second copy of the flag in run params: the catalog it
+        // projects and the pull layer that serves that catalog's detail cannot disagree.
+        ...(directiveAuthor.sourceObservationCatalogTool === true
+          ? {
+            observationReadPull: {
+              observationsPath: preparationRefs.source_observations,
+              safetyLedgerPath: sourceSafetyLedgerPath,
+              safetyLedgerValidationPath: sourceSafetyLedgerValidationPath,
+              workDir: sessionRoot,
+            },
+          }
+          : {}),
       }),
     );
   } finally {

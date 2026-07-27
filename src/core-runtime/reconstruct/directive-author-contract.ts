@@ -651,6 +651,20 @@ export interface ReconstructAnswerSupportLedgerAuthorInput {
   maturationAuthorityResponseValidation:
     ReconstructMaturationAuthorityResponseValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
+  /**
+   * Where the PULL layer lives for this round (design 20260726 §4, stage 3b). Present only under
+   * `source_observation_catalog_tool`; absent leaves the author on the push-only path, byte-identical.
+   *
+   * PATHS, not contents: the facade re-reads them on every serve so its drift check cannot be fed a
+   * stale copy (stage 2's CLAIM 6). `workDir` is where the run's descriptor and receipt for this
+   * dispatch are written — the runtime owns the location, the author never invents one.
+   */
+  observationReadPull?: {
+    readonly observationsPath: string;
+    readonly safetyLedgerPath: string;
+    readonly safetyLedgerValidationPath: string;
+    readonly workDir: string;
+  };
 }
 
 export interface ReconstructAnswerSupportJudgmentAuthorInput {

@@ -26,6 +26,11 @@ import {
   type LlmExecutionAdapter,
   type NormalizedLlmSelection,
 } from "./model-switcher.js";
+import {
+  observationReadFacadeCodexArgs,
+  type ObservationReadFacadeLaunch,
+  writeObservationReadFacadeDescriptor,
+} from "../reconstruct/observation-read-facade.js";
 import { resolveClaudeBin } from "./claude-bin.js";
 import { awaitChildExit } from "../child-process-exit.js";
 import {
@@ -91,6 +96,15 @@ export interface LlmCallConfig {
   thinking_mode?: "disabled";
   /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
   service_tier?: string;
+  /**
+   * codex-only: register the observation-read facade for THIS dispatch (design 20260726 §4, stage 3b).
+   * The route writes the descriptor itself — filling in the two prompt parts it is about to dispatch —
+   * and registers the server plus the measured approval lever. Absent = no facade, byte-identical.
+   *
+   * Guarded, not ignored, on other routes: a surface that asked for the pull layer and silently got a
+   * worker without it would fail later as "the model never fetched", which is a different diagnosis.
+   */
+  observation_read_facade?: ObservationReadFacadeLaunch;
   /**
    * Per-call transport timeout (ms) for the direct-call CLI worker route
    * (codex_cli/claude_code). Absent → the route's DEFAULT_WORKER_TIMEOUT_MS.
@@ -274,7 +288,11 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000;
 // on the claude-opus-4-8 reconstruct route; give the CLI workers a longer
 // default so supported models complete without an unencoded env override. The
 // `ONTO_LLM_TIMEOUT_MS` override still applies to both paths when set.
-const DEFAULT_WORKER_TIMEOUT_MS =
+/**
+ * Exported for the stage-3b grant ttl: a grant must not outlive the worker it was minted for, and the
+ * only honest source for that lifetime is the timeout this route enforces.
+ */
+export const DEFAULT_WORKER_TIMEOUT_MS =
   Number(process.env.ONTO_LLM_TIMEOUT_MS) || 600_000;
 // Grace period after a timeout SIGTERM before escalating to SIGKILL. A worker
 // that traps/ignores SIGTERM would otherwise leave the run hanging indefinitely
@@ -930,14 +948,25 @@ function assertCodexPromptWithinInputLimit(combinedPrompt: string): void {
   );
 }
 
+interface CodexCliOptions {
+  modelId?: string | undefined;
+  reasoningEffort?: string | undefined;
+  serviceTier?: string | undefined;
+  timeoutMs?: number | undefined;
+  /** Stage 3b: register the observation-read facade for this dispatch. */
+  observationReadFacade?: ObservationReadFacadeLaunch | undefined;
+}
+
+/**
+ * Options object rather than a positional tail: three call sites pass these through, and the stage-3b
+ * facade would have been a seventh positional argument next to three optional strings.
+ */
 async function callCodexCli(
   systemPrompt: string,
   userPrompt: string,
-  modelId?: string,
-  reasoningEffort?: string,
-  serviceTier?: string,
-  timeoutMs?: number,
+  options: CodexCliOptions = {},
 ): Promise<LlmCallResult> {
+  const { modelId, reasoningEffort, serviceTier, timeoutMs } = options;
   const { spawn } = await import("node:child_process");
   const workerTimeoutMs = timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
 
@@ -992,6 +1021,24 @@ async function callCodexCli(
   if (modelId) args.push("-m", modelId);
   if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
   if (serviceTier) args.push("-c", `service_tier="${serviceTier}"`);
+  // Stage 3b: the facade is registered ON TOP of the hardening above — `--ignore-user-config` drops the
+  // operator's servers, and this adds back exactly one, scoped to this dispatch. Measured 2026-07-27
+  // (design §5.5): `-c` overrides survive `--ignore-user-config`, and the worker's call needs this
+  // server's own approval mode or it dies as `user cancelled MCP tool call`.
+  //
+  // The descriptor is written HERE so its prompt parts are, by construction, the parts written to stdin
+  // below — the divergence stage 2's review removed from the grant API cannot reappear through a
+  // caller that measured a different string.
+  if (options.observationReadFacade) {
+    writeObservationReadFacadeDescriptor({
+      launch: options.observationReadFacade,
+      systemPrompt,
+      userPrompt,
+    });
+    args.push(
+      ...observationReadFacadeCodexArgs(options.observationReadFacade, process.execPath),
+    );
+  }
   args.push("-");
 
   const combinedPrompt = codexCombinedPrompt(systemPrompt, userPrompt);
@@ -1365,14 +1412,13 @@ async function dispatchByPlan(
 
   if (plan.provider_identity === "codex") {
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.codex;
-    return callCodexCli(
-      systemPrompt,
-      userPrompt,
+    return callCodexCli(systemPrompt, userPrompt, {
       modelId,
-      config.reasoning_effort,
-      config.service_tier,
-      config.timeout_ms,
-    );
+      reasoningEffort: config.reasoning_effort,
+      serviceTier: config.service_tier,
+      timeoutMs: config.timeout_ms,
+      observationReadFacade: config.observation_read_facade,
+    });
   }
   if (plan.provider_identity === "anthropic") {
     const apiKey = readEnvApiKey(
@@ -1500,6 +1546,20 @@ export async function callLlm(
     );
   }
 
+  // Stage 3b: the facade only exists on the codex route. Mirrors the headroom guard above — a per-call
+  // capability that reached an unsupported route fails loud instead of being dropped.
+  if (
+    config?.observation_read_facade !== undefined &&
+    config.plan?.provider_identity !== "codex" &&
+    config.provider !== "codex"
+  ) {
+    throw new Error(
+      "the observation-read facade reached a non-codex dispatch route. It is served by an MCP server " +
+        "codex launches; on any other route the worker would have no tool and the run would fail later " +
+        "as a missing fetch.",
+    );
+  }
+
   if (config?.plan) {
     return dispatchByPlan(
       systemPrompt,
@@ -1509,14 +1569,13 @@ export async function callLlm(
   }
 
   if (isLegacyCodexCliProvider(config)) {
-    return callCodexCli(
-      systemPrompt,
-      userPrompt,
-      config.model_id ?? config.models_per_provider?.codex,
-      config.reasoning_effort,
-      config.service_tier,
-      config.timeout_ms,
-    );
+    return callCodexCli(systemPrompt, userPrompt, {
+      modelId: config.model_id ?? config.models_per_provider?.codex,
+      reasoningEffort: config.reasoning_effort,
+      serviceTier: config.service_tier,
+      timeoutMs: config.timeout_ms,
+      observationReadFacade: config.observation_read_facade,
+    });
   }
 
   // Anthropic OAuth → Claude Code CLI worker. The model-switcher keeps
@@ -1588,14 +1647,13 @@ export async function callLlm(
   switch (resolved.provider) {
     case "codex": {
       const modelId = config?.model_id ?? perProviderModel;
-      return callCodexCli(
-        systemPrompt,
-        userPrompt,
+      return callCodexCli(systemPrompt, userPrompt, {
         modelId,
-        config?.reasoning_effort,
-        config?.service_tier,
-        config?.timeout_ms,
-      );
+        reasoningEffort: config?.reasoning_effort,
+        serviceTier: config?.service_tier,
+        timeoutMs: config?.timeout_ms,
+        observationReadFacade: config?.observation_read_facade,
+      });
     }
     case "anthropic": {
       const modelId = config?.model_id ?? perProviderModel;

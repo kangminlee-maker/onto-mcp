@@ -95,6 +95,77 @@ export interface ObservationReadFacadeDescriptor {
   readonly ttl_ms: number;
 }
 
+/**
+ * What a dispatch hands the codex route to turn on the facade. Carries no prompt: the route writes the
+ * descriptor itself, filling in the two parts it is about to dispatch, so the budget can never be
+ * derived from a different string than the one that goes to stdin (stage 2's F6 defect, structurally
+ * removed rather than re-checked).
+ */
+export interface ObservationReadFacadeLaunch {
+  readonly sources: ObservationReadGrantSources;
+  /** Where the route writes the descriptor for this dispatch. */
+  readonly descriptorPath: string;
+  /** Where the facade rewrites the receipt; the dispatch's caller reads it afterwards. */
+  readonly receiptPath: string;
+  /** Binds descriptor to launch (a handshake — see the module header). */
+  readonly launchToken: string;
+  readonly ttlMs: number;
+}
+
+/**
+ * Write the descriptor for one dispatch. Called by the codex route with the exact prompt parts it is
+ * about to write to stdin.
+ */
+export function writeObservationReadFacadeDescriptor(args: {
+  launch: ObservationReadFacadeLaunch;
+  systemPrompt: string;
+  userPrompt: string;
+}): ObservationReadFacadeDescriptor {
+  const descriptor: ObservationReadFacadeDescriptor = {
+    schema_version: DESCRIPTOR_SCHEMA_VERSION,
+    launch_token: args.launch.launchToken,
+    sources: args.launch.sources,
+    system_prompt: args.systemPrompt,
+    user_prompt: args.userPrompt,
+    receipt_path: args.launch.receiptPath,
+    ttl_ms: args.launch.ttlMs,
+  };
+  writeFileSync(args.launch.descriptorPath, `${JSON.stringify(descriptor, null, 2)}\n`, "utf8");
+  return descriptor;
+}
+
+/**
+ * The codex CLI arguments that register this facade — single-sourced here so the measured launch
+ * contract lives beside the server it launches.
+ *
+ * `default_tools_approval_mode="approve"` is REQUIRED, not a convenience: measured 2026-07-27
+ * (design §5.5), a worker's MCP call in non-interactive `codex exec` dies as
+ * `user cancelled MCP tool call` without it, and neither `auto` nor a global `approval_policy="never"`
+ * changes that. Its scope is this server alone — it approves nothing else the worker might reach.
+ */
+export function observationReadFacadeCodexArgs(
+  launch: ObservationReadFacadeLaunch,
+  nodeExecutable: string,
+): string[] {
+  const server = observationReadFacadeServerEntry();
+  return [
+    "-c",
+    `mcp_servers.onto_observation.command=${JSON.stringify(nodeExecutable)}`,
+    "-c",
+    `mcp_servers.onto_observation.args=[${JSON.stringify(server)},${
+      JSON.stringify(`--descriptor=${launch.descriptorPath}`)
+    }]`,
+    "-c",
+    `mcp_servers.onto_observation.env.${OBSERVATION_READ_LAUNCH_TOKEN_ENV}=${
+      JSON.stringify(launch.launchToken)
+    }`,
+    "-c",
+    'mcp_servers.onto_observation.default_tools_approval_mode="approve"',
+    "-c",
+    "mcp_servers.onto_observation.startup_timeout_sec=30",
+  ];
+}
+
 /** Written by the facade, read by the runtime after the worker exits. */
 export interface ObservationReadFacadeReceiptFile {
   readonly schema_version: "observation-read-facade-receipt/v1";

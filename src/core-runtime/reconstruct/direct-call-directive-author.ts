@@ -171,6 +171,8 @@ import type {
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
 import { CODE_SET_TIER_SEED_PROMPT_NOTE } from "./comprehension-set-tier.js";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type {
   BreadthFoldDisclosureRecord,
   ReconstructDirectiveAuthor,
@@ -214,6 +216,13 @@ import {
   foldObservationsToBudget,
   projectBreadthFoldTailRung,
 } from "./source-breadth-fold.js";
+import { DEFAULT_WORKER_TIMEOUT_MS } from "../llm/llm-caller.js";
+import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
+import {
+  observationIdsServed,
+  OBSERVATION_READ_TOOL_NAME,
+  readObservationReadFacadeReceipt,
+} from "./observation-read-facade.js";
 import type { BreadthFoldLevel } from "./source-breadth-fold.js";
 
 export function createDirectCallReconstructDirectiveAuthor(args: {
@@ -3191,6 +3200,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(promptCatalog);
       const promptObservationIds = promptCatalog.promptObservationIds;
       const promptObservationIdSet = new Set(promptObservationIds);
+      // Present exactly when the pull layer will be registered, so the prompt announces a tool that
+      // exists. Computed here because the announcement below is part of the payload the fold measures.
+      const pull = observationCatalogTool ? input.observationReadPull : undefined;
       // The policy block is a function of the ROWS, so the fold measures each rung with the text that
       // rung would actually dispatch and the dispatched text describes the rows that went out. A fixed
       // sentence told the worker summaries were present exactly when `anchor` had removed them; a
@@ -3235,6 +3247,28 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             ? null
             : POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
         },
+        // Codex does not advertise MCP tools to the model: measured 2026-07-27 (design §5.5), the
+        // request payload carries only `exec`/`wait`/`request_user_input`, and MCP tools live inside
+        // that sandbox to be discovered. So the prompt NAMES the tool. In the payload rather than the
+        // system prompt on purpose: the system prompt is module-static and its sha keys artifact
+        // reuse, so editing it would rotate every OFF run's reuse key for an opt-in nobody enabled.
+        ...(pull
+          ? {
+            source_observation_fetch_tool: {
+              tool_name: OBSERVATION_READ_TOOL_NAME,
+              why: "source_observations above is a NAVIGATION catalog: ids, refs and summaries, with no " +
+                "detail. This tool is the only way to read an observation's content.",
+              how: `Call ${OBSERVATION_READ_TOOL_NAME} with {"observation_ids": [...]} using up to ` +
+                `${OBSERVATION_READ_MAX_REQUEST_IDS} ids from prompt_visible_observation_ids, or with ` +
+                '{"cursor": "..."} to continue a previous page. An observation larger than one page ' +
+                "arrives split: concatenate part_index 1..part_count to recover its body exactly.",
+              budget: "Fetches and this prompt share one ceiling, and failed calls are charged too. " +
+                "Fetch what you will actually cite.",
+              citation_rule: "An evidence_observation_ids value you did not fetch in this dispatch is " +
+                "rejected: the runtime checks every citation against what it actually served.",
+            },
+          }
+          : {}),
         prompt_visible_observation_ids: promptObservationIds,
       });
       const answerSupportUserPayloadBase = answerSupportUserPayloadFor([]);
@@ -3317,15 +3351,47 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           });
         }
       }
+      // Stage 3b PULL layer. The catalog above is navigation only; the detail behind those ids is
+      // fetched by the worker through a facade codex launches for THIS dispatch. The route writes the
+      // descriptor (so its prompt parts are the dispatched ones by construction) and this reads the
+      // receipt back — the `조회` term of `인용 ⊆ 조회 ⊆ 스냅샷`.
+      const facadeLaunch = pull
+        ? {
+          sources: {
+            observationsPath: pull.observationsPath,
+            safetyLedgerPath: pull.safetyLedgerPath,
+            safetyLedgerValidationPath: pull.safetyLedgerValidationPath,
+          },
+          descriptorPath: path.join(
+            pull.workDir,
+            `observation-read-descriptor-${input.roundId}.json`,
+          ),
+          receiptPath: path.join(pull.workDir, `observation-read-receipt-${input.roundId}.json`),
+          // Not a secret and not a capability (see the facade module header): it binds this
+          // descriptor to this launch so a crossed pair refuses instead of serving another snapshot.
+          launchToken: randomUUID(),
+          // The grant must not outlive its worker. The worker's own timeout is that lifetime, so it is
+          // read from the config this dispatch will use rather than restated as a second number.
+          ttlMs: llmConfig.timeout_ms ?? DEFAULT_WORKER_TIMEOUT_MS,
+        }
+        : undefined;
       const raw = await callJsonAuthor({
         llmCall,
-        llmConfig,
+        llmConfig: facadeLaunch
+          ? { ...llmConfig, observation_read_facade: facadeLaunch }
+          : llmConfig,
         telemetry,
         artifactName: "AnswerSupportLedger",
         maxTokens: 3800,
         systemPrompt: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
         userPayload: answerSupportUserPayload,
       });
+      // Read the receipt AFTER the dispatch: the facade rewrote it after every attempt, and the worker
+      // is gone by now. FAIL-CLOSED — a missing or torn receipt yields an empty served set, which makes
+      // every citation inadmissible rather than unchecked.
+      const servedObservationIds = facadeLaunch
+        ? observationIdsServed(readObservationReadFacadeReceipt(facadeLaunch.receiptPath))
+        : null;
       return {
         schema_version: "1",
         session_id: input.sessionId,
@@ -3368,6 +3434,21 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               throw new Error(
                 `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfPromptIds.join(", ")}`,
               );
+            }
+            // Design §3, stage 3b: `인용 ⊆ 조회`. IN SERIES with the catalog gate above, which is not
+            // touched — the citable set only narrows. Under the pull layer the catalog carries no
+            // detail, so a citation the worker never fetched is a claim about content it did not read.
+            if (servedObservationIds) {
+              const unservedIds = observationIds.filter((observationId) =>
+                !servedObservationIds.has(observationId)
+              );
+              if (unservedIds.length > 0) {
+                throw new Error(
+                  `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids the runtime ` +
+                    `never served: ${unservedIds.join(", ")}. Under the observation catalog tool a ` +
+                    "citation must name an observation this dispatch actually fetched.",
+                );
+              }
             }
             return evidenceRefsFromIds({
               observationIds,
