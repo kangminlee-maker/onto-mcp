@@ -34,7 +34,17 @@
  * point is `observation-read-facade-server.ts`. That split is what lets the protocol handling be tested
  * without spawning anything.
  */
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -87,7 +97,7 @@ export const OBSERVATION_READ_LAUNCH_TOKEN_ENV = "ONTO_OBSERVATION_READ_LAUNCH_T
  * could not check: no budget numbers, no id lists, no pre-combined prompt.
  */
 export interface ObservationReadFacadeDescriptor {
-  readonly schema_version: "observation-read-facade-descriptor/v1";
+  readonly schema_version: "observation-read-facade-descriptor/v2";
   /** Binds this descriptor to one worker launch; compared against the env token. */
   readonly launch_token: string;
   readonly sources: ObservationReadGrantSources;
@@ -96,6 +106,8 @@ export interface ObservationReadFacadeDescriptor {
   readonly user_prompt: string;
   /** Where to rewrite the receipt after every attempt. */
   readonly receipt_path: string;
+  /** Where to record the emitted page strings, verbatim (design §4). */
+  readonly emissions_path: string;
   /** Grant lifetime; the runtime knows the worker's timeout. */
   readonly ttl_ms: number;
 }
@@ -112,6 +124,11 @@ export interface ObservationReadFacadeLaunch {
   readonly descriptorPath: string;
   /** Where the facade rewrites the receipt; the dispatch's caller reads it afterwards. */
   readonly receiptPath: string;
+  /**
+   * Where the facade records what it EMITTED, verbatim (design §4). Delivery reconciliation compares
+   * this against the worker's transcript; creating it is also how a facade claims the right to start.
+   */
+  readonly emissionsPath: string;
   /** Binds descriptor to launch (a handshake — see the module header). */
   readonly launchToken: string;
   readonly ttlMs: number;
@@ -154,6 +171,23 @@ export function prepareObservationReadFacadeLaunch(
       `observation-read facade receipt at ${launch.receiptPath} still exists after being cleared.`,
     );
   }
+  // The emissions artifact is cleared for the same reason AND for one more: the facade claims the
+  // right to start by CREATING it exclusively, so a predecessor's file left in place would refuse
+  // this dispatch outright. Clearing is a precondition removal here, never the concurrency control —
+  // that is the exclusive create itself (design §11-L2).
+  try {
+    rmSync(launch.emissionsPath, { force: true });
+  } catch (error) {
+    throw new Error(
+      `observation-read facade could not clear a stale emissions record at ${launch.emissionsPath}: ` +
+        `${(error as Error).message}.`,
+    );
+  }
+  if (existsSync(launch.emissionsPath)) {
+    throw new Error(
+      `observation-read facade emissions record at ${launch.emissionsPath} still exists after being cleared.`,
+    );
+  }
   return launch;
 }
 
@@ -173,6 +207,7 @@ export function writeObservationReadFacadeDescriptor(args: {
     system_prompt: args.systemPrompt,
     user_prompt: args.userPrompt,
     receipt_path: args.launch.receiptPath,
+    emissions_path: args.launch.emissionsPath,
     ttl_ms: args.launch.ttlMs,
   };
   writeFileSync(args.launch.descriptorPath, `${JSON.stringify(descriptor, null, 2)}\n`, "utf8");
@@ -280,14 +315,21 @@ const OPERATOR_FAILURE_HISTORY_MAX = 8;
 /** Bounds the model-authored key names echoed back in a shape rejection. */
 const UNSUPPORTED_KEY_ECHO_MAX_CHARS = 200;
 
+// v2 because the descriptor gained a REQUIRED field: `emissions_path`, which is where the facade
+// claims its right to start and records what it emitted. A v1 descriptor names no such path, so a
+// facade reading one would have nowhere to make that claim — refusing it outright is the only shape
+// that cannot half-run.
 const DESCRIPTOR_SCHEMA_VERSION: ObservationReadFacadeDescriptor["schema_version"] =
-  "observation-read-facade-descriptor/v1";
+  "observation-read-facade-descriptor/v2";
 // v2 because the FILE'S MEANING changed, not its shape: a v1 receipt is evidence that some facade
 // served something at this path, a v2 receipt is evidence that THIS launch did. Reusing v1 would leave
 // the hole open in both directions — a reader from before the binding accepts our receipts and ignores
 // the token, and a v1 receipt reaches our token comparison instead of being refused outright.
 const RECEIPT_SCHEMA_VERSION: ObservationReadFacadeReceiptFile["schema_version"] =
   "observation-read-facade-receipt/v2";
+
+const EMISSIONS_SCHEMA_VERSION: ObservationReadFacadeEmissionsFile["schema_version"] =
+  "observation-read-facade-emissions/v1";
 
 function assertString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.length === 0) {
@@ -354,6 +396,7 @@ export function parseObservationReadFacadeDescriptor(
         throw new Error("observation-read facade descriptor field user_prompt must be a string.");
       })(),
     receipt_path: assertString(record.receipt_path, "receipt_path"),
+    emissions_path: assertString(record.emissions_path, "emissions_path"),
     ttl_ms: ttlMs,
   };
 }
@@ -435,6 +478,9 @@ export class ObservationReadFacadeSession {
   readonly #token: string;
   readonly #launchToken: string;
   readonly #receiptPath: string;
+  readonly #emissionsPath: string;
+  /** The page strings this facade actually put on the wire, in emission order (design §9-F4). */
+  readonly #emissions: string[] = [];
   #rejectedBeforeGrant = 0;
   readonly #failures: { reason: ObservationReadFailureReason; detail: string }[] = [];
   #droppedFailureCount = 0;
@@ -461,6 +507,20 @@ export class ObservationReadFacadeSession {
           "erase the served set the earlier dispatch proved.",
       );
     }
+    // THE START RIGHT, taken before a grant exists (design §11-L2). The check above is a comparison
+    // and two processes can both pass it, mint their own budgets, and race to write; creating this
+    // file exclusively cannot be won twice, so the loser never mints. Ordering matters as much as the
+    // flag: acquiring after minting would leave the loser holding a live grant.
+    try {
+      closeSync(openSync(args.descriptor.emissions_path, "wx"));
+    } catch (error) {
+      throw new Error(
+        "observation-read facade refuses to start: could not claim the start right at " +
+          `${args.descriptor.emissions_path} (${(error as Error).message}). A file already there means ` +
+          "another facade holds this launch.",
+      );
+    }
+    this.#emissionsPath = args.descriptor.emissions_path;
     this.#launchToken = args.descriptor.launch_token;
     this.#registry = new ObservationReadGrantRegistry(
       args.now ? { now: args.now } : {},
@@ -508,8 +568,13 @@ export class ObservationReadFacadeSession {
       // and the flush left a receipt claiming a page that never arrived, and a citation to it was then
       // admitted. `commit()` publishes it after the transport says the bytes went out, so the crash
       // window under-records instead of over-recording — which the consumer already fails closed on.
+      // ONE serialization, recorded and returned. Serializing twice would let the recorded string and
+      // the emitted one drift, and reconciliation searches the transcript for exactly this text
+      // (design §9-F4) — a second `JSON.stringify` is a second source of truth for the same bytes.
+      const canonicalText = JSON.stringify(page);
+      this.#emissions.push(canonicalText);
       return {
-        content: [{ type: "text", text: JSON.stringify(page) }],
+        content: [{ type: "text", text: canonicalText }],
         structuredContent: page,
         isError: false,
       };
@@ -526,6 +591,7 @@ export class ObservationReadFacadeSession {
    */
   commit(): void {
     this.writeReceipt();
+    this.writeEmissions();
   }
 
   /**
@@ -609,10 +675,45 @@ export class ObservationReadFacadeSession {
       failures: [...this.#failures],
       dropped_failure_count: this.#droppedFailureCount,
     };
-    const temporaryPath = `${this.#receiptPath}.tmp`;
-    writeFileSync(temporaryPath, `${JSON.stringify(file, null, 2)}\n`, "utf8");
-    renameSync(temporaryPath, this.#receiptPath);
+    writeFileAtomically(this.#receiptPath, `${JSON.stringify(file, null, 2)}\n`);
   }
+
+  /**
+   * Rewrite the emissions record: the page strings this facade put on the wire, verbatim.
+   *
+   * Written AFTER the receipt and, like it, only once the response bytes are out (`commit`). It is not
+   * a delivery receipt and no consumer may read it as one — it says what was SENT. What reached the
+   * model is decided later, by comparing these strings against the worker's own transcript.
+   */
+  writeEmissions(): void {
+    const file: ObservationReadFacadeEmissionsFile = {
+      schema_version: EMISSIONS_SCHEMA_VERSION,
+      launch_token: this.#launchToken,
+      grant_id: this.receipt().grant_id,
+      emissions: this.#emissions.map((canonical_text) => ({ canonical_text })),
+    };
+    writeFileAtomically(this.#emissionsPath, `${JSON.stringify(file, null, 2)}\n`);
+  }
+}
+
+/**
+ * Publish a file by rename, through a temp name NOBODY else can pick.
+ *
+ * `${path}.tmp` was a shared name: two facades over one path wrote the same temp file and renamed each
+ * other's half-written bytes into place (design §11-L2). The random suffix removes the collision, and
+ * the fsync is what makes the rename publish DURABLE content rather than a name pointing at a buffer
+ * the crash took with it.
+ */
+function writeFileAtomically(destinationPath: string, contents: string): void {
+  const temporaryPath = `${destinationPath}.${randomBytes(6).toString("hex")}.tmp`;
+  const handle = openSync(temporaryPath, "w");
+  try {
+    writeFileSync(handle, contents, "utf8");
+    fsyncSync(handle);
+  } finally {
+    closeSync(handle);
+  }
+  renameSync(temporaryPath, destinationPath);
 }
 
 /**
@@ -836,6 +937,63 @@ export function readObservationReadFacadeReceipt(
  * The observation ids a receipt proves were SERVED — the `조회` set citations are checked against.
  * Returns an empty set for a null receipt, which is what makes the consumer fail closed.
  */
+/**
+ * What a facade EMITTED — the page strings it put on the wire, verbatim and in order.
+ *
+ * Deliberately NOT a receipt and deliberately not readable as one. A receipt is the runtime's record of
+ * what it served; this is the input to deciding what ARRIVED, which only the worker's own transcript
+ * can answer. Keeping the two in separate files with separate schemas is what stops a consumer from
+ * reading "sent" as "delivered" — the confusion design §10-R2-3 renamed `delivered` to avoid.
+ *
+ * Its existence also carries the START RIGHT: the facade creates this file exclusively before minting a
+ * grant, so a second facade on the same launch fails before it can spend anything (§11-L2).
+ */
+export interface ObservationReadFacadeEmissionsFile {
+  readonly schema_version: "observation-read-facade-emissions/v1";
+  readonly launch_token: string;
+  readonly grant_id: string;
+  readonly emissions: readonly { readonly canonical_text: string }[];
+}
+
+/**
+ * Read an emissions record, FAIL-CLOSED exactly like the receipt reader: a missing file, torn JSON, a
+ * shape we do not recognise or another launch's token all yield `null`. A null here must never be read
+ * as "nothing was emitted" — it is "we have no record", which reconciliation reports as unverifiable.
+ */
+export function readObservationReadFacadeEmissions(
+  emissionsPath: string,
+  expectedLaunchToken: string,
+): ObservationReadFacadeEmissionsFile | null {
+  if (!existsSync(emissionsPath)) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(emissionsPath, "utf8")) as unknown;
+  } catch {
+    return null;
+  }
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  if (record.schema_version !== EMISSIONS_SCHEMA_VERSION) return null;
+  if (typeof record.launch_token !== "string" || record.launch_token !== expectedLaunchToken) {
+    return null;
+  }
+  if (typeof record.grant_id !== "string") return null;
+  if (!Array.isArray(record.emissions)) return null;
+  const emissions: { canonical_text: string }[] = [];
+  for (const entry of record.emissions) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return null;
+    const text = (entry as { canonical_text?: unknown }).canonical_text;
+    if (typeof text !== "string") return null;
+    emissions.push({ canonical_text: text });
+  }
+  return {
+    schema_version: EMISSIONS_SCHEMA_VERSION,
+    launch_token: record.launch_token,
+    grant_id: record.grant_id,
+    emissions,
+  };
+}
+
 export function observationIdsServed(
   receiptFile: ObservationReadFacadeReceiptFile | null,
 ): ReadonlySet<string> {

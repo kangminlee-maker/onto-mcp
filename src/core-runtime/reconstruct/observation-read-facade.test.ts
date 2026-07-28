@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,8 @@ import {
   OBSERVATION_READ_TOOL_NAME,
   ObservationReadFacadeSession,
   parseObservationReadFacadeDescriptor,
+  prepareObservationReadFacadeLaunch,
+  readObservationReadFacadeEmissions,
   readObservationReadFacadeReceipt,
   type ObservationReadFacadeDescriptor,
 } from "./observation-read-facade.js";
@@ -89,23 +91,30 @@ function writeSources(options: { ledgerOverride?: Record<string, unknown> } = {}
 
 function writeDescriptor(
   overrides: Partial<ObservationReadFacadeDescriptor> = {},
-): { descriptor: ObservationReadFacadeDescriptor; descriptorPath: string; receiptPath: string } {
+): {
+  descriptor: ObservationReadFacadeDescriptor;
+  descriptorPath: string;
+  receiptPath: string;
+  emissionsPath: string;
+} {
   const sources = overrides.sources ?? writeSources();
   tempSeq += 1;
   const receiptPath = path.join(TEMP_ROOT, `receipt-${tempSeq}.json`);
+  const emissionsPath = path.join(TEMP_ROOT, `emissions-${tempSeq}.json`);
   const descriptor: ObservationReadFacadeDescriptor = {
-    schema_version: "observation-read-facade-descriptor/v1",
+    schema_version: "observation-read-facade-descriptor/v2",
     launch_token: `launch-token-${tempSeq}`,
     sources,
     system_prompt: "SYSTEM",
     user_prompt: "USER",
     receipt_path: receiptPath,
+    emissions_path: emissionsPath,
     ttl_ms: 600_000,
     ...overrides,
   };
   const descriptorPath = path.join(TEMP_ROOT, `descriptor-${tempSeq}.json`);
   writeFileSync(descriptorPath, JSON.stringify(descriptor, null, 2));
-  return { descriptor, descriptorPath, receiptPath };
+  return { descriptor, descriptorPath, receiptPath, emissionsPath };
 }
 
 /**
@@ -137,7 +146,9 @@ describe("observation read facade — descriptor contract (stage 3b)", () => {
   it("refuses every incomplete descriptor rather than defaulting a field", () => {
     const { descriptor } = writeDescriptor();
     const mutations: [string, Record<string, unknown>][] = [
-      ["schema_version", { schema_version: "observation-read-facade-descriptor/v2" }],
+      // The RETIRED version: a v1 descriptor names no emissions path, so a facade reading one would
+      // have nowhere to claim its start right — refusing it is what stops a half-run.
+      ["schema_version", { schema_version: "observation-read-facade-descriptor/v1" }],
       ["launch_token", { launch_token: "" }],
       ["sources", { sources: undefined }],
       ["observationsPath", { sources: { ...descriptor.sources, observationsPath: "" } }],
@@ -147,6 +158,8 @@ describe("observation read facade — descriptor contract (stage 3b)", () => {
       ["system_prompt", { system_prompt: undefined }],
       ["user_prompt", { user_prompt: 5 }],
       ["receipt_path", { receipt_path: "" }],
+      ["emissions_path", { emissions_path: "" }],
+      ["emissions_path missing", { emissions_path: undefined }],
       ["ttl_ms", { ttl_ms: 0 }],
     ];
     expect(mutations.length).toBeGreaterThan(0); // non-empty subject
@@ -950,4 +963,138 @@ describe("observation read facade — the launch contract, as a real process", (
     expect(absent.code).toBe(2);
     expect(absent.stderr).toMatch(/cannot read descriptor/);
   }, 60_000);
+});
+
+/**
+ * Stage 3a-1 — the facade records what it EMITTED, and creating that record is how it claims the right
+ * to start (design §4, §11-L2). Nothing reads these yet: reconciliation is the next stage.
+ */
+describe("observation read facade — emissions record and the start right", () => {
+  it("records the emitted page string BYTE-IDENTICALLY to what the worker received", () => {
+    const { descriptor, emissionsPath } = writeDescriptor();
+    const session = new ObservationReadFacadeSession({ descriptor });
+    const result = callTool(session, { observation_ids: [allObservationIds[0]] });
+
+    const emissions = readObservationReadFacadeEmissions(emissionsPath, descriptor.launch_token)!;
+    expect(emissions).not.toBeNull();
+    expect(emissions.emissions).toHaveLength(1);
+    // THE property reconciliation depends on: the recorded string is the one that went out, not a
+    // re-serialization of the same object. A second `JSON.stringify` could differ and the transcript
+    // search would then look for bytes nobody sent.
+    expect(emissions.emissions[0]!.canonical_text).toBe(result.content[0].text);
+    expect(JSON.parse(emissions.emissions[0]!.canonical_text)).toEqual(result.structuredContent);
+  });
+
+  it("records every page of a split observation, in emission order", () => {
+    const { descriptor, emissionsPath } = writeDescriptor();
+    const session = new ObservationReadFacadeSession({ descriptor });
+    const [biggest] = [...observationsArtifact.observations]
+      .sort((left, right) => JSON.stringify(right).length - JSON.stringify(left).length);
+    const first = callTool(session, { observation_ids: [biggest!.observation_id] });
+    const emitted = [first.content[0].text as string];
+    let cursor = (first.structuredContent as { next_cursor?: string }).next_cursor;
+    expect(cursor, "the fixture must actually split, or this proves nothing").toBeTruthy();
+    let guard = 0;
+    while (cursor && guard < 50) {
+      guard += 1;
+      const next = callTool(session, { cursor }, guard + 1);
+      emitted.push(next.content[0].text as string);
+      cursor = (next.structuredContent as { next_cursor?: string }).next_cursor;
+    }
+    const emissions = readObservationReadFacadeEmissions(emissionsPath, descriptor.launch_token)!;
+    expect(emissions.emissions.map((entry) => entry.canonical_text)).toEqual(emitted);
+  });
+
+  /**
+   * The two guards are INDEPENDENT and ordered: the receipt latch refuses a launch that already
+   * proved something, and the start right refuses one that is merely already claimed. Isolating the
+   * second means arranging the state only it can see — a claim with no receipt yet, which is exactly
+   * the race window the latch cannot cover because neither process has written a receipt.
+   */
+  it("refuses to start when another facade already claimed the right, before any receipt exists", () => {
+    const { descriptor, emissionsPath, receiptPath } = writeDescriptor();
+    writeFileSync(emissionsPath, "");
+    expect(existsSync(receiptPath), "the latch must not be what refuses here").toBe(false);
+    expect(() => new ObservationReadFacadeSession({ descriptor }))
+      .toThrow(/could not claim the start right/);
+    // The loser minted nothing and wrote nothing: the claim is taken BEFORE the grant exists, so a
+    // refused facade cannot be left holding a live budget.
+    expect(existsSync(receiptPath)).toBe(false);
+  });
+
+  it("still refuses a second facade on a launch that already served, via the receipt latch", () => {
+    const { descriptor, receiptPath } = writeDescriptor();
+    const first = new ObservationReadFacadeSession({ descriptor });
+    callTool(first, { observation_ids: [allObservationIds[0]] });
+    const servedBefore = observationIdsServed(
+      readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token),
+    );
+    expect(() => new ObservationReadFacadeSession({ descriptor }))
+      .toThrow(/a receipt for this launch already exists/);
+    // The first dispatch's evidence is untouched.
+    expect(
+      observationIdsServed(readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token)),
+    ).toEqual(servedBefore);
+  });
+
+  it("clearing a launch releases the start right, so a resumed run can serve", () => {
+    const { descriptor, emissionsPath, receiptPath } = writeDescriptor();
+    new ObservationReadFacadeSession({ descriptor });
+    prepareObservationReadFacadeLaunch({
+      sources: descriptor.sources,
+      descriptorPath: path.join(TEMP_ROOT, "unused-descriptor.json"),
+      receiptPath,
+      emissionsPath,
+      launchToken: descriptor.launch_token,
+      ttlMs: descriptor.ttl_ms,
+    });
+    expect(() => new ObservationReadFacadeSession({ descriptor })).not.toThrow();
+  });
+
+  it("reads fail-closed — a torn, foreign or unknown record is null, never an empty emission list", () => {
+    const { descriptor, emissionsPath } = writeDescriptor();
+    const session = new ObservationReadFacadeSession({ descriptor });
+    callTool(session, { observation_ids: [allObservationIds[0]] });
+    expect(readObservationReadFacadeEmissions(emissionsPath, descriptor.launch_token)).not.toBeNull();
+
+    // Another launch's token.
+    expect(readObservationReadFacadeEmissions(emissionsPath, "some-other-launch")).toBeNull();
+    // Absent.
+    expect(readObservationReadFacadeEmissions(path.join(TEMP_ROOT, "nope.json"), "t")).toBeNull();
+
+    const intact = JSON.parse(readFileSync(emissionsPath, "utf8")) as Record<string, unknown>;
+    for (
+      const mutation of [
+        { schema_version: "observation-read-facade-emissions/v2" },
+        { grant_id: 5 },
+        { emissions: "not an array" },
+        { emissions: [{ canonical_text: 5 }] },
+        { emissions: [{}] },
+      ]
+    ) {
+      const path_ = path.join(TEMP_ROOT, `emissions-mutated-${JSON.stringify(mutation).length}.json`);
+      writeFileSync(path_, JSON.stringify({ ...intact, ...mutation }));
+      expect(readObservationReadFacadeEmissions(path_, descriptor.launch_token), JSON.stringify(mutation))
+        .toBeNull();
+    }
+    const torn = path.join(TEMP_ROOT, "emissions-torn.json");
+    writeFileSync(torn, "{ not json");
+    expect(readObservationReadFacadeEmissions(torn, descriptor.launch_token)).toBeNull();
+  });
+
+  it("publishes through a temp name no other facade can pick", () => {
+    // A shared `${path}.tmp` let two facades over one path rename each other's half-written bytes into
+    // place (§11-L2). Occupying that exact name is what makes the difference OBSERVABLE: an
+    // implementation still using it fails on the obstruction, a unique-name one never looks there.
+    // Asserting only "no temp file survives" would pass either way — a rename removes it regardless.
+    const { descriptor, emissionsPath, receiptPath } = writeDescriptor();
+    mkdirSync(`${emissionsPath}.tmp`);
+    mkdirSync(`${receiptPath}.tmp`);
+    const session = new ObservationReadFacadeSession({ descriptor });
+    callTool(session, { observation_ids: [allObservationIds[0]] });
+    expect(readObservationReadFacadeEmissions(emissionsPath, descriptor.launch_token)).not.toBeNull();
+    expect(readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token)).not.toBeNull();
+    // The obstruction is untouched, and no stray temp of ours is left behind.
+    expect(existsSync(`${emissionsPath}.tmp`)).toBe(true);
+  });
 });

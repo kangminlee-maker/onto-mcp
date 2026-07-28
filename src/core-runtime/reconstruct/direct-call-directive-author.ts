@@ -3369,6 +3369,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             `observation-read-descriptor-${input.roundId}.json`,
           ),
           receiptPath: path.join(pull.workDir, `observation-read-receipt-${input.roundId}.json`),
+          // Where the facade records what it emitted AND claims the right to start (design §11-L2).
+          // Beside the receipt and keyed by the same round id, so a run's artifacts stay together.
+          emissionsPath: path.join(pull.workDir, `observation-read-emissions-${input.roundId}.json`),
           // Not a secret and not a capability (see the facade module header): it binds this
           // descriptor to this launch so a crossed pair refuses instead of serving another snapshot.
           launchToken: randomUUID(),

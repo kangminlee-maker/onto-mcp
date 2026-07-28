@@ -98,6 +98,7 @@ const launch: ObservationReadFacadeLaunch = {
   sources: { observationsPath, safetyLedgerPath, safetyLedgerValidationPath },
   descriptorPath: path.join(outDir, "descriptor.json"),
   receiptPath: path.join(outDir, "receipt.json"),
+  emissionsPath: path.join(outDir, "emissions.json"),
   launchToken: randomUUID(),
   ttlMs: 600_000,
 };
