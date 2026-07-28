@@ -1,11 +1,12 @@
-# START HERE — 배달 재조정: 설계 종료(단계 계획 포함), 다음은 단계 A 구현 (2026-07-28)
+# START HERE — 배달 재조정: 단계 A·0·0b 착지, 다음은 단계 1 (2026-07-28)
 
 ## 0. 지금 위치
 
-- 브랜치 `feat/observation-grant-stage2`. **origin/main 대비 미푸시 38커밋**. 워킹트리 클린
+- 브랜치 `feat/observation-grant-stage2`. **origin/main 대비 미푸시 43커밋**. 워킹트리 클린
   (`benchmark/`만 untracked — 리뷰·probe 원본이라 커밋하지 않는다).
 - 설계 SSOT: `development-records/design/20260727-observation-pull-layer-redesign/11-implementation-design-delivery-reconciliation.md` (806줄)
-- **구현 코드는 아직 한 줄도 없다.** 설계·검증·단계 계획까지가 끝난 상태다.
+- **단계 A·0·0b 구현 완료**(`d5ac91d` · `deffda0` · `fe02bd4`), 측정 기록 `8fe3f02`.
+- 전체 스위트 **231파일 3,935 pass · 1 todo** · 게이트 **15 green + 2 rc=1**(베이스라인).
 
 ## 1. 설계는 닫혔다
 
@@ -25,31 +26,34 @@ D2 = **(a) 결정론적 구문 수리** · D3 = ② 단계 3·4 원자 착지.
 2. **순서 의존은 재조정만의 문제가 아니라 이미 실행 중 경로에 있다.** 같은 페이지 집합이
    도착 순서에 따라 다르게 판정된다(last-wins 리셋). → 단계 0b.
 
-## 2. 다음 작업 = 단계 A 구현 (§6-3)
+## 2. 끝난 것
 
-`callJsonAuthor`의 **2차 LLM 디스패치를 결정론적 구문 수리로 교체**한다.
-재조정과 독립적으로 가치가 있고 단독 착지 가능하며, **재조정보다 반드시 먼저**다 —
-A 없이 재조정을 얹으면 관찰을 못 받은 워커의 산출물에 `delivered` 영수증이 찍힌다.
+| 단계 | 커밋 | 요점 |
+|---|---|---|
+| **A** | `d5ac91d` | 2차 LLM 복구 디스패치 제거 → **결정론 삭제-전용 수리**. 절단은 닫는 괄호를 못 붙여 자동 거부(구조로 성립). 부수로 "산출물 하나 = 자식 하나" 복원 → §11-L3 뿌리 닫힘 |
+| **0** | `deffda0` | 누적(grant)·완전성(facade) **두 규칙**을 `observation-read-coverage.ts` 한 곳으로. 차등 하니스 20만 trial diff 0 |
+| **0b** | `fe02bd4` | 파티션을 `(sha, allowance)`로 나란히 보관, 하나라도 완전하면 인정 → **순서 비의존**. 293자 구멍은 여전히 거부 |
+| 측정 | `8fe3f02` | rollout 구조 재측정 → **설계 서술 2건 정정** |
 
-착수 전 알고 있어야 할 실측:
-- `parseLlmJsonObject`(`authoring-llm-call.ts:86-108`)가 **이미** 결정론 층을 갖고 있다
-  (코드펜스 제거 + 첫 `{`~마지막 `}`). 새로 만드는 것은 그 위의 문법 수리다.
-- LLM 턴이 실제로 잡던 나머지는 (i) 문법 오류와 (ii) **max_tokens 절단**이다.
-  (ii)는 꼬리가 실재하지 않으므로 **아무도 고칠 수 없다** — LLM 턴은 지어낸다. 그게 S1이다.
-- `allowParseRepair: false` 경로가 이미 있다(`reconstruct-api.ts:1496`) — 배선 선례.
-- `callLlmRecorded`(`:150-240`)는 호출당 1회 디스패치, 재시도 없음.
-  `callJsonAuthor` 호출부 19곳 중 façade를 싣는 곳은 `direct-call-directive-author.ts:3383` 하나.
+**단계 A가 남긴 미결 1건**: `output-budget.ts`의 `json_parse_repair: 16_000`은 더는 디스패치를
+크기 조절하지 않지만 세 값 중 **최댓값**이라 지우면 `reconstruct-api`의 출력 헤드룸이 16k→9k로
+내려간다. 주석만 달아 두었다 — 내릴지는 별도 결정.
 
-done-when (§6-3):
-- 리프 verbatim 속성 테스트 — 산출의 모든 스칼라가 입력 텍스트에 그대로 있다
-- 변이 배터리 — 발명하는 수리는 FAIL
-- **픽스처 뒤집기** — `observation-read-pull.test.ts:376-448`은 지금 1차 `"{ not json"`에서
-  2차가 evidence cluster를 통째 생성하는 것을 **성공으로 단언**한다. 새 계약에서는 실패다.
-  거짓 전제 주석(*"복구는 JSON을 재포맷할 뿐"*)도 함께 고친다.
-- 게이트: *façade를 실은 디스패치는 산출물당 정확히 1회* (L3의 뿌리를 주장이 아니라 구조로)
+## 3. 다음 작업 = 단계 1 (rollout 리더)
 
-행동 변화는 **승인된 비용**이다: 지금 LLM 복구가 살려내던 런 일부(특히 절단)가 실패로 떨어진다.
-손실이 아니라 거짓 성공을 실패로 되돌리는 것이다.
+**전제는 이미 확보됐다** — 측정 기록 `design/.../20-measurement-rollout-record-structure.md` 참조.
+
+- `benchmark/tool-result-truncation/*/worker-stderr.txt`의 session id 14개 → `~/.codex`에 **14/14 존재**
+- 위상 **3개 확보**: 다중 순차 호출을 한 출력에 렌더링(전송 4 : 수신 1 — **F1 시퀀스 실측**) ·
+  다중 호출인데 페이로드 미출력 · 호출 0회. **미확보 3개**: 동시 호출 · 다중 `text()` · 겹친 exec
+- 레코드 모양 확정: 수신분 `output`은 **배열**(원소 2개, `[0]`=exec 배너 47자, `[1]`=렌더링 결과,
+  절단 경고는 그 **안**) → §9-F4 포함 검사 대상은 `output[*].text`
+- id 공간이 다름(`exec-<uuid>` vs `call_<...>`) → §9-F1 짝짓기 제거가 유일한 선택
+- 전송 28 : 수신 34 → **§11-L1 양방향 대응을 단순 개수 비교로 짜면 안 된다**
+
+**착수 전에 정할 것 하나**: 단위 테스트 fixture를 어떻게 repo에 넣을지. 실 rollout은 `~/.codex`에
+있고 크며(330KB/건) `base_instructions`·사용자 내용을 담는다. 권장 = **실 레코드에서 봉투는 그대로
+두고 긴 본문만 줄인 축약 fixture를 repo에 커밋**하고, 무엇을 잘랐는지 명기한다.
 
 ## 3. 상시 제약
 
