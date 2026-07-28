@@ -86,6 +86,21 @@ export interface ReconstructExecutionTelemetryCollector {
    * shows the validation miss for S1/S2, but does not count as an LLM call (no
    * `llm_call_count` or size contribution). The LLM has no authority over it.
    */
+  /**
+   * Records that a malformed JSON response was repaired DETERMINISTICALLY (deletion only, no model
+   * call — see `authoring-json-repair.ts`).
+   *
+   * Appends a succeeded `parse_repair` attempt so the unit's lineage still shows the model's output
+   * did not parse, while the LAST attempt reflects what actually happened: the unit produced its
+   * artifact. Without it `terminalFailureMessageFromTelemetry` reads the initial malformed row as
+   * terminal and the pipeline ledger reports a completed unit as failed (codex review, PR #271).
+   *
+   * Does NOT count as an LLM call — the repair dispatches nothing — for the same reason
+   * `recordValidationGateFailure` does not.
+   */
+  recordDeterministicJsonRepair(
+    input: { unitId: ReconstructStageId; deletedCharCount: number },
+  ): void;
   recordValidationGateFailure(
     input: { unitId: ReconstructStageId; failureMessage: string },
   ): void;
@@ -351,6 +366,18 @@ export function createReconstructExecutionTelemetryCollector(options: {
         failure_message:
           input.status === "failed" ? input.failureMessage ?? null : null,
         duration_ms: Math.max(0, Math.round(input.durationMs)),
+      });
+    },
+    recordDeterministicJsonRepair(input) {
+      const row = unitRow(input.unitId);
+      row.attempt_count += 1;
+      row.attempts.push({
+        attempt: row.attempt_count,
+        kind: "parse_repair",
+        status: "succeeded",
+        failure_class: null,
+        failure_message: null,
+        duration_ms: 0,
       });
     },
     recordValidationGateFailure(input) {

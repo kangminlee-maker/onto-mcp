@@ -1104,10 +1104,12 @@ describe("runReconstruct", () => {
     const telemetry = author.executionTelemetry?.unitTelemetry(
       "observation_directive",
     );
+    // ONE dispatch, TWO attempts: the model's output did not parse, and the unit produced its
+    // artifact anyway. Recording only the first made a completed unit read as terminally failed
+    // downstream (codex review, PR #271) — recording the repair as an LLM attempt would instead have
+    // claimed a call that never happened.
     expect(telemetry?.llm_call_count).toBe(1);
-    expect(telemetry?.attempt_count).toBe(1);
-    // The row still records that the model's own output did not parse — a deterministic repair is
-    // not a reason to report the dispatch as clean.
+    expect(telemetry?.attempt_count).toBe(2);
     expect(
       telemetry?.attempts.map((attempt) => ({
         kind: attempt.kind,
@@ -1116,7 +1118,10 @@ describe("runReconstruct", () => {
       })),
     ).toEqual([
       { kind: "initial", status: "failed", failure_class: "malformed_json" },
+      { kind: "parse_repair", status: "succeeded", failure_class: null },
     ]);
+    // THE consequence: a unit that succeeded must not project a terminal failure into the ledger.
+    expect(terminalFailureMessageFromTelemetry(telemetry)).toBeNull();
     expect(telemetry?.prompt_chars).toBeGreaterThan(0);
     expect(telemetry?.prompt_policy_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(telemetry?.source_identity_refs).toContain(

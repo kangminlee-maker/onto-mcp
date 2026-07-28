@@ -327,7 +327,17 @@ export async function callJsonAuthor(args: {
   const repair = candidate === null
     ? ({ ok: false, refusal: "truncated_or_unrepairable_by_deletion" } as const)
     : repairJsonSyntaxByDeletion(candidate);
-  if (repair.ok) return parseLlmJsonObject(repair.text, args.artifactName);
+  if (repair.ok) {
+    const repaired = parseLlmJsonObject(repair.text, args.artifactName);
+    // The model's output really did not parse, and this unit really did produce its artifact. Both
+    // facts belong in the lineage — recording only the first made a completed unit read as terminally
+    // failed downstream.
+    args.telemetry?.recordDeterministicJsonRepair({
+      unitId: unitIdForAuthoredArtifactName(args.artifactName),
+      deletedCharCount: repair.deleted_char_count,
+    });
+    return repaired;
+  }
   throw new Error(
     `${args.artifactName} author returned invalid JSON and deterministic repair refused it ` +
       `(${repair.refusal}): ${initialErrorMessage}`,

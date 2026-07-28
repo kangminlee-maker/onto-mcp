@@ -945,11 +945,38 @@ describe("observation catalog tool — production wiring (cross-family review, l
     expect(api).toContain(
       "settings.reconstruct?.execution?.source_delivery_reconciliation === true",
     );
-    const forwards = api.match(
-      /\.\.\.\(sourceDeliveryReconciliation \? \{ sourceDeliveryReconciliation: true \} : \{\}\)/g,
-    ) ?? [];
-    const constructions = api.match(/createDirectCallReconstructDirectiveAuthor\(/g) ?? [];
-    expect(forwards.length).toBe(constructions.length);
+    // PER CONSTRUCTION, not by count. Counting forwards against constructions passed while BOTH
+    // forwards sat in the fallback author and the primary one had none — the production path was
+    // silently OFF and the test said the wiring was complete (codex review, PR #271).
+    const authorArgumentBlocks = (source: string): string[] => {
+      const blocks: string[] = [];
+      const marker = "createDirectCallReconstructDirectiveAuthor({";
+      for (let at = source.indexOf(marker); at >= 0; at = source.indexOf(marker, at + 1)) {
+        let depth = 0;
+        let cursor = at + marker.length - 1;
+        for (; cursor < source.length; cursor += 1) {
+          if (source[cursor] === "{") depth += 1;
+          else if (source[cursor] === "}") {
+            depth -= 1;
+            if (depth === 0) break;
+          }
+        }
+        blocks.push(source.slice(at, cursor + 1));
+      }
+      return blocks;
+    };
+    const blocks = authorArgumentBlocks(api);
+    expect(blocks.length).toBeGreaterThan(1); // primary AND dispatch-fallback, or this proves nothing
+    for (const [index, block] of blocks.entries()) {
+      const occurrences =
+        block.match(/\.\.\.\(sourceDeliveryReconciliation \? \{ sourceDeliveryReconciliation: true \} : \{\}\)/g) ??
+          [];
+      expect(occurrences.length, `author construction #${index + 1}`).toBe(1);
+      const catalogOccurrences =
+        block.match(/\.\.\.\(sourceObservationCatalogTool \? \{ sourceObservationCatalogTool: true \} : \{\}\)/g) ??
+          [];
+      expect(catalogOccurrences.length, `author construction #${index + 1}`).toBe(1);
+    }
     // And the key exists in the accepted settings surface at all — an unknown key is refused upstream,
     // so a flip nobody declared would not be "default off", it would be unusable.
     expect(repoFile("src/core-runtime/discovery/settings-chain.ts"))

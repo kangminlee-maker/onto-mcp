@@ -1488,7 +1488,8 @@ export function createOntoReconstructCoreApi(
             // Stage 3a: and projects the same answer-support catalog — a fallback dispatch must not
             // silently author the ledger in the other mode.
             ...(sourceObservationCatalogTool ? { sourceObservationCatalogTool: true } : {}),
-          ...(sourceDeliveryReconciliation ? { sourceDeliveryReconciliation: true } : {}),
+            // Stage 4: and judges citations by the same rule — a fallback dispatch must not accept a
+            // citation the primary path would refuse.
             ...(sourceDeliveryReconciliation ? { sourceDeliveryReconciliation: true } : {}),
             semanticMapSynthesizeLlmConfig: fallbackLlmConfig,
             enableSemanticMapAuthoring: true,
@@ -1584,6 +1585,9 @@ export function createOntoReconstructCoreApi(
           // Stage 3a: observation-catalog-tool push layer (design 20260726 §6) — author-level knob,
           // off = byte-parity.
           ...(sourceObservationCatalogTool ? { sourceObservationCatalogTool: true } : {}),
+          // Stage 4: judge citations against what was DELIVERED (design 20260727 §6-7) — author-level
+          // knob, off = byte-parity.
+          ...(sourceDeliveryReconciliation ? { sourceDeliveryReconciliation: true } : {}),
           ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
           // Production opt-in + per-role synthesize override (design §5.5/§5.2)
           // from the single wiring seam. Opt-in absent/false = pair not
