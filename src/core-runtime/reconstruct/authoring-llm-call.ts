@@ -4,12 +4,14 @@
  * `callLlmRecorded` is the single place a reconstruct run reaches an LLM for authoring: it stamps
  * the model identity and prompt-contract hash onto the call, runs it, and writes the recorded
  * result. `callJsonAuthor` layers the JSON contract on top — classify the output
- * (`jsonOutputClassifier`), parse it (`parseLlmJsonObject`), and on a format failure retry through
- * the repair prompt rather than accepting a malformed answer. Routing every call through here is
- * what makes the run's LLM spend and provenance complete by construction.
+ * (`jsonOutputClassifier`), parse it (`parseLlmJsonObject`), and on a format failure hand the text to
+ * a DETERMINISTIC deletion-only repair (`authoring-json-repair.ts`) rather than to a second model
+ * turn. Routing every call through here is what makes the run's LLM spend and provenance complete by
+ * construction — and there is exactly one dispatch per authored artifact.
  */
 import crypto from "node:crypto";
 import type { LlmCallConfig, LlmCallResult } from "../llm/llm-caller.js";
+import { repairJsonSyntaxByDeletion } from "./authoring-json-repair.js";
 import { readOpenAIResponsesIncompleteEvidence } from "../llm/openai-responses-incomplete-error.js";
 import {
   ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT,
@@ -38,7 +40,6 @@ import {
   SOURCE_PURPOSE_MINIMAL_KERNEL_SYSTEM_PROMPT,
   VALUE_READ_JUDGMENT_PROMPT,
   VALUE_READ_LOCATION_PROMPT,
-  authoringJsonRepairSystemPrompt,
   candidateDispositionSystemPrompt,
   candidateInventoryCoverageRepairSystemPrompt,
   candidateInventorySystemPrompt,
@@ -62,7 +63,6 @@ import {
   readReconstructLlmDispatchFailureError,
 } from "./llm-dispatch-failure.js";
 import type { ReconstructLlmCallKind } from "./llm-dispatch-failure.js";
-import { RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS } from "./output-budget.js";
 import { sha256Text, stableJson } from "./run-primitives.js";
 import {
   CODE_SEMANTIC_MAP_PROMPT_NOTE,
@@ -83,15 +83,25 @@ function stripJsonFences(text: string): string {
   return fenced?.[1]?.trim() ?? trimmed;
 }
 
-export function parseLlmJsonObject(text: string, artifactName: string): Record<string, unknown> {
+/**
+ * The substring a response is judged as: fences off, first `{` through last `}`. Declared once so the
+ * deterministic repair works on exactly the text the parser would have accepted — repairing a wider
+ * string would refuse documents the parser can already reach, and a narrower one is not a document.
+ */
+function jsonObjectCandidate(text: string): string | null {
   const stripped = stripJsonFences(text);
   const start = stripped.indexOf("{");
   const end = stripped.lastIndexOf("}");
-  if (start < 0 || end < start) {
+  return start < 0 || end < start ? null : stripped.slice(start, end + 1);
+}
+
+export function parseLlmJsonObject(text: string, artifactName: string): Record<string, unknown> {
+  const candidate = jsonObjectCandidate(text);
+  if (candidate === null) {
     throw new Error(`${artifactName} author returned no JSON object.`);
   }
   try {
-    const parsed = JSON.parse(stripped.slice(start, end + 1)) as unknown;
+    const parsed = JSON.parse(candidate) as unknown;
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("top-level value is not an object");
     }
@@ -105,13 +115,6 @@ export function parseLlmJsonObject(text: string, artifactName: string): Record<s
       }`,
     );
   }
-}
-
-function jsonRepairMaxTokens(originalText: string, requestedMaxTokens: number): number {
-  return Math.min(
-    RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS.json_parse_repair,
-    Math.max(requestedMaxTokens * 2, Math.ceil(originalText.length / 3) + 1024),
-  );
 }
 
 type ReconstructLlmAttemptKind = Exclude<Parameters<
@@ -304,38 +307,22 @@ export async function callJsonAuthor(args: {
   if (args.allowParseRepair === false) {
     throw new Error(initialErrorMessage);
   }
-  const repairSink: JsonOutputSink = { parsed: null, failureMessage: null };
-  // The repair turn drops the per-dispatch capability. Its prompt is a JSON fixer — no catalog, no tool
-  // announcement — so a worker on it has nothing to fetch and no way to know it could. Carrying the
-  // capability across is not merely useless: `observation_read_facade` names ONE launch, with one
-  // descriptor and one receipt path, so a second dispatch through it restarts the facade over the first
-  // dispatch's receipt and erases the served set the run is about to be judged against. Every citation
-  // is then rejected as "never served" — a correct run failed by its own evidence check.
-  const { observation_read_facade: _repairDropsTheFacade, ...repairConfig } = args.llmConfig;
-  await callLlmRecorded({
-    telemetry: args.telemetry,
-    artifactName: args.artifactName,
-    kind: "parse_repair",
-    llmCall: args.llmCall,
-    llmConfig: repairConfig,
-    systemPrompt: authoringJsonRepairSystemPrompt(args.artifactName),
-    userPrompt: JSON.stringify({
-      artifact_name: args.artifactName,
-      parse_error: initialErrorMessage,
-      malformed_json_text: result.text,
-    }, null, 2),
-    maxTokens: jsonRepairMaxTokens(result.text, args.maxTokens),
-    classifyOutput: jsonOutputClassifier({
-      artifactName: args.artifactName,
-      failureClass: "parse_repair_failure",
-      sink: repairSink,
-    }),
-  });
-  if (repairSink.parsed) return repairSink.parsed;
+  // Repair is DETERMINISTIC and deletion-only (design §6-3, decision §13-D2). It used to be a second
+  // LLM dispatch told to fix punctuation and change nothing else, which nothing enforced: that worker
+  // never receives the observations the first one fetched, so an artifact it invented was authorised
+  // by the first dispatch's evidence receipt (design §12-S1). Deleting characters cannot invent, and
+  // a response cut off at max_tokens is refused rather than completed — its tail does not exist.
+  //
+  // Removing that dispatch also restores "one authored artifact, one child", which the reconciliation
+  // design depends on for binding a transcript to the dispatch that held the facade (design §11-L3).
+  const candidate = jsonObjectCandidate(result.text);
+  const repair = candidate === null
+    ? ({ ok: false, refusal: "truncated_or_unrepairable_by_deletion" } as const)
+    : repairJsonSyntaxByDeletion(candidate);
+  if (repair.ok) return parseLlmJsonObject(repair.text, args.artifactName);
   throw new Error(
-    `${args.artifactName} author returned invalid JSON and repair failed: ${
-      repairSink.failureMessage ?? "no parseable JSON object"
-    }`,
+    `${args.artifactName} author returned invalid JSON and deterministic repair refused it ` +
+      `(${repair.refusal}): ${initialErrorMessage}`,
   );
 }
 
@@ -405,7 +392,6 @@ export const AUTHORING_PROMPT_CONTRACT_VERSION =
 // branch so neither branch's edits can hide from the hash.
 export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   base_system: RECONSTRUCT_AUTHORING_BASE_SYSTEM,
-  json_repair: authoringJsonRepairSystemPrompt("<<artifact_name>>"),
   source_observation_directive: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
   lens_judgment: lensJudgmentSystemPrompt({
     lensId: "<<lens_id>>",

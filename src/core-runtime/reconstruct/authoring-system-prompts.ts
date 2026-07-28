@@ -144,17 +144,6 @@ export const RECONSTRUCT_AUTHORING_BASE_SYSTEM = [
   "Runtime will validate ids and refs. If evidence is insufficient, mark gaps or open questions instead of guessing.",
 ].join("\n");
 
-export function authoringJsonRepairSystemPrompt(artifactName: string): string {
-  return [
-    "Repair malformed JSON for a runtime artifact.",
-    `Artifact: ${artifactName}`,
-    "Return exactly one valid JSON object and nothing else.",
-    "Preserve all existing keys, ids, strings, arrays, and object values.",
-    "Only add, remove, or replace JSON punctuation needed to make the object parse.",
-    "Do not add new facts, do not summarize, and do not translate text.",
-  ].join("\n");
-}
-
 export const SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT = [
   RECONSTRUCT_AUTHORING_BASE_SYSTEM,
   "Select observations that should become evidence candidates for the declared reconstruct purpose.",

@@ -1035,27 +1035,20 @@ describe("runReconstruct", () => {
     });
   });
 
-  it("repairs malformed direct-call JSON once before schema coercion", async () => {
+  // Repair is deterministic and deletion-only (design §6-3, decision §13-D2), so this exercises the
+  // wiring end to end: a surplus punctuation character is removed WITHOUT a second dispatch. The
+  // malformation is the shape actually observed in a transcript — a complete document with a stray
+  // separator — not a synthetic one.
+  it("repairs malformed direct-call JSON deterministically, without a second dispatch", async () => {
     let callCount = 0;
     const author = createDirectCallReconstructDirectiveAuthor({
-      llmCall: (systemPrompt) => {
+      llmCall: () => {
         callCount += 1;
-        if (systemPrompt.includes("Repair malformed JSON")) {
-          return Promise.resolve({
-            text: JSON.stringify({
-              selected_observations: [
-                {
-                  observation_id: "obs-1",
-                  selection_rationale: "Shows the dashboard actor.",
-                },
-              ],
-              open_questions: [],
-            }),
-          } satisfies LlmCallResult);
-        }
         return Promise.resolve({
+          // Prose prefix too: the repair must run on the SAME substring the parser judges (fences
+          // off, first `{` through last `}`), or it would refuse documents the parser can reach.
           text:
-            "{\"selected_observations\":[{\"observation_id\":\"obs-1\",\"selection_rationale\":\"Shows the dashboard actor.\"}],\"open_questions\":[\"unfinished\" \\u0635}",
+            "Here is the directive:\n{\"selected_observations\":[{\"observation_id\":\"obs-1\",\"selection_rationale\":\"Shows the dashboard actor.\",}],\"open_questions\":[]}",
         } satisfies LlmCallResult);
       },
     });
@@ -1100,15 +1093,21 @@ describe("runReconstruct", () => {
       },
     });
 
-    expect(callCount).toBe(2);
+    // ONE dispatch: the repair costs no call, and the artifact is still produced.
+    expect(callCount).toBe(1);
     expect(result.selected_observations).toHaveLength(1);
     expect(result.selected_observations[0]?.observation_id).toBe("obs-1");
+    expect(result.selected_observations[0]?.selection_rationale).toBe(
+      "Shows the dashboard actor.",
+    );
 
     const telemetry = author.executionTelemetry?.unitTelemetry(
       "observation_directive",
     );
-    expect(telemetry?.llm_call_count).toBe(2);
-    expect(telemetry?.attempt_count).toBe(2);
+    expect(telemetry?.llm_call_count).toBe(1);
+    expect(telemetry?.attempt_count).toBe(1);
+    // The row still records that the model's own output did not parse — a deterministic repair is
+    // not a reason to report the dispatch as clean.
     expect(
       telemetry?.attempts.map((attempt) => ({
         kind: attempt.kind,
@@ -1117,7 +1116,6 @@ describe("runReconstruct", () => {
       })),
     ).toEqual([
       { kind: "initial", status: "failed", failure_class: "malformed_json" },
-      { kind: "parse_repair", status: "succeeded", failure_class: null },
     ]);
     expect(telemetry?.prompt_chars).toBeGreaterThan(0);
     expect(telemetry?.prompt_policy_sha256).toMatch(/^[0-9a-f]{64}$/);
@@ -1126,7 +1124,7 @@ describe("runReconstruct", () => {
     );
   });
 
-  it("records terminal parse_repair_failure telemetry when repair also fails", async () => {
+  it("records a terminal failure when deterministic repair refuses the output", async () => {
     const author = createDirectCallReconstructDirectiveAuthor({
       llmCall: () =>
         Promise.resolve({ text: "{not json" } satisfies LlmCallResult),
@@ -1172,7 +1170,7 @@ describe("runReconstruct", () => {
           validation_results: [],
         },
       }),
-    ).rejects.toThrow(/invalid JSON and repair failed/);
+    ).rejects.toThrow(/deterministic repair refused it \(truncated_or_unrepairable_by_deletion\)/);
 
     const telemetry = author.executionTelemetry?.unitTelemetry(
       "observation_directive",
@@ -1185,11 +1183,6 @@ describe("runReconstruct", () => {
       })),
     ).toEqual([
       { kind: "initial", status: "failed", failure_class: "malformed_json" },
-      {
-        kind: "parse_repair",
-        status: "failed",
-        failure_class: "parse_repair_failure",
-      },
     ]);
     expect(terminalFailureMessageFromTelemetry(telemetry))
       .toMatch(/returned no JSON object/);
@@ -6949,7 +6942,11 @@ describe("runReconstruct", () => {
     // site to keep map-absent prompts byte-identical)
     // 37 = 34 + leaf_read (P1-C2-A: the leaf-read prompt is an authoring template too)
     //    + value_read_location + value_read_judgment (maturation value-read cut, design §15.4).
-    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(41);
+    // 40 = 41 − json_repair: JSON repair became deterministic and stopped dispatching a model
+    // (design §13-D2), so the prompt left the catalog. Removing it ROTATES the contract sha on
+    // purpose — the rule for accepting an authored artifact changed, so reuse must not carry over.
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(40);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.json_repair).toBeUndefined();
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.value_read_location).toContain(
       "Select spreadsheet cell locations to read for a value-dependent limitation.",
     );

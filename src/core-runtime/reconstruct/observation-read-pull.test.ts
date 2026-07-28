@@ -369,12 +369,19 @@ describe("observation read pull layer — 인용 ⊆ 조회 (design §3, stage 3
 
 describe("observation read pull layer — receipt lifecycle across dispatches", () => {
   /**
-   * PROBE 1 — the parse-repair dispatch. `callJsonAuthor` dispatches a SECOND time with the SAME
-   * llmConfig when the first output is not parseable JSON, so the facade is registered again with the
-   * same receipt path and its session constructor rewrites that receipt as "granted, served nothing".
-   * The worker really did fetch; the repair only reformats its JSON. Rejecting here fails a correct run.
+   * PROBE 1 — there is no second dispatch any more (design §6-3, decision §13-D2).
+   *
+   * This test used to assert the OPPOSITE: that a first output of literally `"{ not json"` was
+   * rescued by a second LLM turn which returned a complete evidence cluster, and that the run
+   * SUCCEEDED. Its comment claimed "the worker really did fetch; the repair only reformats its JSON",
+   * and the fixture below disproved that claim in the same file — the second worker, which never
+   * receives the observation bodies, authored the semantics outright and the first dispatch's receipt
+   * authorised the citations (design §12-S1).
+   *
+   * Repair is now deterministic and deletion-only, so a response with no document in it cannot be
+   * rescued by anything, and the artifact fails instead of being invented.
    */
-  it("keeps the served evidence when the JSON parse-repair dispatch runs", async () => {
+  it("fails instead of letting a second worker author what the first one did not", async () => {
     const pull = writePullSources();
     const fetched = allObservationIds.slice(0, 2);
     let dispatchIndex = 0;
@@ -430,22 +437,16 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
         });
       },
     } as never);
-    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
-    expect(dispatchIndex).toBe(2);
-    expect(ledger.evidence_clusters[0].evidence_refs.length).toBe(2);
-    // The repair dispatch must lose the facade and NOTHING ELSE: a strip that also dropped the model,
-    // effort or timeout would still make this test pass on the citation alone.
-    const [initial, repair] = dispatched;
-    expect(Object.keys(initial!.config)).toContain("observation_read_facade");
-    expect(Object.keys(repair!.config)).not.toContain("observation_read_facade");
-    const droppedKeys = Object.keys(initial!.config).filter((key) =>
-      !Object.keys(repair!.config).includes(key)
-    );
-    expect(droppedKeys).toEqual(["observation_read_facade"]);
-    for (const key of Object.keys(repair!.config)) {
-      if (key === "max_tokens") continue; // callJsonAuthor sizes the repair turn separately
-      expect(repair!.config[key], key).toEqual(initial!.config[key]);
-    }
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull)))
+      .rejects.toThrow(/deterministic repair refused it/);
+
+    // THE gate this test exists for: one authored artifact, one child. `observation_read_facade`
+    // names ONE launch with one descriptor and one receipt path, and the delivery-reconciliation
+    // design binds a worker transcript to the dispatch that held it (§11-L3). A second dispatch —
+    // with the facade or without it — reopens that binding.
+    expect(dispatchIndex).toBe(1);
+    expect(dispatched).toHaveLength(1);
+    expect(Object.keys(dispatched[0]!.config)).toContain("observation_read_facade");
   });
 
   it("starts each dispatch from an empty receipt path, without relying on the token check", async () => {
