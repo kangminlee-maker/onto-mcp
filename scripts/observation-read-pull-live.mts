@@ -93,7 +93,8 @@ writeFileSync(
     source_observations_ref: path.resolve(observationsPath),
     validation_status: "valid",
     safety_row_count: (ledgerArtifact.safety_rows as unknown[]).length,
-    no_prompt_use_count: 0,
+    no_prompt_use_count: (ledgerArtifact.safety_rows as { visibility_tier?: unknown }[])
+      .filter((row) => row.visibility_tier === "no_prompt_use").length,
     validation_results: ["source_safety_ledger_valid"],
     asserted_obligation_ids: [],
     violations: [],

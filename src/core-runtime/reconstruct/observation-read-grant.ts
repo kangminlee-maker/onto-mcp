@@ -290,14 +290,45 @@ function assertLedgerBoundToObservations(sources: ObservationReadGrantSources): 
       );
     }
   }
-  const ledgerRef = parseSafetyLedger(
+  const ledger = parseSafetyLedger(
     readArtifactText(sources.safetyLedgerPath, "source-safety-ledger"),
-  ).source_observations_ref;
+  );
+  const ledgerRef = ledger.source_observations_ref;
   if (typeof ledgerRef !== "string" || path.resolve(ledgerRef) !== observationsPath) {
     throw new ObservationReadError(
       "artifact_malformed",
       "source-safety-ledger was not written for this source-observations artifact",
     );
+  }
+  // The validation above proves a validator once ran over a ledger AT THIS PATH — not over THIS
+  // ledger. A same-path rewrite after validation would carry the old verdict, and flipping one row
+  // from `no_prompt_use` to `consumption_allowed` would then expose an observation the gate had
+  // withheld (codex review, PR #271).
+  //
+  // These two counts are what the validation artifact already carries about the ledger's CONTENTS, so
+  // checking them costs nothing and refuses exactly that flip: retiering a withheld row changes
+  // `no_prompt_use_count`, and adding or dropping rows changes `safety_row_count`.
+  //
+  // NOT a content bind. An edit that preserves both counts — swapping WHICH row is withheld — still
+  // passes. Closing that needs the validation artifact to carry content hashes, or the validator to
+  // re-run at mint; both change a contract, so they are an owner decision rather than a quiet fix.
+  const rows = Array.isArray(ledger.safety_rows) ? ledger.safety_rows : [];
+  const withheldRows = rows.filter((row) =>
+    (row as { visibility_tier?: unknown } | null)?.visibility_tier === "no_prompt_use"
+  ).length;
+  for (
+    const [field, actual, expected] of [
+      ["safety_row_count", rows.length, validation.safety_row_count],
+      ["no_prompt_use_count", withheldRows, validation.no_prompt_use_count],
+    ] as const
+  ) {
+    if (typeof expected !== "number" || actual !== expected) {
+      throw new ObservationReadError(
+        "artifact_malformed",
+        `source-safety-ledger ${field} is ${actual}, but its validation recorded ` +
+          `${String(expected)} — the ledger changed after it was validated`,
+      );
+    }
   }
 }
 

@@ -78,7 +78,10 @@ function writeSources(
     safetyLedgerPath,
     stringifyYaml({ ...ledger, source_observations_ref: path.resolve(observationsPath) }),
   );
-  writeFileSync(safetyLedgerValidationPath, stringifyYaml(validationFor(observationsPath, safetyLedgerPath)));
+  writeFileSync(
+    safetyLedgerValidationPath,
+    stringifyYaml(validationFor(observationsPath, safetyLedgerPath, {}, ledger)),
+  );
   return { observationsPath, safetyLedgerPath, safetyLedgerValidationPath };
 }
 
@@ -87,6 +90,8 @@ function validationFor(
   observationsPath: string,
   safetyLedgerPath: string,
   overrides: Record<string, unknown> = {},
+  /** The ledger this validation is FOR — counts come from what is actually written, not the full one. */
+  ledger: { safety_rows: unknown[] } = fullLedger,
 ): Record<string, unknown> {
   return {
     schema_version: "1",
@@ -95,8 +100,12 @@ function validationFor(
     source_safety_ledger_ref: path.resolve(safetyLedgerPath),
     source_observations_ref: path.resolve(observationsPath),
     validation_status: "valid",
-    safety_row_count: fullLedger.safety_rows.length,
-    no_prompt_use_count: 0,
+    // Derived from the ledger this validation is FOR, exactly as the real validator derives it
+    // (`source-safety-validation.ts`). Hard-coding 0 made the pair internally inconsistent, which the
+    // grant's post-validation count bind then refused — correctly.
+    safety_row_count: ledger.safety_rows.length,
+    no_prompt_use_count: ledger.safety_rows
+      .filter((row) => (row as { visibility_tier?: unknown }).visibility_tier === "no_prompt_use").length,
     validation_results: ["source_safety_ledger_valid"],
     asserted_obligation_ids: [],
     violations: [],
@@ -481,6 +490,43 @@ describe("gate — the pull path admits exactly what the push path admits", () =
       expect([...pulled].sort()).toEqual([...pushed].sort());
     },
   );
+
+  /**
+   * codex review, PR #271. The validation artifact proves a validator once ran over a ledger AT THIS
+   * PATH — not over THIS ledger. Rewriting the file in place after validation carried the old verdict,
+   * and flipping one row from `no_prompt_use` to `consumption_allowed` exposed an observation the gate
+   * had withheld. Bound by the two counts the validation already records.
+   */
+  it("refuses a ledger rewritten after its validation — retiering a withheld row", () => {
+    const registry = new ObservationReadGrantRegistry();
+    const withheldId = smallIds[2] as string;
+    const withholding = {
+      ...fullLedger,
+      safety_rows: fullLedger.safety_rows.map((row) =>
+        (row as { safety_row_id?: string }).safety_row_id ===
+            `source_safety:${withheldId}:prompt_context`
+          ? { ...(row as object), visibility_tier: "no_prompt_use" }
+          : row
+      ),
+    };
+    const sources = writeSources(OBSERVATIONS_TEXT, withholding);
+    // Precondition: the pair is consistent, so a mint succeeds before anything is tampered with.
+    expect(() => mintOver(registry, sources)).not.toThrow();
+
+    // Now rewrite the SAME path, admitting what the validated ledger withheld. The validation file is
+    // untouched — same refs, same `valid` status — which is exactly the stale acceptance.
+    writeFileSync(
+      sources.safetyLedgerPath,
+      stringifyYaml({
+        ...fullLedger,
+        source_observations_ref: path.resolve(sources.observationsPath),
+      }),
+    );
+    expect(reasonOf(() => mintOver(new ObservationReadGrantRegistry(), sources)))
+      .toBe("artifact_malformed");
+    expect(messageOf(() => mintOver(new ObservationReadGrantRegistry(), sources)))
+      .toMatch(/changed after it was validated/);
+  });
 
   it("keeps a withheld observation out of the grant's snapshot and unreachable by direct request", () => {
     const withheldId = smallIds[2] as string;
