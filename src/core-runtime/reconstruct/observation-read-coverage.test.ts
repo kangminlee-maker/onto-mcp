@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  type ObservationPartCoverage,
+  type ObservationCoverage,
   type ObservationReadPartFact,
   coversWholeObservation,
   foldObservationPart,
+  selectReportedPartition,
 } from "./observation-read-coverage.js";
 
 function part(
@@ -19,31 +20,33 @@ function part(
 }
 
 /** The call site's shape: fold into a map keyed by observation id, exactly as the grant does. */
-function foldAll(entries: readonly ObservationReadPartFact[]): Map<string, ObservationPartCoverage> {
-  const served = new Map<string, ObservationPartCoverage>();
+function foldAll(entries: readonly ObservationReadPartFact[]): Map<string, ObservationCoverage> {
+  const served = new Map<string, ObservationCoverage>();
   for (const entry of entries) {
     served.set(entry.observation_id, foldObservationPart(served.get(entry.observation_id), entry));
   }
   return served;
 }
 
-/** The receipt projection, as `receiptOf` builds it — indexes ascending. */
+/** The receipt projection, as `receiptOf` builds it — reported partition, indexes ascending. */
 function asServedRecord(
-  coverage: ObservationPartCoverage,
-): { part_indexes: readonly number[]; part_count: number } {
+  coverage: ObservationCoverage,
+): { part_indexes: readonly number[]; part_count: number; part_allowance: number } {
+  const record = selectReportedPartition(coverage)!;
   return {
-    part_indexes: [...coverage.parts].sort((a, b) => a - b),
-    part_count: coverage.partCount,
+    part_indexes: [...record.parts].sort((a, b) => a - b),
+    part_count: record.partCount,
+    part_allowance: record.partAllowance,
   };
 }
 
 describe("observation read coverage — the accumulation and completeness rules, declared once", () => {
   it("accumulates parts of ONE decomposition into a whole observation", () => {
     const served = foldAll([part({ part_index: 1 }), part({ part_index: 2 })]);
-    const coverage = served.get("obs-1")!;
-    expect([...coverage.parts].sort()).toEqual([1, 2]);
-    expect(coverage.partAllowance).toBe(1_000);
-    expect(coversWholeObservation(asServedRecord(coverage))).toBe(true);
+    const record = asServedRecord(served.get("obs-1")!);
+    expect(record.part_indexes).toEqual([1, 2]);
+    expect(record.part_allowance).toBe(1_000);
+    expect(coversWholeObservation(record)).toBe(true);
   });
 
   it("does not admit an observation whose tail was never served", () => {
@@ -63,8 +66,11 @@ describe("observation read coverage — the accumulation and completeness rules,
       part({ part_index: 2, part_count: 2, part_allowance: 65_068 }),
     ]);
     const coverage = served.get("obs-1")!;
-    expect(coverage.partAllowance).toBe(65_068);
-    expect([...coverage.parts]).toEqual([2]); // the 64,774 partition's index was dropped, not merged
+    // BOTH partitions are kept now — and neither is whole, which is why the merge is still refused.
+    expect(coverage.partitions.size).toBe(2);
+    for (const partition of coverage.partitions.values()) {
+      expect(partition.parts.size).toBe(1);
+    }
     expect(coversWholeObservation(asServedRecord(coverage))).toBe(false);
   });
 
@@ -79,7 +85,7 @@ describe("observation read coverage — the accumulation and completeness rules,
 
   it("treats a repeated fetch of the same part as one part", () => {
     const served = foldAll([part({ part_index: 1 }), part({ part_index: 1 }), part({ part_index: 2 })]);
-    expect([...served.get("obs-1")!.parts].sort()).toEqual([1, 2]);
+    expect(asServedRecord(served.get("obs-1")!).part_indexes).toEqual([1, 2]);
   });
 
   describe("completeness rejects every shape that is not full coverage", () => {
@@ -100,22 +106,44 @@ describe("observation read coverage — the accumulation and completeness rules,
   });
 
   /**
-   * The order dependence this extraction PRESERVES, pinned so stage 0b's change is visible as a
-   * deliberate one rather than a drift. The same three parts, in two orders, judge differently today:
-   * the last allowance wins and discards what came before it.
+   * Stage 0b: the judgment no longer depends on the order pages arrive in. The server's wire order is
+   * not the order the model received them — the JS the model writes decides when each result is
+   * rendered (design §12-S4) — so an accumulator that discarded a completed partition because a
+   * later page used a different allowance could refuse a delivery that really happened.
    */
-  it("is order dependent today — pinned so the stage 0b change cannot happen silently", () => {
+  it("judges the same set of parts the same way in any order", () => {
+    const parts = [
+      part({ part_index: 1, part_count: 2, part_allowance: 1_000 }),
+      part({ part_index: 1, part_count: 1, part_allowance: 2_000 }),
+      part({ part_index: 2, part_count: 2, part_allowance: 1_000 }),
+    ];
+    const orders = [
+      [parts[0]!, parts[1]!, parts[2]!],
+      [parts[0]!, parts[2]!, parts[1]!],
+      [parts[1]!, parts[0]!, parts[2]!],
+      [parts[1]!, parts[2]!, parts[0]!],
+      [parts[2]!, parts[0]!, parts[1]!],
+      [parts[2]!, parts[1]!, parts[0]!],
+    ];
+    const projected = orders.map((order) => asServedRecord(foldAll(order).get("obs-1")!));
+    for (const record of projected) {
+      expect(coversWholeObservation(record)).toBe(true);
+      // Identical projection, not merely an identical verdict: the receipt must not vary either.
+      expect(record).toEqual(projected[0]);
+    }
+  });
+
+  it("stays order independent when NO partition is complete", () => {
     const forward = foldAll([
-      part({ part_index: 1, part_count: 2, part_allowance: 1_000 }),
-      part({ part_index: 1, part_count: 1, part_allowance: 2_000 }),
-      part({ part_index: 2, part_count: 2, part_allowance: 1_000 }),
+      part({ part_index: 1, part_count: 2, part_allowance: 64_774 }),
+      part({ part_index: 2, part_count: 2, part_allowance: 65_068 }),
     ]);
-    const reordered = foldAll([
-      part({ part_index: 1, part_count: 2, part_allowance: 1_000 }),
-      part({ part_index: 2, part_count: 2, part_allowance: 1_000 }),
-      part({ part_index: 1, part_count: 1, part_allowance: 2_000 }),
+    const backward = foldAll([
+      part({ part_index: 2, part_count: 2, part_allowance: 65_068 }),
+      part({ part_index: 1, part_count: 2, part_allowance: 64_774 }),
     ]);
-    expect(coversWholeObservation(asServedRecord(forward.get("obs-1")!))).toBe(false);
-    expect(coversWholeObservation(asServedRecord(reordered.get("obs-1")!))).toBe(true);
+    const forwardRecord = asServedRecord(forward.get("obs-1")!);
+    expect(forwardRecord).toEqual(asServedRecord(backward.get("obs-1")!));
+    expect(coversWholeObservation(forwardRecord)).toBe(false);
   });
 });

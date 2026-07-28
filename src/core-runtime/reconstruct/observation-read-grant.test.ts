@@ -280,11 +280,50 @@ describe("part indexes are only meaningful inside the decomposition that produce
     expect(groupedEntry.part_count).not.toBe(soloCount);
 
     const record = registry.receipt(token).served.find((r) => r.observation_id === big)!;
-    // The record describes ONE partition — the latest — and holds only the parts served under it.
+    // The record describes ONE partition and holds only the parts served under it. Both partitions are
+    // retained internally (stage 0b), but neither is complete here, so the reported one is chosen by
+    // the projection's deterministic rule — never by merging the two.
     expect(record.part_count).toBe(groupedEntry.part_count);
     expect([...record.part_indexes]).toEqual([groupedEntry.part_index]);
     // ...so it cannot read as complete on the strength of an index from the other partition.
     expect(record.part_indexes.length).toBeLessThan(record.part_count);
+  });
+
+  it("keeps a COMPLETE partition when a later request splits the same observation differently", () => {
+    // Stage 0b (design §12-S4). The accumulator used to hold one record per observation and reset it
+    // whenever the allowance changed, so a later partial fetch ERASED an earlier complete one and the
+    // citation was refused for a delivery that really happened. The order is not even observable: the
+    // JS the model writes decides when each result is rendered, so the server's wire order is not the
+    // model's receiving order.
+    const registry = new ObservationReadGrantRegistry();
+    const { token } = mintOver(registry, writeSources(OBSERVATIONS_TEXT), { pageCharBudget: 32_768 });
+    const big = [...fullArtifact.observations]
+      .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
+    const others = allIds.filter((id) => id !== big).slice(0, 15);
+
+    // Fetch the observation WHOLE under its solo allowance, following the cursor to the last part.
+    let page = registry.serve({ token, request: { observation_ids: [big] } });
+    const solo = page.entries[0]!;
+    while (page.next_cursor) {
+      page = registry.serve({ token, request: { cursor: page.next_cursor } });
+    }
+    // Then touch it again in a request whose id list gives it a DIFFERENT decomposition.
+    const grouped = registry
+      .serve({ token, request: { observation_ids: [big, ...others] } })
+      .entries.find((entry) => entry.observation_id === big)!;
+    // Preconditions, asserted rather than assumed: two real partitions, the second one partial.
+    expect(grouped.part_allowance).not.toBe(solo.part_allowance);
+    expect(grouped.part_count).toBeGreaterThan(1);
+
+    const record = registry.receipt(token).served.find((r) => r.observation_id === big)!;
+    // The complete solo partition survives the later partial fetch, and the receipt reports IT.
+    // Before stage 0b the allowance change reset the record to the grouped part alone, and the
+    // observation was refused as incomplete despite having been delivered whole.
+    expect(record.part_allowance).toBe(solo.part_allowance);
+    expect(record.part_count).toBe(solo.part_count);
+    expect([...record.part_indexes]).toEqual(
+      Array.from({ length: solo.part_count }, (_unused, index) => index + 1),
+    );
   });
 
   it("does not merge two partitions that share a part_count but not a boundary", () => {

@@ -93,7 +93,11 @@ import {
   type ObservationReadRequest,
   type ObservationSnapshot,
 } from "./observation-read.js";
-import { foldObservationPart } from "./observation-read-coverage.js";
+import {
+  type ObservationCoverage,
+  foldObservationPart,
+  selectReportedPartition,
+} from "./observation-read-coverage.js";
 
 /**
  * Per-response ceiling — design §4.2's "응답 1건당 상한". Held constant for a grant's life (see BUDGET
@@ -414,10 +418,12 @@ interface ObservationReadGrantState {
   expired: boolean;
   callsServed: number;
   charsServed: number;
-  readonly served: Map<
-    string,
-    { sha256: string; parts: Set<number>; partCount: number; partAllowance: number }
-  >;
+  /**
+   * Every decomposition of every observation this grant has served parts of. Keeping the partitions
+   * side by side rather than one-record-with-reset is what makes the served set independent of the
+   * order pages arrive in (design §12-S4 / §6-4, `observation-read-coverage.ts`).
+   */
+  readonly served: Map<string, ObservationCoverage>;
 }
 
 function sha256Hex(text: string): string {
@@ -757,15 +763,19 @@ function receiptOf(state: ObservationReadGrantState): ObservationReadReceipt {
     served: Object.freeze(
       [...state.served.entries()]
         .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([observationId, record]) =>
-          Object.freeze({
+        // One record per observation, and WHICH partition it reports is decided by the same module
+        // that owns the fold — a projection that picked differently would reintroduce the order
+        // dependence one layer below the accumulator.
+        .flatMap(([observationId, coverage]) => {
+          const record = selectReportedPartition(coverage);
+          return record === undefined ? [] : [Object.freeze({
             observation_id: observationId,
             observation_content_sha256: record.sha256,
             part_indexes: Object.freeze([...record.parts].sort((a, b) => a - b)),
             part_count: record.partCount,
             part_allowance: record.partAllowance,
-          })
-        ),
+          })];
+        }),
     ),
   });
 }
