@@ -52,6 +52,7 @@ import {
   type ObservationReadGrantSources,
   type ObservationReadReceipt,
 } from "./observation-read-grant.js";
+import { coversWholeObservation } from "./observation-read-coverage.js";
 
 /**
  * Absolute path to the process codex must launch, resolved from THIS module's own location so it is
@@ -841,15 +842,9 @@ export function observationIdsServed(
   if (!receiptFile) return new Set();
   return new Set(
     receiptFile.receipt.served
-      // WHOLE observations only. A citation names an observation, so serving page 1 of 4 and stopping
-      // proves the worker saw an opening fragment — not the thing it is about to cite. Admitting the id
-      // anyway let the runtime infer more than its evidence carried, which is the one inference this
-      // stage exists to prevent.
-      .filter((record) =>
-        record.part_count >= 1 &&
-        new Set(record.part_indexes).size === record.part_count &&
-        record.part_indexes.every((part) => part >= 1 && part <= record.part_count)
-      )
+      // WHOLE observations only. The rule is declared in `observation-read-coverage.ts` next to the
+      // accumulation it judges, so delivery reconciliation applies the same one (design §6-4).
+      .filter(coversWholeObservation)
       .map((record) => record.observation_id),
   );
 }

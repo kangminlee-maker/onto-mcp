@@ -93,6 +93,7 @@ import {
   type ObservationReadRequest,
   type ObservationSnapshot,
 } from "./observation-read.js";
+import { foldObservationPart } from "./observation-read-coverage.js";
 
 /**
  * Per-response ceiling — design §4.2's "응답 1건당 상한". Held constant for a grant's life (see BUDGET
@@ -661,28 +662,13 @@ export class ObservationReadGrantRegistry {
       );
     }
     for (const entry of page.entries) {
-      // A part index means nothing outside the decomposition that produced it. The split is a pure
-      // function of (body, partAllowance), and `partAllowance` is derived from the REQUEST's id list —
-      // the page envelope reserves worst-case cursor and entry framing for exactly those ids — so the
-      // same observation splits into a different number of parts when it is fetched alone than when it
-      // is fetched alongside fifteen others. Unioning indexes across requests therefore assembled a
-      // "complete" set out of two different partitions and authorized an observation whose tail was
-      // never served (measured). Keyed on the ALLOWANCE, not on `part_count`: the split is a pure
-      // function of (body, allowance), so the allowance names the partition exactly, while two different
-      // partitions can share a count — a grouped part 1/2 ending at char 64,774 and a solo part 2/2
-      // starting at 65,068 both report count 2, and merging them claimed complete coverage across a
-      // 293-char hole (measured). A different allowance means the earlier indexes describe a partition
-      // this one is not part of, so they are dropped rather than merged — the only direction that
-      // cannot invent coverage.
-      const existing = state.served.get(entry.observation_id);
-      const record = existing && existing.partAllowance === entry.part_allowance ? existing : {
-        sha256: entry.observation_content_sha256,
-        parts: new Set<number>(),
-        partCount: entry.part_count,
-        partAllowance: entry.part_allowance,
-      };
-      record.parts.add(entry.part_index);
-      state.served.set(entry.observation_id, record);
+      // The accumulation rule — which parts of which decomposition count — is declared in
+      // `observation-read-coverage.ts`, because delivery reconciliation has to apply the SAME rule to
+      // what reached the model and a second declaration is one that can disagree (design §9-F2).
+      state.served.set(entry.observation_id, foldObservationPart(
+        state.served.get(entry.observation_id),
+        entry,
+      ));
     }
     return page;
   }
