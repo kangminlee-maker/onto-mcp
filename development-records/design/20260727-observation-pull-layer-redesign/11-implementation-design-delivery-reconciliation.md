@@ -462,6 +462,13 @@ rollout이 지워졌거나 읽히지 않아도 페이지는 **실제로 도달�
    → §9-F1의 처방(짝짓기 제거)을 택하면 **설계 전제에서는 빠지지만**, 위상 fixture를 만들려면
    여전히 측정해야 한다(§9-M4).
 5. **rollout 영속을 끄는 플래그**가 프로덕션 경로에 유입될 수 있는가(현재 `--ephemeral` 미사용).
+   > **정정(2026-07-28, 실측)**: **틀렸다 — 프로덕션은 `--ephemeral`을 쓴다**(`llm-caller.ts`의
+   > codex args). 그리고 통제군 있는 probe로 확인했다: `--ephemeral`이면 codex가 **session id는
+   > 찍으면서 rollout을 아예 안 쓴다**(없이 돌리면 쓴다). 즉 이 설계는 그대로면 프로덕션에서
+   > **영원히 `rollout_not_found`** 다. 측정 코퍼스 14벌이 rollout을 남긴 이유도 여기 있다 —
+   > 그 probe 스크립트는 `--ephemeral`을 쓰지 않는다.
+   > **처방(구현됨)**: `source_delivery_reconciliation`이 ON일 때만 그 플래그를 뺀다. OFF는
+   > 오늘과 동일. 대가는 operator의 디스크 — 워커 호출마다 세션 파일이 남는다.
 6. **flush 타이밍** — 워커 종료 시점에 rollout이 완전히 기록됐는가.
 
 ### 전문 리뷰가 추가로 요구한 측정 (2026-07-28 반영)

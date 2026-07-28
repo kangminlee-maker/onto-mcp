@@ -110,3 +110,28 @@
    비교해야 한다.
 3. **실 façade 재측정이 남는다.** 페이지 단위 수치와 `invocation.server` 값은 probe로 대체할 수
    없다. 단계 3·4의 라이브 N=1에서 함께 확보한다.
+
+## 6. 추가 측정 (2026-07-28, 라이브 검증 착수 직전) — `--ephemeral`이 rollout을 없앤다
+
+단계 4의 라이브 N=1을 준비하다 프로덕션 인자를 다시 읽었다. **설계 §8-5의 "현재 `--ephemeral`
+미사용"은 틀렸다** — `llm-caller.ts`의 codex args에 그 플래그가 있다.
+
+통제군을 포함한 최소 probe(각 1회 디스패치, `gpt-5.6-luna`/low):
+
+| 인자 | stderr `session id` | `~/.codex`의 rollout |
+|---|---|---|
+| `--ephemeral` (= 프로덕션) | 찍힘 `019fa8aa-0cc4-…` | **없음** |
+| 없음 (= 측정 probe) | 찍힘 `019fa8aa-434c-…` | **있음** |
+
+즉 **session id가 있다고 전사본이 있는 것이 아니다.** 배너만 보고 결속을 시도하면 항상
+`rollout_not_found`로 떨어진다 — 그리고 그것이 지금까지 이 트랙이 쌓아온 모든 코퍼스가
+`--ephemeral` 없이 돌아간 probe였던 이유이기도 하다.
+
+**처방(구현됨)**: `LlmCallConfig.persist_worker_transcript`. `source_delivery_reconciliation`이
+ON일 때만 저자가 요청하고, 그때만 codex args에서 `--ephemeral`이 빠진다. OFF는 byte-identical.
+
+**대가**: 워커 호출마다 세션 파일이 `CODEX_HOME`에 남는다 — `--ephemeral`이 막고 있던 바로 그것.
+이 머신엔 이미 55,000개가 넘는 rollout이 있다. 상시 ON 승격을 논할 때 함께 판단할 항목이다.
+
+**부수 확인**: 그렇게 남은 rollout의 `session_meta`는 리더가 기대하는 모양 그대로였다
+(`session_id` · `cwd` · `cli_version: "0.145.0"`).

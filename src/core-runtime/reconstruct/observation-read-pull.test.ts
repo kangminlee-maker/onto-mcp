@@ -799,6 +799,39 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
     );
   });
 
+  it("asks the route to KEEP the worker transcript — without it there is nothing to reconcile", async () => {
+    // Measured 2026-07-28: `codex exec --ephemeral` prints a session id and writes no rollout at all,
+    // so a dispatch that keeps the flag can only ever report `unverifiable`. The request travels on the
+    // dispatch config, which is what this asserts — the route's own flag handling is checked lexically
+    // in observation-catalog-tool.test.ts.
+    const pull = writePullSources();
+    const fetched = [allObservationIds[0]!];
+    const { author, dispatched } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      deliveryReconciliation: true,
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-00000000dddd",
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-00000000dddd",
+          sent: emissions,
+          rendered: emissions,
+        }),
+      }),
+    });
+    await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(dispatched[0]!.config.persist_worker_transcript).toBe(true);
+  });
+
+  it("does NOT ask for it when the key is absent — today's dispatch is unchanged", async () => {
+    const pull = writePullSources();
+    const fetched = [allObservationIds[0]!];
+    const { author, dispatched } = authorWithWorker({ fetchIds: fetched, citeIds: fetched });
+    await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(dispatched[0]!.config.observation_read_facade).toBeDefined(); // non-vacuous: it IS a pull dispatch
+    expect("persist_worker_transcript" in dispatched[0]!.config).toBe(false);
+  });
+
   it("leaves the served path in place when the key is absent", async () => {
     // The same run without the opt-in: the served set is still the authority and still says so in the
     // words it always did. This is what "default off is byte-identical" means here.

@@ -3392,7 +3392,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig: facadeLaunch
-          ? { ...llmConfig, observation_read_facade: facadeLaunch }
+          ? {
+            ...llmConfig,
+            observation_read_facade: facadeLaunch,
+            // Delivery reconciliation reads the worker's own transcript, and codex writes none under
+            // `--ephemeral` (measured). Asked for only when the citation rule actually needs it.
+            ...(args.sourceDeliveryReconciliation === true
+              ? { persist_worker_transcript: true }
+              : {}),
+          }
           : llmConfig,
         telemetry,
         artifactName: "AnswerSupportLedger",

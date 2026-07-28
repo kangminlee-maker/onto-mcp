@@ -955,6 +955,18 @@ describe("observation catalog tool — production wiring (cross-family review, l
     expect(repoFile("src/core-runtime/discovery/settings-chain.ts"))
       .toContain('"source_delivery_reconciliation"');
 
+    // The route side, lexically — the args are built inside a private function that spawns, so this is
+    // inspection rather than measurement, and it is here because the alternative is no check at all.
+    const caller = repoFile("src/core-runtime/llm/llm-caller.ts");
+    expect(caller).toContain(
+      'options.persistWorkerTranscript === true ? [] : ["--ephemeral"]',
+    );
+    // Forwarded at EVERY codex call site, or one route would silently keep the flag.
+    const facadeForwards = caller.match(/observationReadFacade: config\??\.observation_read_facade,/g) ?? [];
+    const transcriptForwards = caller.match(/persistWorkerTranscript: config\??\.persist_worker_transcript,/g) ?? [];
+    expect(facadeForwards.length).toBeGreaterThan(0);
+    expect(transcriptForwards.length).toBe(facadeForwards.length);
+
     const authorOf = (delivery: boolean) =>
       createDirectCallReconstructDirectiveAuthor({
         sourceObservationCatalogTool: true,

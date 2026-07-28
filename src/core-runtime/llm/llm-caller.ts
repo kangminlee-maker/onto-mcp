@@ -108,6 +108,18 @@ export interface LlmCallConfig {
    */
   observation_read_facade?: ObservationReadFacadeLaunch;
   /**
+   * Keep the codex worker's transcript on disk, by NOT passing `--ephemeral`.
+   *
+   * Delivery reconciliation derives what reached the model from that transcript, and MEASURED
+   * 2026-07-28: with `--ephemeral` codex still prints a session id but writes no rollout at all, so a
+   * dispatch that keeps the flag can only ever be reported `unverifiable`. Absent (the default) leaves
+   * today's flags exactly as they are — the transcript is not kept, and nothing looks for one.
+   *
+   * The cost when set is real and belongs to the operator: every worker call leaves a session file
+   * under `CODEX_HOME`, which is what `--ephemeral` was there to avoid.
+   */
+  persist_worker_transcript?: boolean;
+  /**
    * Per-call transport timeout (ms) for the direct-call CLI worker route
    * (codex_cli/claude_code). Absent → the route's DEFAULT_WORKER_TIMEOUT_MS.
    * Sourced from the actor `llm.timeout_ms` settings block via
@@ -1046,6 +1058,8 @@ interface CodexCliOptions {
   timeoutMs?: number | undefined;
   /** Stage 3b: register the observation-read facade for this dispatch. */
   observationReadFacade?: ObservationReadFacadeLaunch | undefined;
+  /** Stage 4: keep the worker's rollout, which delivery reconciliation reads (see the config field). */
+  persistWorkerTranscript?: boolean | undefined;
 }
 
 /**
@@ -1064,7 +1078,10 @@ async function callCodexCli(
   const args: string[] = [
     "exec",
     "--skip-git-repo-check",
-    "--ephemeral",
+    // Dropped ONLY when a caller needs the transcript: measured 2026-07-28, `--ephemeral` suppresses
+    // the rollout file entirely while still printing a session id, so delivery reconciliation would
+    // find nothing to reconcile against. Default keeps the flag and today's behaviour.
+    ...(options.persistWorkerTranscript === true ? [] : ["--ephemeral"]),
     // Pin the worker's execution posture instead of inheriting the operator's global codex config.
     // onto asks this worker to READ material and return text; nothing in either pipeline routes a
     // file write through the model — the runtime writes every artifact itself. Left unpinned, the
@@ -1525,6 +1542,7 @@ async function dispatchByPlan(
       serviceTier: config.service_tier,
       timeoutMs: config.timeout_ms,
       observationReadFacade: config.observation_read_facade,
+      persistWorkerTranscript: config.persist_worker_transcript,
     });
   }
   if (plan.provider_identity === "anthropic") {
@@ -1687,6 +1705,7 @@ export async function callLlm(
       serviceTier: config.service_tier,
       timeoutMs: config.timeout_ms,
       observationReadFacade: config.observation_read_facade,
+      persistWorkerTranscript: config.persist_worker_transcript,
     });
   }
 
@@ -1765,6 +1784,7 @@ export async function callLlm(
         serviceTier: config?.service_tier,
         timeoutMs: config?.timeout_ms,
         observationReadFacade: config?.observation_read_facade,
+        persistWorkerTranscript: config?.persist_worker_transcript,
       });
     }
     case "anthropic": {
