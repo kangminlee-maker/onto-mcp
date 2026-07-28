@@ -32,11 +32,17 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   observationIdsServed,
   observationReadFacadeCodexArgs,
+  OBSERVATION_READ_MCP_SERVER_NAME,
   OBSERVATION_READ_TOOL_NAME,
   readObservationReadFacadeReceipt,
   writeObservationReadFacadeDescriptor,
   type ObservationReadFacadeLaunch,
 } from "../src/core-runtime/reconstruct/observation-read-facade.ts";
+import { codexWorkerSessionId } from "../src/core-runtime/llm/llm-caller.ts";
+import {
+  reconcileFacadeDelivery,
+  VERIFIED_CODEX_CLI_VERSIONS,
+} from "../src/core-runtime/reconstruct/delivery-reconciliation.ts";
 
 type AnyRecord = Record<string, any>;
 
@@ -123,7 +129,8 @@ const userPrompt = [
 const args = [
   "exec",
   "--skip-git-repo-check",
-  "--ephemeral",
+  // NO `--ephemeral` — the production dispatch drops it under `source_delivery_reconciliation`, and
+  // with it codex writes no rollout at all (measured 2026-07-28). This arm needs the transcript.
   "-s",
   "read-only",
   "--ignore-user-config",
@@ -150,6 +157,7 @@ observation-read PULL layer — LIVE
   evidence:    ${outDir}
 `);
 
+const workerStartedAtMs = Date.now();
 const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
   const child = spawn(CODEX_BIN, args, { stdio: ["pipe", "pipe", "pipe"] });
   let stdout = "";
@@ -165,6 +173,7 @@ const result = await new Promise<{ code: number | null; stdout: string; stderr: 
     resolve({ code, stdout, stderr });
   });
 });
+const workerEndedAtMs = Date.now();
 
 writeFileSync(
   path.join(outDir, "worker.json"),
@@ -230,4 +239,82 @@ console.log(`
 ✓ OBSERVATION-READ PULL LIVE PASS — a real codex worker under the full hardening set launched the
   facade, fetched real observations, and the receipt the runtime reads names exactly what was served.
   evidence: ${outDir}
+`);
+
+// ---------------------------------------------------------------------------
+// Stage 4 — DELIVERY RECONCILIATION over this dispatch's own transcript.
+//
+// Everything above proves what the runtime SERVED. This proves what the worker's context actually
+// received, derived after exit from codex's own rollout. It is the only arm that exercises the real
+// `invocation.server` value, the real page strings, and the real file layout together — every fixture
+// in the suite carries a synthetic probe server instead.
+// ---------------------------------------------------------------------------
+
+const workerSessionId = codexWorkerSessionId(result.stderr);
+if (workerSessionId === null) {
+  fail(
+    "codex printed no single `session id:` banner on stderr — delivery reconciliation cannot bind a " +
+      `transcript without it. stderr tail:\n${result.stderr.slice(-800)}`,
+  );
+}
+ok(`the worker announced exactly one session id: ${workerSessionId}`);
+
+const reconciliationStartedAtMs = Date.now();
+const delivery = reconcileFacadeDelivery({
+  launch: { emissionsPath: launch.emissionsPath, launchToken: launch.launchToken },
+  workerSession: {
+    id: workerSessionId,
+    startedAtMs: workerStartedAtMs,
+    endedAtMs: workerEndedAtMs,
+  },
+  recordPath: path.join(outDir, "delivery.json"),
+  toolName: OBSERVATION_READ_TOOL_NAME,
+});
+// §13-D1 asked for this number honestly: reconciliation runs in the window where a runtime crash
+// leaves the attempt unrecoverable, and the design chose to document that window rather than build a
+// recovery action. Documenting it without measuring it would be a shrug.
+const reconciliationMs = Date.now() - reconciliationStartedAtMs;
+
+writeFileSync(
+  path.join(outDir, "delivery-verdict.json"),
+  `${JSON.stringify({
+    worker_session_id: workerSessionId,
+    verified_cli_versions: VERIFIED_CODEX_CLI_VERSIONS,
+    mcp_server_name: OBSERVATION_READ_MCP_SERVER_NAME,
+    reconciliation_ms: reconciliationMs,
+    record: delivery,
+  }, null, 2)}\n`,
+);
+
+if (delivery.status !== "verified") {
+  fail(
+    `delivery reconciliation reported ${delivery.status} (${delivery.reason}). ` +
+      `See ${outDir}/delivery-verdict.json`,
+  );
+}
+ok(`delivery reconciliation VERIFIED in ${reconciliationMs} ms`);
+
+// The point of the whole layer: the ids it admits are the ones whose pages reached the model.
+for (const id of wantedIds) {
+  if (!delivery.delivered.includes(id)) {
+    fail(
+      `${id} was SERVED but delivery reconciliation does not admit it. attestation: ` +
+        `${JSON.stringify(delivery.attestation)}`,
+    );
+  }
+}
+// Non-vacuous: an empty delivered set would satisfy no `includes` check above only because the loop
+// would still run — assert the set is real.
+if (delivery.delivered.length === 0) fail("delivery reconciliation admitted nothing");
+ok(
+  `delivered = ${delivery.delivered.length} observation(s): ${delivery.delivered.join(", ")} ` +
+    `(${delivery.attestation.filter((entry) => entry.disposition === "verbatim_delivered").length}/` +
+    `${delivery.attestation.length} emissions found verbatim in the worker's context)`,
+);
+
+console.log(`
+✓ DELIVERY RECONCILIATION LIVE PASS — a real codex worker's own transcript proves the pages the
+  runtime served actually entered the model's context, and the citation authority derived from it
+  names them. Reconciliation window: ${reconciliationMs} ms (design §13-D1).
+  evidence: ${outDir}/delivery-verdict.json
 `);

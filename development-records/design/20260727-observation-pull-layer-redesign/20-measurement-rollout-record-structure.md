@@ -135,3 +135,38 @@ ON일 때만 저자가 요청하고, 그때만 codex args에서 `--ephemeral`이
 
 **부수 확인**: 그렇게 남은 rollout의 `session_meta`는 리더가 기대하는 모양 그대로였다
 (`session_id` · `cwd` · `cli_version: "0.145.0"`).
+
+## 7. 라이브 N=1 (2026-07-28) — 실 façade에서 전 구간 통과
+
+`scripts/observation-read-pull-live.mts`를 재조정까지 확장해 실 codex 워커 1회로 돌렸다.
+증거: `benchmark/observation-read-pull-live/2026-07-28T12-24-46-105Z/`.
+
+| 항목 | 결과 |
+|---|---|
+| 워커 배너 | `session id` **정확히 1개** (`019fa8af-6551-…`) |
+| rollout | `--ephemeral` 제거 후 **남았다** — `~/.codex/sessions/2026/07/28/rollout-…-019fa8af-….jsonl` |
+| 전송분 `invocation` | **`{server:"onto_observation", tool:"onto_observation_read"}`** — 실 값 첫 확인 |
+| 재조정 | **verified** |
+| `delivered` | `obs_9f291d6235fdb41c` · `obs_eb90f83378bd57a0` (서빙된 것과 동일) |
+| attestation | 방출 1건 15,177자, `verbatim_delivered` (1/1) |
+| **재조정 소요** | **4 ms** |
+
+**§13-D1이 요구한 수치가 이것이다.** owner는 "명시적 복구 행위를 만들지 않고 문서화한다"를
+고르면서 "창 폭이 예상을 크게 벗어나면 재개한다"를 조건으로 달았다. 재조정이 복구 불가 창에
+더하는 시간은 **4 ms**다 — 파일 로케이트·읽기·파싱·대조·영속 전부 포함. 결정은 유지된다.
+
+**§1-1의 미해결 항목 하나가 닫혔다**: 지금까지 모든 코퍼스가 합성 `probe` 서버였고 실 façade의
+`invocation.server` 값은 미측정이었다. 이제 실측됐고, 코드가 스코프하는 상수와 일치한다.
+
+**대조군** — 같은 전사본·같은 emissions에 서버 이름만 옛 철자로 바꿔 재생:
+
+```
+server=onto_observation         -> verified, delivered=2
+server=observation_read_facade  -> unverifiable (recorded_emission_without_sent_record)
+```
+
+즉 이 라이브 통과는 **이름에 민감하다**. 커밋 `2c3400f`에서 고친 추측이 살아 있었다면
+이 실행은 통과하지 못했다.
+
+**아직 미확보**: `Promise.all` 동시 호출 · 다중 `text()` · 겹치는 외부 exec. 이번 런은 워커가
+도구를 1회 호출한 위상이다.
