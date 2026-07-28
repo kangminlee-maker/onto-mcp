@@ -402,6 +402,18 @@ export function authoredArtifactReuseMatch(args: {
     ...(args.directiveAuthor.sourceObservationCatalogTool === true
       ? { authored_output_contract_version: AUTHORED_OUTPUT_CONTRACT_VERSION }
       : {}),
+    // Delivery reconciliation changes the same kind of thing: what the author ACCEPTS, with no change
+    // to its input. A ledger authored while citations were judged against the SERVED set is not
+    // admissible under a rule that judges them against the DELIVERED set, so a resume across the flag
+    // must regenerate rather than reuse.
+    //
+    // Scoped to the flag rather than bumped into `AUTHORED_OUTPUT_CONTRACT_VERSION`, which the comment
+    // above asks for in exactly this case: bumping the constant would rotate keys for catalog-tool runs
+    // that never turned delivery reconciliation on, and a rotated key here THROWS on resume rather than
+    // regenerating. Present-only-when-ON leaves every OFF key byte-identical.
+    ...(args.directiveAuthor.sourceDeliveryReconciliation === true
+      ? { delivered_citation_rule_version: 1 }
+      : {}),
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
     // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —

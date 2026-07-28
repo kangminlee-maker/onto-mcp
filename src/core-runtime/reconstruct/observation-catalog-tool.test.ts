@@ -936,6 +936,67 @@ describe("observation catalog tool — production wiring (cross-family review, l
     expect("authored_output_contract_version" in off).toBe(false);
   });
 
+  it("delivery reconciliation is reachable ONLY through its settings key, and rotates the reuse key", () => {
+    // Stage 4's reachability claim, checked where it can actually be checked. The key is read from
+    // settings rather than a literal — a `const … = false` would silently turn production ON runs into
+    // OFF runs, and no author-level test could see it — and every author construction is forwarded to,
+    // so a dispatch-fallback author cannot judge citations in the other mode.
+    const api = repoFile("src/core-api/reconstruct-api.ts");
+    expect(api).toContain(
+      "settings.reconstruct?.execution?.source_delivery_reconciliation === true",
+    );
+    const forwards = api.match(
+      /\.\.\.\(sourceDeliveryReconciliation \? \{ sourceDeliveryReconciliation: true \} : \{\}\)/g,
+    ) ?? [];
+    const constructions = api.match(/createDirectCallReconstructDirectiveAuthor\(/g) ?? [];
+    expect(forwards.length).toBe(constructions.length);
+    // And the key exists in the accepted settings surface at all — an unknown key is refused upstream,
+    // so a flip nobody declared would not be "default off", it would be unusable.
+    expect(repoFile("src/core-runtime/discovery/settings-chain.ts"))
+      .toContain('"source_delivery_reconciliation"');
+
+    const authorOf = (delivery: boolean) =>
+      createDirectCallReconstructDirectiveAuthor({
+        sourceObservationCatalogTool: true,
+        ...(delivery ? { sourceDeliveryReconciliation: true } : {}),
+        llmCall: () => Promise.resolve({ text: "{}" }),
+      } as never);
+    const matchFor = (delivery: boolean) =>
+      authoredArtifactReuseMatch({
+        sessionId: SESSION_ID,
+        intent: "reuse-key probe",
+        targetRefs: ["/fixture/target.ts"],
+        targetMaterialProfile: {
+          target_refs: ["/fixture/target.ts"],
+          target_material_kind: "code",
+          target_material_kind_candidates: [],
+          support_status: "supported",
+          selected_source_profiles: [],
+          detection: { per_ref: [] },
+        },
+        sourceInventory: { inventory_units: [] },
+        sourceObservations: { observations: [], skipped_refs: [] },
+        governingSnapshot: { requested_domain_ids: [] },
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+        directiveAuthor: authorOf(delivery),
+        confirmationProvider: { providerId: "probe-provider" },
+      } as never);
+    const off = matchFor(false);
+    const on = matchFor(true);
+    // A ledger authored under the SERVED rule is not admissible under the DELIVERED rule, so a resume
+    // across the flag must regenerate rather than reuse.
+    expect(JSON.stringify(on)).not.toBe(JSON.stringify(off));
+    expect(on.delivered_citation_rule_version).toBe(1);
+    // ...and ABSENT when off, which is what keeps every OFF key byte-identical to before this existed.
+    // Scoped to the flag rather than folded into AUTHORED_OUTPUT_CONTRACT_VERSION, which would have
+    // rotated keys for catalog-tool runs that never turned this on — and a rotated key THROWS on
+    // resume rather than regenerating.
+    expect("delivered_citation_rule_version" in off).toBe(false);
+    const { delivered_citation_rule_version: _onlyOn, ...onWithoutOnOnlyFields } = on;
+    expect(onWithoutOnOnlyFields).toEqual(off); // non-vacuous: nothing else differs
+  });
+
   it("run.ts feeds the answer-support author the CONSUMPTION-GATED projection, not the raw artifact", () => {
     // C2's last hop. The author-level tests and the replay's arm E both receive an already-gated
     // array, so neither can see run.ts swapping in the ungated `sourceObservations` — the concrete

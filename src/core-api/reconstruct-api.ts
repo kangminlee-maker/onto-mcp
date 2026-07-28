@@ -1240,6 +1240,8 @@ export function createOntoReconstructCoreApi(
       // above: an author-level projection knob (it lives entirely inside writeAnswerSupportLedger),
       // so it rides the directive-author construction args rather than the run params. Absent = off,
       // byte-identical.
+      const sourceDeliveryReconciliation =
+        settings.reconstruct?.execution?.source_delivery_reconciliation === true;
       const sourceObservationCatalogTool =
         settings.reconstruct?.execution?.source_observation_catalog_tool === true;
       const authorProviderBefore =
@@ -1486,6 +1488,8 @@ export function createOntoReconstructCoreApi(
             // Stage 3a: and projects the same answer-support catalog — a fallback dispatch must not
             // silently author the ledger in the other mode.
             ...(sourceObservationCatalogTool ? { sourceObservationCatalogTool: true } : {}),
+          ...(sourceDeliveryReconciliation ? { sourceDeliveryReconciliation: true } : {}),
+            ...(sourceDeliveryReconciliation ? { sourceDeliveryReconciliation: true } : {}),
             semanticMapSynthesizeLlmConfig: fallbackLlmConfig,
             enableSemanticMapAuthoring: true,
             semanticMapDispatchCapabilities: {

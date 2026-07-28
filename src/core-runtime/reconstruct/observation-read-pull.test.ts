@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,9 +34,61 @@ const FIXTURE_DIR = path.join(REPO_ROOT, "scripts/fixtures/observation-catalog")
 const TEMP_ROOT = mkdtempSync(path.join(os.tmpdir(), "onto-observation-pull-"));
 let tempSeq = 0;
 
+/** Stands in for the user's real one, so a test never reads or writes the machine's transcripts. */
+const codexHome = path.join(TEMP_ROOT, "codex-home");
+const priorCodexHome = process.env.CODEX_HOME;
+process.env.CODEX_HOME = codexHome;
+
 afterAll(() => {
+  if (priorCodexHome === undefined) delete process.env.CODEX_HOME;
+  else process.env.CODEX_HOME = priorCodexHome;
   rmSync(TEMP_ROOT, { recursive: true, force: true });
 });
+
+/** A transcript in which `sent` went out and `rendered` reached the model's context. */
+function plantedTranscript(args: {
+  sessionId: string;
+  sent: readonly string[];
+  rendered: readonly string[];
+  /** Parameterised, NOT string-replaced afterwards: the transcript holds serialized JSON, and editing
+   * that text is how a mutation silently does nothing (it already did, twice in this work). */
+  cliVersion?: string;
+}): string {
+  const records: unknown[] = [
+    {
+      timestamp: "<<STAMP>>",
+      type: "session_meta",
+      payload: {
+        session_id: args.sessionId,
+        cwd: process.cwd(),
+        cli_version: args.cliVersion ?? "0.145.0",
+      },
+    },
+    ...args.sent.map((text, index) => ({
+      timestamp: "<<STAMP>>",
+      type: "event_msg",
+      payload: {
+        type: "mcp_tool_call_end",
+        call_id: `exec-${index}`,
+        invocation: { server: "onto_observation", tool: OBSERVATION_READ_TOOL_NAME },
+        result: { Ok: { content: [{ type: "text", text }], isError: false } },
+      },
+    })),
+    {
+      timestamp: "<<STAMP>>",
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call_output",
+        call_id: "call_0",
+        output: [
+          { type: "input_text", text: "Script completed\nWall time 0.0 seconds\nOutput:\n" },
+          { type: "input_text", text: args.rendered.join("\n") },
+        ],
+      },
+    },
+  ];
+  return records.map((record) => JSON.stringify(record)).join("\n");
+}
 
 const observationsArtifact = parseYaml(
   readFileSync(path.join(FIXTURE_DIR, "source-observations.yaml"), "utf8"),
@@ -216,10 +268,19 @@ function authorWithWorker(options: {
   citeIds: string[];
   /** Skip the facade entirely — the worker never fetched, and no receipt is written at all. */
   skipFacade?: boolean;
+  /** Stage 4: judge citations against what was DELIVERED rather than what was served. */
+  deliveryReconciliation?: boolean;
+  /**
+   * Plays codex keeping a transcript. Called with the emissions the facade just recorded; whatever it
+   * returns is planted under `CODEX_HOME` as this worker's rollout, and its session id is reported on
+   * the result the way the real route reports the stderr banner.
+   */
+  transcript?: (emissions: string[]) => { sessionId: string; text: string };
 }) {
   const dispatched: { systemPrompt: string; userPrompt: string; config: Record<string, any> }[] = [];
   const author = createDirectCallReconstructDirectiveAuthor({
     sourceObservationCatalogTool: true,
+    ...(options.deliveryReconciliation === true ? { sourceDeliveryReconciliation: true } : {}),
     llmCall: (systemPrompt: string, userPrompt: string, config?: Record<string, any>) => {
       dispatched.push({ systemPrompt, userPrompt, config: config ?? {} });
       const launch = config?.observation_read_facade as ObservationReadFacadeLaunch | undefined;
@@ -248,7 +309,38 @@ function authorWithWorker(options: {
           if (result.isError) throw new Error("fixture worker's fetch failed");
         }
       }
+      let workerSession: { id: string; startedAtMs: number; endedAtMs: number } | undefined;
+      if (launch && options.transcript) {
+        // The facade has committed by now, so its emissions record is on disk — the same bytes the
+        // worker received. Plant a transcript carrying them where codex would have kept one.
+        const emissionsFile = JSON.parse(readFileSync(launch.emissionsPath, "utf8")) as {
+          emissions: { canonical_text: string }[];
+        };
+        const planted = options.transcript(
+          emissionsFile.emissions.map((entry) => entry.canonical_text),
+        );
+        const stampedAtMs = Date.now();
+        const at = new Date(stampedAtMs);
+        const dayDir = path.join(
+          codexHome,
+          "sessions",
+          String(at.getFullYear()),
+          String(at.getMonth() + 1).padStart(2, "0"),
+          String(at.getDate()).padStart(2, "0"),
+        );
+        mkdirSync(dayDir, { recursive: true });
+        writeFileSync(
+          path.join(dayDir, `rollout-planted-${planted.sessionId}.jsonl`),
+          planted.text.replace("<<STAMP>>", new Date(stampedAtMs).toISOString()),
+        );
+        workerSession = {
+          id: planted.sessionId,
+          startedAtMs: stampedAtMs - 1_000,
+          endedAtMs: stampedAtMs + 1_000,
+        };
+      }
       return Promise.resolve({
+        ...(workerSession ? { worker_session: workerSession } : {}),
         text: JSON.stringify({
           evidence_clusters: [{
             evidence_cluster_id: "cluster-pull",
@@ -610,5 +702,113 @@ describe("observation read pull layer — the facade is codex-only", () => {
         observation_read_facade: launch,
       }),
     ).rejects.toThrow(/non-codex dispatch route/);
+  });
+});
+
+/**
+ * Stage 4 — the citation authority moves from what the runtime SERVED to what the worker's own
+ * transcript proves ARRIVED. Reachable only through `source_delivery_reconciliation`; with the key
+ * absent every test above still describes the behaviour, unchanged.
+ */
+describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage 4)", () => {
+  it("admits a citation whose page the transcript proves arrived", async () => {
+    const pull = writePullSources();
+    const fetched = allObservationIds.slice(0, 2);
+    const { author } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      deliveryReconciliation: true,
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-00000000aaaa",
+        // Everything the facade emitted was rendered into the worker's context.
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-00000000aaaa",
+          sent: emissions,
+          rendered: emissions,
+        }),
+      }),
+    });
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(ledger.evidence_clusters[0].evidence_refs.length).toBe(2);
+  });
+
+  it("refuses a citation whose page was served but never reached the context", async () => {
+    const pull = writePullSources();
+    const fetched = allObservationIds.slice(0, 2);
+    const { author } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      deliveryReconciliation: true,
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-00000000bbbb",
+        // Sent, but the exec's output carried none of it — codex cut it, or the model printed
+        // something else. Either way those bytes are not in the model's context.
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-00000000bbbb",
+          sent: emissions,
+          rendered: ["Warning: truncated output (original token count: 99999)"],
+        }),
+      }),
+    });
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /verified NOT to have reached the worker's context/,
+    );
+  });
+
+  it("says 'could not be verified' — never 'not delivered' — when there is no transcript", async () => {
+    const pull = writePullSources();
+    const fetched = allObservationIds.slice(0, 2);
+    // No `transcript`, so the route reports no worker session, exactly as a non-codex route would.
+    const { author } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      deliveryReconciliation: true,
+    });
+    const failure = await (author as any).writeAnswerSupportLedger(authorInput(pull))
+      .then(() => null, (error: Error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    // THE distinction §10-R2-4 turns on: the citation is refused, and the sentence says why it could
+    // not be checked rather than asserting something about the run we did not observe.
+    expect(failure.message).toMatch(/could not be verified \(worker_session_unavailable\)/);
+    expect(failure.message).not.toMatch(/never served/);
+    expect(failure.message).not.toMatch(/NOT to have reached/);
+  });
+
+  it("refuses when the transcript is from a codex version nobody verified", async () => {
+    const pull = writePullSources();
+    const fetched = allObservationIds.slice(0, 1);
+    const { author } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      deliveryReconciliation: true,
+      transcript: (emissions) => {
+        const sessionId = "01900000-0000-7000-8000-00000000cccc";
+        return {
+          sessionId,
+          text: plantedTranscript({
+            sessionId,
+            sent: emissions,
+            rendered: emissions,
+            cliVersion: "99.0.0",
+          }),
+        };
+      },
+    });
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /could not be verified \(cli_version_not_verified\)/,
+    );
+  });
+
+  it("leaves the served path in place when the key is absent", async () => {
+    // The same run without the opt-in: the served set is still the authority and still says so in the
+    // words it always did. This is what "default off is byte-identical" means here.
+    const pull = writePullSources();
+    const { author } = authorWithWorker({
+      fetchIds: [allObservationIds[0]!],
+      citeIds: [allObservationIds[0]!, allObservationIds[1]!],
+    });
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /never served/,
+    );
   });
 });

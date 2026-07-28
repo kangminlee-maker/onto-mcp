@@ -177,6 +177,11 @@ export interface ReconstructDirectiveAuthor {
    */
   readonly sourceObservationCatalogTool?: boolean;
   /**
+   * Judge citations against what was DELIVERED rather than what was served (design §6-7, stage 4).
+   * Absent leaves the served set as the authority, byte-identical.
+   */
+  readonly sourceDeliveryReconciliation?: boolean;
+  /**
    * Run-scoped sink (deduped by observation) of documents whose captured excerpt a
    * seed prompt's projection budget sliced. Populated during authoring; read by
    * runReconstruct after authoring to record the truncation durably and surface it.

@@ -61,6 +61,8 @@ export type DeliveryReconciliationRefusal =
   | "rollout_unreadable"
   /** The facade's own emissions record is missing, torn, or another launch's. */
   | "emissions_record_unreadable"
+  /** No delivery record for this launch — reconciliation never ran, or never finished. */
+  | "delivery_record_unreadable"
   /** A result from OUR server that no recorded emission accounts for (§11-L1). */
   | "sent_without_recorded_emission"
   /** A recorded emission the transcript never shows the server sending. */
@@ -406,4 +408,25 @@ export function reconcileFacadeDelivery(args: {
       tool: args.toolName,
     },
   }));
+}
+
+/**
+ * What a citation may name, and on what basis — the shape the consumer branches on (§10-R2-4, §11-L7).
+ *
+ * The two rejections are NOT the same statement. "Verified, and this id did not arrive" is a fact
+ * about the run; "we could not verify" is a fact about our evidence, and reporting the second as the
+ * first is the false statement §12-S3 names. Both refuse the citation — only the sentence differs.
+ */
+export type CitableObservations =
+  | { readonly basis: "delivered"; readonly ids: ReadonlySet<string> }
+  | { readonly basis: "unverifiable"; readonly reason: DeliveryReconciliationRefusal };
+
+/** Project a delivery record into the citable set. A missing record admits nothing. */
+export function citableFromDeliveryRecord(
+  record: ObservationReadDeliveryRecordFile | null,
+): CitableObservations {
+  if (record === null) return { basis: "unverifiable", reason: "delivery_record_unreadable" };
+  return record.status === "verified"
+    ? { basis: "delivered", ids: new Set(record.delivered) }
+    : { basis: "unverifiable", reason: record.reason };
 }

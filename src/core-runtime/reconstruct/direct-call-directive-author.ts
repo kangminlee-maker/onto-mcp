@@ -11,7 +11,12 @@
  */
 import { callLlm } from "../llm/llm-caller.js";
 import type { LlmCallConfig, LlmCallResult } from "../llm/llm-caller.js";
-import { reconcileFacadeDelivery } from "./delivery-reconciliation.js";
+import {
+  type CitableObservations,
+  citableFromDeliveryRecord,
+  readObservationReadDeliveryRecord,
+  reconcileFacadeDelivery,
+} from "./delivery-reconciliation.js";
 import { SemanticMapDispatchAccounting } from "../llm/sealed-dispatch-capability.js";
 import type { ResolvedLlmDispatchCapability } from "../llm/sealed-dispatch-capability.js";
 import { readStructuredDispatchFailureEvidence } from "../llm/structured-dispatch-error.js";
@@ -279,6 +284,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * OFF until stage 3b wires the facade.
    */
   sourceObservationCatalogTool?: boolean;
+  sourceDeliveryReconciliation?: boolean;
   /**
    * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
    * (observation replace + seed payload) — absolute code node_ref.file paths label as
@@ -544,6 +550,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     documentExcerptProjectionBudget,
     sourceBreadthFold: args.sourceBreadthFold === true,
     sourceObservationCatalogTool: args.sourceObservationCatalogTool === true,
+    sourceDeliveryReconciliation: args.sourceDeliveryReconciliation === true,
     documentExcerptProjectionTruncations,
     sourceBreadthFoldDisclosures,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
@@ -3399,25 +3406,38 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // Delivery reconciliation (design §6-2 stage 3a-2). Runs HERE because it needs the worker to be
       // gone — its transcript is only complete once codex has exited. Nothing reads the record yet;
       // switching consumers from `served` to `delivered` is a later, deliberate step.
-      if (facadeLaunch && pull) {
+      const deliveryRecordPath = pull
+        ? path.join(pull.workDir, `observation-read-delivery-${input.roundId}.json`)
+        : null;
+      if (facadeLaunch && deliveryRecordPath) {
         reconcileFacadeDelivery({
           launch: facadeLaunch,
           workerSession,
-          recordPath: path.join(
-            pull.workDir,
-            `observation-read-delivery-${input.roundId}.json`,
-          ),
+          recordPath: deliveryRecordPath,
           toolName: OBSERVATION_READ_TOOL_NAME,
         });
       }
-      // Read the receipt AFTER the dispatch: the facade rewrote it after every attempt, and the worker
-      // is gone by now. FAIL-CLOSED — a missing or torn receipt yields an empty served set, which makes
-      // every citation inadmissible rather than unchecked.
-      const servedObservationIds = facadeLaunch
-        ? observationIdsServed(
-          readObservationReadFacadeReceipt(facadeLaunch.receiptPath, facadeLaunch.launchToken),
-        )
-        : null;
+      // What a citation may name. Read AFTER the dispatch — the worker is gone by now — and FAIL-CLOSED
+      // either way: a missing, torn or foreign artifact admits nothing rather than leaving citations
+      // unchecked.
+      //
+      // Which artifact is the authority is the whole of stage 4. OFF (the default) keeps the facade's
+      // receipt and the SERVED set, byte-identical to before this existed. ON derives the DELIVERED set
+      // from the worker's own transcript, and an unverified codex version or an unrecognised transcript
+      // shape resolves to `unverifiable` — which admits nothing and says so in those words.
+      const citableObservations: CitableObservations | { basis: "served"; ids: ReadonlySet<string> } | null =
+        !facadeLaunch
+          ? null
+          : args.sourceDeliveryReconciliation === true && deliveryRecordPath
+          ? citableFromDeliveryRecord(
+            readObservationReadDeliveryRecord(deliveryRecordPath, facadeLaunch.launchToken),
+          )
+          : {
+            basis: "served" as const,
+            ids: observationIdsServed(
+              readObservationReadFacadeReceipt(facadeLaunch.receiptPath, facadeLaunch.launchToken),
+            ),
+          };
       return {
         schema_version: "1",
         session_id: input.sessionId,
@@ -3464,15 +3484,30 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             // Design §3, stage 3b: `인용 ⊆ 조회`. IN SERIES with the catalog gate above, which is not
             // touched — the citable set only narrows. Under the pull layer the catalog carries no
             // detail, so a citation the worker never fetched is a claim about content it did not read.
-            if (servedObservationIds) {
-              const unservedIds = observationIds.filter((observationId) =>
-                !servedObservationIds.has(observationId)
-              );
-              if (unservedIds.length > 0) {
+            if (citableObservations && citableObservations.basis === "unverifiable") {
+              if (observationIds.length > 0) {
+                // NOT "never delivered" — that would be a claim about the run made on the strength of
+                // evidence we do not have (§10-R2-4, §12-S3). The citation is refused either way.
                 throw new Error(
-                  `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids the runtime ` +
-                    `never served: ${unservedIds.join(", ")}. Under the observation catalog tool a ` +
-                    "citation must name an observation this dispatch actually fetched.",
+                  `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids whose ` +
+                    `delivery could not be verified (${citableObservations.reason}): ` +
+                    `${observationIds.join(", ")}. Under delivery reconciliation a citation must name ` +
+                    "an observation this dispatch can PROVE reached the worker's context.",
+                );
+              }
+            } else if (citableObservations) {
+              const uncitableIds = observationIds.filter((observationId) =>
+                !citableObservations.ids.has(observationId)
+              );
+              if (uncitableIds.length > 0) {
+                throw new Error(
+                  citableObservations.basis === "served"
+                    ? `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids the runtime ` +
+                      `never served: ${uncitableIds.join(", ")}. Under the observation catalog tool a ` +
+                      "citation must name an observation this dispatch actually fetched."
+                    : `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids that were ` +
+                      `verified NOT to have reached the worker's context: ${uncitableIds.join(", ")}. ` +
+                      "A citation must name an observation the worker actually received.",
                 );
               }
             }

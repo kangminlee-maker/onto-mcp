@@ -566,6 +566,13 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // token + citation⊆served) lands in stage 3b; until then this key is push-only and stays default
   // OFF. Absent = off — today's capped detailed projection, byte-identical.
   "source_observation_catalog_tool",
+  // Delivery reconciliation (design 20260727 §6, stage 4). Turns the citation rule from `인용 ⊆ 조회`
+  // (what the runtime SERVED) into `인용 ⊆ 배달` (what actually entered the worker's context, derived
+  // after exit from codex's own transcript). This key is the ONLY way the derivation becomes reachable:
+  // the version and structure gates live inside it, and an unverified codex version or an unrecognised
+  // transcript shape yields "unverifiable", which admits no citation at all. Absent = off — the served
+  // set stays the authority, byte-identical.
+  "source_delivery_reconciliation",
 ] as const;
 export type ReconstructExecutionScalarKey =
   (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];
