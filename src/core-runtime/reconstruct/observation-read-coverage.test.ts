@@ -74,6 +74,37 @@ describe("observation read coverage — the accumulation and completeness rules,
     expect(coversWholeObservation(asServedRecord(coverage))).toBe(false);
   });
 
+  /**
+   * codex ultracode review, PR #271. Every fixture pinned `sha-1`, so the partition key could drop
+   * `observation_content_sha256` entirely and this suite stayed green — while parts of two DIFFERENT
+   * content versions merged into one "complete" observation that never fully arrived.
+   */
+  it("does not merge parts of two different CONTENT versions", () => {
+    const served = foldAll([
+      part({ part_index: 1, part_count: 2, observation_content_sha256: "sha-A" }),
+      part({ part_index: 2, part_count: 2, observation_content_sha256: "sha-B" }),
+    ]);
+    const coverage = served.get("obs-1")!;
+    expect(coverage.partitions.size).toBe(2); // one per content version
+    expect(coversWholeObservation(asServedRecord(coverage))).toBe(false);
+  });
+
+  /**
+   * codex ultracode review, PR #271. The permutation fixture had BOTH partitions complete, so the
+   * projection's "a complete partition wins" comparison could be deleted and the suite stayed green.
+   * A small complete partition must beat a larger incomplete one.
+   */
+  it("reports a COMPLETE small partition over a larger incomplete one", () => {
+    const served = foldAll([
+      part({ part_index: 1, part_count: 1, part_allowance: 2_000 }),
+      part({ part_index: 1, part_count: 3, part_allowance: 1_000 }),
+      part({ part_index: 2, part_count: 3, part_allowance: 1_000 }),
+    ]);
+    const record = asServedRecord(served.get("obs-1")!);
+    expect(record.part_count).toBe(1); // the complete one, not the 2-of-3
+    expect(coversWholeObservation(record)).toBe(true);
+  });
+
   it("keeps observations independent", () => {
     const served = foldAll([
       part({ observation_id: "obs-1", part_index: 1, part_count: 1 }),

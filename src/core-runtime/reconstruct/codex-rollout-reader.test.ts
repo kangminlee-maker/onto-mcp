@@ -170,6 +170,21 @@ describe("codex rollout reader — every uncertainty refuses", () => {
     if (!outcome.ok) expect(outcome.refusal).toBe("rollout_outside_child_window");
   });
 
+  /**
+   * codex ultracode review, PR #271. The only "outside the lifetime" case started AFTER the transcript,
+   * so the lower bound alone decided every rejection and the upper bound could be deleted unnoticed —
+   * a transcript stamped after the worker exited would then be accepted as this dispatch's.
+   */
+  it("refuses a transcript stamped AFTER the child exited", () => {
+    const stampedAtMs = Date.parse("2026-07-27T11:04:16.265Z");
+    const outcome = readCodexRollout(transcriptOf(id), {
+      ...expectationsFor(id),
+      childWindow: { startedAtMs: stampedAtMs - 60_000, endedAtMs: stampedAtMs - 1 },
+    });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.refusal).toBe("rollout_outside_child_window");
+  });
+
   it("refuses a transcript with no session_meta", () => {
     const withoutMeta = transcriptOf(id)
       .split("\n")

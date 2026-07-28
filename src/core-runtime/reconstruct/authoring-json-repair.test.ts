@@ -128,6 +128,19 @@ describe("authoring JSON syntax repair — deterministic, deletion only", () => 
     if (!beyond.ok) expect(beyond.refusal).toBe("repair_exceeds_bounds");
   });
 
+  /**
+   * codex ultracode review, PR #271. The bounds fixture needed four ONE-character deletions, so the
+   * pass cap alone decided it and the cumulative character cap could be deleted while the suite stayed
+   * green. This input needs 4 chars per site, so only the character cap can stop it.
+   */
+  it("refuses when the cumulative deletion budget — not the pass count — is what is exceeded", () => {
+    // Refused — and the CHARACTER budget is what refuses it: each site needs a 4-char run, so two
+    // sites spend the whole 8-char allowance and the third finds no admissible candidate. Removing the
+    // budget guard makes this input repair successfully, which is what the assertion below protects.
+    const outcome = repairJsonSyntaxByDeletion('{"a":1,,,,,"b":2,,,,,"c":3,,,,,"d":4}');
+    expect(outcome.ok).toBe(false);
+  });
+
   it("is deterministic — the same malformed text always yields the same repair", () => {
     const first = repairJsonSyntaxByDeletion(REAL_MALFORMED_OUTPUT);
     const second = repairJsonSyntaxByDeletion(REAL_MALFORMED_OUTPUT);
