@@ -1,0 +1,117 @@
+# REVIEW TASK — where does this design produce a WRONG answer that nothing reveals?
+
+You are reviewing a design before it is built. Two prior rounds already asked whether it is sound and
+closed the blockers they found. **Do not re-audit soundness in general.** This round has one question:
+
+> Once built as specified, where does this produce a **confident, plausible, wrong** result — one that
+> no test, artifact, or operator report would show as wrong?
+
+A crash is not interesting here. A refusal is not interesting here. What is interesting is a run that
+completes, writes a receipt, admits citations, and is quietly incorrect — or one that refuses while
+reporting a cause that is not the real one.
+
+Repository (read-only): `/Users/kangmin/Documents/onto-mcp`, branch `feat/observation-grant-stage2`.
+Relevant code: `src/core-runtime/reconstruct/observation-read*.ts`.
+
+**Independence constraint — binding.** Do NOT open any file under `development-records/`. That tree
+holds the drafts and prior review rounds; reading them replaces your judgment with theirs. Everything
+needed is in this packet. Source under `src/` is where you should check claims.
+
+## THE SYSTEM
+
+A runtime drives an LLM worker (OpenAI's `codex` CLI, non-interactive) to author a JSON artifact whose
+evidence clusters cite **source observation ids** — ids of text excerpts collected earlier.
+
+The excerpts cannot ride in the prompt (one real corpus is 1,328,185 characters against a 1,048,576
+ceiling), so the prompt carries a navigation catalog and the worker **fetches** detail through an MCP
+tool the runtime serves from its own process. A worker looking at a catalog can cite any id without
+reading one, so after the worker exits the runtime must state which observations actually reached the
+model and refuse citations outside that set.
+
+**Measured, this repository, codex-cli 0.145.0:** results are trimmed middle-out on the way to the
+model (65,049 chars loses interior regions, 32,035 survives); the MCP server cannot see the trim; the
+worker does not reliably report it. The model reaches MCP tools from inside codex's JavaScript `exec`
+tool, so what is trimmed is that tool's rendered output. codex writes a per-session transcript
+("rollout") containing BOTH the server's pre-trim result and the post-trim payload that entered the
+model's context; two independent runs showed the post-trim record matching an independent probe
+exactly. The dispatch binds to its transcript through a `session id` codex prints on stderr.
+
+## THE DESIGN UNDER REVIEW
+
+**During the dispatch.** The MCP server keeps, under one launch-bound artifact written atomically
+before anything is served:
+- `served` — the pre-existing record of what was SENT (unchanged meaning, unchanged name);
+- the **exact string** each response carried (`JSON.stringify(page)`, verbatim — not a digest);
+- a launch-bound start marker, so a second start under the same launch fails before minting a grant;
+- the existing audit fields (attempts rejected before the grant, bounded failure list with reasons).
+
+This artifact is NOT readable as a delivery receipt.
+
+**After the worker exits**, the runtime, in its own process:
+1. reads the session id from the child's stderr, requiring exactly one CLI-origin banner, a rollout
+   creation time inside the child's lifetime, and matching canonical `cwd` / `session_meta`;
+2. checks `cli_version` against a verified list AND validates the transcript's structure at runtime;
+3. parses the JSONL envelopes and inspects **only the actual post-trim output payload**;
+4. for each emitted string, asks: is that exact string present, whole, in some post-trim payload of
+   this session? No pairing of records to calls. Only renderings that carry the string unchanged
+   count; anything else leaves that emission not delivered;
+5. replays the delivered emissions **in emission order** through the accumulator rule that already
+   exists at `observation-read-grant.ts:663-686` — extracted into one pure reducer that both the
+   in-dispatch accounting and this step import — producing **`delivered`**;
+6. publishes a receipt (new schema version) **only** when all of the above succeeded. Otherwise the
+   result is `unverifiable` and no receipt exists.
+
+**`served` vs `delivered` are deliberately different names.** `served` is transport truth (the code
+says so at `observation-read-grant.ts:372-375`); `delivered` is what reached the model's context. The
+consumer moves from `observationIdsServed` to `observationIdsDelivered`; its completeness rule is
+unchanged. `unverifiable` and "verified, nothing delivered" must reach the operator as different
+statements.
+
+**Fail-closed set** (each ⇒ no receipt ⇒ consumer admits nothing): banner absent or ambiguous; rollout
+missing/unreadable; `session_meta` or lifetime-window mismatch; `cli_version` outside the list;
+transcript structure unexpected; runtime dies before reconciliation.
+
+**Staged plan.** (0) extract the reducer, behaviour unchanged; (1) transcript reader, no consumer;
+(2) pure reconciliation function, checked by replaying real transcripts whose correct answer is known;
+(3) wire behind an opt-in flag, OFF byte-identical — and NOT product-reachable until (4); (4) version
+and structure gate. Both existing transcripts are one-MCP-call-per-`exec` topology.
+
+## WHAT TO JUDGE
+
+Answer only what you can ground. For each item give the concrete sequence, what the artifact would say,
+and why nobody would notice.
+
+1. **Subset replay of the reducer.** Reconciliation feeds a FILTERED sequence into a reducer whose rule
+   drops earlier part indexes when `part_allowance` changes. Compare: (a) the reducer over all served
+   pages, (b) the reducer over only the delivered subset, in the same order. Where do those differ, and
+   is any difference a WRONG admission rather than a conservative one? Read the rule before answering.
+2. **Whole-string containment.** The emitted string is JSON built by the server; the payload is a
+   rendering produced by model-authored JavaScript. Construct a case where the string is present but
+   the observation did NOT effectively reach the model, or absent though it did — and say which side of
+   the error the design lands on.
+3. **The `delivered` rename.** Everything that reads `served` today must be re-examined. Which readers,
+   if left pointing at `served`, would now be reading transport truth while their prose claims delivery?
+   Name them from the source tree.
+4. **Order.** "Emission order" is the replay order. What in the design guarantees the recorded order is
+   the order responses actually reached the worker — and what happens to `delivered` if it is not?
+5. **The silent-success shape.** Describe the single most likely way this ships, runs green in CI, is
+   exercised on a real corpus, and still admits a citation whose text never entered the model's context.
+6. **The reverse.** Same, but for silently refusing citations that were delivered — with an operator
+   report that blames the wrong thing.
+
+## OUTPUT FORMAT
+
+```
+VERDICT
+<one paragraph: does a silent-wrongness path survive this design, and how reachable is it>
+
+FINDINGS
+<each: severity (BLOCKER/MATERIAL/MINOR), the concrete sequence, what the artifact would say, why it
+goes unnoticed, and the fix>
+
+ANSWERS TO THE SIX QUESTIONS
+<numbered, briefly>
+
+WHAT WOULD MAKE THE WRONGNESS VISIBLE
+<checks, assertions, or artifact fields that would turn each surviving path into a loud failure>
+```
