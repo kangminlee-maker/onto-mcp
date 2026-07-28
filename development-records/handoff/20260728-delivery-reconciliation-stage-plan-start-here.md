@@ -2,7 +2,9 @@
 
 ## 0. 지금 위치
 
-- 브랜치 `feat/observation-grant-stage2`, **미푸시 9커밋**. 워킹트리 클린(`benchmark/`만 untracked).
+- 브랜치 `feat/observation-grant-stage2`. **origin/main 대비 미푸시 35커밋** — 그중 이번 세션이
+  **10커밋**(`2f1f959`…`4cfa982`), 나머지는 이전 세션들의 관측 grant 작업. 워킹트리 클린
+  (`benchmark/`만 untracked — 리뷰·probe 원본이라 커밋하지 않는다).
 - 설계 SSOT: `development-records/design/20260727-observation-pull-layer-redesign/11-implementation-design-delivery-reconciliation.md`
 - **구현 코드는 아직 한 줄도 없다.** 이번 세션은 전부 설계·검증이었다.
 
