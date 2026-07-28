@@ -3365,6 +3365,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // fetched by the worker through a facade codex launches for THIS dispatch. The route writes the
       // descriptor (so its prompt parts are the dispatched ones by construction) and this reads the
       // receipt back — the `조회` term of `인용 ⊆ 조회 ⊆ 스냅샷`.
+      // Not a secret and not a capability (see the facade module header): it binds this descriptor to
+      // this launch so a crossed pair refuses instead of serving another snapshot.
+      //
+      // It is also in every artifact PATH below, which is what keeps two dispatches from sharing one.
+      // Keyed by round id alone, two overlapping launches wrote the same files — and since
+      // `prepareObservationReadFacadeLaunch` clears those paths, the second one DELETED the first's
+      // start-right file and then created its own, leaving two live grants on one launch
+      // (codex ultracode review, PR #271; the hole design §11-L2 warned about, reopened by the very
+      // clear that exists for resume). Unique paths remove the collision instead of policing it: the
+      // clear can no longer reach another dispatch's evidence, and `O_CREAT|O_EXCL` still refuses a
+      // second facade on the SAME launch, which is the case it was for.
+      const launchToken = randomUUID();
       const facadeLaunch = pull
         ? prepareObservationReadFacadeLaunch({
           sources: {
@@ -3374,15 +3386,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           },
           descriptorPath: path.join(
             pull.workDir,
-            `observation-read-descriptor-${input.roundId}.json`,
+            `observation-read-descriptor-${input.roundId}-${launchToken}.json`,
           ),
-          receiptPath: path.join(pull.workDir, `observation-read-receipt-${input.roundId}.json`),
+          receiptPath: path.join(
+            pull.workDir,
+            `observation-read-receipt-${input.roundId}-${launchToken}.json`,
+          ),
           // Where the facade records what it emitted AND claims the right to start (design §11-L2).
-          // Beside the receipt and keyed by the same round id, so a run's artifacts stay together.
-          emissionsPath: path.join(pull.workDir, `observation-read-emissions-${input.roundId}.json`),
-          // Not a secret and not a capability (see the facade module header): it binds this
-          // descriptor to this launch so a crossed pair refuses instead of serving another snapshot.
-          launchToken: randomUUID(),
+          emissionsPath: path.join(
+            pull.workDir,
+            `observation-read-emissions-${input.roundId}-${launchToken}.json`,
+          ),
+          launchToken,
           // The grant must not outlive its worker. The worker's own timeout is that lifetime, so it is
           // read from the config this dispatch will use rather than restated as a second number.
           ttlMs: llmConfig.timeout_ms ?? DEFAULT_WORKER_TIMEOUT_MS,
@@ -3415,7 +3430,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // gone — its transcript is only complete once codex has exited. Nothing reads the record yet;
       // switching consumers from `served` to `delivered` is a later, deliberate step.
       const deliveryRecordPath = pull
-        ? path.join(pull.workDir, `observation-read-delivery-${input.roundId}.json`)
+        ? path.join(
+          pull.workDir,
+          `observation-read-delivery-${input.roundId}-${launchToken}.json`,
+        )
         : null;
       if (facadeLaunch && deliveryRecordPath) {
         reconcileFacadeDelivery({

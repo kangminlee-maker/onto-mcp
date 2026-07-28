@@ -15,6 +15,7 @@ import {
   observationReadFacadeCodexArgs,
   observationReadFacadeServerEntry,
   parseObservationReadFacadeDescriptor,
+  prepareObservationReadFacadeLaunch,
   writeObservationReadFacadeDescriptor,
   type ObservationReadFacadeLaunch,
 } from "./observation-read-facade.js";
@@ -553,11 +554,13 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
     const pull = writePullSources();
     const stalePath = path.join(pull.workDir, "observation-read-receipt-maturation-round-1.json");
     let observedLaunchToken: string | undefined;
+    let observedReceiptPath: string | undefined;
     const author = createDirectCallReconstructDirectiveAuthor({
       sourceObservationCatalogTool: true,
       llmCall: (_s: string, _u: string, config?: Record<string, any>) => {
         const launch = config?.observation_read_facade as ObservationReadFacadeLaunch | undefined;
         observedLaunchToken = launch?.launchToken;
+        observedReceiptPath = launch?.receiptPath;
         // The facade never starts — the failure mode this exists for. Nothing writes a receipt now, so
         // whatever survives at the path is what the runtime will read.
         return Promise.resolve({
@@ -579,13 +582,62 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
         });
       },
     } as never);
-    // Seed the path, then let the author build its launch — which must clear it.
+    // Seed a receipt at the path a PREVIOUS naming shape used, then run.
     writeFileSync(stalePath, "placeholder");
     await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
       /never served/,
     );
     expect(observedLaunchToken).toBeTruthy();
-    expect(existsSync(stalePath)).toBe(false);
+    // The precondition is now removed by CONSTRUCTION rather than by clearing: every artifact path
+    // carries this launch's token, so a file left by any other dispatch is not even addressed by this
+    // one (codex ultracode review, PR #271 — keying on the round id alone let one dispatch's clear
+    // delete another's start right). The stale file is therefore untouched AND unread, and the run
+    // still fails closed above.
+    expect(existsSync(stalePath)).toBe(true);
+    expect(path.basename(observedReceiptPath!)).toContain(observedLaunchToken!);
+    expect(observedReceiptPath).not.toBe(stalePath);
+  });
+
+  /**
+   * codex ultracode review, PR #271. Two overlapping dispatches shared one artifact path, and
+   * `prepareObservationReadFacadeLaunch` clears that path — so the second launch DELETED the first's
+   * start-right file and then created its own, leaving two live grants on one launch. Unique paths
+   * remove the collision; this proves the deletion cannot reach across launches.
+   */
+  it("does not let one launch's preparation delete another launch's start right", () => {
+    const pull = writePullSources();
+    const launchOf = (token: string) =>
+      prepareObservationReadFacadeLaunch({
+        sources: {
+          observationsPath: pull.observationsPath,
+          safetyLedgerPath: pull.safetyLedgerPath,
+          safetyLedgerValidationPath: pull.safetyLedgerValidationPath,
+        },
+        descriptorPath: path.join(pull.workDir, `d-${token}.json`),
+        receiptPath: path.join(pull.workDir, `observation-read-receipt-round-1-${token}.json`),
+        emissionsPath: path.join(pull.workDir, `observation-read-emissions-round-1-${token}.json`),
+        launchToken: token,
+        ttlMs: 600_000,
+      });
+
+    const first = launchOf("launch-one");
+    writeObservationReadFacadeDescriptor({ launch: first, systemPrompt: "S", userPrompt: "U" });
+    const firstSession = new ObservationReadFacadeSession({
+      descriptor: parseObservationReadFacadeDescriptor(readFileSync(first.descriptorPath, "utf8")),
+    });
+    expect(existsSync(first.emissionsPath)).toBe(true); // the start right is held
+
+    // A second, overlapping dispatch prepares while the first is still live.
+    const second = launchOf("launch-two");
+    expect(existsSync(first.emissionsPath), "the first launch's start right survived").toBe(true);
+    // …and the first facade is still the only one that may serve under ITS launch.
+    expect(() =>
+      new ObservationReadFacadeSession({
+        descriptor: parseObservationReadFacadeDescriptor(readFileSync(first.descriptorPath, "utf8")),
+      })
+    ).toThrow();
+    expect(second.emissionsPath).not.toBe(first.emissionsPath);
+    expect(firstSession.token).toBeTruthy();
   });
 
   /**
