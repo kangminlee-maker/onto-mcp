@@ -1,11 +1,11 @@
-# START HERE — 배달 재조정: 구현 전 단계 착지, 다음은 라이브 검증 (2026-07-28)
+# START HERE — 배달 재조정: 구현·라이브 검증 완료, 다음은 위상 3종 + push (2026-07-28)
 
 ## 0. 지금 위치
 
-- 브랜치 `feat/observation-grant-stage2`. **origin/main 대비 미푸시 49커밋**. 워킹트리 클린
+- 브랜치 `feat/observation-grant-stage2`. **origin/main 대비 미푸시 52커밋**. 워킹트리 클린
   (`benchmark/`만 untracked — 리뷰·probe 원본이라 커밋하지 않는다).
 - 설계 SSOT: `development-records/design/20260727-observation-pull-layer-redesign/11-implementation-design-delivery-reconciliation.md` (806줄)
-- **단계 계획 전 구간 구현 완료.** 전체 스위트 **234파일 3,998 pass · 1 todo** · 게이트 **15 green + 2 rc=1**(베이스라인).
+- **단계 계획 전 구간 구현 + 라이브 N=1 PASS.** 스위트 **234파일 4,000 pass · 1 todo** · 게이트 **15 green + 2 rc=1**.
 
 ## 1. 설계는 닫혔다
 
@@ -38,31 +38,53 @@ D2 = **(a) 결정론적 구문 수리** · D3 = ② 단계 3·4 원자 착지.
 | **3a-1** | `844a8c2` | façade가 emissions 기록 + `O_CREAT\|O_EXCL` 배타 시작권리 |
 | **3a-2** | `2c3400f` | session id 배선 · rollout 로케이터 · 배달 기록 |
 | **3b+4** | `931c71f` | **권위 flip + 설정 키** `source_delivery_reconciliation`(기본 OFF) |
+| **수정** | `24dee15` | **`--ephemeral`이 rollout을 지운다** — 키 ON일 때만 뺀다 |
+| **라이브** | `7b35e89` | 실 codex 워커 1회로 전 구간 PASS |
 
-## 3. 다음 작업 = 라이브 검증
+## 3. 라이브 N=1 결과 (2026-07-28) — 통과
 
-구현은 끝났고 남은 것은 **실 façade에 대한 실측**이다. 지금까지의 증거는 전부 합성 probe
-서버 전사본이라, 실 façade의 `invocation.server` 값과 페이지 단위 수치는 미측정이다.
+증거 `benchmark/observation-read-pull-live/2026-07-28T12-24-46-105Z/`,
+기록 `design/.../20-measurement-rollout-record-structure.md` §6·§7.
 
-1. **라이브 N=1** — `source_delivery_reconciliation: true`로 실 codex 런을 돌려
-   배달 기록이 `verified`로 떨어지고 `delivered`가 실제 관찰 id를 담는지 확인.
-   같은 런에서 **§13-D1이 요구한 복구 불가 창의 실측 소요**를 함께 기록한다.
-   착수점 후보: `scripts/observation-read-pull-live.mts`(이미 실 codex + façade를 구동한다).
-2. **미확보 위상 3종** — `Promise.all` 동시 호출 · 다중 `text()` · 겹치는 외부 exec.
-   확보 전까지 그 위상은 **미검증으로 계상**한다(설계 §9-M4).
-3. **owner 승인 후 push/PR** — 48커밋.
+| 항목 | 결과 |
+|---|---|
+| 전송분 `invocation` | **`{server:"onto_observation", tool:"onto_observation_read"}`** — 실 façade 값 첫 확인 |
+| 재조정 | **verified** · `delivered`= 서빙된 2건과 동일 · 방출 1건(15,177자) verbatim 도달 |
+| **재조정 소요** | **4 ms** ← §13-D1이 요구한 수치. 결정(복구 행위 없이 문서화) 유지 |
+| 대조군 | 서버 이름만 옛 철자로 바꾸면 `unverifiable` — **이 통과는 이름에 민감하다** |
 
-## 4. 남겨둔 것 (의도된 것)
+### 착수 직전에 잡은 치명적 결함 — `--ephemeral`
 
-- `observationIdsServed`는 OFF 경로가 쓰므로 남는다. 소비자 사정권에서 완전히 빼는 것은
-  이 키를 **상시 ON으로 승격**하는 단계의 일이다.
+**설계 §8-5의 "현재 `--ephemeral` 미사용"은 틀렸다.** 프로덕션은 쓴다. 통제군 probe 결과:
+`--ephemeral`이면 codex가 **session id는 찍으면서 rollout을 안 쓴다**. 그대로 뒀으면 키를 켜도
+**영구 `rollout_not_found`** — 안 켜지는 게 아니라 켜져도 아무것도 인정 못 한다.
+이 트랙의 코퍼스가 전부 rollout을 남긴 이유도 그것이다: probe 스크립트들이 그 플래그를 안 썼다.
+
+→ **교훈: probe 인자를 프로덕션 인자와 동일시하지 마라.** 그리고 **session id가 있다고
+전사본이 있는 것이 아니다.**
+
+## 4. 다음 작업
+
+1. **미확보 위상 3종** — `Promise.all` 동시 호출 · 다중 `text()` · 겹치는 외부 exec.
+   라이브 런은 도구 1회 호출 위상이었다. 확보 전까지 그 위상은 **미검증으로 계상**(§9-M4).
+   probe 방식은 `scripts/probe-tool-result-truncation.mts`가 선례(합성 MCP 서버 + 지시된 JS).
+2. **owner 승인 후 push/PR** — 52커밋.
+
+## 5. 상시 ON 승격을 논할 때 함께 판단할 것
+
+- **디스크**: 키가 ON이면 워커 호출마다 `CODEX_HOME`에 세션 파일이 남는다 —
+  `--ephemeral`이 막고 있던 바로 그것. 이 머신엔 이미 rollout이 **55,000개** 넘는다.
+- `observationIdsServed` 완전 제거(지금은 OFF 경로가 쓴다).
+
+## 6. 남겨둔 것 (의도된 것)
+
 - `output-budget.ts`의 `json_parse_repair: 16_000`은 더는 디스패치를 크기 조절하지 않지만
   **최댓값**이라 지우면 `reconstruct-api` 출력 헤드룸이 16k→9k로 내려간다(별도 결정).
 - 설계 §12-S2가 요구한 `AUTHORED_OUTPUT_CONTRACT_VERSION` 회전은 **하지 않았다** — 그 상수
   주석이 이 경우를 플래그 스코프로 지시하고, 여기서 회전한 키는 재생성이 아니라 throw라
   이 기능을 켠 적 없는 런까지 깨진다. 의도(옛 규칙 원장의 조용한 재사용 차단)는 달성됐다.
 
-## 5. 상시 제약
+## 7. 상시 제약
 
 - `git add -A` 금지 = **경로 명시 add** · main 직접 커밋 금지 · **push/PR/머지는 owner 승인 후**
 - **리뷰 좌석은 `gpt-5.6-sol`만**(frontier=max / helm=xhigh). terra·luna는 리뷰 수준이 아니다 —
@@ -71,16 +93,16 @@ D2 = **(a) 결정론적 구문 수리** · D3 = ② 단계 3·4 원자 착지.
   내용 무관) → **NOT-RUN으로 계상**하고 잠시 뒤 재시도. 분류기 거절과 다른 실패이므로 stderr 구별.
 - 게이트 베이스라인 **15 green + 2 rc=1**(gitignored 세션 잔해). 매번 `ignored=yes tracked=no` +
   `src/`·`scripts/` 실위반 0 확인.
-- vitest **총계 확인**(침묵 스킵 탐지). 현재 **234파일 3,998 pass · 1 todo**.
+- vitest **총계 확인**(침묵 스킵 탐지). 현재 **234파일 4,000 pass · 1 todo**.
 - 리뷰어 지적도 **가설**이고, **내 서술도 가설이다** — 이 작업에서 내 문장이 **7번** 실측에 반박당했다.
 - **테스트가 자기 이름이 주장하는 것을 검사하지 않는 일이 5번** 있었고 전부 변이 배터리가 잡았다.
   그린 스위트로는 하나도 못 걸렀다. 새 가드마다 "이 가드를 끄면 어떤 테스트가 실패하는가"를 확인할 것.
 - **직렬화된 아티팩트를 텍스트로 건드리지 말 것**(3번 밟음). 파싱 → 구조 변경 → 재직렬화, 또는 파라미터.
 
-## 6. 재개 첫 명령
+## 8. 재개 첫 명령
 
 ```
-라이브 N=1 돌리자. 키 켜고 실 codex로.
+미확보 위상 3종 fixture 확보하자.
 ```
 
-읽을 순서: 이 파일 → 측정 `design/.../20-measurement-rollout-record-structure.md` → 설계 §6-7.
+읽을 순서: 이 파일 → 측정 `design/.../20-measurement-rollout-record-structure.md` §2·§6·§7 → 설계 §9-M4.
