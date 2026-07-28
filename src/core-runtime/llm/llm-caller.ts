@@ -335,6 +335,36 @@ export interface LlmCallResult {
   effective_base_url?: string;
   /** Declarative billing classification for audit output. */
   declared_billing_mode?: "subscription" | "per_token" | "local";
+  /**
+   * The codex worker's own session identity and lifetime, when the CLI announced one.
+   *
+   * codex prints `session id: <uuid>` on stderr and names its transcript after it, so this is how a
+   * dispatch finds ITS transcript without a "newest file" guess (design §1-2, §9-M1). Absent for every
+   * other route, and absent when the banner was not exactly one — see `codexWorkerSessionId`.
+   */
+  worker_session?: {
+    readonly id: string;
+    readonly startedAtMs: number;
+    readonly endedAtMs: number;
+  };
+}
+
+/**
+ * The codex session id from ONE child's stderr, or null.
+ *
+ * Requires EXACTLY one banner. Zero means the CLI never announced one; two or more means this buffer
+ * is not one child's, and binding a transcript on a guess is the failure mode design §9-M1 exists to
+ * prevent — "first UUID-looking string" and "newest matching rollout" are both forbidden. Null here is
+ * not "no transcript"; it is "we cannot say which", which reconciliation reports as unverifiable.
+ *
+ * Measured against 14 real worker transcripts: exactly one banner each, `session id: <uuid>`.
+ */
+export function codexWorkerSessionId(stderr: string): string | null {
+  const matches = stderr.match(
+    /^session id: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/gim,
+  );
+  if (matches === null || matches.length !== 1) return null;
+  return matches[0]!.slice("session id: ".length).trim();
 }
 
 // Phase 3 production found 30s too tight for large audit batches (37 items
@@ -1108,6 +1138,7 @@ async function callCodexCli(
     `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${workerTimeoutMs}`,
   );
 
+  const workerStartedAtMs = Date.now();
   const child = spawn("codex", args, {
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -1233,6 +1264,7 @@ async function callCodexCli(
     `codex success: model_id=${modelId ?? "codex-default"} input_tokens~=${in_tokens} output_tokens~=${out_tokens}`,
   );
 
+  const workerSessionId = codexWorkerSessionId(stderr);
   return {
     text,
     input_tokens: in_tokens,
@@ -1240,6 +1272,15 @@ async function callCodexCli(
     model_id: modelId ?? "codex-default",
     effective_base_url: "codex-cli://oauth",
     declared_billing_mode: "subscription",
+    ...(workerSessionId === null ? {} : {
+      worker_session: {
+        id: workerSessionId,
+        startedAtMs: workerStartedAtMs,
+        // The child has exited by here, so this bounds its life from the outside — a transcript
+        // stamped outside the window belongs to a different run (design §9-M1).
+        endedAtMs: Date.now(),
+      },
+    }),
   };
 }
 

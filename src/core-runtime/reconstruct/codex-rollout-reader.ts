@@ -13,6 +13,13 @@
  * the received set, and a shrunken received set reads as "less was delivered", which is exactly the
  * false statement this layer exists to avoid (§10-R2-1, §9-M3).
  *
+ * FINDING THE FILE. codex names a transcript after the session id it printed on stderr, under
+ * `<CODEX_HOME>/sessions/<YYYY>/<MM>/<DD>/`, and the date in that path is the LOCAL date the session
+ * started. `locateCodexRollout` therefore looks in the day directories the child's own lifetime spans
+ * (plus one either side, which absorbs a midnight crossing and any clock skew) and nowhere else. It
+ * never scans the whole store and never falls back to "the newest matching file" — that heuristic is
+ * exactly what design §9-M1 forbids, because the wrong transcript passes every later check.
+ *
  * NOT DONE HERE, deliberately:
  *   - pairing sent to received. The two carry different id spaces (`exec-<uuid>` against `call_<…>`),
  *     so there is no key to join on — measured, and the reason §9-F1 removes pairing rather than
@@ -21,6 +28,9 @@
  *     produces a received record, so the counts differ in all three measured fixtures. §11-L1's
  *     bidirectional check has to be scoped to our own server first, which is stage 2's job.
  */
+
+import { readdirSync } from "node:fs";
+import path from "node:path";
 
 /** Why a transcript cannot be used. Each maps to `unverifiable`, never to "delivered nothing". */
 export type CodexRolloutRefusal =
@@ -212,4 +222,56 @@ export function readCodexRollout(
   }
 
   return { ok: true, meta, sent, received };
+}
+
+/** Where codex keeps its transcripts. `CODEX_HOME` wins, as codex itself reads it. */
+export function codexHomeFrom(env: NodeJS.ProcessEnv, homeDir: string): string {
+  const override = env.CODEX_HOME;
+  return override !== undefined && override.length > 0 ? override : path.join(homeDir, ".codex");
+}
+
+/**
+ * The transcript for one session id, or null when it is not where codex would have put it.
+ *
+ * Null is "we have no transcript", never "nothing was delivered" — the caller reports it as
+ * unverifiable (§9-M2).
+ */
+export function locateCodexRollout(args: {
+  readonly codexHome: string;
+  readonly sessionId: string;
+  readonly childWindow: { readonly startedAtMs: number; readonly endedAtMs: number };
+}): string | null {
+  const DAY_MS = 86_400_000;
+  const days = new Set<string>();
+  for (
+    const atMs of [
+      args.childWindow.startedAtMs - DAY_MS,
+      args.childWindow.startedAtMs,
+      args.childWindow.endedAtMs,
+      args.childWindow.endedAtMs + DAY_MS,
+    ]
+  ) {
+    const at = new Date(atMs);
+    days.add(
+      path.join(
+        String(at.getFullYear()),
+        String(at.getMonth() + 1).padStart(2, "0"),
+        String(at.getDate()).padStart(2, "0"),
+      ),
+    );
+  }
+  for (const day of [...days].sort()) {
+    const directory = path.join(args.codexHome, "sessions", day);
+    let entries: string[];
+    try {
+      entries = readdirSync(directory);
+    } catch {
+      continue;
+    }
+    const match = entries.find((entry) =>
+      entry.endsWith(".jsonl") && entry.includes(args.sessionId)
+    );
+    if (match !== undefined) return path.join(directory, match);
+  }
+  return null;
 }

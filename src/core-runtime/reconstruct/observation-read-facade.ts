@@ -89,6 +89,16 @@ export function observationReadFacadeServerEntry(): string {
 /** The MCP tool name the worker sees. Named for the repo's `onto_*` convention (design §4). */
 export const OBSERVATION_READ_TOOL_NAME = "onto_observation_read";
 
+/**
+ * The name codex knows our MCP server by.
+ *
+ * Declared ONCE and read by both the registration below and delivery reconciliation, which scopes the
+ * transcript to "results from our server" before comparing anything (§11-L1). Two spellings of this
+ * name do not fail loudly: reconciliation would simply find no results of ours, call every run
+ * unverifiable, and be right about nothing.
+ */
+export const OBSERVATION_READ_MCP_SERVER_NAME = "onto_observation";
+
 /** Env var carrying the launch token. Read by the server entry, compared against the descriptor. */
 export const OBSERVATION_READ_LAUNCH_TOKEN_ENV = "ONTO_OBSERVATION_READ_LAUNCH_TOKEN";
 
@@ -250,21 +260,20 @@ function observationReadFacadeServerCommand(serverEntry: string): string {
 export function observationReadFacadeCodexArgs(launch: ObservationReadFacadeLaunch): string[] {
   const server = observationReadFacadeServerEntry();
   const command = observationReadFacadeServerCommand(server);
+  const key = `mcp_servers.${OBSERVATION_READ_MCP_SERVER_NAME}`;
   return [
     "-c",
-    `mcp_servers.onto_observation.command=${JSON.stringify(command)}`,
+    `${key}.command=${JSON.stringify(command)}`,
     "-c",
-    `mcp_servers.onto_observation.args=[${JSON.stringify(server)},${
+    `${key}.args=[${JSON.stringify(server)},${
       JSON.stringify(`--descriptor=${launch.descriptorPath}`)
     }]`,
     "-c",
-    `mcp_servers.onto_observation.env.${OBSERVATION_READ_LAUNCH_TOKEN_ENV}=${
-      JSON.stringify(launch.launchToken)
-    }`,
+    `${key}.env.${OBSERVATION_READ_LAUNCH_TOKEN_ENV}=${JSON.stringify(launch.launchToken)}`,
     "-c",
-    'mcp_servers.onto_observation.default_tools_approval_mode="approve"',
+    `${key}.default_tools_approval_mode="approve"`,
     "-c",
-    "mcp_servers.onto_observation.startup_timeout_sec=30",
+    `${key}.startup_timeout_sec=30`,
   ];
 }
 

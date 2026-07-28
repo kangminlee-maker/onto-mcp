@@ -284,6 +284,13 @@ export async function callJsonAuthor(args: {
   maxTokens: number;
   telemetry?: ReconstructExecutionTelemetryCollector;
   allowParseRepair?: boolean;
+  /**
+   * Observes the dispatched call's worker session, when the route reported one. Delivery
+   * reconciliation needs it to find THIS dispatch's transcript, and it is handed over as a callback
+   * rather than added to the return type because exactly one of nineteen call sites wants it — a
+   * wider return would make the other eighteen carry a value they must then ignore.
+   */
+  onWorkerSession?: (session: LlmCallResult["worker_session"]) => void;
 }): Promise<Record<string, unknown>> {
   const initialSink: JsonOutputSink = { parsed: null, failureMessage: null };
   const result = await callLlmRecorded({
@@ -301,6 +308,7 @@ export async function callJsonAuthor(args: {
       sink: initialSink,
     }),
   });
+  args.onWorkerSession?.(result.worker_session);
   if (initialSink.parsed) return initialSink.parsed;
   const initialErrorMessage = initialSink.failureMessage ??
     `${args.artifactName} author returned no parseable JSON object.`;

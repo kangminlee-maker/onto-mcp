@@ -20,8 +20,15 @@
  * observation perfectly well while leaving no verbatim copy — the artifact must not claim otherwise.
  * The refusal direction is safe (an unattested page is not citable) but the STATEMENT would be false.
  */
+import { randomBytes } from "node:crypto";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import type { CodexRolloutExpectations, CodexRolloutRefusal } from "./codex-rollout-reader.js";
-import { readCodexRollout } from "./codex-rollout-reader.js";
+import { codexHomeFrom, locateCodexRollout, readCodexRollout } from "./codex-rollout-reader.js";
+import {
+  OBSERVATION_READ_MCP_SERVER_NAME,
+  readObservationReadFacadeEmissions,
+} from "./observation-read-facade.js";
 import {
   type ObservationCoverage,
   type ObservationReadPartFact,
@@ -47,6 +54,13 @@ export interface EmissionAttestation {
 
 export type DeliveryReconciliationRefusal =
   | CodexRolloutRefusal
+  /** The CLI never announced exactly one session id, so no transcript can be bound (§9-M1). */
+  | "worker_session_unavailable"
+  /** codex kept no transcript where it would have put one — deleted, ephemeral, or another home. */
+  | "rollout_not_found"
+  | "rollout_unreadable"
+  /** The facade's own emissions record is missing, torn, or another launch's. */
+  | "emissions_record_unreadable"
   /** A result from OUR server that no recorded emission accounts for (§11-L1). */
   | "sent_without_recorded_emission"
   /** A recorded emission the transcript never shows the server sending. */
@@ -201,4 +215,195 @@ export function reconcileDelivery(input: DeliveryReconciliationInput): DeliveryR
     }
   }
   return { status: "verified", delivered, attestation: attested.attestation };
+}
+
+/**
+ * The persisted reconciliation result — design §2's "v3 receipt", named for what it holds.
+ *
+ * It is deliberately NOT the facade's receipt file: that one says what the runtime SERVED and is
+ * written by the facade, while this says what ARRIVED and is written only here, after the worker is
+ * gone (§9-F3). Two producers of one file is the shape that let a run die mid-flight and still have
+ * its emit-time record read as authority.
+ *
+ * `delivered` exists only on the verified branch, in the file as in the type (§11-L7).
+ */
+export type ObservationReadDeliveryRecordFile =
+  | {
+    readonly schema_version: "observation-read-delivery/v1";
+    readonly launch_token: string;
+    readonly status: "verified";
+    readonly delivered: readonly string[];
+    readonly attestation: readonly EmissionAttestation[];
+  }
+  | {
+    readonly schema_version: "observation-read-delivery/v1";
+    readonly launch_token: string;
+    readonly status: "unverifiable";
+    readonly reason: DeliveryReconciliationRefusal;
+  };
+
+const DELIVERY_RECORD_SCHEMA_VERSION = "observation-read-delivery/v1" as const;
+
+export function writeObservationReadDeliveryRecord(args: {
+  readonly recordPath: string;
+  readonly launchToken: string;
+  readonly reconciliation: DeliveryReconciliation;
+}): ObservationReadDeliveryRecordFile {
+  const file: ObservationReadDeliveryRecordFile = args.reconciliation.status === "verified"
+    ? {
+      schema_version: DELIVERY_RECORD_SCHEMA_VERSION,
+      launch_token: args.launchToken,
+      status: "verified",
+      delivered: [...args.reconciliation.delivered].sort(),
+      attestation: args.reconciliation.attestation,
+    }
+    : {
+      schema_version: DELIVERY_RECORD_SCHEMA_VERSION,
+      launch_token: args.launchToken,
+      status: "unverifiable",
+      reason: args.reconciliation.reason,
+    };
+  const temporaryPath = `${args.recordPath}.${randomBytes(6).toString("hex")}.tmp`;
+  writeFileSync(temporaryPath, `${JSON.stringify(file, null, 2)}\n`, "utf8");
+  renameSync(temporaryPath, args.recordPath);
+  return file;
+}
+
+/**
+ * Read a delivery record, FAIL-CLOSED. A missing file, torn JSON, an unknown shape or another launch's
+ * token all yield `null` — which a consumer must read as "we have no record", not as "nothing was
+ * delivered". The distinction is the whole point of §9-M2, and it survives here because `null` and
+ * `{status:"verified", delivered:[]}` are different values.
+ */
+export function readObservationReadDeliveryRecord(
+  recordPath: string,
+  expectedLaunchToken: string,
+): ObservationReadDeliveryRecordFile | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(recordPath, "utf8")) as unknown;
+  } catch {
+    return null;
+  }
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  if (record.schema_version !== DELIVERY_RECORD_SCHEMA_VERSION) return null;
+  if (typeof record.launch_token !== "string" || record.launch_token !== expectedLaunchToken) {
+    return null;
+  }
+  if (record.status === "unverifiable") {
+    return typeof record.reason === "string"
+      ? {
+        schema_version: DELIVERY_RECORD_SCHEMA_VERSION,
+        launch_token: record.launch_token,
+        status: "unverifiable",
+        reason: record.reason as DeliveryReconciliationRefusal,
+      }
+      : null;
+  }
+  if (record.status !== "verified") return null;
+  if (!Array.isArray(record.delivered) || !record.delivered.every((id) => typeof id === "string")) {
+    return null;
+  }
+  if (!Array.isArray(record.attestation)) return null;
+  const attestation: EmissionAttestation[] = [];
+  for (const entry of record.attestation) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return null;
+    const candidate = entry as Record<string, unknown>;
+    if (
+      typeof candidate.index !== "number" || typeof candidate.chars !== "number" ||
+      (candidate.disposition !== "verbatim_delivered" &&
+        candidate.disposition !== "verbatim_delivery_not_attested")
+    ) {
+      return null;
+    }
+    attestation.push({
+      index: candidate.index,
+      chars: candidate.chars,
+      disposition: candidate.disposition,
+    });
+  }
+  return {
+    schema_version: DELIVERY_RECORD_SCHEMA_VERSION,
+    launch_token: record.launch_token,
+    status: "verified",
+    delivered: record.delivered as string[],
+    attestation,
+  };
+}
+
+/**
+ * The codex versions this derivation has been verified against.
+ *
+ * A transcript from any other version is `unverifiable` — not because it is necessarily different, but
+ * because nobody has checked. Stage 4 makes this a gate with a re-verification procedure behind it;
+ * until then it is a constant, and its being a constant is what keeps an unverified version from
+ * silently producing a delivered set (§9-M3, §10-R2-1).
+ */
+export const VERIFIED_CODEX_CLI_VERSIONS: readonly string[] = ["0.145.0"];
+
+/**
+ * Reconcile one finished dispatch and persist the result. Called by the runtime AFTER the worker has
+ * exited, because a transcript is only complete then.
+ *
+ * Never throws for an evidence reason: every missing or unreadable input becomes an `unverifiable`
+ * record, which is the honest statement and the fail-closed one. It DOES throw if it cannot write its
+ * own record — a runtime that silently fails to persist evidence is the failure this whole layer
+ * exists to remove.
+ */
+export function reconcileFacadeDelivery(args: {
+  readonly launch: {
+    readonly emissionsPath: string;
+    readonly launchToken: string;
+  };
+  readonly workerSession: { id: string; startedAtMs: number; endedAtMs: number } | undefined;
+  readonly recordPath: string;
+  readonly cwd?: string;
+  readonly codexHome?: string;
+  readonly toolName: string;
+}): ObservationReadDeliveryRecordFile {
+  const persist = (reconciliation: DeliveryReconciliation): ObservationReadDeliveryRecordFile =>
+    writeObservationReadDeliveryRecord({
+      recordPath: args.recordPath,
+      launchToken: args.launch.launchToken,
+      reconciliation,
+    });
+
+  if (args.workerSession === undefined) {
+    return persist({ status: "unverifiable", reason: "worker_session_unavailable" });
+  }
+  const emissionsFile = readObservationReadFacadeEmissions(
+    args.launch.emissionsPath,
+    args.launch.launchToken,
+  );
+  if (emissionsFile === null) {
+    return persist({ status: "unverifiable", reason: "emissions_record_unreadable" });
+  }
+  const rolloutPath = locateCodexRollout({
+    codexHome: args.codexHome ?? codexHomeFrom(process.env, os.homedir()),
+    sessionId: args.workerSession.id,
+    childWindow: args.workerSession,
+  });
+  if (rolloutPath === null) {
+    return persist({ status: "unverifiable", reason: "rollout_not_found" });
+  }
+  let transcript: string;
+  try {
+    transcript = readFileSync(rolloutPath, "utf8");
+  } catch {
+    return persist({ status: "unverifiable", reason: "rollout_unreadable" });
+  }
+  return persist(reconcileDelivery({
+    emissions: emissionsFile.emissions,
+    transcript,
+    expect: {
+      sessionId: args.workerSession.id,
+      cwd: args.cwd ?? process.cwd(),
+      verifiedCliVersions: VERIFIED_CODEX_CLI_VERSIONS,
+      childWindow: args.workerSession,
+      // The SAME constant the registration uses, not a second spelling of it.
+      server: OBSERVATION_READ_MCP_SERVER_NAME,
+      tool: args.toolName,
+    },
+  }));
 }

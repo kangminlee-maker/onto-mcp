@@ -10,7 +10,8 @@
  * this module being loaded at all.
  */
 import { callLlm } from "../llm/llm-caller.js";
-import type { LlmCallConfig } from "../llm/llm-caller.js";
+import type { LlmCallConfig, LlmCallResult } from "../llm/llm-caller.js";
+import { reconcileFacadeDelivery } from "./delivery-reconciliation.js";
 import { SemanticMapDispatchAccounting } from "../llm/sealed-dispatch-capability.js";
 import type { ResolvedLlmDispatchCapability } from "../llm/sealed-dispatch-capability.js";
 import { readStructuredDispatchFailureEvidence } from "../llm/structured-dispatch-error.js";
@@ -3380,6 +3381,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ttlMs: llmConfig.timeout_ms ?? DEFAULT_WORKER_TIMEOUT_MS,
         })
         : undefined;
+      let workerSession: LlmCallResult["worker_session"];
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig: facadeLaunch
@@ -3390,7 +3392,24 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         maxTokens: 3800,
         systemPrompt: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
         userPayload: answerSupportUserPayload,
+        onWorkerSession: (session) => {
+          workerSession = session;
+        },
       });
+      // Delivery reconciliation (design §6-2 stage 3a-2). Runs HERE because it needs the worker to be
+      // gone — its transcript is only complete once codex has exited. Nothing reads the record yet;
+      // switching consumers from `served` to `delivered` is a later, deliberate step.
+      if (facadeLaunch && pull) {
+        reconcileFacadeDelivery({
+          launch: facadeLaunch,
+          workerSession,
+          recordPath: path.join(
+            pull.workDir,
+            `observation-read-delivery-${input.roundId}.json`,
+          ),
+          toolName: OBSERVATION_READ_TOOL_NAME,
+        });
+      }
       // Read the receipt AFTER the dispatch: the facade rewrote it after every attempt, and the worker
       // is gone by now. FAIL-CLOSED — a missing or torn receipt yields an empty served set, which makes
       // every citation inadmissible rather than unchecked.
