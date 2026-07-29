@@ -3426,10 +3426,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         },
       });
       // Delivery reconciliation (design §6-2 stage 3a-2). Runs HERE because it needs the worker to be
-      // gone — its transcript is only complete once codex has exited. Nothing reads the record yet;
-      // switching consumers from `served` to `delivered` is a later, deliberate step.
+      // gone — its transcript is only complete once codex has exited.
+      //
+      // Gated on the key, not merely on the pull layer. With the key absent nothing reads the record,
+      // and the dispatch also kept `--ephemeral`, so codex wrote no transcript to read: reconciling
+      // anyway would scan the sessions tree and leave an `unverifiable` record on every run. The
+      // emissions file is NOT gated with it — that one is the start-right claim (§11-L2) and stands
+      // whether or not anything later reconciles against it.
       const deliveryRecordPath = launchPaths?.deliveryRecordPath ?? null;
-      if (facadeLaunch && deliveryRecordPath) {
+      if (args.sourceDeliveryReconciliation === true && facadeLaunch && deliveryRecordPath) {
         reconcileFacadeDelivery({
           launch: facadeLaunch,
           workerSession,

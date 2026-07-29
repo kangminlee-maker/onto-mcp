@@ -1,5 +1,13 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -960,6 +968,49 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
     });
     await (author as any).writeAnswerSupportLedger(authorInput(pull));
     expect(dispatched[0]!.config.persist_worker_transcript).toBe(true);
+  });
+
+  /**
+   * What OFF means, stated as an artifact count rather than as prose in a PR body — where I asserted
+   * "OFF is identical to today" and was wrong. Reconciliation used to run whenever the pull layer did,
+   * so a key-absent dispatch scanned for a rollout that `--ephemeral` never wrote and left a record
+   * saying `unverifiable` that nothing reads.
+   *
+   * The emissions file is deliberately NOT in this count: it is the start-right claim (design §11-L2),
+   * a defect fix that stands on its own, and it must keep being written with the key absent.
+   */
+  it("writes NO delivery record when the key is absent, and one when it is present", async () => {
+    const deliveryRecordsIn = (workDir: string) =>
+      readdirSync(workDir).filter((entry) => entry.startsWith("observation-read-delivery-"));
+    const emissionsIn = (workDir: string) =>
+      readdirSync(workDir).filter((entry) => entry.startsWith("observation-read-emissions-"));
+    const fetched = [allObservationIds[0]!];
+    const transcriptOf = (sessionId: string) => (emissions: string[]) => ({
+      sessionId,
+      text: plantedTranscript({ sessionId, sent: emissions, rendered: emissions }),
+    });
+
+    const off = writePullSources();
+    const { author: offAuthor } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      transcript: transcriptOf("01900000-0000-7000-8000-0000000000f1"),
+    });
+    await (offAuthor as any).writeAnswerSupportLedger(authorInput(off));
+    expect(deliveryRecordsIn(off.workDir)).toEqual([]);
+    // Non-vacuity: the facade really ran in this dispatch, so an empty count means "not written"
+    // rather than "nothing happened here".
+    expect(emissionsIn(off.workDir)).toHaveLength(1);
+
+    const on = writePullSources();
+    const { author: onAuthor } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      deliveryReconciliation: true,
+      transcript: transcriptOf("01900000-0000-7000-8000-0000000000f2"),
+    });
+    await (onAuthor as any).writeAnswerSupportLedger(authorInput(on));
+    expect(deliveryRecordsIn(on.workDir)).toHaveLength(1);
   });
 
   it("does NOT ask for it when the key is absent — today's dispatch is unchanged", async () => {
