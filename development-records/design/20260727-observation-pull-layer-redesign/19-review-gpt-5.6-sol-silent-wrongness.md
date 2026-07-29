@@ -6,7 +6,7 @@
 >
 > 이 렌즈는 capacity로 **4회 NOT-RUN 후 5번째에 반환**됐다(max 3·xhigh 1 거절 → max 성공).
 > 거절은 전부 추론 전이라 토큰 소모 0이며, 실패 증거는
-> `benchmark/reconciliation-review-r3/silent-wrongness/attempt*-capacity-error.stderr.txt`.
+> `development-records/benchmark/reconciliation-review-r3/silent-wrongness/attempt*-capacity-error.stderr.txt`.
 
 ## 반환 원문
 

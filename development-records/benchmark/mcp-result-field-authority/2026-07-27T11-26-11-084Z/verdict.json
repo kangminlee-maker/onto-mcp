@@ -1,0 +1,28 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "mode": "counting",
+  "rows": [
+    {
+      "mode": "counting",
+      "index": 0,
+      "label": "CONTROL: 20k text + tiny structuredContent",
+      "survival_map": "####.",
+      "text_tags": 4,
+      "points": 5
+    },
+    {
+      "mode": "counting",
+      "index": 1,
+      "label": "TREATMENT: 20k text + 150k structuredContent",
+      "survival_map": ".....",
+      "text_tags": 0,
+      "points": 5
+    },
+    {
+      "mode": "counting",
+      "verdict": "control did not survive — the 20k text was cut on its own, so this run cannot attribute anything to structuredContent. Re-run with a smaller text."
+    }
+  ]
+}

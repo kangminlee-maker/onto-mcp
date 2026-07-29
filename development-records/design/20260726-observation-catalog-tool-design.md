@@ -363,7 +363,7 @@ feature 이름은 **LLM 호출 없이** 확정했다 — `--strict-config`가 �
 
 §12가 단계 3의 선행 조건으로 남겨둔 세 질문에 답한다. **측정 조건은 production 배선 그대로**이며
 (`callCodexCli`, `llm-caller.ts:944-995`), 모든 팔이 대조군을 동반한다.
-증거·재현 절차는 `benchmark/observation-facade-probe/`.
+증거·재현 절차는 `development-records/benchmark/observation-facade-probe/`.
 
 | 팔 | 추가 | 결과 |
 |---|---|---|

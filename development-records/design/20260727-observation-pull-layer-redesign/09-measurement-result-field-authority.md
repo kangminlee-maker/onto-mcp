@@ -1,7 +1,7 @@
 # 측정 — 결과의 어느 부분이 모델에 닿고, 어느 부분이 절단 천장을 먹는가 (2026-07-27)
 
 > 1+2안과 3안의 **작업량·위험을 정확히 재기 위한** 측정. 하니스:
-> `scripts/probe-mcp-result-field-authority.mts` · 증거: `benchmark/mcp-result-field-authority/`
+> `scripts/probe-mcp-result-field-authority.mts` · 증거: `development-records/benchmark/mcp-result-field-authority/`
 > 대상: codex-cli 0.145.0 · `gpt-5.6-luna`/low · 실 `codex exec` + 실 강화 플래그
 
 ## 1. 실측 2건

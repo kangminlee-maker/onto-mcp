@@ -26,7 +26,8 @@ The active runtime lives here and must run without reaching into another
 | `scripts/` | repository-local verification, conformance, and benchmark harnesses |
 | `docs/architecture/` | current architecture, continuation, operational notes |
 | `docs/decisions/` | accepted direction and architecture decisions |
-| `development-records/` | development history, audits, designs, handoff records — outside the authority hierarchy; `development-records/archive/` isolates retired CLI/process/learning/govern/evolve material |
+| `development-records/` | development history, audits, designs, handoff records — outside the authority hierarchy; `development-records/archive/` isolates retired CLI/process/learning/govern/evolve material; `development-records/benchmark/` is the tracked home for probe evidence a document cites |
+| `benchmark/` | **gitignored** working area where `scripts/` harnesses dump raw probe output. Nothing durable lives here — evidence a document cites is promoted into `development-records/benchmark/` (see its `PROVENANCE-promoted.md`) |
 | `IMPLEMENTATION_MAP.html` | visual architecture and roadmap dashboard |
 
 `.onto/review/*` and `.onto/reconstruct/*` are execution session outputs, not

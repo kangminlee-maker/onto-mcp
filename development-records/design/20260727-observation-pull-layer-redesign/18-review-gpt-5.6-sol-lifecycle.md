@@ -6,7 +6,7 @@
 >
 > 같은 라운드의 다른 관점([16](16-crossverify-packet-silent-wrongness.md), "조용히 틀리는 곳")은
 > **NOT-RUN ×4** — 전부 provider capacity(추론 전 거절). 증거
-> `benchmark/reconciliation-review-r3/silent-wrongness/attempt*-capacity-error.stderr.txt`.
+> `development-records/benchmark/reconciliation-review-r3/silent-wrongness/attempt*-capacity-error.stderr.txt`.
 
 ## 반환 원문
 

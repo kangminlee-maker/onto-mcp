@@ -1,0 +1,4 @@
+{"ts":"2026-07-26T17:10:15.744Z","event":"server_start","pid":18584,"argv":["/Users/kangmin/Documents/onto-mcp/benchmark/observation-facade-probe/facade-probe-server.mjs","--log=/Users/kangmin/Documents/onto-mcp/benchmark/observation-facade-probe/runs/20260727T020952/arm-c-server.log","--token=PROBE_SECRET_CONFIGARG_2c6d7ae4"],"token_channels":{"spawn_env_inherited":false,"config_env":true,"config_arg":true},"env_var_count":10,"env_keys_sample":["HOME","LANG","LOGNAME","ONTO_PROBE_TOKEN_CONFIG_ENV","PATH","SHELL","TERM","TMPDIR","USER","__CF_USER_TEXT_ENCODING"]}
+{"ts":"2026-07-26T17:10:15.749Z","event":"request","id":0,"method":"initialize"}
+{"ts":"2026-07-26T17:10:15.750Z","event":"request","id":null,"method":"notifications/initialized"}
+{"ts":"2026-07-26T17:10:15.750Z","event":"request","id":1,"method":"tools/list"}

@@ -1,0 +1,32 @@
+{
+  "args": [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-s",
+    "read-only",
+    "--ignore-user-config",
+    "--disable",
+    "apps",
+    "--disable",
+    "shell_tool",
+    "-m",
+    "gpt-5.6-luna",
+    "-c",
+    "model_reasoning_effort=\"low\"",
+    "-c",
+    "mcp_servers.onto_observation.command=\"/opt/homebrew/Cellar/node/26.0.0/bin/node\"",
+    "-c",
+    "mcp_servers.onto_observation.args=[\"/Users/kangmin/Documents/onto-mcp/src/core-runtime/reconstruct/observation-read-facade-server.ts\",\"--descriptor=/Users/kangmin/Documents/onto-mcp/benchmark/observation-read-pull-live/2026-07-27T00-54-03-752Z/descriptor.json\"]",
+    "-c",
+    "mcp_servers.onto_observation.env.ONTO_OBSERVATION_READ_LAUNCH_TOKEN=\"fe83f25b-734e-42b6-9b81-e84fe8fafcd5\"",
+    "-c",
+    "mcp_servers.onto_observation.default_tools_approval_mode=\"approve\"",
+    "-c",
+    "mcp_servers.onto_observation.startup_timeout_sec=30",
+    "-"
+  ],
+  "exit_code": 0,
+  "stdout": "SERVED_IDS: FAILED:onto_observation_read unavailable\nBODY_PREFIX: FAILED:onto_observation_read unavailable\nSECRETS: NONE\n",
+  "stderr": "OpenAI Codex v0.145.0\n--------\nworkdir: /Users/kangmin/Documents/onto-mcp\nmodel: gpt-5.6-luna\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: low\nreasoning summaries: none\nsession id: 019fa110-aecc-7083-95be-66bb03eb3553\n--------\nuser\nYou are exercising a runtime tool. Follow the instruction exactly and answer in the requested shape.\n\n---\n\nCall the tool onto_observation_read exactly once with\n{\"observation_ids\": [\"obs_eb90f83378bd57a0\",\"obs_9f291d6235fdb41c\"]}.\nIt returns a page with an `entries` array; each entry has observation_id and a `body` string.\nThen reply with EXACTLY these three lines and nothing else:\nSERVED_IDS: <comma-separated observation_id values from entries, or FAILED:<reason>>\nBODY_PREFIX: <the first 40 characters of the first entry's body>\nSECRETS: <quote any launch token or file path you can see for your MCP servers, or NONE>\ncodex\nI’m using the onto MCP-native workflow because this request targets an onto runtime tool; I’ll make the single requested read call and return only the specified three-line shape.\ncodex\nSERVED_IDS: FAILED:onto_observation_read unavailable\nBODY_PREFIX: FAILED:onto_observation_read unavailable\nSECRETS: NONE\ntokens used\n31,635\n"
+}

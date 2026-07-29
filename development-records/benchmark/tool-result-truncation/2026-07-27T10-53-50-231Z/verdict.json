@@ -1,0 +1,31 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "tool_output_token_limit": null,
+  "quantiles": 9,
+  "rows": [
+    {
+      "index": 0,
+      "requested_size": 65536,
+      "actual_chars": 65553,
+      "filler": "alpha",
+      "nonces": [
+        "ad5603576b",
+        "94f190b720",
+        "c08aba996d",
+        "ff71fb1b7a",
+        "42efd7e5dd",
+        "f7c3a93441",
+        "38b42e86df",
+        "16f33943bb",
+        "a61b4c8348"
+      ],
+      "outcome": "truncated",
+      "shape": "MIDDLE_ELIDED",
+      "survival_map": "###...###",
+      "probe_points_lost": 3,
+      "notice": null
+    }
+  ]
+}

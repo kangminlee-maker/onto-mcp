@@ -52,3 +52,10 @@ development-records/benchmark/review-cert/20260712-101717/capture/
 development-records/benchmark/review-cert/20260712-101717/review-cert-record.json
 development-records/benchmark/review-cert/20260712-101717/runs/rows.progress.jsonl
 scripts/.code-probe-out/
+
+# Probe/benchmark WORKING area at the repo root. Harnesses under `scripts/` write here
+# (raw transcripts, input copies, reviewer reasoning traces), and it grows without bound —
+# 19 MB by 2026-07-29. Nothing durable lives here: evidence a document CITES is promoted
+# into `development-records/benchmark/<name>/`, which is tracked. See that tree's
+# PROVENANCE-promoted.md for what is promoted and what is deliberately left behind.
+/benchmark/

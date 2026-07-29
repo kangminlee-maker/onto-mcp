@@ -1,0 +1,24 @@
+{
+  "worker_session_id": "019fa8af-6551-73e0-a1ca-c91c47a71af4",
+  "verified_cli_versions": [
+    "0.145.0"
+  ],
+  "mcp_server_name": "onto_observation",
+  "reconciliation_ms": 4,
+  "record": {
+    "schema_version": "observation-read-delivery/v1",
+    "launch_token": "02be9bec-b0fc-4be2-929b-95ac4f9e93ac",
+    "status": "verified",
+    "delivered": [
+      "obs_9f291d6235fdb41c",
+      "obs_eb90f83378bd57a0"
+    ],
+    "attestation": [
+      {
+        "index": 0,
+        "chars": 15177,
+        "disposition": "verbatim_delivered"
+      }
+    ]
+  }
+}

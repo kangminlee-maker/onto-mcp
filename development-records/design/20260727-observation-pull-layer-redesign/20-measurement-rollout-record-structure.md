@@ -5,7 +5,7 @@
 
 ## 0. 대상
 
-`benchmark/tool-result-truncation/*/worker-stderr.txt`의 `session id:` 14개 → 전부
+`development-records/benchmark/tool-result-truncation/*/worker-stderr.txt`의 `session id:` 14개 → 전부
 `~/.codex/sessions/2026/07/27/rollout-*.jsonl`로 **14/14 존재**. 이 문서의 모든 수치는 그 14개에서
 직접 센 것이다.
 
@@ -161,7 +161,7 @@ ON일 때만 저자가 요청하고, 그때만 codex args에서 `--ephemeral`이
 ## 7. 라이브 N=1 (2026-07-28) — 실 façade에서 전 구간 통과
 
 `scripts/observation-read-pull-live.mts`를 재조정까지 확장해 실 codex 워커 1회로 돌렸다.
-증거: `benchmark/observation-read-pull-live/2026-07-28T12-24-46-105Z/`.
+증거: `development-records/benchmark/observation-read-pull-live/2026-07-28T12-24-46-105Z/`.
 
 | 항목 | 결과 |
 |---|---|
@@ -190,5 +190,7 @@ server=observation_read_facade  -> unverifiable (recorded_emission_without_sent_
 즉 이 라이브 통과는 **이름에 민감하다**. 커밋 `2c3400f`에서 고친 추측이 살아 있었다면
 이 실행은 통과하지 못했다.
 
-**아직 미확보**: `Promise.all` 동시 호출 · 다중 `text()` · 겹치는 외부 exec. 이번 런은 워커가
-도구를 1회 호출한 위상이다.
+**이번 런의 위상**: 워커가 도구를 1회 호출했다. `Promise.all` 동시 호출 · 다중 `text()` ·
+겹치는 외부 exec은 이 런으로 확보되지 않았고 — **라이브로 확보할 필요가 없다고 2026-07-29에
+종결했다**(§2의 종결 상자). 판정이 그 세 축을 보지 않는다는 것이 근거이며, 그 무관함 자체가
+테스트로 고정돼 있다.

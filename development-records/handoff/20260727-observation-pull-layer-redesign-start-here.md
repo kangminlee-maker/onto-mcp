@@ -72,7 +72,7 @@ Node 스트림 4 · 단계 1 리더 2 · 단계 2 grant 1 · 재사용 서브시
 
 | 후보 | 판정 | 근거 |
 |---|---|---|
-| codex 트랜스크립트에서 조회 유도 | **반증** | 세션 로그는 `started`/`(completed)`만 기록. 인자·결과·id 없음. stdout의 id는 **모델의 자기 보고**. 기존 라이브 아티팩트 `benchmark/observation-read-pull-live/2026-07-27T00-56-14-986Z/worker.json`에서 확인(신규 디스패치 0) |
+| codex 트랜스크립트에서 조회 유도 | **반증** | 세션 로그는 `started`/`(completed)`만 기록. 인자·결과·id 없음. stdout의 id는 **모델의 자기 보고**. 기존 라이브 아티팩트 `development-records/benchmark/observation-read-pull-live/2026-07-27T00-56-14-986Z/worker.json`에서 확인(신규 디스패치 0) |
 | 런타임이 소켓으로 직접 서빙 | **도달 가능** | `scripts/probe-facade-socket-reach.mts` PASS — 자식이 부모 유닉스 소켓에 연결, 부모 nonce가 모델까지 도달 |
 
 **단, 소켓 PASS는 설계를 결정하지 않는다.** fable 초안의 지적이 옳다 — 신뢰의 뿌리는 *위치*가 아니라
@@ -116,7 +116,7 @@ fable의 기각 논거 ①("회계 분할")은 **순수 전선 자식에는 해�
 > **codex가 MCP 도구 결과를 조용히 절단하는가?** → **한다.**
 
 전체 기록: [05-measurement-tool-result-truncation.md](../design/20260727-observation-pull-layer-redesign/05-measurement-tool-result-truncation.md)
-하니스: `scripts/probe-tool-result-truncation.mts` · 증거: `benchmark/tool-result-truncation/`
+하니스: `scripts/probe-tool-result-truncation.mts` · 증거: `development-records/benchmark/tool-result-truncation/`
 
 핵심 3줄:
 

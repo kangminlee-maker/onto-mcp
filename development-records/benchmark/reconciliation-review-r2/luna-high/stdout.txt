@@ -1,0 +1,41 @@
+VERDICT
+SOUND WITH CONDITIONS — Under the stated criterion, whole-string presence in a verified post-trim payload is sound: the serialized page, including its body, necessarily entered model context. The design is not causal proof that the matching MCP response produced that context, so it is acceptable only if “delivered” means context containment. It should remain a provider-specific, version- and topology-gated realization.
+
+FINDINGS
+- MATERIAL — The rendering matcher can become unsound if it normalizes or repairs payloads. Sequence: an output contains a projected or altered page; reconciliation parses/re-encodes it and reconstructs the emission string, certifying content that was never present whole. Fix: allow only explicitly injective unwrapping/decoding; never pretty-print, project, canonicalize, or repair.
+
+- MATERIAL — Version validation alone does not define transcript completeness. Sequence: the same CLI version emits a new record shape or multi-call topology; the reader inspects the wrong field, ignores an unknown record, or accepts a pre-trim field. Fix: pin a complete transcript/topology profile per verified version, reject unknown record kinds/fields and malformed or incomplete JSONL, and require a clean end-of-transcript condition.
+
+- MATERIAL — Emission persistence and launch binding are underspecified. Sequence: a reused work directory contains emissions from dispatch A while dispatch B has a different snapshot or no facade. The reconciliation can combine artifacts from different launches, especially if causal “served by this dispatch” remains part of the contract. Fix: clear before launch; bind emissions to launch token, session id, snapshot digest, and ordered sequence; write atomically; reject stale or mixed artifacts.
+
+- MATERIAL — “Unverifiable” cannot preserve an operator cause if the runtime dies before reconciliation. Sequence: the worker exits, then the runtime crashes before publishing reconciliation; the consumer sees empty evidence, but no durable cause exists. Fix: persist a pending reconciliation marker before dispatch and finalize it as verified or unverifiable transactionally.
+
+- MINOR — The reducer extraction is correct only if it becomes the sole implementation. Any remaining inline fold can drift on allowance changes or part handling. Fix: property-test the extracted reducer against fresh replay of arbitrary page subsets and remove the old inline rule.
+
+ANSWERS TO THE SEVEN QUESTIONS
+1. No, not under the stated physical-context criterion, assuming the transcript field truly is model context and matching is exact. Partial pages remain incomplete and are rejected by the existing consumer.
+
+2. Escaping, wrappers, pretty-printing, and several calls per exec mostly cause safe under-counting. Repeated or coincident content loses causal attribution, but not context containment: if the exact page appears, its body entered context. Lossy normalization could create a false positive.
+
+3. It loses call-to-output attribution and may certify an emission because a later output contains it. That is only a correctness issue if delivery means “this MCP response was delivered”; it is not one if delivery means “the page entered this model context.”
+
+4. Yes. Folding a subset in original emission order equals running the same reducer over only those pages. Emission order is correct because allowance changes are sequence-sensitive; transcript order is not a substitute.
+
+5. Yes. `verified` with an empty set and `unverifiable` are operationally different. It does not create a second authority if DeliveryReconciliation alone produces the delivered set and the status merely records its outcome.
+
+6. Extracting the reducer avoids duplicating the allowance rule. The new risk is duplicating delivery authority through stale emissions, old receipts, or alternate consumers. The ON path must read only reconciliation; the OFF path may retain the old byte-identical behavior.
+
+7. Adequate as a bounded Codex realization, not as a provider-independent guarantee. The verified version list, strict structure gate, topology pinning, and fail-closed behavior are sufficient only for tested profiles. The acknowledgement alternative is correctly rejected: it proves challenge arrival, not page-body arrival, and consumes calls.
+
+WHAT I WOULD MEASURE BEFORE BUILDING
+1. End-to-end Codex runs with at least 3 repetitions and 2 fixtures per topology: independently compare emitted pages, raw MCP records, post-trim payloads, matcher decisions, and known delivered parts.
+
+2. Actual rendering matrix: direct return, `JSON.stringify`, nested objects, escaped strings, pretty output, warnings, multiple MCP calls per exec, duplicate pages, and partial pages. Record false positives and false negatives separately.
+
+3. Transcript gate matrix across supported CLI versions and invocation flags, including malformed JSONL, unknown records, missing tails, mixed sessions, stale rollouts, and clean/unclean termination.
+
+4. Crash and race points around emission persistence, stdout write completion, worker exit, transcript flush, and reconciliation publication. Every uncertain case must produce no receipt and a durable cause.
+
+5. Property tests for reducer replay, especially allowance changes, repeated observations, cursor pages, and arbitrary delivered subsets.
+
+6. OFF-path byte identity and ON-path authority tests: no old receipt may authorize citations after successful reconciliation wiring.

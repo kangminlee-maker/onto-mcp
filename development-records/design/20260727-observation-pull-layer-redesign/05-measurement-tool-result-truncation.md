@@ -2,7 +2,7 @@
 
 > 착수 안내 §3이 지목한 작업. 두 초안이 **공통 CRITICAL**로 올린 항목이고, 재설계 질문이기 이전에
 > **이미 커밋된 3b에 있는 위험**이다.
-> 하니스: `scripts/probe-tool-result-truncation.mts` · 증거: `benchmark/tool-result-truncation/`
+> 하니스: `scripts/probe-tool-result-truncation.mts` · 증거: `development-records/benchmark/tool-result-truncation/`
 > 대상: codex-cli **0.145.0** · `gpt-5.6-luna` / low · 실 `codex exec` + 실 강화 플래그
 
 ## 0. 한 줄 결론

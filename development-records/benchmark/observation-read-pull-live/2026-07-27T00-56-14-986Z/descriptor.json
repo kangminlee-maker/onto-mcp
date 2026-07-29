@@ -1,0 +1,13 @@
+{
+  "schema_version": "observation-read-facade-descriptor/v1",
+  "launch_token": "f58ebd30-15e8-4a9f-9cef-fd318ca0a2f6",
+  "sources": {
+    "observationsPath": "/Users/kangmin/Documents/onto-mcp/benchmark/observation-read-pull-live/2026-07-27T00-56-14-986Z/source-observations.yaml",
+    "safetyLedgerPath": "/Users/kangmin/Documents/onto-mcp/benchmark/observation-read-pull-live/2026-07-27T00-56-14-986Z/source-safety-ledger.yaml",
+    "safetyLedgerValidationPath": "/Users/kangmin/Documents/onto-mcp/benchmark/observation-read-pull-live/2026-07-27T00-56-14-986Z/source-safety-ledger-validation.yaml"
+  },
+  "system_prompt": "You are exercising a runtime tool. Follow the instruction exactly and answer in the requested shape.",
+  "user_prompt": "Call the tool onto_observation_read exactly once with\n{\"observation_ids\": [\"obs_eb90f83378bd57a0\",\"obs_9f291d6235fdb41c\"]}.\nIt returns a page with an `entries` array; each entry has observation_id and a `body` string.\nThen reply with EXACTLY these three lines and nothing else:\nSERVED_IDS: <comma-separated observation_id values from entries, or FAILED:<reason>>\nBODY_PREFIX: <the first 40 characters of the first entry's body>\nSECRETS: <quote any launch token or file path you can see for your MCP servers, or NONE>",
+  "receipt_path": "/Users/kangmin/Documents/onto-mcp/benchmark/observation-read-pull-live/2026-07-27T00-56-14-986Z/receipt.json",
+  "ttl_ms": 600000
+}

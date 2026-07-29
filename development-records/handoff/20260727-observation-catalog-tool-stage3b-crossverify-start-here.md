@@ -77,9 +77,9 @@ façade  → 자기 grant를 mint하고 stdio로 서빙 · 시도마다 receipt 
 - 게이트 15 green + 2 rc=1(베이스라인: gitignored 세션 잔해)
 - `scripts/off-parity-probe.mts` — OFF byte-parity, 두 트리 × 3코퍼스(3a 값에서 불변)
 - `scripts/observation-catalog-tool-replay.mts` — 실 코퍼스 6팔 + 팔 F 자기점검
-- `benchmark/stage3a/mutation-battery.mjs` — 변이 20종(3a 대상; **3b용 배터리는 아직 없다**)
+- `development-records/benchmark/stage3a/mutation-battery.mjs` — 변이 20종(3a 대상; **3b용 배터리는 아직 없다**)
 - `scripts/observation-read-pull-live.mts` — **실 워커 라이브**(1 dispatch 소모). 증거는
-  `benchmark/observation-read-pull-live/<ts>/`
+  `development-records/benchmark/observation-read-pull-live/<ts>/`
 - **pull 테스트의 스텁 경계**: 주입된 llmCall이 워커를 연기한다 — 라우트와 똑같이 디스크립터를 쓰고
   **실제 façade 세션**을 구동한다. 스텁은 전송뿐이지만, **codex가 실제로 띄우는 것과는 다르다**(§4 교훈)
 
@@ -132,4 +132,4 @@ production이다. 처방은 실행기를 엔트리에서 **파생**하고, 그 �
   `invariant-drift` = gitignored 세션 잔해). 매번 `ignored=yes tracked=no` + `src/`·`scripts/` 실위반 0 확인
 - vitest 총계를 **매번 확인**한다(침묵 스킵 탐지). 현재 **224파일 3,827 pass · 1 todo**
 - 라이브 하니스는 **실 dispatch를 소모**한다. 디버깅용으로 반복 실행하지 말고, 실패하면 먼저
-  `benchmark/observation-read-pull-live/<ts>/worker.json`을 읽는다
+  `development-records/benchmark/observation-read-pull-live/<ts>/worker.json`을 읽는다

@@ -6,7 +6,7 @@
 >
 > ⚠ 같은 라운드에 `gpt-5.6-terra`/high·`gpt-5.6-luna`/high도 디스패치했으나 **owner 판단으로
 > 리뷰 좌석이 아니다** — 렌즈로 계상하지 않고 그 산출물은 이 폴더에 두지 않는다
-> (원본은 `benchmark/reconciliation-review-r2/`에 남아 있다).
+> (원본은 `development-records/benchmark/reconciliation-review-r2/`에 남아 있다).
 
 ## 반환 원문
 

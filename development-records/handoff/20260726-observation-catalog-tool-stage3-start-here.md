@@ -67,7 +67,7 @@ OBSERVATION_READ_MAX_ID_CHARS          128      (실패 메시지 크기를 묶�
 
 ## 2. 선행 실측 — **완료(2026-07-27)**. 결과가 단계 3의 배선을 바꾼다
 
-증거·재현: `benchmark/observation-facade-probe/` · 설계 반영: §5.5. 11팔 전부 production 배선 + 대조군.
+증거·재현: `development-records/benchmark/observation-facade-probe/` · 설계 반영: §5.5. 11팔 전부 production 배선 + 대조군.
 
 | 질문 | 답 |
 |---|---|
@@ -213,7 +213,7 @@ M13이 **미탐지**로 떴다 — 역행 시계 테스트를 안 썼기 때문�
 - 3a가 남긴 검증 자산 3종은 3b에서도 그대로 쓴다:
   `scripts/off-parity-probe.mts`(두 트리 × 3코퍼스 OFF byte-parity — base worktree 절차가 헤더에 있다) ·
   `scripts/observation-catalog-tool-replay.mts`(실 코퍼스 6팔 + 팔 F 자기점검) ·
-  `benchmark/stage3a/mutation-battery.mjs`(변이 20종, 전부 탐지 상태로 보존).
+  `development-records/benchmark/stage3a/mutation-battery.mjs`(변이 20종, 전부 탐지 상태로 보존).
 
 ## 6. 열린 항목 (단계 2 후 갱신)
 

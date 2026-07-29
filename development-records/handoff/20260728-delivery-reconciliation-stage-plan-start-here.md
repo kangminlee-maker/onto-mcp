@@ -43,7 +43,7 @@ D2 = **(a) 결정론적 구문 수리** · D3 = ② 단계 3·4 원자 착지.
 
 ## 3. 라이브 N=1 결과 (2026-07-28) — 통과
 
-증거 `benchmark/observation-read-pull-live/2026-07-28T12-24-46-105Z/`,
+증거 `development-records/benchmark/observation-read-pull-live/2026-07-28T12-24-46-105Z/`,
 기록 `design/.../20-measurement-rollout-record-structure.md` §6·§7.
 
 | 항목 | 결과 |

@@ -1,7 +1,7 @@
 # 측정 — ack 왕복(3안의 심장)과 절단의 비결정성 (2026-07-27)
 
 > owner 결정 "3번을 하자" 직후, **코드를 쓰기 전에** 3안이 딛는 역량을 실측한 것.
-> 하니스: `scripts/probe-ack-roundtrip.mts` · 증거: `benchmark/ack-roundtrip/`
+> 하니스: `scripts/probe-ack-roundtrip.mts` · 증거: `development-records/benchmark/ack-roundtrip/`
 > 대상: codex-cli 0.145.0 · `gpt-5.6-luna`/low · `tool_output_token_limit=2000` 선언
 
 ## 1. 확립된 것 — 3안이 필요로 하는 것들

@@ -39,9 +39,9 @@ quoting either one.
 | gpt-5.6-sol | `minimal` | **1** | `raw/sol-minimal.err` — `Unsupported value: 'minimal' is not supported with the 'gpt-5.6-sol-1p-codexswic-ev3' model. Supported values are: 'none', 'low', 'medium', 'high', and 'xhigh'.` |
 | gpt-5.6-terra | `ultra` | 0 | `raw/gpt-5.6-terra-ultra.*` |
 | gpt-5.6-luna | `ultra` | 0 | `raw/gpt-5.6-luna-ultra.*` |
-| gpt-5.6-terra | `high` | 0 | full review dispatch, `benchmark/reconciliation-review-r2/terra-high/` |
-| gpt-5.6-sol | `max` | 0 | full review dispatch, `benchmark/reconciliation-review-r2/sol-max/` |
-| gpt-5.6-luna | `high` | 0 | full review dispatch, `benchmark/reconciliation-review-r2/luna-high/` |
+| gpt-5.6-terra | `high` | 0 | full review dispatch, `development-records/benchmark/reconciliation-review-r2/terra-high/` |
+| gpt-5.6-sol | `max` | 0 | full review dispatch, `development-records/benchmark/reconciliation-review-r2/sol-max/` |
+| gpt-5.6-luna | `high` | 0 | full review dispatch, `development-records/benchmark/reconciliation-review-r2/luna-high/` |
 | gpt-5.5 | `none`, `xhigh` | 0 | `raw/codex_cli-gpt-5.5-{none,xhigh}.*` |
 | gpt-5.5 | `max` | **1** | `Invalid value: 'max'. Supported values are: 'none', 'minimal', 'low', 'medium', 'high', and 'xhigh'.` |
 | gpt-5.5 | `ultra` | **1** | `raw/codex_cli-gpt-5.5-ultra.err` — rejection names **'max'**, not 'ultra' |

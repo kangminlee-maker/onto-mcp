@@ -1,0 +1,31 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "tool_output_token_limit": "500",
+  "marker_every": 200,
+  "rows": [
+    {
+      "index": 0,
+      "requested_size": 8000,
+      "actual_chars": 8054,
+      "filler": "alpha",
+      "max_marker": 40,
+      "nonce": "79451ed055f4",
+      "outcome": "lossless",
+      "reported_first": 1,
+      "reported_last": 40
+    },
+    {
+      "index": 1,
+      "requested_size": 32000,
+      "actual_chars": 32000,
+      "filler": "hex",
+      "max_marker": 160,
+      "nonce": "f6985d40d06a",
+      "outcome": "lossless",
+      "reported_first": 1,
+      "reported_last": 160
+    }
+  ]
+}
