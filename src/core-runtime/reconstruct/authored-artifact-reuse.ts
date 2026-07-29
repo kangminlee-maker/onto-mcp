@@ -90,9 +90,23 @@ export interface AuthoredArtifactReuseMatch {
   judge_model_identity: string;
   // DET-1 (CG-1): sha256 of the authoring prompt-template contract — every host-LLM
   // authoring prompt template (RECONSTRUCT_AUTHORING_PROMPT_CONTRACT). Editing any
-  // authoring prompt rotates this sha, so a resume after a prompt edit regenerates
-  // instead of reusing artifacts authored under the prior template. The realization
-  // tag + model identity above carry no template text; this is the only path for it.
+  // authoring prompt rotates this sha, so artifacts authored under the prior template
+  // are never reused under the new one. The realization tag + model identity above
+  // carry no template text; this is the only path for it.
+  //
+  // ROTATING THIS BREAKS RESUMES IN FLIGHT — it does not quietly regenerate them. An
+  // earlier version of this note claimed regeneration; that is wrong, and the note at
+  // `delivered_citation_rule_version` below has always had it right. `reuseExisting` is
+  // set only for `resumeMode === "reuse_existing_authored_artifacts"` (`run.ts`), and on
+  // that path a mismatched `reuse_match_hash` THROWS (`writeFreshAuthoredYamlDocument`
+  // below). Regeneration happens only when no artifact exists yet, which never consults
+  // this key. So a run that already authored under the old contract cannot be resumed —
+  // it must start fresh or be superseded.
+  //
+  // That is the intended posture for a contract change, not an accident: an artifact
+  // produced under different acceptance rules must not be silently adopted. But it is a
+  // cost to state deliberately before rotating, and to weigh against scoping the change
+  // so only affected keys move (see `delivered_citation_rule_version`).
   authoring_prompt_contract_sha256: string;
   // The seed-stage document projection budget shapes the authored prompts (how
   // much of a captured document reaches seed authoring), so a budget change — e.g.
