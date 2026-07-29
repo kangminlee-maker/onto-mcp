@@ -308,6 +308,85 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
    * With counting dropped, both halves below reconcile as `verified`: an emission the transcript never
    * shows, and a send our record never accounted for, each hide behind the OTHER copy of the same text.
    */
+  /**
+   * The two phases the measurement (§5) left unmeasured — CONCURRENT tool calls and OVERLAPPING outer
+   * execs — reach the judgment only as order and grouping. Neither is something the judgment looks at:
+   * `call_id` is carried by the reader and read by nothing here, the send comparison is a multiset,
+   * the containment search scans every received record, and the fold is order independent (stage 0b).
+   *
+   * So instead of buying live dispatches to produce those shapes, this pins the property that makes
+   * them irrelevant: pages scattered across SEVERAL received records, interleaved with the sends in an
+   * order no single-exec transcript would produce, must reconcile exactly as the tidy shape does.
+   * If any of those three ever starts pairing by call_id or assuming one output record, this fails.
+   */
+  it("judges the same whether the pages arrive in one exec output or several, in any order", () => {
+    const target = ids[0]!;
+    const texts = serveAll([target], 8_192);
+    expect(texts.length, "the fixture must split, or one record and several are the same case")
+      .toBeGreaterThan(1);
+
+    /** Every page in its own `custom_tool_call_output`, records emitted in the given order. */
+    const scattered = (order: readonly number[], sessionId: string): string => {
+      const meta = {
+        timestamp: "2026-07-27T11:00:00.000Z",
+        type: "session_meta",
+        payload: { session_id: sessionId, cwd: "/repo", cli_version: "0.145.0" },
+      };
+      const records: unknown[] = [meta];
+      for (const index of order) {
+        // Interleaved on purpose: send and its rendering do not arrive adjacent under concurrency.
+        records.push({
+          timestamp: "2026-07-27T11:00:01.000Z",
+          type: "event_msg",
+          payload: {
+            type: "mcp_tool_call_end",
+            // Deliberately NOT a per-page id: overlapping execs reuse and interleave these, and the
+            // judgment must not care. A pairing rule would break right here.
+            call_id: "shared-call-id",
+            invocation: { server: "onto", tool: "observation_read" },
+            result: { Ok: { content: [{ type: "text", text: texts[index]! }], isError: false } },
+          },
+        });
+        records.push({
+          timestamp: "2026-07-27T11:00:02.000Z",
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "shared-call-id",
+            output: [
+              { type: "input_text", text: "Script completed\nWall time 0.0 seconds\nOutput:\n" },
+              { type: "input_text", text: texts[index]! },
+            ],
+          },
+        });
+      }
+      return records.map((record) => JSON.stringify(record)).join("\n");
+    };
+
+    const emissions = texts.map((canonical_text) => ({ canonical_text }));
+    const tidy = reconcileDelivery({
+      emissions,
+      transcript: transcriptRendering(texts, texts, "s-one-exec"),
+      expect: expectFor("s-one-exec"),
+    });
+    expect(tidy.status).toBe("verified");
+    if (tidy.status !== "verified") return;
+    expect(tidy.delivered.has(target)).toBe(true);
+
+    const forward = texts.map((_, index) => index);
+    for (const [attempt, order] of [forward, [...forward].reverse()].entries()) {
+      const outcome = reconcileDelivery({
+        emissions,
+        transcript: scattered(order, `s-scattered-${attempt}`),
+        expect: expectFor(`s-scattered-${attempt}`),
+      });
+      expect(outcome.status, `order ${order.join(",")}`).toBe("verified");
+      if (outcome.status !== "verified") continue;
+      expect(outcome.delivered.has(target)).toBe(true);
+      expect(outcome.attestation).toEqual(tidy.attestation);
+    }
+  });
+
   it("counts repeats — one page emitted twice is not accounted for by one send", () => {
     const [page] = serveAll([ids[0]!], 65_536);
 

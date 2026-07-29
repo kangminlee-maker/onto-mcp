@@ -997,6 +997,36 @@ describe("observation read facade — emissions record and the start right", () 
     expect(JSON.parse(emissions.emissions[0]!.canonical_text)).toEqual(result.structuredContent);
   });
 
+  /**
+   * EXACTLY ONE text part per result, on both the success and the failure path.
+   *
+   * This is what closes the "multiple `text()`" phase (measurement §5) by construction instead of by
+   * measurement. The rollout reader concatenates a content array with NO separator
+   * (`codex-rollout-reader.ts` `textOfContentArray`), so if this facade ever emitted two parts and
+   * codex rendered them joined by anything at all, the verbatim containment check would miss its own
+   * page and report a delivery that happened as `verbatim_delivery_not_attested`. Fail-closed, but
+   * wrong — and invisible, because the citation would simply be refused.
+   *
+   * Nothing else pins this: the emissions record stores the string the facade already built, so a
+   * second part would be dropped from the record and the transcript alike, and every other test here
+   * reads `content[0]` without ever asserting there is no `content[1]`.
+   */
+  it("emits exactly ONE text part per result — success and failure alike", () => {
+    const { descriptor } = writeDescriptor();
+    const session = new ObservationReadFacadeSession({ descriptor });
+
+    const served = callTool(session, { observation_ids: [allObservationIds[0]] });
+    expect(served.isError).toBe(false);
+    expect(served.content).toHaveLength(1);
+    expect(served.content[0].type).toBe("text");
+
+    // The failure path builds its own result object, so it needs its own assertion.
+    const refused = callTool(session, { observation_ids: ["no-such-observation"] }, 2);
+    expect(refused.isError).toBe(true);
+    expect(refused.content).toHaveLength(1);
+    expect(refused.content[0].type).toBe("text");
+  });
+
   it("records every page of a split observation, in emission order", () => {
     const { descriptor, emissionsPath } = writeDescriptor();
     const session = new ObservationReadFacadeSession({ descriptor });
