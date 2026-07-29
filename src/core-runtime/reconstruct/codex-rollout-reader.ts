@@ -43,7 +43,17 @@ export type CodexRolloutRefusal =
 
 /** What the MCP server handed back, as codex recorded it before rendering. */
 export interface CodexRolloutSentRecord {
-  /** `exec-<uuid>` — a DIFFERENT id space from the received records'. */
+  /**
+   * `exec-<uuid>` — a DIFFERENT id space from the received records'.
+   *
+   * EVIDENCE, NOT INPUT. No judgment reads this: `delivery-reconciliation.ts` never mentions it, and
+   * that is the point — the two id spaces are disjoint, so there is no key to join on and §9-F1's
+   * "remove pairing" is the only available rule rather than a convenience. What keeps that claim
+   * honest is `codex-rollout-reader.test.ts`, which asserts the disjointness over the real fixtures.
+   * Deleting this field would delete the evidence for the design, not dead weight — and its absence
+   * from the judgment is exactly what the order-independence tests in
+   * `delivery-reconciliation.test.ts` depend on.
+   */
   readonly call_id: string;
   readonly server: string;
   readonly tool: string;
@@ -54,11 +64,19 @@ export interface CodexRolloutSentRecord {
 
 /** What entered the model's context: the exec's rendered output. */
 export interface CodexRolloutReceivedRecord {
-  /** `call_<…>` — the exec's own id. */
+  /** `call_<…>` — the exec's own id. Evidence, not input; see the sent record's note. */
   readonly call_id: string;
   /** Concatenated `output[*].text`, in order. This is the ONLY text stage 2 may search (§9-F4). */
   readonly text: string;
-  /** codex's own marker that it cut the exec's output. */
+  /**
+   * codex's own marker that it cut the exec's output.
+   *
+   * EVIDENCE, NOT INPUT — same standing as `call_id`. The delivered decision is a verbatim
+   * containment check and never consults this, which is WHY a change to codex's marker wording
+   * cannot flip a delivery: a cut page simply stops containing its own bytes. What reads it is
+   * `codex-rollout-reader.test.ts`, pinning the measured truncation counts per fixture — the
+   * observation the exec output ceiling (§1-1, §4) was derived from.
+   */
   readonly truncated: boolean;
 }
 
