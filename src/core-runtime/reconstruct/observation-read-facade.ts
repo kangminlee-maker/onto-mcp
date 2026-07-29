@@ -145,25 +145,62 @@ export interface ObservationReadFacadeLaunch {
 }
 
 /**
- * Make a launch usable: clear the receipt path so this dispatch starts from NO evidence.
+ * Every artifact path one dispatch owns, derived from ONE rule.
  *
- * The receipt path is derived from the session root and a literal round id, so a resumed run finds its
- * predecessor's file already sitting there. The launch token binding refuses that file — but a binding
- * is a comparison, and a comparison is a line of code that can be wrong. It was: comparing the two
- * tokens directly meant a receipt written before the binding existed met an absent expectation as
- * `undefined !== undefined`, and a stale served set was admitted.
+ * The launch token is in all four names, and that is the whole mechanism: two overlapping dispatches
+ * of the same round would otherwise share these files, and `prepareObservationReadFacadeLaunch` clears
+ * them — so the second launch deleted the first's start-right file and both minted grants
+ * (codex ultracode review, PR #271).
  *
- * Clearing removes the PRECONDITION instead of detecting it. "The file is absent" cannot be computed
- * wrongly, and absent already means "nothing was served" at the consumer, which is the safe answer. The
- * binding stays as the second line of defence — one guards on the file's absence, the other on its
- * contents, so a mistake in either leaves the other standing.
+ * Declared here rather than at the call site so a test cannot build "safe-looking" paths of its own:
+ * the first regression test for that defect did exactly that, and removing the token from the
+ * PRODUCTION path left the whole suite green. One builder means the test and the runtime disagree
+ * about nothing.
+ */
+export function observationReadFacadeLaunchPaths(args: {
+  readonly workDir: string;
+  readonly roundId: string;
+  readonly launchToken: string;
+}): {
+  readonly descriptorPath: string;
+  readonly receiptPath: string;
+  readonly emissionsPath: string;
+  readonly deliveryRecordPath: string;
+} {
+  const suffix = `${args.roundId}-${args.launchToken}.json`;
+  return {
+    descriptorPath: path.join(args.workDir, `observation-read-descriptor-${suffix}`),
+    receiptPath: path.join(args.workDir, `observation-read-receipt-${suffix}`),
+    emissionsPath: path.join(args.workDir, `observation-read-emissions-${suffix}`),
+    // Written by the RUNTIME after the worker exits, not by the facade — but named by the same rule,
+    // because it is the same dispatch's evidence and shares the collision it would otherwise have.
+    deliveryRecordPath: path.join(args.workDir, `observation-read-delivery-${suffix}`),
+  };
+}
+
+/**
+ * Make a launch usable: clear this launch's paths so the dispatch starts from NO evidence.
+ *
+ * WHAT THIS NO LONGER GUARDS. The paths used to be derived from the session root and a literal round
+ * id, so a resumed run found its predecessor's file sitting there and this clear removed it. They now
+ * carry the LAUNCH TOKEN (see the caller), so a fresh launch addresses files that cannot already
+ * exist — the precondition is gone by construction rather than by deletion. That change was not
+ * cosmetic: two overlapping dispatches shared one path, and this very clear then deleted the first
+ * one's start-right file, leaving two live grants on one launch (codex ultracode review, PR #271).
+ *
+ * WHAT IT STILL GUARDS. A caller that reuses a launch token — which is the only way these paths can be
+ * occupied — starts from a clean set rather than on top of another attempt's evidence. Cheap, and it
+ * fails loud rather than continuing on a best-effort basis: a clear that silently did nothing would put
+ * the run back in the state this exists to prevent, without saying so.
+ *
+ * The launch token binding remains the second line of defence — one guards on the file's absence, the
+ * other on its contents, so a mistake in either leaves the other standing. That binding earned its
+ * place: comparing the two tokens directly once meant a receipt written before the binding existed met
+ * an absent expectation as `undefined !== undefined`, and a stale served set was admitted.
  *
  * Done by the RUNTIME, not the facade: the failure this exists for is the facade never starting, so a
  * facade-side clear would be absent exactly when it is needed. Every launch is built through this
  * function so there is no path that skips it.
- *
- * Fails loud rather than continuing on a best-effort basis: a clear that silently did nothing would put
- * the run back in the state this exists to prevent, without saying so.
  */
 export function prepareObservationReadFacadeLaunch(
   launch: ObservationReadFacadeLaunch,

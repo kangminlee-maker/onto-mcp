@@ -227,6 +227,7 @@ import { DEFAULT_WORKER_TIMEOUT_MS } from "../llm/llm-caller.js";
 import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
 import {
   observationIdsServed,
+  observationReadFacadeLaunchPaths,
   OBSERVATION_READ_TOOL_NAME,
   prepareObservationReadFacadeLaunch,
   readObservationReadFacadeReceipt,
@@ -3377,26 +3378,24 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // clear can no longer reach another dispatch's evidence, and `O_CREAT|O_EXCL` still refuses a
       // second facade on the SAME launch, which is the case it was for.
       const launchToken = randomUUID();
-      const facadeLaunch = pull
+      const launchPaths = pull
+        ? observationReadFacadeLaunchPaths({
+          workDir: pull.workDir,
+          roundId: input.roundId,
+          launchToken,
+        })
+        : undefined;
+      const facadeLaunch = pull && launchPaths
         ? prepareObservationReadFacadeLaunch({
           sources: {
             observationsPath: pull.observationsPath,
             safetyLedgerPath: pull.safetyLedgerPath,
             safetyLedgerValidationPath: pull.safetyLedgerValidationPath,
           },
-          descriptorPath: path.join(
-            pull.workDir,
-            `observation-read-descriptor-${input.roundId}-${launchToken}.json`,
-          ),
-          receiptPath: path.join(
-            pull.workDir,
-            `observation-read-receipt-${input.roundId}-${launchToken}.json`,
-          ),
+          descriptorPath: launchPaths.descriptorPath,
+          receiptPath: launchPaths.receiptPath,
           // Where the facade records what it emitted AND claims the right to start (design §11-L2).
-          emissionsPath: path.join(
-            pull.workDir,
-            `observation-read-emissions-${input.roundId}-${launchToken}.json`,
-          ),
+          emissionsPath: launchPaths.emissionsPath,
           launchToken,
           // The grant must not outlive its worker. The worker's own timeout is that lifetime, so it is
           // read from the config this dispatch will use rather than restated as a second number.
@@ -3429,12 +3428,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // Delivery reconciliation (design §6-2 stage 3a-2). Runs HERE because it needs the worker to be
       // gone — its transcript is only complete once codex has exited. Nothing reads the record yet;
       // switching consumers from `served` to `delivered` is a later, deliberate step.
-      const deliveryRecordPath = pull
-        ? path.join(
-          pull.workDir,
-          `observation-read-delivery-${input.roundId}-${launchToken}.json`,
-        )
-        : null;
+      const deliveryRecordPath = launchPaths?.deliveryRecordPath ?? null;
       if (facadeLaunch && deliveryRecordPath) {
         reconcileFacadeDelivery({
           launch: facadeLaunch,

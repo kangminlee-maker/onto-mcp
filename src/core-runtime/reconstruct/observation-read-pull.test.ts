@@ -15,6 +15,7 @@ import {
   observationReadFacadeCodexArgs,
   observationReadFacadeServerEntry,
   parseObservationReadFacadeDescriptor,
+  observationReadFacadeLaunchPaths,
   prepareObservationReadFacadeLaunch,
   writeObservationReadFacadeDescriptor,
   type ObservationReadFacadeLaunch,
@@ -606,19 +607,33 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
    */
   it("does not let one launch's preparation delete another launch's start right", () => {
     const pull = writePullSources();
-    const launchOf = (token: string) =>
-      prepareObservationReadFacadeLaunch({
+    // The PRODUCTION path builder, not a safe-looking copy. The first version of this test built its
+    // own token-bearing paths, so removing the token from the runtime's path left the suite green and
+    // the defect fully restored (codex ultracode review of the fix, PR #271).
+    const launchOf = (token: string) => {
+      const paths = observationReadFacadeLaunchPaths({
+        workDir: pull.workDir,
+        roundId: "round-1",
+        launchToken: token,
+      });
+      // Every path this dispatch owns must carry its launch token — dropping it from ANY of them is
+      // what reopens the collision, so all four are asserted rather than the one under test.
+      for (const [name, value] of Object.entries(paths)) {
+        expect(path.basename(value), name).toContain(token);
+      }
+      return prepareObservationReadFacadeLaunch({
         sources: {
           observationsPath: pull.observationsPath,
           safetyLedgerPath: pull.safetyLedgerPath,
           safetyLedgerValidationPath: pull.safetyLedgerValidationPath,
         },
-        descriptorPath: path.join(pull.workDir, `d-${token}.json`),
-        receiptPath: path.join(pull.workDir, `observation-read-receipt-round-1-${token}.json`),
-        emissionsPath: path.join(pull.workDir, `observation-read-emissions-round-1-${token}.json`),
+        descriptorPath: paths.descriptorPath,
+        receiptPath: paths.receiptPath,
+        emissionsPath: paths.emissionsPath,
         launchToken: token,
         ttlMs: 600_000,
       });
+    };
 
     const first = launchOf("launch-one");
     writeObservationReadFacadeDescriptor({ launch: first, systemPrompt: "S", userPrompt: "U" });
