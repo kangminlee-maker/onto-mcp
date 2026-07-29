@@ -1,5 +1,13 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1023,6 +1031,29 @@ describe("observation read facade — emissions record and the start right", () 
       .toThrow(/could not claim the start right/);
     // The loser minted nothing and wrote nothing: the claim is taken BEFORE the grant exists, so a
     // refused facade cannot be left holding a live budget.
+    expect(existsSync(receiptPath)).toBe(false);
+  });
+
+  /**
+   * The claim must be ONE exclusive syscall, not a look followed by a write. The test above proves
+   * only that an existing file is refused, which a check-then-write claim does too — while leaving a
+   * window in which two facades both look, both see nothing, and both mint.
+   *
+   * A dangling symlink separates them, deterministically and with no concurrency at all. Measured on
+   * this platform: `existsSync` FOLLOWS the link and reports false, while `O_CREAT|O_EXCL` refuses a
+   * symlink outright (POSIX). So a check-then-write claim sails through here — and worse, creates the
+   * link's target — whereas the exclusive open cannot be fooled.
+   */
+  it("claims the right with an EXCLUSIVE create — a dangling symlink is not an opening", () => {
+    const { descriptor, emissionsPath, receiptPath } = writeDescriptor();
+    const target = path.join(TEMP_ROOT, `symlink-target-${tempSeq}.json`);
+    symlinkSync(target, emissionsPath);
+    expect(existsSync(emissionsPath), "the discriminator: a look reports nothing here").toBe(false);
+
+    expect(() => new ObservationReadFacadeSession({ descriptor }))
+      .toThrow(/could not claim the start right/);
+    // Nothing was written THROUGH the link, and no grant was minted behind it.
+    expect(existsSync(target)).toBe(false);
     expect(existsSync(receiptPath)).toBe(false);
   });
 

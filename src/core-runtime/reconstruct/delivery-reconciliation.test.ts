@@ -298,4 +298,46 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
     expect(outcome.status).toBe("unverifiable");
     if (outcome.status !== "verified") expect(outcome.reason).toBe("emission_not_a_page");
   });
+
+  /**
+   * The bidirectional check counts HOW MANY TIMES each page appears, not merely whether it appears.
+   * Every other fixture here serves distinct pages, so a membership test would satisfy them all — and
+   * a repeated fetch of one part is a real emission, not a hypothetical: the fold treats it as one
+   * part precisely because the facade can serve it twice (`observation-read-coverage.test.ts`).
+   *
+   * With counting dropped, both halves below reconcile as `verified`: an emission the transcript never
+   * shows, and a send our record never accounted for, each hide behind the OTHER copy of the same text.
+   */
+  it("counts repeats — one page emitted twice is not accounted for by one send", () => {
+    const [page] = serveAll([ids[0]!], 65_536);
+
+    const recordedTwice = attestEmissionDelivery({
+      emissions: [{ canonical_text: page! }, { canonical_text: page! }],
+      transcript: transcriptRendering([page!], [page!], "s-dup-recorded"),
+      expect: expectFor("s-dup-recorded"),
+    });
+    expect(recordedTwice.status).toBe("unverifiable");
+    if (recordedTwice.status !== "verified") {
+      expect(recordedTwice.reason).toBe("recorded_emission_without_sent_record");
+    }
+
+    const sentTwice = attestEmissionDelivery({
+      emissions: [{ canonical_text: page! }],
+      transcript: transcriptRendering([page!, page!], [page!], "s-dup-sent"),
+      expect: expectFor("s-dup-sent"),
+    });
+    expect(sentTwice.status).toBe("unverifiable");
+    if (sentTwice.status !== "verified") {
+      expect(sentTwice.reason).toBe("sent_without_recorded_emission");
+    }
+
+    // The control: the SAME page, emitted and sent the same number of times, still reconciles. Without
+    // this the two assertions above would also pass a rule that refused every duplicate outright.
+    const balanced = attestEmissionDelivery({
+      emissions: [{ canonical_text: page! }, { canonical_text: page! }],
+      transcript: transcriptRendering([page!, page!], [page!], "s-dup-even"),
+      expect: expectFor("s-dup-even"),
+    });
+    expect(balanced.status).toBe("verified");
+  });
 });

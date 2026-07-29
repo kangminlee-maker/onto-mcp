@@ -271,6 +271,8 @@ function authorInput(pull: ReturnType<typeof writePullSources>) {
  */
 function authorWithWorker(options: {
   fetchIds: string[];
+  /** One entry per `tools/call` the fixture worker makes. Defaults to a single call for `fetchIds`. */
+  fetchCalls?: string[][];
   citeIds: string[];
   /** Skip the facade entirely — the worker never fetched, and no receipt is written at all. */
   skipFacade?: boolean;
@@ -298,22 +300,28 @@ function authorWithWorker(options: {
             readFileSync(launch.descriptorPath, "utf8"),
           ),
         });
-        if (options.fetchIds.length > 0) {
+        // One `tools/call` per batch. The default is the single call every other fixture makes; a test
+        // that needs each observation on its OWN page — so delivery can differ between them — asks for
+        // one batch each, which is a shape the real worker produces too (measurement §9-M4: two execs
+        // made four calls apiece).
+        const batches = options.fetchCalls ?? (options.fetchIds.length > 0 ? [options.fetchIds] : []);
+        for (const [batchIndex, observationIds] of batches.entries()) {
           const result = handleFacadeMessage(
             {
               jsonrpc: "2.0",
-              id: 1,
+              id: batchIndex + 1,
               method: "tools/call",
               params: {
                 name: OBSERVATION_READ_TOOL_NAME,
-                arguments: { observation_ids: options.fetchIds },
+                arguments: { observation_ids: observationIds },
               },
             },
             session,
           )!.result as { isError: boolean };
-          session.commit(); // the process shell publishes after delivery; the stub plays that role too
           if (result.isError) throw new Error("fixture worker's fetch failed");
         }
+        // the process shell publishes after delivery; the stub plays that role too
+        if (batches.length > 0) session.commit();
       }
       let workerSession: { id: string; startedAtMs: number; endedAtMs: number } | undefined;
       if (launch && options.transcript) {
@@ -801,6 +809,66 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
     });
     const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
     expect(ledger.evidence_clusters[0].evidence_refs.length).toBe(2);
+  });
+
+  /**
+   * The two tests around this one move the WHOLE dispatch between delivered and not — so a rule that
+   * admitted every citation the moment anything arrived would satisfy both. That rule is wrong, and
+   * this is the case that says so: two observations served, ONE of them rendered into the context.
+   *
+   * `delivered` must come out a non-empty PROPER subset of what was cited, which is the only shape
+   * that distinguishes a per-observation judgment from an all-or-nothing one.
+   */
+  it("admits exactly the observation that arrived when the other did not", async () => {
+    const [arrived, cut] = [allObservationIds[0]!, allObservationIds[1]!];
+    /** The pages carrying one observation — the fixture fetches each in its own call, so they split. */
+    const pagesOf = (emissions: readonly string[], observationId: string): string[] =>
+      emissions.filter((text) => {
+        const page = JSON.parse(text) as { entries?: { observation_id: string }[] };
+        return (page.entries ?? []).some((entry) => entry.observation_id === observationId);
+      });
+
+    const renderOnlyArrived = (emissions: string[], sessionId: string) => {
+      const kept = pagesOf(emissions, arrived);
+      const dropped = pagesOf(emissions, cut);
+      // Non-vacuity: the split is REAL. If both observations shared a page, rendering one would
+      // render the other and the assertions below would prove nothing.
+      expect(kept.length, "the arriving observation must have pages of its own").toBeGreaterThan(0);
+      expect(dropped.length, "the cut observation must have pages of its own").toBeGreaterThan(0);
+      expect(kept.some((page) => dropped.includes(page))).toBe(false);
+      return { sessionId, text: plantedTranscript({ sessionId, sent: emissions, rendered: kept }) };
+    };
+
+    // Citing ONLY the observation that arrived is admitted.
+    const admitted = writePullSources();
+    const { author: admittingAuthor } = authorWithWorker({
+      fetchIds: [arrived, cut],
+      fetchCalls: [[arrived], [cut]],
+      citeIds: [arrived],
+      deliveryReconciliation: true,
+      transcript: (emissions) =>
+        renderOnlyArrived(emissions, "01900000-0000-7000-8000-0000000000e1"),
+    });
+    const ledger = await (admittingAuthor as any).writeAnswerSupportLedger(authorInput(admitted));
+    expect(ledger.evidence_clusters[0].evidence_refs.length).toBe(1);
+
+    // Citing the one that did not arrive is refused — BY NAME, and only that one is named.
+    const refused = writePullSources();
+    const { author: refusingAuthor } = authorWithWorker({
+      fetchIds: [arrived, cut],
+      fetchCalls: [[arrived], [cut]],
+      citeIds: [arrived, cut],
+      deliveryReconciliation: true,
+      transcript: (emissions) =>
+        renderOnlyArrived(emissions, "01900000-0000-7000-8000-0000000000e2"),
+    });
+    const failure = await (refusingAuthor as any).writeAnswerSupportLedger(authorInput(refused))
+      .then(() => null, (error: Error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toMatch(/verified NOT to have reached the worker's context/);
+    expect(failure.message).toContain(cut);
+    // THE proper-subset assertion: the delivered one is not swept up in the refusal.
+    expect(failure.message).not.toContain(arrived);
   });
 
   it("refuses a citation whose page was served but never reached the context", async () => {
