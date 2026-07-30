@@ -39,7 +39,9 @@ export type CodexRolloutRefusal =
   | "session_meta_mismatch"
   | "cli_version_not_verified"
   | "rollout_outside_child_window"
-  | "record_shape_unrecognised";
+  | "record_shape_unrecognised"
+  /** No answer marker in the transcript, so "before the answer" cannot be established at all. */
+  | "answer_boundary_unresolved";
 
 /** What the MCP server handed back, as codex recorded it before rendering. */
 export interface CodexRolloutSentRecord {
@@ -62,7 +64,13 @@ export interface CodexRolloutSentRecord {
   readonly is_error: boolean;
 }
 
-/** What entered the model's context: the exec's rendered output. */
+/**
+ * What entered the model's context BEFORE it answered: the exec's rendered output.
+ *
+ * Records after the accepted answer are dropped here rather than reported and filtered by the caller.
+ * A record that must never be counted is not a record the search should be able to see — the caller
+ * that forgets to filter is the failure this shape removes (design §6, §11 R2 MATERIAL).
+ */
 export interface CodexRolloutReceivedRecord {
   /** `call_<…>` — the exec's own id. Evidence, not input; see the sent record's note. */
   readonly call_id: string;
@@ -185,7 +193,39 @@ export function readCodexRollout(
 
   const sent: CodexRolloutSentRecord[] = [];
   const received: CodexRolloutReceivedRecord[] = [];
-  for (const record of records) {
+
+  /**
+   * Where the model answered. An output recorded after this point cannot have informed the answer the
+   * runtime is about to judge, so counting it would attest a delivery to a moment that had not
+   * happened yet (design §6-… "수용된 최종 응답 이후에 기록된 출력은 세면 안 된다", from the R2
+   * MATERIAL finding).
+   *
+   * Two markers, because codex writes the same answer twice — an `agent_message` event and an
+   * assistant `response_item`. The EARLIEST is taken: the answer had already been produced by then,
+   * so anything later is out regardless of which record type survives a codex change.
+   *
+   * Measured across the three real fixtures: exactly one of each, `agent_message` immediately before
+   * the assistant message, and every tool output before both. A transcript with no marker at all is
+   * refused rather than treated as unbounded — an answer we cannot place is an ordering we cannot
+   * assert. Multi-answer topologies would make this bound too strict rather than too loose; that
+   * direction refuses citations instead of inventing deliveries, which is the safe way to be wrong.
+   */
+  let answerIndex = Number.POSITIVE_INFINITY;
+  for (const [index, record] of records.entries()) {
+    if (!isRecord(record.payload)) continue;
+    const kind = record.payload.type;
+    const isAgentMessage = record.type === "event_msg" && kind === "agent_message";
+    const isAssistantMessage = record.type === "response_item" && kind === "message" &&
+      record.payload.role === "assistant";
+    if (isAgentMessage || isAssistantMessage) {
+      answerIndex = Math.min(answerIndex, index);
+    }
+  }
+  if (!Number.isFinite(answerIndex)) {
+    return { ok: false, refusal: "answer_boundary_unresolved" };
+  }
+
+  for (const [index, record] of records.entries()) {
     if (!isRecord(record.payload)) continue;
     const kind = record.payload.type;
 
@@ -231,6 +271,9 @@ export function readCodexRollout(
       if (typeof record.payload.call_id !== "string" || text === null) {
         return { ok: false, refusal: "record_shape_unrecognised" };
       }
+      // Shape is still validated above — a malformed record is a fact about the transcript and is
+      // refused wherever it sits. Only COUNTING is bounded by the answer.
+      if (index > answerIndex) continue;
       received.push({
         call_id: record.payload.call_id,
         text,

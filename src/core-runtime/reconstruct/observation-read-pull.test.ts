@@ -96,6 +96,13 @@ function plantedTranscript(args: {
         ],
       },
     },
+    // The model answering. Real transcripts always carry this, and the reader needs it to bound what
+    // counted — an output after the answer cannot have informed it (design §6, R2 MATERIAL).
+    {
+      timestamp: "<<STAMP>>",
+      type: "event_msg",
+      payload: { type: "agent_message", message: "done" },
+    },
   ];
   return records.map((record) => JSON.stringify(record)).join("\n");
 }

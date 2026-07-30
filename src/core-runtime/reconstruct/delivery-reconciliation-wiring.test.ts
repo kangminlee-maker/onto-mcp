@@ -166,6 +166,13 @@ describe("the server name reconciliation scopes to is the one the runtime regist
           ],
         },
       },
+      // The answer. Without it the reader cannot bound what counted and refuses the transcript, so a
+      // fixture that omits it is not a shape codex ever writes.
+      {
+        timestamp: "2026-07-27T12:00:03.000Z",
+        type: "event_msg",
+        payload: { type: "agent_message", message: "done" },
+      },
     ].map((record) => JSON.stringify(record)).join("\n");
     writeFileSync(path.join(dayDir, `rollout-x-${sessionId}.jsonl`), transcript);
     writeFileSync(

@@ -221,7 +221,16 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
         ],
       },
     };
-    return [meta, ...sentRecords, received].map((record) => JSON.stringify(record)).join("\n");
+    // Every real transcript ends with the model answering, and the reader now needs that boundary to
+    // decide what counted (it refuses a transcript it cannot place an answer in). Appending it here
+    // is what makes these fixtures the shape codex actually writes rather than a prefix of one.
+    const answered = {
+      timestamp: "2026-07-27T11:00:03.000Z",
+      type: "event_msg",
+      payload: { type: "agent_message", message: "done" },
+    };
+    return [meta, ...sentRecords, received, answered]
+      .map((record) => JSON.stringify(record)).join("\n");
   }
 
   function expectFor(sessionId: string): DeliveryReconciliationInput["expect"] {
@@ -360,6 +369,11 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
           },
         });
       }
+      records.push({
+        timestamp: "2026-07-27T11:00:03.000Z",
+        type: "event_msg",
+        payload: { type: "agent_message", message: "done" },
+      });
       return records.map((record) => JSON.stringify(record)).join("\n");
     };
 
@@ -385,6 +399,116 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
       expect(outcome.delivered.has(target)).toBe(true);
       expect(outcome.attestation).toEqual(tidy.attestation);
     }
+  });
+
+  /**
+   * §11 R2 (MATERIAL, `15-review-gpt-5.6-sol-r2.md`) and design §6 in three places: **an output
+   * recorded AFTER the accepted final answer must not count.** Those bytes cannot have informed the
+   * answer the runtime is about to judge, so attesting them is a delivery claim about a moment that
+   * had not happened yet.
+   *
+   * The requirement was accepted into the design and never implemented — the search scanned every
+   * received record. Measured on the real corpus this shape does not occur today (0 of 3 transcripts
+   * have an output after the answer), so it was latent rather than live; a codex change that appends
+   * a debug output would have made it live silently.
+   */
+  it("does not count an output recorded after the accepted final answer", () => {
+    const [page] = serveAll([ids[0]!], 65_536);
+    const sessionId = "s-after-answer";
+    const meta = {
+      timestamp: "2026-07-27T11:00:00.000Z",
+      type: "session_meta",
+      payload: { session_id: sessionId, cwd: "/repo", cli_version: "0.145.0" },
+    };
+    const sent = {
+      timestamp: "2026-07-27T11:00:01.000Z",
+      type: "event_msg",
+      payload: {
+        type: "mcp_tool_call_end",
+        call_id: "exec-0",
+        invocation: { server: "onto", tool: "observation_read" },
+        result: { Ok: { content: [{ type: "text", text: page! }], isError: false } },
+      },
+    };
+    const answer = {
+      timestamp: "2026-07-27T11:00:02.000Z",
+      type: "event_msg",
+      payload: { type: "agent_message", message: "done" },
+    };
+    const lateOutput = {
+      timestamp: "2026-07-27T11:00:03.000Z",
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call_output",
+        call_id: "call_0",
+        // The page IS here, byte for byte — and that is exactly what must not be enough.
+        output: [{ type: "input_text", text: page! }],
+      },
+    };
+    const transcript = [meta, sent, answer, lateOutput]
+      .map((record) => JSON.stringify(record)).join("\n");
+
+    const outcome = reconcileDelivery({
+      emissions: [{ canonical_text: page! }],
+      transcript,
+      expect: expectFor(sessionId),
+    });
+    expect(outcome.status).toBe("verified");
+    if (outcome.status !== "verified") return;
+    expect(outcome.attestation[0]!.disposition).toBe("verbatim_delivery_not_attested");
+    expect(outcome.delivered.size).toBe(0);
+  });
+
+  /**
+   * codex writes the same answer TWICE — an `agent_message` event and then an assistant
+   * `response_item`. The boundary is the EARLIER of them, because by the time the first appears the
+   * answer already exists and nothing later can have informed it.
+   *
+   * Nothing pinned that choice: in every real fixture the two are adjacent with no output between,
+   * so taking the later marker instead changed no outcome and the whole suite stayed green. This is
+   * the gap between them.
+   */
+  it("bounds at the FIRST answer marker, not the last — an output between the two does not count", () => {
+    const [page] = serveAll([ids[0]!], 65_536);
+    const sessionId = "s-between-markers";
+    const record = (timestamp: string, type: string, payload: unknown) => ({
+      timestamp,
+      type,
+      payload,
+    });
+    const transcript = [
+      record("2026-07-27T11:00:00.000Z", "session_meta", {
+        session_id: sessionId,
+        cwd: "/repo",
+        cli_version: "0.145.0",
+      }),
+      record("2026-07-27T11:00:01.000Z", "event_msg", {
+        type: "mcp_tool_call_end",
+        call_id: "exec-0",
+        invocation: { server: "onto", tool: "observation_read" },
+        result: { Ok: { content: [{ type: "text", text: page! }], isError: false } },
+      }),
+      // Marker 1: the answer exists from here on.
+      record("2026-07-27T11:00:02.000Z", "event_msg", { type: "agent_message", message: "done" }),
+      // Lands BETWEEN the two markers. Counted if the boundary is the last marker; not counted if it
+      // is the first — and the first is right, because the answer above is already written.
+      record("2026-07-27T11:00:03.000Z", "response_item", {
+        type: "custom_tool_call_output",
+        call_id: "call_0",
+        output: [{ type: "input_text", text: page! }],
+      }),
+      // Marker 2: the same answer, as a conversation item.
+      record("2026-07-27T11:00:04.000Z", "response_item", { type: "message", role: "assistant" }),
+    ].map((entry) => JSON.stringify(entry)).join("\n");
+
+    const outcome = reconcileDelivery({
+      emissions: [{ canonical_text: page! }],
+      transcript,
+      expect: expectFor(sessionId),
+    });
+    expect(outcome.status).toBe("verified");
+    if (outcome.status !== "verified") return;
+    expect(outcome.attestation[0]!.disposition).toBe("verbatim_delivery_not_attested");
   });
 
   it("counts repeats — one page emitted twice is not accounted for by one send", () => {
