@@ -31,10 +31,12 @@ import {
 } from "./observation-read-facade.js";
 import {
   type ObservationCoverage,
-  type ObservationReadPartFact,
+  type ObservationCoverageRecord,
+  type ObservationRange,
+  type ObservationRangeFact,
   coversWholeObservation,
-  foldObservationPart,
-  selectReportedPartition,
+  foldObservationRange,
+  observationCoverageRecord,
 } from "./observation-read-coverage.js";
 
 /** What the facade recorded serving: the emitted string, verbatim (§9-F4). */
@@ -81,7 +83,7 @@ export type DeliveryAttestation =
 export type DeliveryReconciliation =
   | {
     readonly status: "verified";
-    readonly delivered: ReadonlySet<string>;
+    readonly delivered: readonly ObservationCoverageRecord[];
     readonly attestation: readonly EmissionAttestation[];
   }
   | { readonly status: "unverifiable"; readonly reason: DeliveryReconciliationRefusal };
@@ -148,7 +150,7 @@ export function attestEmissionDelivery(input: DeliveryReconciliationInput): Deli
   return { status: "verified", attestation };
 }
 
-function partsOfPage(canonicalText: string): readonly ObservationReadPartFact[] | null {
+function rangesOfPage(canonicalText: string): readonly ObservationRangeFact[] | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(canonicalText);
@@ -158,7 +160,7 @@ function partsOfPage(canonicalText: string): readonly ObservationReadPartFact[] 
   if (typeof parsed !== "object" || parsed === null) return null;
   const entries = (parsed as { entries?: unknown }).entries;
   if (!Array.isArray(entries)) return null;
-  const facts: ObservationReadPartFact[] = [];
+  const facts: ObservationRangeFact[] = [];
   for (const entry of entries) {
     if (typeof entry !== "object" || entry === null) return null;
     const candidate = entry as Record<string, unknown>;
@@ -166,29 +168,39 @@ function partsOfPage(canonicalText: string): readonly ObservationReadPartFact[] 
       typeof candidate.observation_id !== "string" ||
       typeof candidate.observation_content_sha256 !== "string" ||
       typeof candidate.part_index !== "number" || typeof candidate.part_count !== "number" ||
-      typeof candidate.part_allowance !== "number"
+      // The OFFSETS are what this layer folds, and a page that does not state them cannot be folded —
+      // they are not derivable here (the split cuts on JSON escape cost, and this module must never
+      // re-split, §9-F2). A page from before the range contract therefore fails as "not a page", which
+      // is the honest answer: it is not a page THIS rule can judge.
+      typeof candidate.body_start !== "number" || typeof candidate.body_end !== "number"
     ) {
       return null;
     }
     facts.push({
       observation_id: candidate.observation_id,
       observation_content_sha256: candidate.observation_content_sha256,
+      body_start: candidate.body_start,
+      body_end: candidate.body_end,
       part_index: candidate.part_index,
       part_count: candidate.part_count,
-      part_allowance: candidate.part_allowance,
     });
   }
   return facts;
 }
 
 /**
- * `delivered` — the observation ids whose WHOLE content reached the model's context.
+ * `delivered` — WHICH CHARACTERS of which observations reached the model's context.
+ *
+ * Ranges rather than a set of ids, because that is the unit the evidence actually supports: a worker
+ * that read one section of an 800 KB observation received that section, and the layer above decides
+ * what may be claimed from it. Under the old id-set shape the only expressible answer was "all of it or
+ * none", which made a large observation permanently uncitable no matter how faithfully it was read.
  *
  * Only the attested emissions are folded, and they are folded by the reducer the live metering shares,
- * so a partition can only be completed out of pages that actually arrived. The fold is order
- * independent (stage 0b), which matters here more than anywhere: the order pages arrive in the
- * transcript is the order the SERVER wrote them, and the measured `store`/`load` phase shows that is
- * not the order the model received them.
+ * so coverage can only accumulate out of pages that actually arrived. The fold is order independent
+ * (stage 0b), which matters here more than anywhere: the order pages arrive in the transcript is the
+ * order the SERVER wrote them, and the measured `store`/`load` phase shows that is not the order the
+ * model received them.
  */
 export function reconcileDelivery(input: DeliveryReconciliationInput): DeliveryReconciliation {
   const attested = attestEmissionDelivery(input);
@@ -196,26 +208,20 @@ export function reconcileDelivery(input: DeliveryReconciliationInput): DeliveryR
 
   const coverage = new Map<string, ObservationCoverage>();
   for (const [index, emission] of input.emissions.entries()) {
-    const parts = partsOfPage(emission.canonical_text);
-    if (parts === null) return { status: "unverifiable", reason: "emission_not_a_page" };
+    const ranges = rangesOfPage(emission.canonical_text);
+    if (ranges === null) return { status: "unverifiable", reason: "emission_not_a_page" };
     if (attested.attestation[index]!.disposition !== "verbatim_delivered") continue;
-    for (const part of parts) {
-      coverage.set(part.observation_id, foldObservationPart(coverage.get(part.observation_id), part));
+    for (const fact of ranges) {
+      coverage.set(fact.observation_id, foldObservationRange(coverage.get(fact.observation_id), fact));
     }
   }
 
-  const delivered = new Set<string>();
-  for (const [observationId, observationCoverage] of coverage) {
-    const reported = selectReportedPartition(observationCoverage);
-    if (
-      reported && coversWholeObservation({
-        part_indexes: [...reported.parts],
-        part_count: reported.partCount,
-      })
-    ) {
-      delivered.add(observationId);
-    }
-  }
+  const delivered = [...coverage.entries()]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .flatMap(([observationId, observationCoverage]) => {
+      const record = observationCoverageRecord(observationId, observationCoverage);
+      return record === undefined ? [] : [record];
+    });
   return { status: "verified", delivered, attestation: attested.attestation };
 }
 
@@ -231,20 +237,25 @@ export function reconcileDelivery(input: DeliveryReconciliationInput): DeliveryR
  */
 export type ObservationReadDeliveryRecordFile =
   | {
-    readonly schema_version: "observation-read-delivery/v1";
+    readonly schema_version: "observation-read-delivery/v2";
     readonly launch_token: string;
     readonly status: "verified";
-    readonly delivered: readonly string[];
+    readonly delivered: readonly ObservationCoverageRecord[];
     readonly attestation: readonly EmissionAttestation[];
   }
   | {
-    readonly schema_version: "observation-read-delivery/v1";
+    readonly schema_version: "observation-read-delivery/v2";
     readonly launch_token: string;
     readonly status: "unverifiable";
     readonly reason: DeliveryReconciliationRefusal;
   };
 
-const DELIVERY_RECORD_SCHEMA_VERSION = "observation-read-delivery/v1" as const;
+// v2 because `delivered` changed UNIT, not shape: it was the ids whose whole content arrived and is now
+// the char ranges that arrived. A v1 reader handed a v2 file would read an array of objects where it
+// expected strings; a v2 reader handed a v1 file would read ids as coverage records. Both fail closed
+// here (unknown version -> null -> "no record"), which is the honest outcome for a file authored under
+// a rule this build no longer applies.
+const DELIVERY_RECORD_SCHEMA_VERSION = "observation-read-delivery/v2" as const;
 
 export function writeObservationReadDeliveryRecord(args: {
   readonly recordPath: string;
@@ -256,7 +267,9 @@ export function writeObservationReadDeliveryRecord(args: {
       schema_version: DELIVERY_RECORD_SCHEMA_VERSION,
       launch_token: args.launchToken,
       status: "verified",
-      delivered: [...args.reconciliation.delivered].sort(),
+      // Already ordered by observation id where it is derived, so the file's order is the fold's — the
+      // sort does not live in two places.
+      delivered: args.reconciliation.delivered,
       attestation: args.reconciliation.attestation,
     }
     : {
@@ -304,8 +317,35 @@ export function readObservationReadDeliveryRecord(
       : null;
   }
   if (record.status !== "verified") return null;
-  if (!Array.isArray(record.delivered) || !record.delivered.every((id) => typeof id === "string")) {
-    return null;
+  if (!Array.isArray(record.delivered)) return null;
+  const delivered: ObservationCoverageRecord[] = [];
+  for (const entry of record.delivered) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return null;
+    const candidate = entry as Record<string, unknown>;
+    if (
+      typeof candidate.observation_id !== "string" ||
+      typeof candidate.observation_content_sha256 !== "string" ||
+      !Array.isArray(candidate.ranges) ||
+      (candidate.body_length !== null && typeof candidate.body_length !== "number")
+    ) {
+      return null;
+    }
+    const ranges: ObservationRange[] = [];
+    for (const range of candidate.ranges) {
+      if (
+        !Array.isArray(range) || range.length !== 2 ||
+        typeof range[0] !== "number" || typeof range[1] !== "number"
+      ) {
+        return null;
+      }
+      ranges.push([range[0], range[1]]);
+    }
+    delivered.push({
+      observation_id: candidate.observation_id,
+      observation_content_sha256: candidate.observation_content_sha256,
+      ranges,
+      body_length: candidate.body_length as number | null,
+    });
   }
   if (!Array.isArray(record.attestation)) return null;
   const attestation: EmissionAttestation[] = [];
@@ -329,7 +369,7 @@ export function readObservationReadDeliveryRecord(
     schema_version: DELIVERY_RECORD_SCHEMA_VERSION,
     launch_token: record.launch_token,
     status: "verified",
-    delivered: record.delivered as string[],
+    delivered,
     attestation,
   };
 }
@@ -421,12 +461,25 @@ export type CitableObservations =
   | { readonly basis: "delivered"; readonly ids: ReadonlySet<string> }
   | { readonly basis: "unverifiable"; readonly reason: DeliveryReconciliationRefusal };
 
-/** Project a delivery record into the citable set. A missing record admits nothing. */
+/**
+ * Project a delivery record into the citable set. A missing record admits nothing.
+ *
+ * The record carries RANGES; this projection keeps the observations whose coverage is whole, because
+ * that is what today's citation names — an observation. It is deliberately a NARROWING of the record
+ * rather than its shape: the ranges stay in the artifact so the citation contract can move to them
+ * without the evidence having to be re-derived (design `23-…md` §3, S2 before S3).
+ */
 export function citableFromDeliveryRecord(
   record: ObservationReadDeliveryRecordFile | null,
 ): CitableObservations {
   if (record === null) return { basis: "unverifiable", reason: "delivery_record_unreadable" };
-  return record.status === "verified"
-    ? { basis: "delivered", ids: new Set(record.delivered) }
-    : { basis: "unverifiable", reason: record.reason };
+  if (record.status !== "verified") return { basis: "unverifiable", reason: record.reason };
+  return {
+    basis: "delivered",
+    ids: new Set(
+      record.delivered
+        .filter((entry) => coversWholeObservation({ ranges: entry.ranges, bodyLength: entry.body_length ?? undefined }))
+        .map((entry) => entry.observation_id),
+    ),
+  };
 }

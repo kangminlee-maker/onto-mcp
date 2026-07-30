@@ -27,6 +27,7 @@ import {
   OBSERVATION_READ_SESSION_RESERVE_CHARS,
   type ObservationReadGrantSources,
 } from "./observation-read-grant.js";
+import { coversWholeObservation } from "./observation-read-coverage.js";
 
 // Spec basis: development-records/design/20260726-observation-catalog-tool-design.md §4.1 (session scope
 // binding), §4.2 (cumulative budget), §3 (인용 ⊆ 조회 ⊆ 스냅샷), §8 (failure modes), §9 Stage 2 done-when.
@@ -266,12 +267,16 @@ describe("charging a refused call — it spends the same ceiling a served page d
   });
 });
 
-describe("part indexes are only meaningful inside the decomposition that produced them", () => {
-  it("does not assemble a complete observation out of two different partitions", () => {
+describe("coverage is char ranges, so it survives what part indexes could not", () => {
+  const wholeOf = (record: { ranges: readonly (readonly [number, number])[]; body_length: number | null }) =>
+    coversWholeObservation({ ranges: record.ranges, bodyLength: record.body_length ?? undefined });
+
+  it("does not assemble a complete observation out of two different decompositions of it", () => {
     // `partAllowance` is derived from the REQUEST's id list (the page envelope reserves worst-case
     // cursor framing for exactly those ids), so one observation splits differently when fetched alone
-    // than when fetched alongside others. Unioning indexes across requests built a "complete" set from
-    // two partitions and authorized an observation whose tail was never served.
+    // than when fetched alongside others. Unioning INDEXES across requests built a "complete" set from
+    // two decompositions and authorized an observation whose tail was never served. Offsets share one
+    // coordinate space per body, so the same two pages leave a visible hole instead.
     const registry = new ObservationReadGrantRegistry();
     const sources = writeSources(OBSERVATIONS_TEXT);
     const { token } = mintOver(registry, sources, { pageCharBudget: 8_192 });
@@ -279,110 +284,77 @@ describe("part indexes are only meaningful inside the decomposition that produce
       .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
 
     const solo = registry.serve({ token, request: { observation_ids: [big] } });
-    const soloCount = solo.entries[0]!.part_count;
+    const soloEntry = solo.entries[0]!;
     const grouped = registry.serve({
       token,
       request: { observation_ids: [big, ...allIds.filter((id) => id !== big).slice(0, 15)] },
     });
     const groupedEntry = grouped.entries.find((e) => e.observation_id === big)!;
     // Non-vacuous: the two requests really do decompose the same body differently.
-    expect(groupedEntry.part_count).not.toBe(soloCount);
+    expect(groupedEntry.part_count).not.toBe(soloEntry.part_count);
+    expect(groupedEntry.body_end).not.toBe(soloEntry.body_end);
 
     const record = registry.receipt(token).served.find((r) => r.observation_id === big)!;
-    // The record describes ONE partition and holds only the parts served under it. Both partitions are
-    // retained internally (stage 0b), but neither is complete here, so the reported one is chosen by
-    // the projection's deterministic rule — never by merging the two.
-    expect(record.part_count).toBe(groupedEntry.part_count);
-    expect([...record.part_indexes]).toEqual([groupedEntry.part_index]);
-    // ...so it cannot read as complete on the strength of an index from the other partition.
-    expect(record.part_indexes.length).toBeLessThan(record.part_count);
+    // Both first parts start at 0 and one reaches further, so the union is a single opening segment —
+    // and it stops short of a body whose length nothing has taught yet.
+    expect(record.ranges).toEqual([[0, Math.max(soloEntry.body_end, groupedEntry.body_end)]]);
+    expect(record.body_length).toBeNull();
+    expect(wholeOf(record)).toBe(false);
   });
 
-  it("keeps a COMPLETE partition when a later request splits the same observation differently", () => {
-    // Stage 0b (design §12-S4). The accumulator used to hold one record per observation and reset it
-    // whenever the allowance changed, so a later partial fetch ERASED an earlier complete one and the
-    // citation was refused for a delivery that really happened. The order is not even observable: the
-    // JS the model writes decides when each result is rendered, so the server's wire order is not the
-    // model's receiving order.
+  it("credits a walk that reaches the end, and only then", () => {
+    // The capability the range unit buys: coverage accumulates toward a body length the FINAL part
+    // teaches, so a walk that finishes is whole and a walk that stops is not — with no partition to
+    // agree about. A mid-sized observation, because the largest needs more calls than a grant has.
     const registry = new ObservationReadGrantRegistry();
-    const { token } = mintOver(registry, writeSources(OBSERVATIONS_TEXT), { pageCharBudget: 32_768 });
-    const big = [...fullArtifact.observations]
-      .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
-    const others = allIds.filter((id) => id !== big).slice(0, 15);
+    const sources = writeSources(OBSERVATIONS_TEXT);
+    const { token } = mintOver(registry, sources, { pageCharBudget: 8_192 });
+    const sized = [...fullArtifact.observations]
+      .map((observation) => ({ id: observation.observation_id, chars: JSON.stringify(observation).length }))
+      .sort((a, b) => a.chars - b.chars);
+    // Splits into a handful of parts: enough that "stopped early" is a real state, few enough to finish.
+    const target = sized.find((entry) => entry.chars > 20_000 && entry.chars < 60_000)!.id;
 
-    // Fetch the observation WHOLE under its solo allowance, following the cursor to the last part.
-    let page = registry.serve({ token, request: { observation_ids: [big] } });
-    const solo = page.entries[0]!;
-    while (page.next_cursor) {
+    let page = registry.serve({ token, request: { observation_ids: [target] } });
+    expect(page.next_cursor).toBeDefined(); // non-vacuous: it really does split
+    const partial = registry.receipt(token).served.find((r) => r.observation_id === target)!;
+    expect(partial.body_length).toBeNull(); // no final part yet, so no length, so not whole
+    expect(wholeOf(partial)).toBe(false);
+
+    while (page.next_cursor !== undefined) {
       page = registry.serve({ token, request: { cursor: page.next_cursor } });
     }
-    // Then touch it again in a request whose id list gives it a DIFFERENT decomposition.
-    const grouped = registry
-      .serve({ token, request: { observation_ids: [big, ...others] } })
-      .entries.find((entry) => entry.observation_id === big)!;
-    // Preconditions, asserted rather than assumed: two real partitions, the second one partial.
-    expect(grouped.part_allowance).not.toBe(solo.part_allowance);
-    expect(grouped.part_count).toBeGreaterThan(1);
-
-    const record = registry.receipt(token).served.find((r) => r.observation_id === big)!;
-    // The complete solo partition survives the later partial fetch, and the receipt reports IT.
-    // Before stage 0b the allowance change reset the record to the grouped part alone, and the
-    // observation was refused as incomplete despite having been delivered whole.
-    expect(record.part_allowance).toBe(solo.part_allowance);
-    expect(record.part_count).toBe(solo.part_count);
-    expect([...record.part_indexes]).toEqual(
-      Array.from({ length: solo.part_count }, (_unused, index) => index + 1),
-    );
+    const complete = registry.receipt(token).served.find((r) => r.observation_id === target)!;
+    expect(complete.ranges).toEqual([[0, complete.body_length]]);
+    expect(wholeOf(complete)).toBe(true);
   });
 
-  it("does not merge two partitions that share a part_count but not a boundary", () => {
-    // `part_count` is NOT a partition identity: two requests can split the same body into the same
-    // NUMBER of parts at different boundaries, and merging their indexes claims complete coverage
-    // across a hole. The allowance names the partition exactly, because the split is a pure function of
-    // (body, allowance). Search for a budget that actually produces the colliding-count case — asserting
-    // it rather than assuming it is what makes this arm distinguish the two keying rules.
+  it("reports the union of what was served, across request shapes, without inventing coverage", () => {
+    // Two decompositions of one body in one grant. The receipt must describe CHARACTERS, so the two
+    // fronts merge into one opening segment rather than into "two of two parts".
+    //
+    // The hole case — a front from one decomposition and a tail from another — is asserted in
+    // `observation-read-coverage.test.ts` over synthetic facts, because a grant's cursor is sequential
+    // and cannot skip a middle page. Re-proving it here would need a forged cursor, which would test
+    // the reader's coordinate handling rather than the fold.
+    const registry = new ObservationReadGrantRegistry();
+    const sources = writeSources(OBSERVATIONS_TEXT);
+    const { token } = mintOver(registry, sources, { pageCharBudget: 8_192 });
     const big = [...fullArtifact.observations]
       .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
     const others = allIds.filter((id) => id !== big).slice(0, 15);
-    let collision:
-      | {
-        registry: ObservationReadGrantRegistry;
-        token: string;
-        grouped: number;
-        soloAllowance: number;
-        groupedAllowance: number;
-      }
-      | null = null;
-    for (const pageCharBudget of [8_192, 10_240, 12_288, 16_384, 20_480, 24_576, 32_768, 49_152]) {
-      const registry = new ObservationReadGrantRegistry();
-      const { token } = mintOver(registry, writeSources(OBSERVATIONS_TEXT), { pageCharBudget });
-      const solo = registry.serve({ token, request: { observation_ids: [big] } }).entries[0]!;
-      const grouped = registry
-        .serve({ token, request: { observation_ids: [big, ...others] } })
-        .entries.find((entry) => entry.observation_id === big);
-      if (!grouped) continue;
-      if (solo.part_count !== grouped.part_count) continue;
-      if (solo.part_allowance === grouped.part_allowance) continue;
-      collision = {
-        registry,
-        token,
-        grouped: grouped.part_index,
-        soloAllowance: solo.part_allowance,
-        groupedAllowance: grouped.part_allowance,
-      };
-      break;
-    }
-    // The colliding case must exist, or this arm proves nothing about the keying rule.
-    expect(collision, "no budget produced equal part_count with different allowances").not.toBeNull();
 
-    const record = collision!.registry.receipt(collision!.token).served
-      .find((r) => r.observation_id === big)!;
-    // The record names the LATEST decomposition. Keyed on `part_count`, the equal counts would have made
-    // the accumulator reuse the earlier record and keep the earlier allowance while merging into it —
-    // the state from which two partitions assemble a complete-looking set.
-    expect(record.part_allowance).toBe(collision!.groupedAllowance);
-    expect(record.part_allowance).not.toBe(collision!.soloAllowance);
-    expect([...record.part_indexes]).toEqual([collision!.grouped]);
+    const grouped = registry.serve({ token, request: { observation_ids: [big, ...others] } })
+      .entries.find((e) => e.observation_id === big)!;
+    const solo = registry.serve({ token, request: { observation_ids: [big] } }).entries[0]!;
+    // Non-vacuous: genuinely two decompositions, and the grouped one really is the narrower.
+    expect(grouped.part_allowance).toBeLessThan(solo.part_allowance);
+    expect(grouped.body_end).toBeLessThan(solo.body_end);
+
+    const record = registry.receipt(token).served.find((r) => r.observation_id === big)!;
+    expect(record.ranges).toEqual([[0, solo.body_end]]);
+    expect(record.body_length).toBeNull();
+    expect(wholeOf(record)).toBe(false);
   });
 });
 
@@ -1060,7 +1032,7 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
     expect(body).toBe(expected);
     const receipt = registry.receipt(token);
     expect(receipt.served).toHaveLength(1);
-    expect(receipt.served[0]?.part_indexes.length).toBe(pages.length);
+    expect(receipt.served[0]?.ranges).toEqual([[0, receipt.served[0]?.body_length]]);
   });
 });
 
@@ -1222,8 +1194,13 @@ describe("receipt — what the runtime served, deterministically", () => {
     expect(receipt.served.map((record) => record.observation_id))
       .toEqual([...[big, smallIds[0], smallIds[1]].sort()]);
     for (const record of receipt.served) {
-      expect(record.part_indexes).toEqual([...record.part_indexes].sort((a, b) => a - b));
-      expect(record.part_indexes[0]).toBe(1);
+      // Ascending, disjoint and starting at the origin — the shape the fold guarantees and the shape
+      // `coversWholeObservation` reads positionally.
+      expect(record.ranges).toEqual([...record.ranges].sort((a, b) => a[0] - b[0]));
+      expect(record.ranges[0]![0]).toBe(0);
+      for (let at = 1; at < record.ranges.length; at += 1) {
+        expect(record.ranges[at]![0]).toBeGreaterThan(record.ranges[at - 1]![1]);
+      }
     }
     expect(receipt.grant_id).toMatch(/^obsgrant_[0-9a-f]{16}$/);
 

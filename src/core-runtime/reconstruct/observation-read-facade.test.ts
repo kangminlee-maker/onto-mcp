@@ -746,14 +746,14 @@ describe("observation read facade — receipt reading is fail-closed (design §8
     const wellFormed = {
       observation_id: "obs_0000000000000001",
       observation_content_sha256: "abc",
-      part_indexes: [1],
-      part_count: 1,
+      ranges: [[0, 12]],
+      body_length: 12,
     };
     const write = (served: unknown) =>
       writeFileSync(
         forged,
         JSON.stringify({
-          schema_version: "observation-read-facade-receipt/v2",
+          schema_version: "observation-read-facade-receipt/v3",
           launch_token: token,
           receipt: { grant_id: "g", served },
           rejected_before_grant: 0,
@@ -765,9 +765,16 @@ describe("observation read facade — receipt reading is fail-closed (design §8
     write([wellFormed]);
     expect(observationIdsServed(readObservationReadFacadeReceipt(forged, token)).size).toBe(1);
     const broken: unknown[] = [
-      { observation_id: "obs_0000000000000001" }, // no hash, no parts
-      { ...wellFormed, part_count: 0 },
-      { ...wellFormed, part_indexes: "1" },
+      { observation_id: "obs_0000000000000001" }, // no hash, no coverage
+      { ...wellFormed, body_length: -1 },
+      { ...wellFormed, ranges: "0-12" },
+      { ...wellFormed, ranges: [[0]] }, // not a pair
+      { ...wellFormed, ranges: [[12, 0]] }, // end before start
+      { ...wellFormed, ranges: [[-1, 12]] }, // before the origin
+      // Ranges the FOLD could never produce. Validating only element types would let a hand-written
+      // duplicate pass as a whole cover, because `coversWholeObservation` reads them positionally.
+      { ...wellFormed, ranges: [[0, 12], [0, 12]] },
+      { ...wellFormed, ranges: [[6, 12], [0, 6]] }, // out of order
       { ...wellFormed, observation_id: "" },
       "not-an-object",
     ];

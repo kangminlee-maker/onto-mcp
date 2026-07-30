@@ -316,7 +316,7 @@ export function observationReadFacadeCodexArgs(launch: ObservationReadFacadeLaun
 
 /** Written by the facade, read by the runtime after the worker exits. */
 export interface ObservationReadFacadeReceiptFile {
-  readonly schema_version: "observation-read-facade-receipt/v2";
+  readonly schema_version: "observation-read-facade-receipt/v3";
   /**
    * The launch this receipt belongs to. WITHOUT it the file is only evidence that *some* facade once
    * served *something* at this path, and the path is derived from the session root plus a literal round
@@ -367,12 +367,13 @@ const UNSUPPORTED_KEY_ECHO_MAX_CHARS = 200;
 // that cannot half-run.
 const DESCRIPTOR_SCHEMA_VERSION: ObservationReadFacadeDescriptor["schema_version"] =
   "observation-read-facade-descriptor/v2";
-// v2 because the FILE'S MEANING changed, not its shape: a v1 receipt is evidence that some facade
-// served something at this path, a v2 receipt is evidence that THIS launch did. Reusing v1 would leave
-// the hole open in both directions — a reader from before the binding accepts our receipts and ignores
-// the token, and a v1 receipt reaches our token comparison instead of being refused outright.
+// v3 because the served records changed UNIT: part indexes became char ranges. A v2 receipt's
+// `part_indexes` say nothing this reader can judge — an index is meaningless outside the decomposition
+// that produced it, which is the whole reason for the change — so it is refused rather than reinterpreted.
+// (v2 itself was a MEANING change with no shape change: a v1 receipt is evidence that some facade served
+// something at this path, a v2 receipt is evidence that THIS launch did.)
 const RECEIPT_SCHEMA_VERSION: ObservationReadFacadeReceiptFile["schema_version"] =
-  "observation-read-facade-receipt/v2";
+  "observation-read-facade-receipt/v3";
 
 const EMISSIONS_SCHEMA_VERSION: ObservationReadFacadeEmissionsFile["schema_version"] =
   "observation-read-facade-emissions/v1";
@@ -958,10 +959,22 @@ export function readObservationReadFacadeReceipt(
     const record = entry as Record<string, unknown>;
     if (typeof record.observation_id !== "string" || record.observation_id.length === 0) return null;
     if (typeof record.observation_content_sha256 !== "string") return null;
-    if (typeof record.part_count !== "number" || !Number.isInteger(record.part_count)) return null;
-    if (record.part_count < 1) return null;
-    if (!Array.isArray(record.part_indexes)) return null;
-    if (record.part_indexes.some((part) => !Number.isInteger(part))) return null;
+    if (record.body_length !== null) {
+      if (typeof record.body_length !== "number" || !Number.isInteger(record.body_length)) return null;
+      if (record.body_length < 0) return null;
+    }
+    if (!Array.isArray(record.ranges)) return null;
+    for (const range of record.ranges) {
+      // Shape AND order: a record whose ranges are not ascending, disjoint and well-formed did not come
+      // from the fold, and `coversWholeObservation` reads them positionally. Validating only the element
+      // types would let a hand-written `[[0, 9], [0, 9]]` pass as a whole cover of a 9-char body.
+      if (!Array.isArray(range) || range.length !== 2) return null;
+      if (!Number.isInteger(range[0]) || !Number.isInteger(range[1])) return null;
+      if (range[0] < 0 || range[1] <= range[0]) return null;
+    }
+    for (let at = 1; at < record.ranges.length; at += 1) {
+      if ((record.ranges[at] as number[])[0]! <= (record.ranges[at - 1] as number[])[1]!) return null;
+    }
   }
   return {
     schema_version: RECEIPT_SCHEMA_VERSION,
@@ -1040,15 +1053,26 @@ export function readObservationReadFacadeEmissions(
   };
 }
 
+/**
+ * The observations this receipt shows were served WHOLE.
+ *
+ * NOT a citation authority — that is the delivery record's job, and the difference is the point: this
+ * says the runtime wrote the bytes, which the transport can clip without telling the server. Kept
+ * because a receipt that cannot be projected is not auditable, and this is the projection an operator
+ * and the receipt's own tests read.
+ *
+ * The completeness rule is declared in `observation-read-coverage.ts` next to the accumulation it
+ * judges, so delivery reconciliation applies the same one (design §6-4).
+ */
 export function observationIdsServed(
   receiptFile: ObservationReadFacadeReceiptFile | null,
 ): ReadonlySet<string> {
   if (!receiptFile) return new Set();
   return new Set(
     receiptFile.receipt.served
-      // WHOLE observations only. The rule is declared in `observation-read-coverage.ts` next to the
-      // accumulation it judges, so delivery reconciliation applies the same one (design §6-4).
-      .filter(coversWholeObservation)
+      .filter((record) =>
+        coversWholeObservation({ ranges: record.ranges, bodyLength: record.body_length ?? undefined })
+      )
       .map((record) => record.observation_id),
   );
 }

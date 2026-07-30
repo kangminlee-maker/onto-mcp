@@ -237,14 +237,20 @@ describe("the delivery record — written by reconciliation, read fail-closed", 
       launchToken: "launch-1",
       reconciliation: {
         status: "verified",
-        delivered: new Set(["obs-b", "obs-a"]),
+        delivered: [
+          { observation_id: "obs-a", observation_content_sha256: "sha-a", ranges: [[0, 4]], body_length: 4 },
+          { observation_id: "obs-b", observation_content_sha256: "sha-b", ranges: [[0, 7]], body_length: 7 },
+        ],
         attestation: [{ index: 0, chars: 12, disposition: "verbatim_delivered" }],
       },
     });
     const read = readObservationReadDeliveryRecord(recordPath, "launch-1")!;
     expect(read.status).toBe("verified");
     if (read.status !== "verified") return;
-    expect(read.delivered).toEqual(["obs-a", "obs-b"]); // sorted, so the file is stable
+    // Ordered by observation id where the fold derives it, so the file is stable across runs.
+    expect(read.delivered.map((entry) => entry.observation_id)).toEqual(["obs-a", "obs-b"]);
+    expect(read.delivered[0]!.ranges).toEqual([[0, 4]]);
+    expect(read.delivered[0]!.body_length).toBe(4);
     expect(read.attestation).toHaveLength(1);
   });
 
@@ -270,17 +276,29 @@ describe("the delivery record — written by reconciliation, read fail-closed", 
     writeObservationReadDeliveryRecord({
       recordPath,
       launchToken: "launch-1",
-      reconciliation: { status: "verified", delivered: new Set(["a"]), attestation: [] },
+      reconciliation: {
+        status: "verified",
+        delivered: [
+          { observation_id: "a", observation_content_sha256: "sha-a", ranges: [[0, 1]], body_length: 1 },
+        ],
+        attestation: [],
+      },
     });
     expect(readObservationReadDeliveryRecord(recordPath, "another-launch")).toBeNull();
     expect(readObservationReadDeliveryRecord(path.join(dir, "absent.json"), "launch-1")).toBeNull();
 
     const intact = JSON.parse(readFileSync(recordPath, "utf8")) as Record<string, unknown>;
     const mutations: Record<string, unknown>[] = [
-      { schema_version: "observation-read-delivery/v2" },
+      // The PREVIOUS version, not an invented one: a v1 file's `delivered` is an array of ids, which a
+      // v2 reader would otherwise read as coverage records and find shapeless. Refusing on the version
+      // is what keeps a file authored under the id-unit rule from being judged under the range rule.
+      { schema_version: "observation-read-delivery/v1" },
+      { schema_version: "observation-read-delivery/v3" },
       { status: "maybe" },
       { delivered: "not an array" },
       { delivered: [5] },
+      { delivered: [{ observation_id: "a", observation_content_sha256: "sha-a", ranges: [[0]], body_length: 1 }] },
+      { delivered: [{ observation_id: "a", observation_content_sha256: "sha-a", ranges: "no", body_length: 1 }] },
       { attestation: [{ index: 0, chars: 1, disposition: "invented" }] },
       { attestation: "not an array" },
     ];

@@ -8,6 +8,7 @@ import {
   attestEmissionDelivery,
   reconcileDelivery,
 } from "./delivery-reconciliation.js";
+import { coversWholeObservation } from "./observation-read-coverage.js";
 import type { ReconstructSourceSafetyLedgerArtifact } from "./artifact-types.js";
 import { fixObservationSnapshot, readObservationPage } from "./observation-read.js";
 
@@ -197,6 +198,22 @@ describe("delivery reconciliation — replay against real transcripts", () => {
  * corpus, so the part indexes, counts and allowances are the ones the runtime actually serves rather
  * than numbers chosen to make the test pass.
  */
+/**
+ * Is this observation covered WHOLE by the reconciliation's delivered ranges?
+ *
+ * `delivered` is coverage, not a set of ids — a worker that read one section of an 800 KB observation
+ * received that section — so "was it delivered" is a question about the ranges. The rule itself lives
+ * in `observation-read-coverage.ts`; this only locates the record.
+ */
+function deliveredWhole(
+  outcome: { readonly delivered: readonly { observation_id: string; ranges: readonly (readonly [number, number])[]; body_length: number | null }[] },
+  observationId: string,
+): boolean {
+  const record = outcome.delivered.find((entry) => entry.observation_id === observationId);
+  return record !== undefined &&
+    coversWholeObservation({ ranges: record.ranges, bodyLength: record.body_length ?? undefined });
+}
+
 describe("delivery reconciliation — folding real pages into delivered ids", () => {
   // BOTH artifacts are the real, paired ones from the 59-file value bench (see that fixture's
   // PROVENANCE.md). The ledger is loaded rather than synthesized on purpose: writing an "admit
@@ -316,7 +333,7 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
     });
     expect(outcome.status).toBe("verified");
     if (outcome.status !== "verified") return;
-    expect(outcome.delivered.has(target)).toBe(true);
+    expect(deliveredWhole(outcome, target)).toBe(true);
   });
 
   it("withholds an observation whose tail was cut out of the context", () => {
@@ -336,7 +353,7 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
     });
     expect(outcome.status).toBe("verified");
     if (outcome.status !== "verified") return;
-    expect(outcome.delivered.has(biggest)).toBe(false);
+    expect(deliveredWhole(outcome, biggest)).toBe(false);
     expect(outcome.attestation.filter((entry) => entry.disposition === "verbatim_delivered"))
       .toHaveLength(texts.length - 1);
   });
@@ -433,7 +450,7 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
     });
     expect(tidy.status).toBe("verified");
     if (tidy.status !== "verified") return;
-    expect(tidy.delivered.has(target)).toBe(true);
+    expect(deliveredWhole(tidy, target)).toBe(true);
 
     const forward = texts.map((_, index) => index);
     for (const [attempt, order] of [forward, [...forward].reverse()].entries()) {
@@ -444,7 +461,7 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
       });
       expect(outcome.status, `order ${order.join(",")}`).toBe("verified");
       if (outcome.status !== "verified") continue;
-      expect(outcome.delivered.has(target)).toBe(true);
+      expect(deliveredWhole(outcome, target)).toBe(true);
       expect(outcome.attestation).toEqual(tidy.attestation);
     }
   });
@@ -509,7 +526,7 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
     expect(outcome.status).toBe("verified");
     if (outcome.status !== "verified") return;
     expect(outcome.attestation[0]!.disposition).toBe("verbatim_delivery_not_attested");
-    expect(outcome.delivered.size).toBe(0);
+    expect(outcome.delivered).toEqual([]);
   });
 
   /**

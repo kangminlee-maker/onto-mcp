@@ -95,8 +95,9 @@ import {
 } from "./observation-read.js";
 import {
   type ObservationCoverage,
-  foldObservationPart,
-  selectReportedPartition,
+  type ObservationCoverageRecord,
+  foldObservationRange,
+  observationCoverageRecord,
 } from "./observation-read-coverage.js";
 
 /**
@@ -402,26 +403,15 @@ export interface ObservationReadFetchBudget {
   readonly max_calls: number;
 }
 
-/** One observation this grant actually served, and which of its parts. */
-export interface ObservationReadServedRecord {
-  readonly observation_id: string;
-  readonly observation_content_sha256: string;
-  /** 1-based part indexes served, ascending. A whole observation appears as `[1]`. */
-  readonly part_indexes: readonly number[];
-  /**
-   * How many parts the observation splits into. Without it `part_indexes` cannot say whether the worker
-   * received the WHOLE observation or only its opening page — and a citation names the observation, not
-   * the fragment, so the consumer needs to know the difference.
-   */
-  readonly part_count: number;
-  /**
-   * The decomposition these indexes belong to. Persisted because `part_count` does not identify one:
-   * two requests can split the same body into the same number of parts at different boundaries, so a
-   * receipt that recorded only the count could not say whether its indexes describe one partition or
-   * two. Reading it also makes the accumulator's reset observable rather than inferred.
-   */
-  readonly part_allowance: number;
-}
+/**
+ * One observation this grant actually served, and WHICH CHARACTERS of it.
+ *
+ * The shape is `ObservationCoverageRecord`, shared with the delivery record. What differs is the
+ * AUTHORITY: this one says the runtime wrote those bytes, that one says the worker received them, and
+ * only the second is what a citation claims. The names are kept apart for exactly that reason.
+ */
+export type ObservationReadServedRecord = ObservationCoverageRecord;
+
 
 /**
  * What the runtime handed out under a grant — the "조회" term of design §3's chain
@@ -720,7 +710,7 @@ export class ObservationReadGrantRegistry {
       // The accumulation rule — which parts of which decomposition count — is declared in
       // `observation-read-coverage.ts`, because delivery reconciliation has to apply the SAME rule to
       // what reached the model and a second declaration is one that can disagree (design §9-F2).
-      state.served.set(entry.observation_id, foldObservationPart(
+      state.served.set(entry.observation_id, foldObservationRange(
         state.served.get(entry.observation_id),
         entry,
       ));
@@ -812,18 +802,12 @@ function receiptOf(state: ObservationReadGrantState): ObservationReadReceipt {
     served: Object.freeze(
       [...state.served.entries()]
         .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        // One record per observation, and WHICH partition it reports is decided by the same module
-        // that owns the fold — a projection that picked differently would reintroduce the order
+        // One record per observation, and WHICH content version it reports is decided by the same
+        // module that owns the fold — a projection that picked differently would reintroduce the order
         // dependence one layer below the accumulator.
         .flatMap(([observationId, coverage]) => {
-          const record = selectReportedPartition(coverage);
-          return record === undefined ? [] : [Object.freeze({
-            observation_id: observationId,
-            observation_content_sha256: record.sha256,
-            part_indexes: Object.freeze([...record.parts].sort((a, b) => a - b)),
-            part_count: record.partCount,
-            part_allowance: record.partAllowance,
-          })];
+          const record = observationCoverageRecord(observationId, coverage);
+          return record === undefined ? [] : [record];
         }),
     ),
   });

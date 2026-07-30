@@ -43,6 +43,7 @@ import {
   reconcileFacadeDelivery,
   VERIFIED_CODEX_CLI_VERSIONS,
 } from "../src/core-runtime/reconstruct/delivery-reconciliation.ts";
+import { coversWholeObservation } from "../src/core-runtime/reconstruct/observation-read-coverage.ts";
 
 type AnyRecord = Record<string, any>;
 
@@ -297,10 +298,18 @@ ok(`delivery reconciliation VERIFIED in ${reconciliationMs} ms`);
 
 // The point of the whole layer: the ids it admits are the ones whose pages reached the model.
 for (const id of wantedIds) {
-  if (!delivery.delivered.includes(id)) {
+  // What it admits is the CHARACTERS whose pages reached the model. A probe that fetched an
+  // observation end to end must come back covered WHOLE; anything less means a page went out and did
+  // not arrive, which is precisely the failure this probe exists to surface.
+  const record = delivery.delivered.find((entry) => entry.observation_id === id);
+  if (
+    record === undefined ||
+    !coversWholeObservation({ ranges: record.ranges, bodyLength: record.body_length ?? undefined })
+  ) {
     fail(
-      `${id} was SERVED but delivery reconciliation does not admit it. attestation: ` +
-        `${JSON.stringify(delivery.attestation)}`,
+      `${id} was SERVED but delivery reconciliation does not admit it whole (${
+        record === undefined ? "no coverage record" : JSON.stringify(record.ranges)
+      }). attestation: ${JSON.stringify(delivery.attestation)}`,
     );
   }
 }
