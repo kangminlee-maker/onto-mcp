@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { ReconstructSourceSafetyLedgerArtifact } from "./artifact-types.js";
 import {
@@ -472,7 +473,18 @@ describe("request shape — safety by unrepresentability, checked at the boundar
     // snapshot, or past the id cap.
     const forge = (payload: Record<string, unknown>): string =>
       Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-    const base = { v: 1, d: snapshot.snapshot_digest, b: PAGE_BUDGET, o: 0, p: 0 };
+    // The version is READ BACK from a cursor the reader just issued, not written down here. This test is
+    // about forgery narrowing, not about versioning: pinning a literal would make it fail on every
+    // version bump for a reason that has nothing to do with what it checks (it did, on the S1 bump).
+    const issued = readObservationPage({
+      snapshot,
+      request: { observation_ids: [largestScalar.observationId] },
+      pageCharBudget: PAGE_BUDGET,
+    }).next_cursor as string;
+    const currentVersion = (
+      JSON.parse(Buffer.from(issued, "base64url").toString("utf8")) as { v: number }
+    ).v;
+    const base = { v: currentVersion, d: snapshot.snapshot_digest, b: PAGE_BUDGET, o: 0, p: 0 };
     expect(
       reasonOf(() =>
         readObservationPage({
@@ -769,5 +781,125 @@ describe("serialized-cost model — the arithmetic the page budget rests on", ()
     }
     expect(parts.join("")).toBe(body);
     for (const page of pages) expect(JSON.stringify(page).length).toBeLessThanOrEqual(800);
+  });
+});
+
+// ── Stage S1 of the RANGE contract (design 20260727 `23-…md` §3/S1).
+//
+// The unit of delivery and citation drops from "the whole observation" to a RANGE, so a page entry must
+// carry the range it is — `[body_start, body_end)` into the observation's canonical body, plus a hash OF
+// THAT SLICE. The offsets cannot be derived downstream: `splitBodyByJsonCost` cuts on JSON escape cost,
+// `codePointJsonCost` is non-uniform, and the allowance depends on the request's id list. So the runtime
+// states them, and these tests are what make "states them CORRECTLY" checkable.
+describe("range contract — a page entry says which slice of the body it is", () => {
+  const bodyOf = (id: string): string => snapshot.lookup(id)?.body as string;
+
+  // Two budgets, because one budget is one partition: a rule that held only for the boundaries this
+  // corpus happens to produce at 65,536 would be an artifact of the fixture, not a property.
+  for (const budget of [PAGE_BUDGET, 32_000]) {
+    it(`offsets partition every observation's body with no gap and no overlap (budget ${budget})`, () => {
+      let observationsChecked = 0;
+      let splitObservationsChecked = 0;
+      for (const group of batches(allIds, OBSERVATION_READ_MAX_REQUEST_IDS)) {
+        const entries = walk(snapshot, group, budget).flatMap((page) => page.entries);
+        const byObservation = new Map<string, typeof entries>();
+        for (const entry of entries) {
+          byObservation.set(entry.observation_id, [
+            ...(byObservation.get(entry.observation_id) ?? []),
+            entry,
+          ]);
+        }
+        for (const [id, parts] of byObservation) {
+          observationsChecked += 1;
+          if (parts.length > 1) splitObservationsChecked += 1;
+          const body = bodyOf(id);
+          let cursor = 0;
+          for (const part of parts) {
+            // Contiguous and forward: `body_start` picks up exactly where the previous part ended, so
+            // the parts tile `[0, body.length)` — no gap to lose content in, no overlap to double-count.
+            expect(part.body_start).toBe(cursor);
+            expect(part.body_end).toBeGreaterThan(part.body_start);
+            cursor = part.body_end;
+          }
+          expect(cursor).toBe(body.length);
+        }
+      }
+      // The claim above is vacuous unless the corpus actually splits something at this budget.
+      expect(observationsChecked).toBe(allIds.length);
+      expect(splitObservationsChecked).toBeGreaterThan(0);
+    });
+
+    it(`range_content_sha256 covers the slice the offsets name, re-sliced from the body (budget ${budget})`, () => {
+      let checked = 0;
+      for (const group of batches(allIds, OBSERVATION_READ_MAX_REQUEST_IDS)) {
+        for (const entry of walk(snapshot, group, budget).flatMap((page) => page.entries)) {
+          const body = bodyOf(entry.observation_id);
+          // The oracle re-slices the ORIGINAL body by the declared offsets rather than hashing
+          // `entry.body`. Hashing the served text instead would be a tautology: shifting an internal
+          // boundary by one character would still satisfy it, because both sides would move together.
+          const slice = body.slice(entry.body_start, entry.body_end);
+          expect(entry.body).toBe(slice);
+          expect(entry.range_content_sha256).toBe(
+            createHash("sha256").update(slice, "utf8").digest("hex"),
+          );
+          checked += 1;
+        }
+      }
+      expect(checked).toBeGreaterThan(allIds.length);
+    });
+  }
+
+  // NOTE on framing parity (F-9). A test comparing `JSON.stringify(entry).length` against
+  // `JSON.stringify({...entry, body: ""}).length + jsonStringContentCost(body)` looks like it proves the
+  // reader's reservation covers every field — it does not. Both sides are built from the SAME emitted
+  // entry, so it is a tautology about `JSON.stringify` that passes no matter what the reader reserved.
+  // (It was written that way here first, and passed before the fields existed.) The real guard belongs
+  // at the reader's own authority, where the reserved shape and the emitted shape are different values:
+  // `readObservationPage` now checks each entry's exact serialized cost against the framing it reserved
+  // and fails loud on a mismatch. The page-budget assertion below is the input-dependent backstop.
+
+  it("refuses a cursor issued before the range contract existed", () => {
+    // The cursor binds the snapshot digest and the PAGE BUDGET — not the allowance. S1 leaves the budget
+    // alone and grows the entry framing, so a pre-S1 cursor passes both existing checks and then resumes
+    // into a DIFFERENT decomposition: same `p`, different boundary. Only a version bump refuses it.
+    //
+    // The id must be one that really splits at this budget: with a single-part observation, `p: 1` is
+    // past the end and `cursor_malformed` comes from the bounds check instead — a control that passes
+    // whether or not the version was ever bumped. (It did, the first time this was written.)
+    const splitting = largestScalar.observationId;
+    expect(
+      readObservationPage({
+        snapshot,
+        request: { observation_ids: [splitting] },
+        pageCharBudget: PAGE_BUDGET,
+      }).next_cursor,
+    ).toBeDefined();
+    const stale = Buffer.from(
+      JSON.stringify({ v: 1, d: snapshot.snapshot_digest, b: PAGE_BUDGET, ids: [splitting], o: 0, p: 1 }),
+      "utf8",
+    ).toString("base64url");
+    expect(
+      reasonOf(() =>
+        readObservationPage({ snapshot, request: { cursor: stale }, pageCharBudget: PAGE_BUDGET })
+      ),
+    ).toBe("cursor_malformed");
+  });
+
+  it("still issues cursors this reader accepts back", () => {
+    // The negative control above must not be passing because ALL cursors are refused.
+    const first = readObservationPage({
+      snapshot,
+      request: { observation_ids: [largestScalar.observationId] },
+      pageCharBudget: PAGE_BUDGET,
+    });
+    expect(first.next_cursor).toBeDefined();
+    const second = readObservationPage({
+      snapshot,
+      request: { cursor: first.next_cursor as string },
+      pageCharBudget: PAGE_BUDGET,
+    });
+    expect(second.entries[0]?.body_start).toBe(
+      first.entries[first.entries.length - 1]?.body_end,
+    );
   });
 });

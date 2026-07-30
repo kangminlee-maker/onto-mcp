@@ -55,8 +55,19 @@ export const OBSERVATION_READ_MAX_ID_CHARS = 128;
  */
 export const OBSERVATION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-/** Cursor payload version. Bumped when the cursor's fields change; an older cursor is then rejected. */
-const OBSERVATION_CURSOR_VERSION = 1;
+/**
+ * Cursor payload version. Bumped when the cursor's fields change OR when the decomposition it is a
+ * coordinate INTO changes; an older cursor is then rejected.
+ *
+ * v2: the range contract (design `23-…md` §3/S1). A cursor binds the snapshot digest and the page
+ * BUDGET — not the allowance — so the budget check alone does not notice that the entry framing grew and
+ * moved every boundary. A v1 cursor would have passed both existing checks and then resumed into a
+ * different split at the same `(o, p)`: measured on the real corpus, the first boundary moves from
+ * 62,528 to 62,395, so 133 characters would be served twice and reported as consecutive parts. The
+ * version is what refuses it. (Cross-family review; the migration note that said the budget binding
+ * already covered this was wrong — it covers a budget CHANGE, which this is not.)
+ */
+const OBSERVATION_CURSOR_VERSION = 2;
 
 /**
  * Upper bound reserved for the part_index / part_count digit width when sizing a part, and the hard cap
@@ -192,6 +203,23 @@ export interface ObservationReadPageEntry {
    * accumulating parts across calls must merge only within one allowance.
    */
   part_allowance: number;
+  /**
+   * Start of this part within the observation's body, as a character offset — the RANGE this entry is.
+   *
+   * Stated by the runtime rather than derived downstream, because it CANNOT be derived: the split cuts
+   * on JSON escape cost, not character count (`codePointJsonCost` charges 1, 2 or 6), and the allowance
+   * itself depends on the request's id list. A consumer computing `part_index * part_allowance` would be
+   * wrong by a content-dependent amount on every observation that escapes anything.
+   */
+  body_start: number;
+  /** End of this part, exclusive. `body.slice(body_start, body_end)` is this entry's `body`, exactly. */
+  body_end: number;
+  /**
+   * sha256 (hex) of `body.slice(body_start, body_end)` as UTF-8 — the hash OF THE RANGE, not of the
+   * observation. Makes a citation to this range self-verifying: a consumer holding the observation can
+   * re-slice and check, so a range that names content the runtime never served cannot be constructed.
+   */
+  range_content_sha256: string;
   /** Slice of the observation body. Concatenate parts 1..part_count to recover it exactly. */
   body: string;
 }
@@ -544,22 +572,69 @@ function pageFramingChars(snapshotDigest: string, cursor: string | undefined): n
   ).length;
 }
 
+/**
+ * The page entry's shape, declared ONCE — used both to reserve room for an entry and to emit it.
+ *
+ * Two callers, one literal, on purpose. The reservation passes sentinels where the real values are not
+ * known yet; the emission passes the real ones. Because both go through THIS function, a field present
+ * in the emitted entry but absent from the framing is unrepresentable rather than merely checked —
+ * which is the point. (Cross-family review found the earlier arrangement, where the reservation carried
+ * its own object literal: forgetting a field there was caught only when the resulting page happened to
+ * overflow its budget, and the smallest observations in the measured corpus never do. The guard was
+ * input-dependent, so the fix is to remove the second literal rather than to test harder.)
+ */
+function pageEntryOf(args: {
+  observationId: string;
+  contentSha256: string;
+  partIndex: number;
+  partCount: number;
+  partAllowance: number;
+  bodyStart: number;
+  bodyEnd: number;
+  rangeContentSha256: string;
+  body: string;
+}): ObservationReadPageEntry {
+  return {
+    observation_id: args.observationId,
+    observation_content_sha256: args.contentSha256,
+    part_index: args.partIndex,
+    part_count: args.partCount,
+    part_allowance: args.partAllowance,
+    body_start: args.bodyStart,
+    body_end: args.bodyEnd,
+    range_content_sha256: args.rangeContentSha256,
+    body: args.body,
+  };
+}
+
 /** Chars one entry costs excluding its body content (the `""` quotes are included). */
 function entryFramingChars(
   observationId: string,
   contentSha256: string,
   partIndex: number,
   partCount: number,
+  partAllowance: number,
+  bodyStart: number,
+  bodyEnd: number,
+  rangeContentSha256: string,
 ): number {
-  return JSON.stringify({
-    observation_id: observationId,
-    observation_content_sha256: contentSha256,
-    part_index: partIndex,
-    part_count: partCount,
-    part_allowance: PART_NUMBER_SENTINEL,
-    body: "",
-  }).length;
+  return JSON.stringify(
+    pageEntryOf({
+      observationId,
+      contentSha256,
+      partIndex,
+      partCount,
+      partAllowance,
+      bodyStart,
+      bodyEnd,
+      rangeContentSha256,
+      body: "",
+    }),
+  ).length;
 }
+
+/** A hash-shaped placeholder for reserving a range hash before the slice that produces it is known. */
+const SHA256_HEX_PLACEHOLDER = "0".repeat(64);
 
 function encodeCursor(payload: ObservationCursorPayload): string {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
@@ -754,6 +829,12 @@ export function readObservationPage(args: {
           entry.observation_content_sha256,
           PART_NUMBER_SENTINEL,
           PART_NUMBER_SENTINEL,
+          PART_NUMBER_SENTINEL,
+          // Offsets are bounded by the body length, so the part-number sentinel is a safe over-reserve
+          // for them too — the same constant rather than a second one to keep in step.
+          PART_NUMBER_SENTINEL,
+          PART_NUMBER_SENTINEL,
+          SHA256_HEX_PLACEHOLDER,
         ),
       ),
     0,
@@ -774,6 +855,9 @@ export function readObservationPage(args: {
     entry: ObservationSnapshotEntry;
     partIndex: number;
     partCount: number;
+    bodyStart: number;
+    bodyEnd: number;
+    rangeContentSha256: string;
     body: string;
   }> = [];
   const firstPartOfObservation: number[] = [];
@@ -786,8 +870,24 @@ export function readObservationPage(args: {
       );
     }
     firstPartOfObservation.push(pending.length);
+    // The offsets come from the split itself — the parts ARE consecutive slices, so accumulating their
+    // lengths is the only derivation that cannot disagree with what is served. Hashing each range costs
+    // one more pass over the same characters the split already walked; the reader re-derives the whole
+    // request's split on every call anyway (see this function's header), so the order is unchanged.
+    let bodyStart = 0;
     parts.forEach((body, partIndex) => {
-      pending.push({ observationIndex, entry, partIndex, partCount: parts.length, body });
+      const bodyEnd = bodyStart + body.length;
+      pending.push({
+        observationIndex,
+        entry,
+        partIndex,
+        partCount: parts.length,
+        bodyStart,
+        bodyEnd,
+        rangeContentSha256: sha256Hex(body),
+        body,
+      });
+      bodyStart = bodyEnd;
     });
   });
 
@@ -809,24 +909,45 @@ export function readObservationPage(args: {
   let flat = startFlat;
   for (; flat < pending.length; flat += 1) {
     const part = pending[flat] as (typeof pending)[number];
-    const cost =
-      entryFramingChars(
-        part.entry.observation_id,
-        part.entry.observation_content_sha256,
-        part.partIndex + 1,
-        part.partCount,
-      ) +
-      jsonStringContentCost(part.body) +
-      (entries.length > 0 ? 1 : 0);
+    const framingChars = entryFramingChars(
+      part.entry.observation_id,
+      part.entry.observation_content_sha256,
+      part.partIndex + 1,
+      part.partCount,
+      partAllowance,
+      part.bodyStart,
+      part.bodyEnd,
+      part.rangeContentSha256,
+    );
+    const cost = framingChars + jsonStringContentCost(part.body) + (entries.length > 0 ? 1 : 0);
     if (entries.length > 0 && used + cost > pageCharBudget) break;
-    entries.push({
-      observation_id: part.entry.observation_id,
-      observation_content_sha256: part.entry.observation_content_sha256,
-      part_index: part.partIndex + 1,
-      part_count: part.partCount,
-      part_allowance: partAllowance,
+    const entry = pageEntryOf({
+      observationId: part.entry.observation_id,
+      contentSha256: part.entry.observation_content_sha256,
+      partIndex: part.partIndex + 1,
+      partCount: part.partCount,
+      partAllowance,
+      bodyStart: part.bodyStart,
+      bodyEnd: part.bodyEnd,
+      rangeContentSha256: part.rangeContentSha256,
       body: part.body,
     });
+    // The COST MODEL, checked per entry (design `23-…md` §3/S1, review F-9). Field parity is already
+    // structural — `pageEntryOf` is the only entry literal — so what remains falsifiable is the
+    // arithmetic: `jsonStringContentCost` must equal what `JSON.stringify` actually spends on this body,
+    // or every reservation above it is wrong. Checking it here fires on the FIRST entry, where the
+    // page-level assertion below fires only once a page grows past its budget — which the corpus's small
+    // observations never do. Both stay: this covers the entry, that covers the page envelope.
+    const emittedChars = JSON.stringify(entry).length;
+    if (emittedChars !== framingChars + jsonStringContentCost(part.body)) {
+      throw new ObservationReadError(
+        "budget_too_small",
+        `entry for ${part.entry.observation_id} part ${part.partIndex + 1} serialized to ${emittedChars} chars, ` +
+          `but its framing reserved ${framingChars} plus ${jsonStringContentCost(part.body)} of content; ` +
+          "the reserved shape and the emitted shape disagree",
+      );
+    }
+    entries.push(entry);
     used += cost;
   }
 
