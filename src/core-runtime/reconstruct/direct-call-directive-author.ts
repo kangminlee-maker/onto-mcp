@@ -227,11 +227,9 @@ import {
 import { DEFAULT_WORKER_TIMEOUT_MS } from "../llm/llm-caller.js";
 import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
 import {
-  observationIdsServed,
   observationReadFacadeLaunchPaths,
   OBSERVATION_READ_TOOL_NAME,
   prepareObservationReadFacadeLaunch,
-  readObservationReadFacadeReceipt,
 } from "./observation-read-facade.js";
 import type { BreadthFoldLevel } from "./source-breadth-fold.js";
 
@@ -286,7 +284,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * OFF until stage 3b wires the facade.
    */
   sourceObservationCatalogTool?: boolean;
-  sourceDeliveryReconciliation?: boolean;
   /**
    * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
    * (observation replace + seed payload) — absolute code node_ref.file paths label as
@@ -555,7 +552,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     documentExcerptProjectionBudget,
     sourceBreadthFold: args.sourceBreadthFold === true,
     sourceObservationCatalogTool: args.sourceObservationCatalogTool === true,
-    sourceDeliveryReconciliation: args.sourceDeliveryReconciliation === true,
     documentExcerptProjectionTruncations,
     sourceBreadthFoldDisclosures,
     withheldEvidenceClusters,
@@ -3415,10 +3411,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             ...llmConfig,
             observation_read_facade: facadeLaunch,
             // Delivery reconciliation reads the worker's own transcript, and codex writes none under
-            // `--ephemeral` (measured). Asked for only when the citation rule actually needs it.
-            ...(args.sourceDeliveryReconciliation === true
-              ? { persist_worker_transcript: true }
-              : {}),
+            // `--ephemeral` (measured). The pull layer now REQUIRES that reconciliation (see the
+            // citation authority below), so the transcript is asked for whenever the facade launches.
+            persist_worker_transcript: true,
           }
           : llmConfig,
         telemetry,
@@ -3433,13 +3428,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // Delivery reconciliation (design §6-2 stage 3a-2). Runs HERE because it needs the worker to be
       // gone — its transcript is only complete once codex has exited.
       //
-      // Gated on the key, not merely on the pull layer. With the key absent nothing reads the record,
-      // and the dispatch also kept `--ephemeral`, so codex wrote no transcript to read: reconciling
-      // anyway would scan the sessions tree and leave an `unverifiable` record on every run. The
-      // emissions file is NOT gated with it — that one is the start-right claim (§11-L2) and stands
-      // whether or not anything later reconciles against it.
+      // Gated on the PULL LAYER alone, no longer on a separate key. It used to be opt-in beside a
+      // `served` fallback, and that pairing was unsound: codex clips a tool result middle-out on the way
+      // into the model, the unit it clips is the RECEIVED RECORD, and one exec turn can render several
+      // tool results into one record — so two legally sized pages in a turn still get clipped while the
+      // facade, whose write succeeded, records both as served. Sizing cannot close that (the server
+      // speaks `initialize`/`tools/list`/`tools/call`/`ping` and has no notion of a turn, so it cannot
+      // enforce one page per turn; and sizing for the worst-case cumulative record would need a budget
+      // below the minimum). Only asking "did these bytes actually appear in the worker's context" closes
+      // it, because a clipped record fails to contain the emitted page. Making it unconditional is what
+      // stops the unsafe combination from being a procedure someone has to remember.
       const deliveryRecordPath = launchPaths?.deliveryRecordPath ?? null;
-      if (args.sourceDeliveryReconciliation === true && facadeLaunch && deliveryRecordPath) {
+      if (facadeLaunch && deliveryRecordPath) {
         reconcileFacadeDelivery({
           launch: facadeLaunch,
           workerSession,
@@ -3451,23 +3451,20 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // either way: a missing, torn or foreign artifact admits nothing rather than leaving citations
       // unchecked.
       //
-      // Which artifact is the authority is the whole of stage 4. OFF (the default) keeps the facade's
-      // receipt and the SERVED set, byte-identical to before this existed. ON derives the DELIVERED set
-      // from the worker's own transcript, and an unverified codex version or an unrecognised transcript
-      // shape resolves to `unverifiable` — which admits nothing and says so in those words.
-      const citableObservations: CitableObservations | { basis: "served"; ids: ReadonlySet<string> } | null =
-        !facadeLaunch
-          ? null
-          : args.sourceDeliveryReconciliation === true && deliveryRecordPath
-          ? citableFromDeliveryRecord(
-            readObservationReadDeliveryRecord(deliveryRecordPath, facadeLaunch.launchToken),
-          )
-          : {
-            basis: "served" as const,
-            ids: observationIdsServed(
-              readObservationReadFacadeReceipt(facadeLaunch.receiptPath, facadeLaunch.launchToken),
-            ),
-          };
+      // The authority is the DELIVERED set — what the worker's own transcript shows arrived — and there
+      // is no second basis to fall back to. An unverified codex version or an unrecognised transcript
+      // shape resolves to `unverifiable`, which admits nothing and says so in those words; §2.5 turns
+      // that into a withheld cluster and a disclosure rather than a dead run.
+      //
+      // The `served` basis is gone on purpose. It answered "did the runtime send this", which is not the
+      // question a citation asks, and the gap between the two is not hypothetical: the transport clips
+      // whole records, the facade cannot see it, and its write succeeded. Keeping it as an opt-out would
+      // leave the unsound answer reachable by configuration.
+      const citableObservations: CitableObservations | null = !facadeLaunch || !deliveryRecordPath
+        ? null
+        : citableFromDeliveryRecord(
+          readObservationReadDeliveryRecord(deliveryRecordPath, facadeLaunch.launchToken),
+        );
       return {
         schema_version: "1",
         session_id: input.sessionId,
@@ -3544,14 +3541,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 !citableObservations.ids.has(observationId)
               );
               if (uncitableIds.length > 0) {
+                // One sentence, because there is now one basis. The distinction this used to draw —
+                // "never served" against "verified not to have reached" — was between two authorities,
+                // and only the second survives; "we could not verify" is a THIRD statement and never
+                // arrives here, because `unverifiable` withheld the cluster above.
                 throw new Error(
-                  citableObservations.basis === "served"
-                    ? `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids the runtime ` +
-                      `never served: ${uncitableIds.join(", ")}. Under the observation catalog tool a ` +
-                      "citation must name an observation this dispatch actually fetched."
-                    : `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids that were ` +
-                      `verified NOT to have reached the worker's context: ${uncitableIds.join(", ")}. ` +
-                      "A citation must name an observation the worker actually received.",
+                  `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids that were ` +
+                    `verified NOT to have reached the worker's context: ${uncitableIds.join(", ")}. ` +
+                    "A citation must name an observation the worker actually received.",
                 );
               }
             }

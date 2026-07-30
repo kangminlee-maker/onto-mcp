@@ -920,8 +920,21 @@ describe("observation catalog tool — production wiring (cross-family review, l
     // by serialization, which is what reuseMatchHash hashes.
     expect(JSON.stringify(on)).not.toBe(JSON.stringify(off));
     // Non-vacuous: everything ELSE about the two keys is identical, so the difference is the mode.
-    const { authored_output_contract_version: _onlyOn, ...onWithoutOnOnlyFields } = on;
+    const {
+      authored_output_contract_version: _contractVersion,
+      delivered_citation_rule_version: _citationRule,
+      ...onWithoutOnOnlyFields
+    } = on;
     expect({ ...onWithoutOnOnlyFields, source_observation_catalog_tool: false }).toEqual(off);
+
+    // The citation rule rides the SAME switch. A ledger authored while citations were judged against
+    // the served set is not admissible under a rule that judges them against the delivered set, and
+    // since turning the pull layer on now turns that rule on too, the mode field alone would not say
+    // WHICH delivered-rule an ON artifact was authored under.
+    expect(on.delivered_citation_rule_version).toBe(2);
+    // Absent when off, for the same reason as the contract version: a rotated key THROWS on resume
+    // rather than regenerating, so an always-present field would fail every historical OFF resume.
+    expect("delivered_citation_rule_version" in off).toBe(false);
 
     // The reuse key also carries what the AUTHOR will ACCEPT, not only what it was given. Every other
     // field describes input, on the premise that identical input means the artifact is still
@@ -936,15 +949,20 @@ describe("observation catalog tool — production wiring (cross-family review, l
     expect("authored_output_contract_version" in off).toBe(false);
   });
 
-  it("delivery reconciliation is reachable ONLY through its settings key, and rotates the reuse key", () => {
-    // Stage 4's reachability claim, checked where it can actually be checked. The key is read from
-    // settings rather than a literal — a `const … = false` would silently turn production ON runs into
-    // OFF runs, and no author-level test could see it — and every author construction is forwarded to,
-    // so a dispatch-fallback author cannot judge citations in the other mode.
+  it("the pull layer and transcript-confirmed delivery are ONE switch, with no key to separate them", () => {
+    // This replaces a test that checked delivery reconciliation was reachable through its OWN settings
+    // key. That key is gone: the `served` basis it toggled answered "did the runtime send this", which
+    // is not what a citation claims, and the gap is real — codex clips a received record middle-out and
+    // the facade, whose write succeeded, records the page as served either way. An opt-out would have
+    // left the unsound answer reachable by configuration, so the two are now one condition.
+    //
+    // The negative assertion is the load-bearing one: no separate key means the safe combination cannot
+    // be un-selected, and it fails the moment someone reintroduces one.
+    expect(repoFile("src/core-runtime/discovery/settings-chain.ts"))
+      .not.toContain("source_delivery_reconciliation");
     const api = repoFile("src/core-api/reconstruct-api.ts");
-    expect(api).toContain(
-      "settings.reconstruct?.execution?.source_delivery_reconciliation === true",
-    );
+    expect(api).not.toContain("source_delivery_reconciliation");
+
     // PER CONSTRUCTION, not by count. Counting forwards against constructions passed while BOTH
     // forwards sat in the fallback author and the primary one had none — the production path was
     // silently OFF and the test said the wiring was complete (codex review, PR #271).
@@ -968,19 +986,21 @@ describe("observation catalog tool — production wiring (cross-family review, l
     const blocks = authorArgumentBlocks(api);
     expect(blocks.length).toBeGreaterThan(1); // primary AND dispatch-fallback, or this proves nothing
     for (const [index, block] of blocks.entries()) {
-      const occurrences =
-        block.match(/\.\.\.\(sourceDeliveryReconciliation \? \{ sourceDeliveryReconciliation: true \} : \{\}\)/g) ??
-          [];
-      expect(occurrences.length, `author construction #${index + 1}`).toBe(1);
       const catalogOccurrences =
         block.match(/\.\.\.\(sourceObservationCatalogTool \? \{ sourceObservationCatalogTool: true \} : \{\}\)/g) ??
           [];
       expect(catalogOccurrences.length, `author construction #${index + 1}`).toBe(1);
     }
-    // And the key exists in the accepted settings surface at all — an unknown key is refused upstream,
-    // so a flip nobody declared would not be "default off", it would be unusable.
-    expect(repoFile("src/core-runtime/discovery/settings-chain.ts"))
-      .toContain('"source_delivery_reconciliation"');
+
+    // The transcript is what reconciliation reads, and codex writes none under `--ephemeral`. Asking
+    // for it is now UNCONDITIONAL on the facade launching — if it stayed tied to a flag, the delivered
+    // rule would be mandatory while its evidence was optional, and every run would be `unverifiable`.
+    const author = repoFile("src/core-runtime/reconstruct/direct-call-directive-author.ts");
+    const facadeConfig = author.slice(
+      author.indexOf("observation_read_facade: facadeLaunch,"),
+    ).slice(0, 400);
+    expect(facadeConfig).toContain("persist_worker_transcript: true,");
+    expect(facadeConfig).not.toContain("sourceDeliveryReconciliation");
 
     // The route side, lexically — the args are built inside a private function that spawns, so this is
     // inspection rather than measurement, and it is here because the alternative is no check at all.
@@ -993,47 +1013,6 @@ describe("observation catalog tool — production wiring (cross-family review, l
     const transcriptForwards = caller.match(/persistWorkerTranscript: config\??\.persist_worker_transcript,/g) ?? [];
     expect(facadeForwards.length).toBeGreaterThan(0);
     expect(transcriptForwards.length).toBe(facadeForwards.length);
-
-    const authorOf = (delivery: boolean) =>
-      createDirectCallReconstructDirectiveAuthor({
-        sourceObservationCatalogTool: true,
-        ...(delivery ? { sourceDeliveryReconciliation: true } : {}),
-        llmCall: () => Promise.resolve({ text: "{}" }),
-      } as never);
-    const matchFor = (delivery: boolean) =>
-      authoredArtifactReuseMatch({
-        sessionId: SESSION_ID,
-        intent: "reuse-key probe",
-        targetRefs: ["/fixture/target.ts"],
-        targetMaterialProfile: {
-          target_refs: ["/fixture/target.ts"],
-          target_material_kind: "code",
-          target_material_kind_candidates: [],
-          support_status: "supported",
-          selected_source_profiles: [],
-          detection: { per_ref: [] },
-        },
-        sourceInventory: { inventory_units: [] },
-        sourceObservations: { observations: [], skipped_refs: [] },
-        governingSnapshot: { requested_domain_ids: [] },
-        semanticAuthorRealization: "direct_call",
-        confirmationProviderRealization: "direct_call",
-        directiveAuthor: authorOf(delivery),
-        confirmationProvider: { providerId: "probe-provider" },
-      } as never);
-    const off = matchFor(false);
-    const on = matchFor(true);
-    // A ledger authored under the SERVED rule is not admissible under the DELIVERED rule, so a resume
-    // across the flag must regenerate rather than reuse.
-    expect(JSON.stringify(on)).not.toBe(JSON.stringify(off));
-    expect(on.delivered_citation_rule_version).toBe(1);
-    // ...and ABSENT when off, which is what keeps every OFF key byte-identical to before this existed.
-    // Scoped to the flag rather than folded into AUTHORED_OUTPUT_CONTRACT_VERSION, which would have
-    // rotated keys for catalog-tool runs that never turned this on — and a rotated key THROWS on
-    // resume rather than regenerating.
-    expect("delivered_citation_rule_version" in off).toBe(false);
-    const { delivered_citation_rule_version: _onlyOn, ...onWithoutOnOnlyFields } = on;
-    expect(onWithoutOnOnlyFields).toEqual(off); // non-vacuous: nothing else differs
   });
 
   it("run.ts feeds the answer-support author the CONSUMPTION-GATED projection, not the raw artifact", () => {

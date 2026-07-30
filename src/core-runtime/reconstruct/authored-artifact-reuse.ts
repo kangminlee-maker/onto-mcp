@@ -416,17 +416,16 @@ export function authoredArtifactReuseMatch(args: {
     ...(args.directiveAuthor.sourceObservationCatalogTool === true
       ? { authored_output_contract_version: AUTHORED_OUTPUT_CONTRACT_VERSION }
       : {}),
-    // Delivery reconciliation changes the same kind of thing: what the author ACCEPTS, with no change
-    // to its input. A ledger authored while citations were judged against the SERVED set is not
-    // admissible under a rule that judges them against the DELIVERED set, so a resume across the flag
-    // must regenerate rather than reuse.
+    // Which citation rule the author ACCEPTED under, with no change to its input. A ledger authored
+    // while citations were judged against the SERVED set is not admissible under a rule that judges
+    // them against the DELIVERED set, so a resume across that change must regenerate rather than reuse.
     //
-    // Scoped to the flag rather than bumped into `AUTHORED_OUTPUT_CONTRACT_VERSION`, which the comment
-    // above asks for in exactly this case: bumping the constant would rotate keys for catalog-tool runs
-    // that never turned delivery reconciliation on, and a rotated key here THROWS on resume rather than
-    // regenerating. Present-only-when-ON leaves every OFF key byte-identical.
-    ...(args.directiveAuthor.sourceDeliveryReconciliation === true
-      ? { delivered_citation_rule_version: 1 }
+    // Keyed on the CATALOG TOOL now, not on a separate reconciliation flag: the pull layer implies
+    // transcript-confirmed delivery, so "catalog tool on" and "delivered rule" are the same condition.
+    // Version 2 because that is the change — v1 marked runs whose reconciliation flag was on beside a
+    // `served` fallback, and those ledgers were authored under a rule this build no longer applies.
+    ...(args.directiveAuthor.sourceObservationCatalogTool === true
+      ? { delivered_citation_rule_version: 2 }
       : {}),
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,

@@ -41,6 +41,11 @@ import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
 
 const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..", "..");
 const FIXTURE_DIR = path.join(REPO_ROOT, "scripts/fixtures/observation-catalog");
+
+/** Read a repository source file. Lexical inspection is weaker than measurement and is used only where
+ *  the alternative is no check at all — here, for properties that are the ABSENCE of a code path. */
+const repoFile = (relativePath: string): string =>
+  readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
 const TEMP_ROOT = mkdtempSync(path.join(os.tmpdir(), "onto-observation-pull-"));
 let tempSeq = 0;
 
@@ -297,8 +302,6 @@ function authorWithWorker(options: {
   citeIds: string[];
   /** Skip the facade entirely — the worker never fetched, and no receipt is written at all. */
   skipFacade?: boolean;
-  /** Stage 4: judge citations against what was DELIVERED rather than what was served. */
-  deliveryReconciliation?: boolean;
   /**
    * Plays codex keeping a transcript. Called with the emissions the facade just recorded; whatever it
    * returns is planted under `CODEX_HOME` as this worker's rollout, and its session id is reported on
@@ -309,7 +312,6 @@ function authorWithWorker(options: {
   const dispatched: { systemPrompt: string; userPrompt: string; config: Record<string, any> }[] = [];
   const author = createDirectCallReconstructDirectiveAuthor({
     sourceObservationCatalogTool: true,
-    ...(options.deliveryReconciliation === true ? { sourceDeliveryReconciliation: true } : {}),
     llmCall: (systemPrompt: string, userPrompt: string, config?: Record<string, any>) => {
       dispatched.push({ systemPrompt, userPrompt, config: config ?? {} });
       const launch = config?.observation_read_facade as ObservationReadFacadeLaunch | undefined;
@@ -397,49 +399,55 @@ function authorWithWorker(options: {
   return { author, dispatched };
 }
 
-describe("observation read pull layer — 인용 ⊆ 조회 (design §3, stage 3b)", () => {
-  it("admits a citation the dispatch actually fetched", async () => {
+describe("observation read pull layer — fetching is not receiving (design §3 stage 3b, §6-7 stage 4)", () => {
+  it("withholds a citation the dispatch fetched but nothing attests — fetching is not receiving", async () => {
+    // This used to ADMIT, on the strength of the facade's own receipt. That was the unsound answer:
+    // the receipt says the runtime wrote the bytes, and codex clips a received record middle-out
+    // without telling the server, so "served" and "arrived" are different facts. With no transcript to
+    // attest against, the honest verdict is "we could not verify" — which withholds the cluster and
+    // lets the run continue (§2.5), rather than admitting or killing it.
     const pull = writePullSources();
     const fetched = allObservationIds.slice(0, 2);
     const { author, dispatched } = authorWithWorker({ fetchIds: fetched, citeIds: fetched });
     const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
-    expect(ledger.evidence_clusters.length).toBe(1);
-    expect(ledger.evidence_clusters[0].evidence_refs.length).toBe(2);
-    // The facade really was attached to this dispatch (otherwise the checks below are vacuous).
+    expect(ledger.evidence_clusters.length).toBe(0);
+    // Non-vacuous on both sides: the facade really was attached, and the same fetch DOES admit once a
+    // transcript proves arrival — that arm is "admits a citation whose page the transcript proves
+    // arrived" below. Without it this assertion would pass for a build that admitted nothing at all.
     expect(dispatched[0]!.config.observation_read_facade).toBeDefined();
   });
 
-  it("rejects a citation the dispatch never fetched — the id is in the catalog but was not served", async () => {
+  it("withholds the WHOLE cluster rather than dropping the refs it cannot attest", async () => {
+    // One cited id was fetched and one was not, and neither is attested. The runtime must not repair
+    // the cluster by keeping the good ref: `support_mode` is the worker's semantic claim and the
+    // ledger's own obligations require two independent refs for convergent source evidence, so a
+    // half-emptied cluster passes here and dies in validation with a message about evidence rather
+    // than about attestation (§12-2). Withholding whole is what keeps the ledger self-consistent.
     const pull = writePullSources();
-    const fetched = [allObservationIds[0]!];
     const cited = [allObservationIds[0]!, allObservationIds[1]!];
-    const { author } = authorWithWorker({ fetchIds: fetched, citeIds: cited });
-    // The second id IS in the prompt catalog — the existing catalog gate would admit it — so what
-    // rejects it is the served check, not the pre-existing one.
-    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /never served: .*\b/,
-    );
+    const { author } = authorWithWorker({ fetchIds: [allObservationIds[0]!], citeIds: cited });
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(ledger.evidence_clusters.length).toBe(0);
   });
 
-  it("rejects every citation when the worker fetched nothing at all", async () => {
+  it("admits nothing when the worker fetched nothing at all", async () => {
     const pull = writePullSources();
     const { author } = authorWithWorker({ fetchIds: [], citeIds: [allObservationIds[0]!] });
-    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /never served/,
-    );
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(ledger.evidence_clusters.length).toBe(0);
   });
 
-  it("fails closed when no receipt exists at all (the facade never ran)", async () => {
+  it("fails closed when the facade never ran at all", async () => {
     const pull = writePullSources();
     const { author } = authorWithWorker({
       fetchIds: [],
       citeIds: [allObservationIds[0]!],
       skipFacade: true,
     });
-    // No receipt file is written, so the served set is empty rather than unchecked.
-    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /never served/,
-    );
+    // Nothing was emitted and nothing was reconciled, so the citation is unattested rather than
+    // unchecked — the distinction the whole layer exists to keep.
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(ledger.evidence_clusters.length).toBe(0);
   });
 
   it("does not apply the served check when the pull layer is absent (push-only stays as it was)", async () => {
@@ -615,8 +623,13 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
     // Seed a receipt at the path a PREVIOUS naming shape used, then run.
     writeFileSync(stalePath, "placeholder");
     await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /never served/,
-    );
+      /still exists after being cleared|already exists|does not match/,
+    ).catch(async () => {
+      // The facade never started, so nothing is attested and the cluster is withheld instead. Either
+      // outcome is fail-closed; what this arm proves is the PATH property asserted below.
+      const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+      expect(ledger.evidence_clusters.length).toBe(0);
+    });
     expect(observedLaunchToken).toBeTruthy();
     // The precondition is now removed by CONSTRUCTION rather than by clearing: every artifact path
     // carries this launch's token, so a file left by any other dispatch is not even addressed by this
@@ -717,9 +730,13 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
       citeIds: [allObservationIds[0]!],
       skipFacade: true,
     });
-    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /never served/,
-    );
+    // A foreign receipt cannot make this citation admissible — and now it cannot even be consulted,
+    // because the receipt stopped being a citation authority. The token check that refused it lives
+    // on in `observation-read-facade.test.ts`; what this arm holds is the stronger property that the
+    // stale file has no path to admission at all.
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(ledger.evidence_clusters.length).toBe(0);
+    expect(existsSync(stalePath)).toBe(true); // untouched: it was never this launch's file
   });
 });
 
@@ -1009,59 +1026,49 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
    * The emissions file is deliberately NOT in this count: it is the start-right claim (design §11-L2),
    * a defect fix that stands on its own, and it must keep being written with the key absent.
    */
-  it("writes NO delivery record when the key is absent, and one when it is present", async () => {
+  it("writes a delivery record whenever the pull layer launches — there is no arm without one", () => {
+    // This replaces a pair of arms that compared "key absent" against "key present". There is no key:
+    // the pull layer and transcript-confirmed delivery are one switch, because the `served` answer the
+    // absent arm fell back to was unsound (the transport clips whole received records and the facade
+    // cannot see it). The negative assertions are the load-bearing ones — they fail the moment someone
+    // reintroduces a way to launch the facade without reconciling.
+    const author = repoFile("src/core-runtime/reconstruct/direct-call-directive-author.ts");
+    expect(author).not.toContain("sourceDeliveryReconciliation");
+    // Gated on the pull layer alone.
+    expect(author).toContain("if (facadeLaunch && deliveryRecordPath) {");
+    // And no second citation authority to fall back to.
+    expect(author).not.toContain('basis: "served"');
+    expect(author).not.toContain("observationIdsServed");
+  });
+
+  it("reconciles and admits on the same dispatch that a transcript attests", async () => {
+    // The positive control for the arms above: the record is written, and it is written because the
+    // facade launched — not because a flag was set. Without this, "withheld" everywhere would pass for
+    // a build whose reconciliation never ran.
     const deliveryRecordsIn = (workDir: string) =>
       readdirSync(workDir).filter((entry) => entry.startsWith("observation-read-delivery-"));
     const emissionsIn = (workDir: string) =>
       readdirSync(workDir).filter((entry) => entry.startsWith("observation-read-emissions-"));
-    const fetched = [allObservationIds[0]!];
-    const transcriptOf = (sessionId: string) => (emissions: string[]) => ({
-      sessionId,
-      text: plantedTranscript({ sessionId, sent: emissions, rendered: emissions }),
-    });
-
-    const off = writePullSources();
-    const { author: offAuthor } = authorWithWorker({
-      fetchIds: fetched,
-      citeIds: fetched,
-      transcript: transcriptOf("01900000-0000-7000-8000-0000000000f1"),
-    });
-    await (offAuthor as any).writeAnswerSupportLedger(authorInput(off));
-    expect(deliveryRecordsIn(off.workDir)).toEqual([]);
-    // Non-vacuity: the facade really ran in this dispatch, so an empty count means "not written"
-    // rather than "nothing happened here".
-    expect(emissionsIn(off.workDir)).toHaveLength(1);
-
-    const on = writePullSources();
-    const { author: onAuthor } = authorWithWorker({
-      fetchIds: fetched,
-      citeIds: fetched,
-      deliveryReconciliation: true,
-      transcript: transcriptOf("01900000-0000-7000-8000-0000000000f2"),
-    });
-    await (onAuthor as any).writeAnswerSupportLedger(authorInput(on));
-    expect(deliveryRecordsIn(on.workDir)).toHaveLength(1);
-  });
-
-  it("does NOT ask for it when the key is absent — today's dispatch is unchanged", async () => {
     const pull = writePullSources();
     const fetched = [allObservationIds[0]!];
-    const { author, dispatched } = authorWithWorker({ fetchIds: fetched, citeIds: fetched });
-    await (author as any).writeAnswerSupportLedger(authorInput(pull));
-    expect(dispatched[0]!.config.observation_read_facade).toBeDefined(); // non-vacuous: it IS a pull dispatch
-    expect("persist_worker_transcript" in dispatched[0]!.config).toBe(false);
-  });
-
-  it("leaves the served path in place when the key is absent", async () => {
-    // The same run without the opt-in: the served set is still the authority and still says so in the
-    // words it always did. This is what "default off is byte-identical" means here.
-    const pull = writePullSources();
-    const { author } = authorWithWorker({
-      fetchIds: [allObservationIds[0]!],
-      citeIds: [allObservationIds[0]!, allObservationIds[1]!],
+    const { author, dispatched } = authorWithWorker({
+      fetchIds: fetched,
+      citeIds: fetched,
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-0000000000f1",
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-0000000000f1",
+          sent: emissions,
+          rendered: emissions,
+        }),
+      }),
     });
-    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /never served/,
-    );
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(emissionsIn(pull.workDir)).toHaveLength(1);
+    expect(deliveryRecordsIn(pull.workDir)).toHaveLength(1);
+    expect(ledger.evidence_clusters.length).toBe(1);
+    // The transcript is what makes that possible, and codex writes none under `--ephemeral`, so the
+    // request for it must ride every pull dispatch rather than a flag.
+    expect(dispatched[0]!.config.persist_worker_transcript).toBe(true);
   });
 });

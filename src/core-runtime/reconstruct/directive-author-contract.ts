@@ -199,13 +199,13 @@ export interface ReconstructDirectiveAuthor {
    * reuse key for the same reason as sourceBreadthFold: the authored ledger differs between the two
    * modes, so a resume across a flag change must regenerate rather than reuse the other mode's
    * artifact. Absent/false = today's capped detailed projection, byte-identical.
+   *
+   * Turning it on also makes citations answerable only against what was DELIVERED — the pull layer and
+   * transcript-confirmed delivery are one switch, not two. There is no `served`-authority mode to fall
+   * back to: the transport clips whole received records without telling the server, so "the runtime sent
+   * it" and "the worker received it" are different facts, and only the second is what a citation claims.
    */
   readonly sourceObservationCatalogTool?: boolean;
-  /**
-   * Judge citations against what was DELIVERED rather than what was served (design §6-7, stage 4).
-   * Absent leaves the served set as the authority, byte-identical.
-   */
-  readonly sourceDeliveryReconciliation?: boolean;
   /**
    * Run-scoped sink (deduped by observation) of documents whose captured excerpt a
    * seed prompt's projection budget sliced. Populated during authoring; read by
