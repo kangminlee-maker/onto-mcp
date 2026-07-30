@@ -110,6 +110,31 @@ export interface BreadthFoldDisclosureRecord {
   readonly disclosure: BreadthFoldDisclosure;
 }
 
+/**
+ * One answer-support evidence cluster the runtime WITHHELD because it could not verify that the
+ * observations it cites reached the worker's context (design §2.5 / §12-3).
+ *
+ * WHY WITHHOLD RATHER THAN REFUSE THE RUN. "We could not check" is a fact about the runtime, not about
+ * the run, and encoding it as "this run is invalid" is the defect the version allowlist had. But the
+ * cluster cannot simply lose its citations either: `maturation-validation` obliges a
+ * `convergent_source_evidence` cluster to carry two independent evidence refs, so an emptied cluster
+ * fails validation a stage later with a message about evidence rather than about attestation. The
+ * whole cluster is therefore held back, the surviving clusters are authored unchanged, and an
+ * all-withheld ledger becomes the empty one the pipeline already handles.
+ *
+ * WHY NOT FALL BACK TO `served`. That is the rule delivery reconciliation replaced as insufficient;
+ * silently returning to it would disable exactly the axis the operator opted into (cross-family
+ * review, blocker lens).
+ */
+export interface WithheldEvidenceClusterRecord {
+  /** Position in the authored ledger, 1-based — the number the author's own errors use. */
+  readonly clusterIndex: number;
+  /** The reason reconciliation gave, verbatim; never rephrased as "not delivered". */
+  readonly reason: string;
+  /** The ids the cluster cited, so the disclosure names what was lost rather than only a count. */
+  readonly citedObservationIds: readonly string[];
+}
+
 // Maturation value-read cut (design §13.3/§13.5). Stage-internal types for the value-read
 // capability: a deterministic trigger builds candidates (limitation-backed material rows whose
 // value-dependent limitations could be cleared by reading authorized runtime-target cells), the
@@ -202,6 +227,19 @@ export interface ReconstructDirectiveAuthor {
    * name rather than another array.
    */
   readonly sourceBreadthFoldDisclosures?: BreadthFoldDisclosureRecord[];
+  /**
+   * Run-scoped sink (mirroring the two above) of answer-support evidence clusters the runtime withheld
+   * because delivery could not be VERIFIED. Empty unless that happened — an ordinary run never touches
+   * it. runReconstruct clears it per run and drains it to durable status events, so a withheld cluster
+   * is never silent: a ledger that came back smaller must say why, or the operator reads a thinner
+   * answer as a weaker corpus rather than as an unverified transport.
+   *
+   * Deliberately NOT the same sink as `sourceBreadthFoldDisclosures`. That one discriminates SURFACES
+   * within one concept (a fold demoted a rung); this is a different concept — evidence held back for
+   * want of attestation — and folding them together would make "one sink, discriminated" mean "one
+   * sink, unrelated".
+   */
+  readonly withheldEvidenceClusters?: WithheldEvidenceClusterRecord[];
   /**
    * Canonical authoring-model identity ("<provider>/<model_id>") folded into the
    * resume reuse key (DET-1/CG-2). Resuming under a DIFFERENT authoring model must

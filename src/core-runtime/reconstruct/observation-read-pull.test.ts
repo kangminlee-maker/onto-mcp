@@ -909,7 +909,17 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
     );
   });
 
-  it("says 'could not be verified' — never 'not delivered' — when there is no transcript", async () => {
+  /**
+   * §2.5: "the runtime could not check" must not end the run. The cluster is WITHHELD and the run
+   * continues; the reason is disclosed, and it still never says "not delivered" — the runtime failed
+   * to observe the transport, it did not observe the run (§10-R2-4).
+   *
+   * Withholding the WHOLE cluster rather than emptying its citations is deliberate: an emptied
+   * `convergent_source_evidence` cluster satisfies this gate and then fails `maturation-validation`'s
+   * two-independent-refs obligation a stage later, which kills the run anyway with a message about
+   * evidence instead of about attestation.
+   */
+  it("withholds the cluster and CONTINUES when there is no transcript", async () => {
     const pull = writePullSources();
     const fetched = allObservationIds.slice(0, 2);
     // No `transcript`, so the route reports no worker session, exactly as a non-codex route would.
@@ -918,17 +928,20 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
       citeIds: fetched,
       deliveryReconciliation: true,
     });
-    const failure = await (author as any).writeAnswerSupportLedger(authorInput(pull))
-      .then(() => null, (error: Error) => error);
-    expect(failure).toBeInstanceOf(Error);
-    // THE distinction §10-R2-4 turns on: the citation is refused, and the sentence says why it could
-    // not be checked rather than asserting something about the run we did not observe.
-    expect(failure.message).toMatch(/could not be verified \(worker_session_unavailable\)/);
-    expect(failure.message).not.toMatch(/never served/);
-    expect(failure.message).not.toMatch(/NOT to have reached/);
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    // The run produced an artifact. The one cluster the fixture authors cited observations, so it is
+    // held back and the ledger comes back empty — the shape the pipeline already handles.
+    expect(ledger.evidence_clusters).toHaveLength(0);
+
+    const withheld = (author as any).withheldEvidenceClusters;
+    expect(withheld).toHaveLength(1);
+    expect(withheld[0].reason).toBe("worker_session_unavailable");
+    expect(withheld[0].citedObservationIds).toEqual(fetched);
+    // Never rephrased as a claim about the run.
+    expect(JSON.stringify(withheld)).not.toMatch(/never served|NOT to have reached/);
   });
 
-  it("refuses when the transcript is from a codex version nobody verified", async () => {
+  it("withholds and continues when the transcript is from a codex version nobody verified", async () => {
     const pull = writePullSources();
     const fetched = allObservationIds.slice(0, 1);
     const { author } = authorWithWorker({
@@ -948,9 +961,13 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
         };
       },
     });
-    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /could not be verified \(cli_version_not_verified\)/,
-    );
+    // Same §2.5 rule for a different reason: an unverified codex build is the runtime failing to
+    // check, not the worker misreporting, so the run continues with the cluster withheld.
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+    expect(ledger.evidence_clusters).toHaveLength(0);
+    const withheld = (author as any).withheldEvidenceClusters;
+    expect(withheld).toHaveLength(1);
+    expect(withheld[0].reason).toBe("cli_version_not_verified");
   });
 
   it("asks the route to KEEP the worker transcript — without it there is nothing to reconcile", async () => {

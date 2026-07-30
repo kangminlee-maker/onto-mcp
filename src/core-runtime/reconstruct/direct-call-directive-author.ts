@@ -182,6 +182,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type {
   BreadthFoldDisclosureRecord,
+  WithheldEvidenceClusterRecord,
   ReconstructDirectiveAuthor,
 } from "./directive-author-contract.js";
 import { createReconstructExecutionTelemetryCollector } from "./execution-telemetry.js";
@@ -358,6 +359,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // maturation answer-support. Each entry names its surface. runReconstruct reads it after the
   // producing stage and clears it per run, exactly like the truncation sink above.
   const sourceBreadthFoldDisclosures: BreadthFoldDisclosureRecord[] = [];
+  // Clusters held back because delivery could not be VERIFIED (design §2.5). Same lifecycle as the two
+  // sinks above: filled during authoring, drained and cleared by runReconstruct.
+  const withheldEvidenceClusters: WithheldEvidenceClusterRecord[] = [];
   const recordDocumentExcerptProjectionTruncation = (
     truncation: DocumentExcerptProjectionTruncation,
   ): void => {
@@ -554,6 +558,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     sourceDeliveryReconciliation: args.sourceDeliveryReconciliation === true,
     documentExcerptProjectionTruncations,
     sourceBreadthFoldDisclosures,
+    withheldEvidenceClusters,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
     // Effective synthesize identity — consumed by the semantic-map stage's
@@ -3471,7 +3476,30 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         evidence_clusters: records(
           raw.evidence_clusters ?? [],
           "evidence_clusters",
-        ).map((cluster, index) => ({
+        ).filter((cluster, index) => {
+          // §2.5: "the runtime could not check" must never end the run. A cluster whose citations
+          // cannot be attested is WITHHELD here — before the mapping below, because emptying its
+          // `evidence_refs` instead would satisfy this gate and then fail `maturation-validation`'s
+          // two-independent-refs obligation a stage later, killing the run anyway with a message
+          // about evidence rather than about attestation.
+          //
+          // Only the `unverifiable` basis is withheld. A citation the worker invented — outside the
+          // catalog, or never served/delivered — is the worker asserting something false, and that
+          // still throws below: the runtime not seeing something and the worker misreporting are
+          // different failures and must not share a response.
+          if (!citableObservations || citableObservations.basis !== "unverifiable") return true;
+          const cited = stringArray(
+            cluster.evidence_observation_ids ?? [],
+            `evidence_clusters[${index}].evidence_observation_ids`,
+          );
+          if (cited.length === 0) return true;
+          withheldEvidenceClusters.push({
+            clusterIndex: index + 1,
+            reason: citableObservations.reason,
+            citedObservationIds: cited,
+          });
+          return false;
+        }).map((cluster, index) => ({
           evidence_cluster_id: optionalString(cluster.evidence_cluster_id) ??
             `evidence-cluster-${index + 1}`,
           question_refs: stringArray(
@@ -3509,18 +3537,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             // Design §3, stage 3b: `인용 ⊆ 조회`. IN SERIES with the catalog gate above, which is not
             // touched — the citable set only narrows. Under the pull layer the catalog carries no
             // detail, so a citation the worker never fetched is a claim about content it did not read.
-            if (citableObservations && citableObservations.basis === "unverifiable") {
-              if (observationIds.length > 0) {
-                // NOT "never delivered" — that would be a claim about the run made on the strength of
-                // evidence we do not have (§10-R2-4, §12-S3). The citation is refused either way.
-                throw new Error(
-                  `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids whose ` +
-                    `delivery could not be verified (${citableObservations.reason}): ` +
-                    `${observationIds.join(", ")}. Under delivery reconciliation a citation must name ` +
-                    "an observation this dispatch can PROVE reached the worker's context.",
-                );
-              }
-            } else if (citableObservations) {
+            // The `unverifiable` basis never reaches here: those clusters were withheld above, and a
+            // cluster citing nothing has nothing to check. What remains is the worker's own claims.
+            if (citableObservations && citableObservations.basis !== "unverifiable") {
               const uncitableIds = observationIds.filter((observationId) =>
                 !citableObservations.ids.has(observationId)
               );

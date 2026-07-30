@@ -1220,6 +1220,7 @@ export async function runReconstruct(
   // carry a prior run's truncations into this run's durable record/final output).
   directiveAuthor.documentExcerptProjectionTruncations?.splice(0);
   directiveAuthor.sourceBreadthFoldDisclosures?.splice(0);
+  directiveAuthor.withheldEvidenceClusters?.splice(0);
   const reuseExistingAuthoredArtifacts =
     params.resumeMode === "reuse_existing_authored_artifacts";
   let currentAuthoredArtifactReuseMatch: AuthoredArtifactReuseMatch | null = null;
@@ -3964,6 +3965,22 @@ export async function runReconstruct(
         sourceLabel: "source-breadth-fold",
         stageId: "maturation_answer_support",
         message: answerSupportFoldDisclosureMessage(record.disclosure),
+      });
+    }
+    // §2.5: a ledger that came back smaller must say why. Drained beside the fold disclosures and in
+    // the same `finally`, so a withheld cluster survives a later authoring failure — that is exactly
+    // when "the runtime could not verify delivery" is the diagnostic. Never phrased as "not
+    // delivered": the runtime did not observe the run, it failed to observe the transport.
+    for (const record of directiveAuthor.withheldEvidenceClusters ?? []) {
+      appendRuntimeStatusEventSync({
+        pipeline: "reconstruct",
+        sessionRoot,
+        sourceLabel: "delivery-reconciliation",
+        stageId: "maturation_answer_support",
+        message:
+          `Runtime withheld answer-support evidence cluster ${record.clusterIndex}: delivery of the ` +
+          `observations it cites could not be verified (${record.reason}). The run continued and the ` +
+          `remaining clusters are unaffected. Withheld citations: ${record.citedObservationIds.join(", ")}.`,
       });
     }
   };
