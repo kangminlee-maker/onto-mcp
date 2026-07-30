@@ -40,6 +40,15 @@ const PINNED_SESSIONS: readonly { id: string; phase: string }[] = [
     id: "019fa33f-3382-7b00-8d5a-ce8e9e7be00d",
     phase: "one MCP call in one exec, plus an exec that calls no tool at all",
   },
+  {
+    // The REAL facade, and the only transcript here where the model SPEAKS BEFORE it fetches. The
+    // three above each carry exactly one `agent_message`, at the end — so a boundary rule that took
+    // the earliest answer marker passed all of them and silently discarded both tool outputs of this
+    // one (measured: delivered went from two observations to none). A phase the corpus did not have.
+    id: "019fa8af-6551-73e0-a1ca-c91c47a71af4",
+    phase:
+      "interim assistant commentary BEFORE the tool calls, then the accepted answer — real onto_observation façade",
+  },
 ];
 
 const STRIPPED_FIELDS: readonly { type: string; key: string }[] = [

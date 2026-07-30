@@ -173,6 +173,11 @@ describe("the server name reconciliation scopes to is the one the runtime regist
         type: "event_msg",
         payload: { type: "agent_message", message: "done" },
       },
+      {
+        timestamp: "2026-07-27T12:00:04.000Z",
+        type: "event_msg",
+        payload: { type: "task_complete", last_agent_message: "done" },
+      },
     ].map((record) => JSON.stringify(record)).join("\n");
     writeFileSync(path.join(dayDir, `rollout-x-${sessionId}.jsonl`), transcript);
     writeFileSync(

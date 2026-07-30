@@ -103,6 +103,12 @@ function plantedTranscript(args: {
       type: "event_msg",
       payload: { type: "agent_message", message: "done" },
     },
+    // codex declaring which answer was accepted — the reader binds its boundary to this.
+    {
+      timestamp: "<<STAMP>>",
+      type: "event_msg",
+      payload: { type: "task_complete", last_agent_message: "done" },
+    },
   ];
   return records.map((record) => JSON.stringify(record)).join("\n");
 }

@@ -195,32 +195,60 @@ export function readCodexRollout(
   const received: CodexRolloutReceivedRecord[] = [];
 
   /**
-   * Where the model answered. An output recorded after this point cannot have informed the answer the
-   * runtime is about to judge, so counting it would attest a delivery to a moment that had not
-   * happened yet (design §6-… "수용된 최종 응답 이후에 기록된 출력은 세면 안 된다", from the R2
-   * MATERIAL finding).
+   * Where the model produced the answer the runtime accepted. An output recorded after this point
+   * cannot have informed that answer, so counting it would attest a delivery to a moment that had not
+   * happened yet (design §6, from the R2 MATERIAL finding).
    *
-   * Two markers, because codex writes the same answer twice — an `agent_message` event and an
-   * assistant `response_item`. The EARLIEST is taken: the answer had already been produced by then,
-   * so anything later is out regardless of which record type survives a codex change.
+   * THE BOUNDARY IS BOUND TO THE ANSWER'S TEXT, NOT TO A RECORD TYPE. An earlier version took the
+   * earliest `agent_message` / assistant `response_item`, on the strength of three fixtures that each
+   * carried exactly one, at the end. The real façade run does not look like that: the model SPEAKS
+   * BEFORE it fetches, so the earliest marker sat before both tool outputs and the rule discarded a
+   * delivery that had demonstrably happened (measured — `delivered` went from two observations to
+   * none; fixture `019fa8af-…` exists to hold that shape).
    *
-   * Measured across the three real fixtures: exactly one of each, `agent_message` immediately before
-   * the assistant message, and every tool output before both. A transcript with no marker at all is
-   * refused rather than treated as unbounded — an answer we cannot place is an ordering we cannot
-   * assert. Multi-answer topologies would make this bound too strict rather than too loose; that
-   * direction refuses citations instead of inventing deliveries, which is the safe way to be wrong.
+   * `task_complete.last_agent_message` is the transcript declaring its own accepted answer, so the
+   * boundary is the FIRST record carrying that exact text. First, not last, because codex writes the
+   * same answer up to three times (`agent_message`, assistant item, `task_complete`) and by the first
+   * of them the answer already exists — anything later cannot have informed it.
    */
+  const answerText = (() => {
+    let text: string | null = null;
+    for (const record of records) {
+      if (record.type !== "event_msg" || !isRecord(record.payload)) continue;
+      if (record.payload.type !== "task_complete") continue;
+      const last = record.payload.last_agent_message;
+      if (typeof last === "string") text = last;
+    }
+    return text;
+  })();
+  if (answerText === null) return { ok: false, refusal: "answer_boundary_unresolved" };
+
   let answerIndex = Number.POSITIVE_INFINITY;
   for (const [index, record] of records.entries()) {
     if (!isRecord(record.payload)) continue;
     const kind = record.payload.type;
-    const isAgentMessage = record.type === "event_msg" && kind === "agent_message";
-    const isAssistantMessage = record.type === "response_item" && kind === "message" &&
-      record.payload.role === "assistant";
-    if (isAgentMessage || isAssistantMessage) {
+    let carried: string | null = null;
+    if (record.type === "event_msg" && kind === "agent_message") {
+      carried = typeof record.payload.message === "string" ? record.payload.message : null;
+    } else if (record.type === "event_msg" && kind === "task_complete") {
+      carried = typeof record.payload.last_agent_message === "string"
+        ? record.payload.last_agent_message
+        : null;
+    } else if (
+      record.type === "response_item" && kind === "message" && record.payload.role === "assistant"
+    ) {
+      const content = record.payload.content;
+      carried = Array.isArray(content)
+        ? content.map((item) => (isRecord(item) && typeof item.text === "string" ? item.text : ""))
+          .join("")
+        : null;
+    }
+    if (carried !== null && carried === answerText) {
       answerIndex = Math.min(answerIndex, index);
     }
   }
+  // The transcript named an answer no record carries — a shape we do not recognise, not an ordering
+  // we may assume.
   if (!Number.isFinite(answerIndex)) {
     return { ok: false, refusal: "answer_boundary_unresolved" };
   }

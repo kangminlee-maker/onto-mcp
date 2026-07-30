@@ -98,6 +98,42 @@ describe("delivery reconciliation — replay against real transcripts", () => {
       .toEqual([...answer.delivered]);
   });
 
+  /**
+   * THE SHAPE THE OTHER THREE DO NOT HAVE: the model speaks BEFORE it fetches. This is the real
+   * `onto_observation` façade run, and its transcript carries interim commentary at record 9/10, the
+   * tool outputs at 12 and 17, and the accepted answer at 20+.
+   *
+   * A boundary rule that took the earliest answer marker placed it at 9 and discarded both outputs —
+   * measured, `delivered` went from two observations to none, and the other three fixtures all passed
+   * because each carries exactly one `agent_message`, at the end. Binding the boundary to
+   * `task_complete.last_agent_message` is what distinguishes commentary from the accepted answer.
+   */
+  it("counts outputs that follow interim commentary but precede the accepted answer", () => {
+    const id = "019fa8af-6551-73e0-a1ca-c91c47a71af4";
+    const emissions = emissionsFromTranscript(id);
+    expect(emissions.map((entry) => entry.canonical_text.length)).toEqual([15_177]);
+
+    const outcome = attestEmissionDelivery({
+      emissions,
+      transcript: transcriptOf(id),
+      expect: {
+        sessionId: id,
+        cwd: "/Users/kangmin/Documents/onto-mcp",
+        verifiedCliVersions: ["0.145.0"],
+        childWindow: {
+          startedAtMs: Date.parse("2026-07-28T00:00:00.000Z"),
+          endedAtMs: Date.parse("2026-07-29T00:00:00.000Z"),
+        },
+        server: "onto_observation",
+        tool: "onto_observation_read",
+      },
+    });
+    expect(outcome.status).toBe("verified");
+    if (outcome.status !== "verified") return;
+    // The page arrived. Taking the earliest marker instead reports `verbatim_delivery_not_attested`.
+    expect(outcome.attestation.map((entry) => entry.disposition)).toEqual(["verbatim_delivered"]);
+  });
+
   it("does not conclude from a corpus that delivered everything or nothing", () => {
     // Non-vacuity: the three transcripts together contain both outcomes, so a rule stuck on either
     // answer fails at least one of them.
@@ -224,12 +260,19 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
     // Every real transcript ends with the model answering, and the reader now needs that boundary to
     // decide what counted (it refuses a transcript it cannot place an answer in). Appending it here
     // is what makes these fixtures the shape codex actually writes rather than a prefix of one.
+    // The answer, then codex's own declaration of which answer was accepted. The reader binds its
+    // boundary to `last_agent_message`, so a fixture without it is not a shape codex writes.
     const answered = {
       timestamp: "2026-07-27T11:00:03.000Z",
       type: "event_msg",
       payload: { type: "agent_message", message: "done" },
     };
-    return [meta, ...sentRecords, received, answered]
+    const completed = {
+      timestamp: "2026-07-27T11:00:04.000Z",
+      type: "event_msg",
+      payload: { type: "task_complete", last_agent_message: "done" },
+    };
+    return [meta, ...sentRecords, received, answered, completed]
       .map((record) => JSON.stringify(record)).join("\n");
   }
 
@@ -374,6 +417,11 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
         type: "event_msg",
         payload: { type: "agent_message", message: "done" },
       });
+      records.push({
+        timestamp: "2026-07-27T11:00:04.000Z",
+        type: "event_msg",
+        payload: { type: "task_complete", last_agent_message: "done" },
+      });
       return records.map((record) => JSON.stringify(record)).join("\n");
     };
 
@@ -445,7 +493,12 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
         output: [{ type: "input_text", text: page! }],
       },
     };
-    const transcript = [meta, sent, answer, lateOutput]
+    const completed = {
+      timestamp: "2026-07-27T11:00:04.000Z",
+      type: "event_msg",
+      payload: { type: "task_complete", last_agent_message: "done" },
+    };
+    const transcript = [meta, sent, answer, lateOutput, completed]
       .map((record) => JSON.stringify(record)).join("\n");
 
     const outcome = reconcileDelivery({
@@ -498,7 +551,15 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
         output: [{ type: "input_text", text: page! }],
       }),
       // Marker 2: the same answer, as a conversation item.
-      record("2026-07-27T11:00:04.000Z", "response_item", { type: "message", role: "assistant" }),
+      record("2026-07-27T11:00:04.000Z", "response_item", {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "done" }],
+      }),
+      record("2026-07-27T11:00:05.000Z", "event_msg", {
+        type: "task_complete",
+        last_agent_message: "done",
+      }),
     ].map((entry) => JSON.stringify(entry)).join("\n");
 
     const outcome = reconcileDelivery({
