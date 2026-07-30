@@ -62,6 +62,15 @@ const ledgerArtifact = parseYaml(readFileSync(LEDGER_FIXTURE, "utf8")) as Record
 const allObservationIds = observationsArtifact.observations.map((o) => o.observation_id);
 
 /**
+ * The observation with the largest canonical body — the one that still splits at any budget this grant
+ * can mint, so a test needing a FULL page has one. Derived rather than named: a hard-coded id would go
+ * stale the moment the fixture changed, and silently, because a smaller observation still serves fine.
+ */
+const largestObservationId = observationsArtifact.observations
+  .map((observation) => ({ id: observation.observation_id, chars: JSON.stringify(observation).length }))
+  .sort((left, right) => right.chars - left.chars)[0]!.id;
+
+/**
  * Write the three artifacts plus a `valid` validation for them. The ledger must NAME the observations
  * artifact it was written for — mint binds on that ref, so a stale pair fails rather than gating one
  * run's observations with another run's decisions.
@@ -1161,5 +1170,35 @@ describe("observation read facade — emissions record and the start right", () 
     expect(readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token)).not.toBeNull();
     // The obstruction is untouched, and no stray temp of ours is left behind.
     expect(existsSync(`${emissionsPath}.tmp`)).toBe(true);
+  });
+});
+
+// ── Stage S4 of the RANGE contract (design 20260727 `23-…md` §3/S4).
+describe("page budget — the value the LIVE facade mints with, not the one a harness passes", () => {
+  it("mints at 32,000 and serves pages that fit inside the measured lossless bracket", () => {
+    const { descriptor, receiptPath } = writeDescriptor();
+    const session = new ObservationReadFacadeSession({ descriptor });
+
+    // The LITERAL, not the constant. Asserting `=== OBSERVATION_READ_PAGE_CHAR_BUDGET` would pass no
+    // matter what that constant became; asserting it here pins the value AND the wiring, because the
+    // number has to travel through `mint` — which is handed no budget at all
+    // (`observation-read-facade.ts`, the `#registry.mint({...})` call) and therefore uses the default.
+    // Cross-family review raised exactly this: a completion condition measured by calling
+    // `readObservationPage({ pageCharBudget: 32000 })` from a test is satisfied while the live path
+    // keeps the old default, because nothing on the live path ever sees the test's argument.
+    const opening = readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token);
+    expect(opening?.receipt.budget.page_char_budget).toBe(32_000);
+
+    // And the budget has to be REACHED, or "pages fit" is a statement about pages nobody served. The
+    // corpus's largest observation splits at this budget, so the first page is a full one.
+    const result = callTool(session, { observation_ids: [largestObservationId] });
+    expect(result.isError).toBe(false);
+    const served = JSON.stringify(result.structuredContent);
+    expect(served.length).toBeGreaterThan(30_000);
+    expect(served.length).toBeLessThanOrEqual(32_000);
+    // 32,151 is the largest tool result observed to arrive in a worker's context uncut (measurement
+    // 20-… §5). Below it is the evidence-backed side of the bracket; the clip length (40,149) is not.
+    expect(served.length).toBeLessThan(32_151);
+    expect(result.structuredContent.next_cursor).toBeDefined();
   });
 });

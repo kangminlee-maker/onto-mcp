@@ -101,10 +101,28 @@ import {
 
 /**
  * Per-response ceiling — design §4.2's "응답 1건당 상한". Held constant for a grant's life (see BUDGET
- * above). 64 KiB is large enough that the measured corpus's median observation arrives whole and small
- * enough that a spent budget wastes little: the unspent tail is at most one page.
+ * above).
+ *
+ * 32,000 because a page has to SURVIVE THE TRIP, and the trip has a ceiling this side cannot see: codex
+ * trims a tool result middle-out on the way into the model's context, and the MCP server is never told.
+ * Two measurements bracket it — in real transcripts the clipped received records cluster at 40,149–40,150
+ * chars (that is the clip length, not the limit) while the largest record that arrived whole is 32,151;
+ * a direct probe passed at 32,035 and was clipped at 65,049. So the true limit sits somewhere in
+ * (32,151, 40,149] and nobody has measured where. This budget sizes the largest page it can emit
+ * (31,960 over the measured corpus) BELOW the largest payload ever observed to arrive intact, rather
+ * than below the clip length — evidence rather than arithmetic.
+ *
+ * The previous value, 65,536, sat on the wrong side of both brackets: a full page could not reach the
+ * model whole, which under delivery reconciliation meant it was never attested and under the default
+ * receipt path meant the runtime authorized a citation to content the worker never saw.
+ *
+ * THIS IS NECESSARY, NOT SUFFICIENT. The unit codex clips is the RECEIVED RECORD, not the page, and one
+ * exec turn can render several tool results into a single record (`delivery-reconciliation.ts` header,
+ * measurement 20-… §2). Two pages this size in one turn still exceed the bracket. Sizing alone cannot
+ * close that; only transcript-confirmed delivery can, because a clipped record simply fails to attest.
+ * See design `23-…md` §3/S4.
  */
-export const OBSERVATION_READ_PAGE_CHAR_BUDGET = 65_536;
+export const OBSERVATION_READ_PAGE_CHAR_BUDGET = 32_000;
 
 /**
  * Smallest `pageCharBudget` a grant may be minted with. Both bounds below are MEASURED, not chosen:

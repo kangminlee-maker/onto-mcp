@@ -857,7 +857,10 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
     // stays green everywhere — zeroing OBSERVATION_READ_EXCHANGE_FRAMING_CHARS removed all exchange framing
     // from both the reservation and the charge with a fully green suite (cross-family review, lens B).
     // These are the only literals; changing a constant is a deliberate act that updates this test with it.
-    expect(OBSERVATION_READ_PAGE_CHAR_BUDGET).toBe(65_536);
+    // 32,000 since the range contract (design `23-…md` §3/S4): a page must survive codex's middle-out
+    // trim of a tool result, and the largest result ever observed to arrive uncut is 32,151 chars. The
+    // previous 65,536 sat above every bracket — a full page could not reach the model whole.
+    expect(OBSERVATION_READ_PAGE_CHAR_BUDGET).toBe(32_000);
     expect(OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET).toBe(4_096);
     expect(OBSERVATION_READ_EXCHANGE_FRAMING_CHARS).toBe(1_024);
     expect(OBSERVATION_READ_SESSION_RESERVE_CHARS).toBe(8_192);
