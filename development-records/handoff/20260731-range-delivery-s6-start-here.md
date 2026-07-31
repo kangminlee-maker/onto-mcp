@@ -1,7 +1,9 @@
 # 구간 단위 배달 — S6(하류 range 보존) 시작 지점 (2026-07-31)
 
-> **한 줄**: S1·S2·S3·S4가 착지했다. 남은 것은 **S6 하나** — 인용은 이미 구간인데
-> **영속 evidence ref와 judge 투영이 아직 관찰 단위**라, 그 사이 틈이 owner 결정 A가 닫으라고 한 구멍이다.
+> **한 줄**: **S6까지 끝났다** (2026-07-31, `4995621`). 인용도 하류도 구간 단위다. 남은 것은 **S5 잔여 정리**와,
+> 그 다음 **`source_observation_catalog_tool` 승격 결정**이다.
+>
+> 아래 §2는 S6이 무엇이었는지의 기록으로 남긴다 — 착수 지점이 아니라 **닫힌 구멍의 설명**이다.
 
 ## 0. 지금 어디에 있나
 
@@ -28,15 +30,15 @@
 | `1f19741` | **S2** | 배달 판정 좌표를 파트 인덱스 → **문자 구간**. 영수증 v3 · 배달 레코드 v2 |
 | `4aec942`·`4be607d` | **S3** | `orng_v1_` 발급·해소 + **인용 단위 교체**. 게이트 순서 해소→카탈로그→배달 |
 
-## 2. 남은 것 — S6 하나
+## 2. 닫힌 것 — S6 (완료, `4995621`)
 
 **owner 결정 A(2026-07-30)**: 구간 provenance를 하류까지 보존한다. 세 지점이다.
 
-| 지점 | 실코드 | 지금 상태 |
+| 지점 | 실코드 | 어떻게 닫혔나 |
 |---|---|---|
-| 영속 evidence ref | `artifact-types.ts:906` `ReconstructEvidenceRef` | `observation_id`·`target_material_kind`·`source_ref`·`location`뿐 — **range identity 없음** |
-| judge 투영 | `direct-call-directive-author.ts` `:3652~` · `authoring-prompt-payloads.ts:2067~` | 관찰 id로 **관찰 전체를 재선택**해 500자 투영을 넣는다 |
-| `direct_authority` 검증 | `maturation-validation.ts:3211`·`:3334` | "evidence ref ≥ 1"만 검사 |
+| 영속 evidence ref | `artifact-types.ts` `ReconstructEvidenceRef` | 선택적 `range`를 지닌다. 클러스터의 ref는 **인용된 구간마다 하나** |
+| judge 투영 | `direct-call-directive-author.ts` `writeAnswerSupportJudgment` | 구간이 있으면 `cited_ranges`만 보내고 **관찰 투영은 아예 없다**. 본문은 레코드에서 다시 잘라 페이지 해시와 대조(`citedRangeText`) |
+| `direct_authority` 검증 | `maturation-validation.ts` | **부분 구간 위에 설 수 없다** — judge를 건너뛰는 유일한 모드라 위반으로 막는다 |
 
 **왜 이게 구멍인가**: 워커가 관찰의 구간 A를 인용했는데 정답이 구간 B에만 있으면, judge는 **B를 보고 A의
 인용을 지지한 것으로** 판정할 수 있다. 인용 게이트는 이미 구간 단위지만 **의미 검증 층이 관찰 단위**다.
@@ -45,9 +47,8 @@
 **못한다**. 공허 방지 — 그 fixture에서 judge 입력이 **인용 구간만 담고 앞뒤 sentinel을 담지 않음**을 먼저
 단언한다.
 
-**착수 지점**: `direct-call-directive-author.ts`의 `buildCluster`가 지금 `observationIds`를 받는다
-(`evidence_refs: evidenceRefsFromIds({ observationIds, … })`). S3가 해소한 `ObservationRangeRef[]`를
-거기까지 흘려보내면 된다 — 저작자 안에서는 이미 값이 있다.
+**변이 확인**: judge에 관찰 투영 되돌리기 · 구간과 투영 동시 전송 · 구간 해시 검증 끄기 ·
+`direct_authority` 규칙 끄기 — 넷 전부 발화.
 
 ## 3. 그 다음 — S5
 
@@ -58,11 +59,16 @@ fold/projection)이 모두 새 range 권위만 쓰는지 확인한다. 지금은
 `part_allowance`의 "분해 identity" 역할 주석 정리, `observationIdsServed`의 위치 재검토(프로덕션 소비자
 없음 — 단, **영수증 테스트 18곳이 증거로 읽으므로 지우지 말 것**).
 
-## 4. 켜면 안 되는 것
+## 4. 켜는 것은 owner 결정이다
 
-**`source_observation_catalog_tool`을 repo settings에 넣지 말 것 — S6 전까지.**
-그 키가 풀 층 전체의 스위치이고, 켜는 순간 구간 인용이 활성화되는데 하류가 아직 관찰 단위라 §2의 구멍이
-열린다. 지금 어디에도 켜져 있지 않으므로 **라이브 위험은 없다**.
+**`source_observation_catalog_tool`이 풀 층 전체의 스위치다.** S6까지 끝났으므로 §2의 구멍은 닫혔고,
+켜는 것을 막는 *구현* 사유는 더 없다. 다만 켜면:
+
+- 인용 권위가 **전사본 확인 배달**로 옮겨간다(F-3에서 한 스위치로 묶었다). 확인 못 하는 경우는 런 사망이
+  아니라 **클러스터 보류 + 공시**다
+- 페이지 예산 32,000이 실사용된다. 밀집 요청에서 페이지 수가 늘어 호출 상한 32에 먼저 닿는다(§0-3 정정)
+- **라이브 실측이 없다.** 이 트랙은 전부 실 fixture·실 전사본 replay로 검증했고, 풀 층 전체를 켠
+  라이브 런은 돌린 적이 없다. `scripts/observation-read-pull-live.mts`가 그 프로브다
 
 ## 5. 게이트 rc=1 2건은 선재 잡음이다
 
