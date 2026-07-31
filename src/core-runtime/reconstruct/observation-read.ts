@@ -26,6 +26,7 @@
 import { createHash } from "node:crypto";
 import { parse as parseYaml } from "yaml";
 import { assertArrayField } from "../artifact-io.js";
+import { observationRangeId } from "./observation-range-id.js";
 import type { ReconstructSourceSafetyLedgerArtifact } from "./artifact-types.js";
 import { sourceSafetyRowIdForObservationId } from "./source-safety-validation.js";
 
@@ -220,6 +221,15 @@ export interface ObservationReadPageEntry {
    * re-slice and check, so a range that names content the runtime never served cannot be constructed.
    */
   range_content_sha256: string;
+  /**
+   * The NAME a citation uses for this range — opaque by construction, derived from the tuple above.
+   *
+   * The offsets beside it are the runtime's own accounting (reconciliation reads them and must never
+   * re-split). The citation surface accepts only this, which is what makes "cite a range I did not
+   * read" unrepresentable rather than merely forbidden: an id naming a range this launch never emitted
+   * resolves to nothing. `observation-range-id.ts` owns both the mint and the resolution.
+   */
+  range_id: string;
   /** Slice of the observation body. Concatenate parts 1..part_count to recover it exactly. */
   body: string;
 }
@@ -592,6 +602,7 @@ function pageEntryOf(args: {
   bodyStart: number;
   bodyEnd: number;
   rangeContentSha256: string;
+  rangeId: string;
   body: string;
 }): ObservationReadPageEntry {
   return {
@@ -603,6 +614,7 @@ function pageEntryOf(args: {
     body_start: args.bodyStart,
     body_end: args.bodyEnd,
     range_content_sha256: args.rangeContentSha256,
+    range_id: args.rangeId,
     body: args.body,
   };
 }
@@ -617,6 +629,7 @@ function entryFramingChars(
   bodyStart: number,
   bodyEnd: number,
   rangeContentSha256: string,
+  rangeId: string,
 ): number {
   return JSON.stringify(
     pageEntryOf({
@@ -628,6 +641,7 @@ function entryFramingChars(
       bodyStart,
       bodyEnd,
       rangeContentSha256,
+      rangeId,
       body: "",
     }),
   ).length;
@@ -635,6 +649,15 @@ function entryFramingChars(
 
 /** A hash-shaped placeholder for reserving a range hash before the slice that produces it is known. */
 const SHA256_HEX_PLACEHOLDER = "0".repeat(64);
+
+/** An id-shaped placeholder. Every minted id has the same length, so the reservation cannot vary. */
+const RANGE_ID_PLACEHOLDER = observationRangeId({
+  observation_id: "",
+  observation_content_sha256: "",
+  body_start: 0,
+  body_end: 0,
+  range_content_sha256: "",
+});
 
 function encodeCursor(payload: ObservationCursorPayload): string {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
@@ -835,6 +858,7 @@ export function readObservationPage(args: {
           PART_NUMBER_SENTINEL,
           PART_NUMBER_SENTINEL,
           SHA256_HEX_PLACEHOLDER,
+          RANGE_ID_PLACEHOLDER,
         ),
       ),
     0,
@@ -858,6 +882,7 @@ export function readObservationPage(args: {
     bodyStart: number;
     bodyEnd: number;
     rangeContentSha256: string;
+    rangeId: string;
     body: string;
   }> = [];
   const firstPartOfObservation: number[] = [];
@@ -877,6 +902,7 @@ export function readObservationPage(args: {
     let bodyStart = 0;
     parts.forEach((body, partIndex) => {
       const bodyEnd = bodyStart + body.length;
+      const rangeContentSha256 = sha256Hex(body);
       pending.push({
         observationIndex,
         entry,
@@ -884,7 +910,14 @@ export function readObservationPage(args: {
         partCount: parts.length,
         bodyStart,
         bodyEnd,
-        rangeContentSha256: sha256Hex(body),
+        rangeContentSha256,
+        rangeId: observationRangeId({
+          observation_id: entry.observation_id,
+          observation_content_sha256: entry.observation_content_sha256,
+          body_start: bodyStart,
+          body_end: bodyEnd,
+          range_content_sha256: rangeContentSha256,
+        }),
         body,
       });
       bodyStart = bodyEnd;
@@ -918,6 +951,7 @@ export function readObservationPage(args: {
       part.bodyStart,
       part.bodyEnd,
       part.rangeContentSha256,
+      part.rangeId,
     );
     const cost = framingChars + jsonStringContentCost(part.body) + (entries.length > 0 ? 1 : 0);
     if (entries.length > 0 && used + cost > pageCharBudget) break;
@@ -930,6 +964,7 @@ export function readObservationPage(args: {
       bodyStart: part.bodyStart,
       bodyEnd: part.bodyEnd,
       rangeContentSha256: part.rangeContentSha256,
+      rangeId: part.rangeId,
       body: part.body,
     });
     // The COST MODEL, checked per entry (design `23-…md` §3/S1, review F-9). Field parity is already
