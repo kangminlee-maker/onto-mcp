@@ -1,25 +1,25 @@
-# 구간 단위 배달 — S6(하류 range 보존) 시작 지점 (2026-07-31)
+# 구간 단위 배달 — 트랙 종료 기록 (2026-07-31)
 
-> **한 줄**: **S6까지 끝났다** (2026-07-31, `4995621`). 인용도 하류도 구간 단위다. 남은 것은 **S5 잔여 정리**와,
-> 그 다음 **`source_observation_catalog_tool` 승격 결정**이다.
+> **한 줄**: **S1~S6이 전부 끝났다.** 배달·인용·하류가 모두 구간 단위다. 구현 잔여는 없다.
+> 남은 것은 **`source_observation_catalog_tool` 승격 결정 하나**이고 그건 owner 판단이다(§4).
 >
-> 아래 §2는 S6이 무엇이었는지의 기록으로 남긴다 — 착수 지점이 아니라 **닫힌 구멍의 설명**이다.
+> 아래 §2·§3은 착수 지점이 아니라 **무엇이 어떻게 닫혔는지의 기록**이다.
 
 ## 0. 지금 어디에 있나
 
 | 항목 | 값 |
 |---|---|
 | 브랜치 | `feat/observation-grant-stage2` |
-| HEAD | `4be607d` |
-| **미푸시** | **20커밋** |
-| vitest | 235파일 · **4,039 pass** · 1 todo |
-| 정적 게이트 | 7종 rc=0 (`check:supported-models`·`check:invariant-drift` 2건은 **선재 잡음** — §5) |
+| HEAD | `c1c4e8e` |
+| **미푸시** | **23커밋** |
+| vitest | 235파일 · **4,041 pass** · 1 todo |
+| 정적 게이트 | 8종 rc=0 (`check:supported-models`·`check:invariant-drift` 2건은 **선재 잡음** — §5) |
 | 워킹트리 | 클린 |
 
 **지켜야 할 제약**: `git add -A` 금지(경로 명시) · main 직접 커밋 금지 · **push/merge는 owner 승인 후** ·
 리뷰 좌석은 `gpt-5.6-sol` 단독 · vitest **총계**를 봐야 침묵 스킵이 잡힌다.
 
-## 1. 착지한 것 (이번 트랙 6커밋)
+## 1. 착지한 것 (이번 트랙 8커밋)
 
 | 커밋 | 단계 | 내용 |
 |---|---|---|
@@ -29,6 +29,7 @@
 | `45e8b8f` | **F-3** | 풀 층과 전사본 확인 배달을 **한 스위치로**. `source_delivery_reconciliation` 키 제거 · `served` basis 삭제 |
 | `1f19741` | **S2** | 배달 판정 좌표를 파트 인덱스 → **문자 구간**. 영수증 v3 · 배달 레코드 v2 |
 | `4aec942`·`4be607d` | **S3** | `orng_v1_` 발급·해소 + **인용 단위 교체**. 게이트 순서 해소→카탈로그→배달 |
+| `4995621` | **S6** | 인용한 구간이 **하류까지** 간다 — evidence ref·judge 투영·`direct_authority` |
 
 ## 2. 닫힌 것 — S6 (완료, `4995621`)
 
@@ -50,14 +51,21 @@
 **변이 확인**: judge에 관찰 투영 되돌리기 · 구간과 투영 동시 전송 · 구간 해시 검증 끄기 ·
 `direct_authority` 규칙 끄기 — 넷 전부 발화.
 
-## 3. 그 다음 — S5
+## 3. S5는 별도 작업이 아니었다 — 실측으로 확인함
 
-파티션 기계 제거. **제거 전에** 네 production import 지점(grant fold/projection · reconciliation
-fold/projection)이 모두 새 range 권위만 쓰는지 확인한다. 지금은 이미 그렇지만, 제거는 **별도 커밋**이다.
+계획은 "파티션 기계 제거"를 마지막 단계로 뒀지만, S2가 **확장이 아니라 교체**였으므로 제거할 것이 남지
+않았다. 전수 확인(2026-07-31):
 
-실제로는 `observation-read-coverage.ts`가 이미 range 기반으로 **교체**됐으므로 S5는 잔여 정리에 가깝다:
-`part_allowance`의 "분해 identity" 역할 주석 정리, `observationIdsServed`의 위치 재검토(프로덕션 소비자
-없음 — 단, **영수증 테스트 18곳이 증거로 읽으므로 지우지 말 것**).
+- `selectReportedPartition`·`foldObservationPart`·`ObservationPartitionCoverage`·`part_indexes`의
+  프로덕션·스크립트 hit은 **0건**. 유일한 문자열 hit은 `observation-read-facade.ts`의 **v3 마이그레이션을
+  설명하는 주석**이다
+- `observation-read-coverage.ts`의 프로덕션 소비자는 셋(façade · reconciliation · grant)이고 **전부 range
+  함수만** 쓴다
+
+→ "두 판정이 함께 권위로 남는" 위험은 존재하지 않는다. **S5 종료.**
+
+남긴 것 하나: `observationIdsServed`는 프로덕션 소비자가 없지만 **영수증 테스트 18곳이 영수증 의미의
+증거로 읽는다**. 지우지 말 것 — 이 저장소에서 "죽은 필드" 오진으로 이미 한 번 틀렸다.
 
 ## 4. 켜는 것은 owner 결정이다
 
