@@ -145,8 +145,12 @@
 | S5 파티션 제거 | **불필요** — S2가 교체였으므로 남은 구 권위 0건(전수 확인) | — |
 
 **S1~S6이 전부 끝났고 구현 잔여는 없다.** 라이브 프로브도 PASS했다
-(2026-07-31, `benchmark/20260731-range-delivery-live-probe/`) — 다만 **부분 인용은 라이브 미실증**이다.
-남은 것은 `source_observation_catalog_tool` 승격 결정 하나다.
+(2026-07-31, `benchmark/20260731-range-delivery-live-probe/`).
+
+**그런데 프로브의 페이징 arm이 F-3을 라이브로 실증했다** — 개별 페이지가 예산 아래여도 여러 페이지가
+한 exec 출력으로 병합되면 잘리고, 그러면 아무것도 도달하지 않는다(수신 레코드 810/45,138/47,451자).
+§3의 S4가 "수신 레코드 경계"로 적어둔 것이 측정됐다. **승격 전에 "exec당 1회 유도"와 그 위반 시
+동작을 정해야 한다** — 진입점 `handoff/20260731-live-citation-arm-design-start-here.md` §2.
 진입점: `handoff/20260731-range-delivery-s6-start-here.md`(§2는 완료로 읽을 것).
 
 ## 3. 단계 계획
