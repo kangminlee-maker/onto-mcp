@@ -311,6 +311,17 @@ function rejectNonJsonRepresentable(_key: string, value: unknown): unknown {
 }
 
 /**
+ * The canonical body of one observation record — the string the reader serves, hashes and slices.
+ *
+ * Exported because RANGE OFFSETS ARE MEASURED AGAINST IT. A consumer re-deriving the body with its own
+ * `JSON.stringify` call would agree today and drift the moment the replacer changes, and a drifted body
+ * makes every offset name different characters while still looking well-formed. One authority, imported.
+ */
+export function canonicalObservationBody(observation: unknown): string {
+  return JSON.stringify(observation, rejectNonJsonRepresentable);
+}
+
+/**
  * Fix a snapshot from the artifact text: parse, project each observation to its canonical body, hash it,
  * APPLY THE CONSUMPTION GATE, and derive the content digest over what survives. Fails loud on a malformed
  * artifact, a blank/absent observation_id, a duplicate id (a duplicate would make `{observation_ids}`
@@ -384,7 +395,7 @@ export function fixObservationSnapshot(
         `${elide(observationId)} appears more than once; an id must resolve to exactly one observation`,
       );
     }
-    const body = JSON.stringify(raw, rejectNonJsonRepresentable);
+    const body = canonicalObservationBody(raw);
     // Frozen at construction: a snapshot that can be edited in place is not fixed, and a mid-walk edit
     // would leave `snapshot_digest` naming content the reader is no longer serving.
     entries.push(

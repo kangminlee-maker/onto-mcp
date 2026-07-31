@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { canonicalObservationBody } from "./observation-read.js";
 import { afterEach, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -2874,6 +2876,90 @@ describe("runReconstruct", () => {
       violations: [],
     };
   }
+
+  it("shows the judge the CITED range and nothing else of the observation", async () => {
+    // S6 / owner decision A (design `23-…md` §4-4). The citation gate is range-level; if the judge is
+    // not, the gate is decorative — the judge re-selects the whole record by id and can support a claim
+    // from a passage the worker never cited. The negative fixture is exactly that: the answer lives ONLY
+    // in a range the cluster does not cite.
+    const { sourceObservations } = answerSupportPromptFixture();
+    const observation = sourceObservations.observations[0]!;
+    const body = canonicalObservationBody(observation);
+    // Cite the FRONT half. The sentinels are positions in the real canonical body, not invented text,
+    // so "cited" and "uncited" are the same string the runtime would slice.
+    const cut = Math.floor(body.length / 2);
+    const citedText = body.slice(0, cut);
+    const uncitedText = body.slice(cut);
+    // Non-vacuous on both sides: the halves must be non-empty AND distinguishable, or "the uncited half
+    // is absent" could hold because it is empty or because it also appears inside the cited half.
+    expect(citedText.length).toBeGreaterThan(40);
+    expect(uncitedText.length).toBeGreaterThan(40);
+    const uncitedProbe = uncitedText.slice(-40);
+    expect(citedText.includes(uncitedProbe)).toBe(false);
+    const citedProbe = citedText.slice(0, 40);
+
+    const range = {
+      range_id: "orng_v1_" + "0".repeat(32),
+      observation_content_sha256: createHash("sha256").update(body, "utf8").digest("hex"),
+      body_start: 0,
+      body_end: cut,
+      range_content_sha256: createHash("sha256").update(citedText, "utf8").digest("hex"),
+    };
+    const ledger: ReconstructAnswerSupportLedgerArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: "2026-06-15T00:00:00.000Z",
+      round_id: "maturation-round-1",
+      evidence_clusters: [{
+        evidence_cluster_id: "cluster-range-scope",
+        question_refs: ["q-1"],
+        support_mode: "convergent_source_evidence",
+        proposed_answer_summary: "Backed by the cited range only.",
+        evidence_refs: [{
+          observation_id: observation.observation_id,
+          target_material_kind: observation.target_material_kind,
+          source_ref: observation.source_ref,
+          location: observation.location,
+          range,
+        }],
+        proof_refs: [],
+        user_confirmation_refs: [],
+        authority_response_refs: [],
+        independence_basis: "AUTHOR-SELF-JUSTIFICATION-WITHHELD",
+        contradiction_refs: [],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+
+    let capturedPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (systemPrompt, userPrompt) => {
+        capturedPayload = JSON.parse(userPrompt) as Record<string, any>;
+        return reconstructFixtureLlm(systemPrompt, userPrompt);
+      },
+    });
+    await author.writeAnswerSupportJudgment({
+      sessionId: sourceObservations.session_id,
+      roundId: "maturation-round-1",
+      answerSupportLedger: ledger,
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      answerSupportLedgerValidation: validJudgeLedgerValidation(sourceObservations.session_id, 1),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      sourceObservations,
+    });
+
+    const payload = JSON.stringify(capturedPayload);
+    // The cited half reached the judge...
+    expect(payload).toContain(JSON.stringify(citedProbe).slice(1, -1));
+    // ...and the uncited half did not. This is the assertion the whole stage exists for.
+    expect(payload).not.toContain(JSON.stringify(uncitedProbe).slice(1, -1));
+    // And the whole-observation projection is GONE rather than merely trimmed: sending both would put
+    // the record back in front of the judge and make the narrowing cosmetic.
+    expect(capturedPayload).not.toHaveProperty("source_observations");
+    expect(capturedPayload!.cited_ranges).toHaveLength(1);
+    expect(capturedPayload!.cited_ranges[0].range_id).toBe(range.range_id);
+  });
 
   it("judges each cited evidence with context isolation and lifts evidence_ref deterministically", async () => {
     const { sourceObservations } = answerSupportPromptFixture();

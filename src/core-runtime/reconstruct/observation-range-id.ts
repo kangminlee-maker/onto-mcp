@@ -15,6 +15,7 @@
  * would be a second thing that can disagree with what was actually served.
  */
 import { createHash } from "node:crypto";
+import { canonicalObservationBody } from "./observation-read.js";
 
 /** Prefix and version of a range id. Bumped if the preimage below changes. */
 export const OBSERVATION_RANGE_ID_PREFIX = "orng_v1_";
@@ -138,4 +139,35 @@ export function indexEmittedObservationRanges(
     }
   }
   return table;
+}
+
+/**
+ * The characters a cited range actually names, taken from the observation record itself.
+ *
+ * SELF-VERIFYING, and that is the point: the slice is hashed and compared against the hash the page
+ * carried, so this cannot hand a consumer content the citation does not name — not if the record moved,
+ * not if the canonical serialization drifted, not if the offsets were transcribed wrong. A mismatch
+ * throws rather than returning a best guess, because the caller's next act is to put this text in front
+ * of a judge as "the evidence", and being wrong there is exactly the failure the range unit exists to
+ * prevent (design `23-…md` §4-4).
+ */
+export function citedRangeText(
+  observation: unknown,
+  range: {
+    readonly body_start: number;
+    readonly body_end: number;
+    readonly range_content_sha256: string;
+  },
+): string {
+  const body = canonicalObservationBody(observation);
+  const slice = body.slice(range.body_start, range.body_end);
+  const actual = createHash("sha256").update(slice, "utf8").digest("hex");
+  if (actual !== range.range_content_sha256) {
+    throw new Error(
+      `cited range [${range.body_start}, ${range.body_end}) does not hash to the value the page ` +
+        `carried (${actual} vs ${range.range_content_sha256}); the observation record this was ` +
+        "re-sliced from is not the one the range was cut from",
+    );
+  }
+  return slice;
 }

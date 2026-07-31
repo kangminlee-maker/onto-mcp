@@ -20,6 +20,7 @@ import {
 } from "./delivery-reconciliation.js";
 import {
   type ObservationRangeRef,
+  citedRangeText,
   indexEmittedObservationRanges,
 } from "./observation-range-id.js";
 import { SemanticMapDispatchAccounting } from "../llm/sealed-dispatch-capability.js";
@@ -28,6 +29,7 @@ import { readStructuredDispatchFailureEvidence } from "../llm/structured-dispatc
 import { readTargetedCellValues } from "../spreadsheet-structure-observer.js";
 import { TARGET_MATERIAL_KINDS } from "../target-material-kind.js";
 import type {
+  ReconstructEvidenceRef,
   ReconstructAnswerSupportLedgerArtifact,
   ReconstructCandidateInventoryArtifact,
   ReconstructClaimRealizationStance,
@@ -3492,7 +3494,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const buildCluster = (
         cluster: Record<string, unknown>,
         index: number,
-        observationIds: string[],
+        evidenceRefs: ReconstructEvidenceRef[],
       ) => ({
           evidence_cluster_id: optionalString(cluster.evidence_cluster_id) ??
             `evidence-cluster-${index + 1}`,
@@ -3515,15 +3517,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             cluster.proposed_answer_summary,
             `evidence_clusters[${index}].proposed_answer_summary`,
           ),
-          evidence_refs: evidenceRefsFromIds({
-            // Observation-level for now: the persisted ref shape gains range identity in S6, and until
-            // it does, projecting the resolved observations keeps the artifact readable by every
-            // downstream consumer. The GATE above is already range-level, which is what closes the
-            // size cliff; what S6 closes is the judge seeing content outside the cited range.
-            observationIds,
-            sourceObservations: input.sourceObservations,
-            fieldName: `evidence_clusters[${index}].evidence_refs`,
-          }),
+          evidence_refs: evidenceRefs,
           proof_refs: stringArray(
             cluster.proof_refs ?? [],
             `evidence_clusters[${index}].proof_refs`,
@@ -3582,7 +3576,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfCatalog.join(", ")}`,
               );
             }
-            return [buildCluster(cluster, index, [...observationIds])];
+            return [buildCluster(
+              cluster,
+              index,
+              evidenceRefsFromIds({
+                observationIds: [...observationIds],
+                sourceObservations: input.sourceObservations,
+                fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
+              }),
+            )];
           }
           const citedRangeIds = stringArray(
             cluster.evidence_range_ids ?? [],
@@ -3617,7 +3619,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           // satisfy this gate and then fail `maturation-validation`'s two-independent-refs obligation a
           // stage later, killing the run anyway with a message about evidence rather than attestation.
           if (citableObservations && citableObservations.basis === "unverifiable") {
-            if (citedRangeIds.length === 0) return [buildCluster(cluster, index, [])];
+            if (citedRangeIds.length === 0) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} cites nothing; a cluster must name ` +
+                  "at least one range.",
+              );
+            }
             withheldEvidenceClusters.push({
               clusterIndex: index + 1,
               reason: citableObservations.reason,
@@ -3636,7 +3643,30 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               );
             }
           }
-          return [buildCluster(cluster, index, [...new Set(resolved.map((ref) => ref.observation_id))])];
+          // ONE REF PER CITED RANGE, not per observation. Collapsing to observations here is what let
+          // the judge below see the whole record and support a claim from a range nobody cited — owner
+          // decision A (§4-4) is that the range travels all the way down, so this is where it starts.
+          return [buildCluster(
+            cluster,
+            index,
+            resolved.map((ref, refIndex) => {
+              const [base] = evidenceRefsFromIds({
+                observationIds: [ref.observation_id],
+                sourceObservations: input.sourceObservations,
+                fieldName: `evidence_clusters[${index}].evidence_range_ids[${refIndex}]`,
+              });
+              return {
+                ...(base as ReconstructEvidenceRef),
+                range: {
+                  range_id: citedRangeIds[refIndex] as string,
+                  observation_content_sha256: ref.observation_content_sha256,
+                  body_start: ref.body_start,
+                  body_end: ref.body_end,
+                  range_content_sha256: ref.range_content_sha256,
+                },
+              };
+            }),
+          )];
         }),
         directive_author: { owner: "host_llm", author_id: authorId },
       };
@@ -3679,6 +3709,32 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ),
         ),
       ];
+      // RANGE-SCOPED JUDGING (owner decision A, design §4-4). When the citation named ranges, the judge
+      // is shown those ranges and NOTHING ELSE of the observation. Without this the judge re-selected
+      // the whole record by id and could support a claim from a passage the worker never cited — the
+      // citation gate is range-level, so a judge that is not makes the gate decorative.
+      //
+      // The text is re-sliced from the record and hashed against the value the page carried
+      // (`citedRangeText`), so this cannot quietly show the judge the wrong characters.
+      const observationById = new Map(
+        input.sourceObservations.observations.map((observation) => [observation.observation_id, observation]),
+      );
+      const citedRanges = convergentClusters.flatMap((cluster) =>
+        cluster.evidence_refs.flatMap((ref) => {
+          if (!ref.range) return [];
+          const observation = observationById.get(ref.observation_id);
+          if (!observation) return [];
+          return [{
+            evidence_cluster_id: cluster.evidence_cluster_id,
+            observation_id: ref.observation_id,
+            range_id: ref.range.range_id,
+            source_ref: ref.source_ref,
+            location: ref.location,
+            cited_text: citedRangeText(observation, ref.range),
+          }];
+        })
+      );
+      const judgesRanges = citedRanges.length > 0;
       const raw = await callJsonAuthor({
         llmCall,
         // Per-stage judge config (opt-in). Defaults to llmConfig (== author) so
@@ -3700,14 +3756,28 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             evidence_observation_ids: cluster.evidence_refs.map(
               (ref) => ref.observation_id,
             ),
+            ...(judgesRanges
+              ? {
+                evidence_range_ids: cluster.evidence_refs.flatMap((ref) =>
+                  ref.range ? [ref.range.range_id] : []
+                ),
+              }
+              : {}),
           })),
-          source_observations: projectObservationsForPrompt(
-            input.sourceObservations,
-            {
-              observationIds: judgePromptObservationIds,
-              contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
-            },
-          ),
+          // Exactly one of the two. With ranges the judge gets `cited_ranges` and NO observation
+          // content — sending both would put the whole record back in front of it and make the
+          // narrowing cosmetic. Without ranges (push mode) the projection is unchanged.
+          ...(judgesRanges
+            ? { cited_ranges: citedRanges }
+            : {
+              source_observations: projectObservationsForPrompt(
+                input.sourceObservations,
+                {
+                  observationIds: judgePromptObservationIds,
+                  contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+                },
+              ),
+            }),
         },
       });
       const judgments = records(raw.judgments ?? [], "judgments").map(

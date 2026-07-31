@@ -908,6 +908,28 @@ export interface ReconstructEvidenceRef {
   target_material_kind: TargetMaterialKind;
   source_ref: string;
   location: string;
+  /**
+   * WHICH CHARACTERS of the observation this ref stands on, when the citation named a range.
+   *
+   * Optional because most artifacts here cite an observation the author had in full: the pull layer is
+   * the only surface where a worker reads part of one, and only its answer-support clusters carry this.
+   * Where it IS present it is authority, not decoration — the judge downstream is shown this range and
+   * nothing else, so a ref that dropped it would put the whole observation back in front of the judge
+   * and let content the worker never cited support the claim (design `23-…md` §4-4).
+   */
+  range?: ReconstructEvidenceRange;
+}
+
+/** One cited slice of an observation's canonical body. Coordinates are the runtime's, not the model's. */
+export interface ReconstructEvidenceRange {
+  /** The opaque name the worker cited (`orng_v1_…`), kept so the artifact traces back to the page. */
+  range_id: string;
+  /** Identifies the coordinate space: offsets only mean something against the body they were cut from. */
+  observation_content_sha256: string;
+  body_start: number;
+  body_end: number;
+  /** sha256 of the slice, so a consumer that re-slices can prove it is reading what was cited. */
+  range_content_sha256: string;
 }
 
 export type ReconstructPurposeEvidenceKind = "P1" | "P2" | "P3" | "P4" | "P5";

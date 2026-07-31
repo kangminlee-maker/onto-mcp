@@ -2318,6 +2318,69 @@ describe("maturation validation", () => {
       .toContain("support_mode_missing_authority");
   });
 
+  it("refuses direct_authority standing on a partially read observation", () => {
+    // S6 / owner decision A. `direct_authority` is the one support mode that skips the judge, so a ref
+    // covering PART of an observation would assert the whole source's authority from a passage nothing
+    // downstream ever looks at. The worker still has convergent_source_evidence, where the judge is
+    // shown exactly the cited range.
+    const { frontier, frontierValidation } = frontierScenario();
+    const observations = sourceObservations(["src/feature.ts"]);
+    const observation = observations.observations[0]!;
+    const cluster = (range?: Record<string, unknown>) => ({
+      evidence_cluster_id: "cluster-direct-partial",
+      question_refs: ["mq-feature-object"],
+      support_mode: "direct_authority" as const,
+      proposed_answer_summary: "The source itself says so.",
+      evidence_refs: [{
+        observation_id: observation.observation_id,
+        target_material_kind: observation.target_material_kind,
+        source_ref: observation.source_ref,
+        location: observation.location,
+        ...(range ? { range } : {}),
+      }],
+      proof_refs: [],
+      user_confirmation_refs: [],
+      authority_response_refs: [],
+      independence_basis: "the observed source",
+      contradiction_refs: [],
+      limitation_refs: [],
+    });
+    const validateWith = (range?: Record<string, unknown>) =>
+      validateAnswerSupportLedger({
+        answerSupportLedger: {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: now,
+          round_id: "maturation-round-1",
+          evidence_clusters: [cluster(range)],
+          directive_author: { owner: "host_llm", author_id: "test-author" },
+        } as ReconstructAnswerSupportLedgerArtifact,
+        answerSupportLedgerRef: "answer-support-ledger.yaml",
+        maturationQuestionFrontier: frontier,
+        maturationQuestionFrontierValidation: frontierValidation,
+        maturationQuestionFrontierValidationRef:
+          "maturation-question-frontier-validation.yaml",
+        sourceObservations: observations,
+      });
+
+    // POSITIVE CONTROL: the same cluster WITHOUT a range is accepted, so the rejection below is about
+    // the range and not about anything else in this fixture.
+    const whole = validateWith();
+    expect(whole.violations.map((violation) => violation.code))
+      .not.toContain("support_mode_missing_authority");
+
+    const partial = validateWith({
+      range_id: `orng_v1_${"0".repeat(32)}`,
+      observation_content_sha256: "a".repeat(64),
+      body_start: 0,
+      body_end: 10,
+      range_content_sha256: "b".repeat(64),
+    });
+    expect(partial.validation_status).toBe("invalid");
+    expect(partial.violations.map((violation) => violation.code))
+      .toContain("support_mode_missing_authority");
+  });
+
   it("requires valid source observation re-entry validation before answer support can consume new source evidence", () => {
     const { frontier, frontierValidation } = frontierScenario();
     const observations = sourceObservations(["src/feature.ts"]);

@@ -3215,6 +3215,24 @@ export function validateAnswerSupportLedger(args: {
         subjectId: cluster.evidence_cluster_id,
       }));
     }
+    // A RANGE-SCOPED ref cannot be direct authority. `direct_authority` says the observed source ITSELF
+    // supports the answer, and this branch is the only support mode that skips the judge — so a ref
+    // standing on part of an observation would assert the whole source's authority from a passage
+    // nobody checked, with nothing downstream to catch it (cross-family review; design `23-…md` §4-4).
+    // The worker still has `convergent_source_evidence`, where the judge is shown exactly the cited
+    // range. Structural and decidable, so it is a violation rather than a disclosure.
+    if (cluster.support_mode === "direct_authority") {
+      for (const ref of cluster.evidence_refs) {
+        if (!ref.range) continue;
+        violations.push(violation({
+          code: "support_mode_missing_authority",
+          message:
+            "direct authority support cannot stand on a partially read observation; cite the range " +
+            "under convergent_source_evidence instead",
+          subjectId: cluster.evidence_cluster_id,
+        }));
+      }
+    }
     if (cluster.support_mode === "runtime_proof" && cluster.proof_refs.length === 0) {
       violations.push(violation({
         code: "support_mode_missing_authority",
