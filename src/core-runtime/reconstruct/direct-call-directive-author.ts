@@ -14,9 +14,14 @@ import type { LlmCallConfig, LlmCallResult } from "../llm/llm-caller.js";
 import {
   type CitableObservations,
   citableFromDeliveryRecord,
+  deliveredCoversRange,
   readObservationReadDeliveryRecord,
   reconcileFacadeDelivery,
 } from "./delivery-reconciliation.js";
+import {
+  type ObservationRangeRef,
+  indexEmittedObservationRanges,
+} from "./observation-range-id.js";
 import { SemanticMapDispatchAccounting } from "../llm/sealed-dispatch-capability.js";
 import type { ResolvedLlmDispatchCapability } from "../llm/sealed-dispatch-capability.js";
 import { readStructuredDispatchFailureEvidence } from "../llm/structured-dispatch-error.js";
@@ -229,6 +234,7 @@ import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
 import {
   observationReadFacadeLaunchPaths,
   OBSERVATION_READ_TOOL_NAME,
+  readObservationReadFacadeEmissions,
   prepareObservationReadFacadeLaunch,
 } from "./observation-read-facade.js";
 import type { BreadthFoldLevel } from "./source-breadth-fold.js";
@@ -3275,9 +3281,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 '{"cursor": "..."} to continue a previous page. An observation larger than one page ' +
                 "arrives split: concatenate part_index 1..part_count to recover its body exactly.",
               budget: "Fetches and this prompt share one ceiling, and failed calls are charged too. " +
-                "Fetch what you will actually cite.",
-              citation_rule: "An evidence_observation_ids value you did not fetch in this dispatch is " +
-                "rejected: the runtime checks every citation against what it actually served.",
+                "Fetch what you will actually cite. You do NOT have to read an observation whole — " +
+                "cite the parts you read.",
+              citation_rule: 'In this dispatch a cluster cites ranges, not observations: put the ' +
+                '"range_id" of each page part you are relying on into evidence_range_ids, copied ' +
+                "exactly as it arrived. A range_id this dispatch did not serve you is rejected, and so " +
+                "is one whose page did not reach you — the runtime checks every citation against the " +
+                "worker transcript, not against what it meant to send.",
             },
           }
           : {}),
@@ -3465,38 +3475,25 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         : citableFromDeliveryRecord(
           readObservationReadDeliveryRecord(deliveryRecordPath, facadeLaunch.launchToken),
         );
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        evidence_clusters: records(
-          raw.evidence_clusters ?? [],
-          "evidence_clusters",
-        ).filter((cluster, index) => {
-          // §2.5: "the runtime could not check" must never end the run. A cluster whose citations
-          // cannot be attested is WITHHELD here — before the mapping below, because emptying its
-          // `evidence_refs` instead would satisfy this gate and then fail `maturation-validation`'s
-          // two-independent-refs obligation a stage later, killing the run anyway with a message
-          // about evidence rather than about attestation.
-          //
-          // Only the `unverifiable` basis is withheld. A citation the worker invented — outside the
-          // catalog, or never served/delivered — is the worker asserting something false, and that
-          // still throws below: the runtime not seeing something and the worker misreporting are
-          // different failures and must not share a response.
-          if (!citableObservations || citableObservations.basis !== "unverifiable") return true;
-          const cited = stringArray(
-            cluster.evidence_observation_ids ?? [],
-            `evidence_clusters[${index}].evidence_observation_ids`,
-          );
-          if (cited.length === 0) return true;
-          withheldEvidenceClusters.push({
-            clusterIndex: index + 1,
-            reason: citableObservations.reason,
-            citedObservationIds: cited,
-          });
-          return false;
-        }).map((cluster, index) => ({
+      // What each `orng_v1_…` the worker cites actually names. Built from the pages THIS launch
+      // emitted, so an id naming a range that was never sent resolves to nothing — forgery fails by
+      // absence rather than by a check that could be wrong. Empty when the facade never ran, which is
+      // the same answer for a different reason and is handled identically below.
+      const emittedRanges = facadeLaunch
+        ? indexEmittedObservationRanges(
+          (readObservationReadFacadeEmissions(facadeLaunch.emissionsPath, facadeLaunch.launchToken)
+            ?.emissions ?? []).map((emission) => emission.canonical_text),
+        )
+        : new Map<string, ObservationRangeRef>();
+      /**
+       * The cluster record itself. Hoisted out of the pass above so the ORDER of the checks stays
+       * readable in one place: resolve, then catalog, then delivery — see the comment there.
+       */
+      const buildCluster = (
+        cluster: Record<string, unknown>,
+        index: number,
+        observationIds: string[],
+      ) => ({
           evidence_cluster_id: optionalString(cluster.evidence_cluster_id) ??
             `evidence-cluster-${index + 1}`,
           question_refs: stringArray(
@@ -3518,46 +3515,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             cluster.proposed_answer_summary,
             `evidence_clusters[${index}].proposed_answer_summary`,
           ),
-          evidence_refs: (() => {
-            const observationIds = stringArray(
-              cluster.evidence_observation_ids ?? [],
-              `evidence_clusters[${index}].evidence_observation_ids`,
-            );
-            const outOfPromptIds = observationIds.filter((observationId) =>
-              !promptObservationIdSet.has(observationId)
-            );
-            if (outOfPromptIds.length > 0) {
-              throw new Error(
-                `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfPromptIds.join(", ")}`,
-              );
-            }
-            // Design §3, stage 3b: `인용 ⊆ 조회`. IN SERIES with the catalog gate above, which is not
-            // touched — the citable set only narrows. Under the pull layer the catalog carries no
-            // detail, so a citation the worker never fetched is a claim about content it did not read.
-            // The `unverifiable` basis never reaches here: those clusters were withheld above, and a
-            // cluster citing nothing has nothing to check. What remains is the worker's own claims.
-            if (citableObservations && citableObservations.basis !== "unverifiable") {
-              const uncitableIds = observationIds.filter((observationId) =>
-                !citableObservations.ids.has(observationId)
-              );
-              if (uncitableIds.length > 0) {
-                // One sentence, because there is now one basis. The distinction this used to draw —
-                // "never served" against "verified not to have reached" — was between two authorities,
-                // and only the second survives; "we could not verify" is a THIRD statement and never
-                // arrives here, because `unverifiable` withheld the cluster above.
-                throw new Error(
-                  `AnswerSupportLedger evidence cluster ${index + 1} cites observation ids that were ` +
-                    `verified NOT to have reached the worker's context: ${uncitableIds.join(", ")}. ` +
-                    "A citation must name an observation the worker actually received.",
-                );
-              }
-            }
-            return evidenceRefsFromIds({
-              observationIds,
-              sourceObservations: input.sourceObservations,
-              fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
-            });
-          })(),
+          evidence_refs: evidenceRefsFromIds({
+            // Observation-level for now: the persisted ref shape gains range identity in S6, and until
+            // it does, projecting the resolved observations keeps the artifact readable by every
+            // downstream consumer. The GATE above is already range-level, which is what closes the
+            // size cliff; what S6 closes is the judge seeing content outside the cited range.
+            observationIds,
+            sourceObservations: input.sourceObservations,
+            fieldName: `evidence_clusters[${index}].evidence_refs`,
+          }),
           proof_refs: stringArray(
             cluster.proof_refs ?? [],
             `evidence_clusters[${index}].proof_refs`,
@@ -3582,7 +3548,96 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             cluster.limitation_refs ?? [],
             `evidence_clusters[${index}].limitation_refs`,
           ),
-        })),
+      });
+
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        evidence_clusters: records(
+          raw.evidence_clusters ?? [],
+          "evidence_clusters",
+        ).flatMap((cluster, index) => {
+          // ORDER MATTERS, and it used to be wrong (cross-family review, F-5). The `unverifiable`
+          // withhold ran in a `filter` BEFORE the catalog and citability checks in the `map`, so a
+          // cluster citing an id the worker invented was withheld instead of refused whenever delivery
+          // could not be verified — and the completion condition "an id that was never emitted is
+          // rejected" could not hold. Resolution and catalog membership are facts about the WORKER'S
+          // claim and are checked first; the delivery basis is a fact about OUR evidence and is applied
+          // last.
+          // WITHOUT the pull layer the worker was never given range ids — the catalog carries detail
+          // inline — so the citation surface stays `evidence_observation_ids` there and only the
+          // catalog gate applies. Branching here rather than accepting both fields everywhere keeps
+          // each mode's contract exact: a range id in push mode names nothing, and an observation id in
+          // pull mode is a claim about content the worker did not necessarily read.
+          if (!facadeLaunch) {
+            const observationIds = stringArray(
+              cluster.evidence_observation_ids ?? [],
+              `evidence_clusters[${index}].evidence_observation_ids`,
+            );
+            const outOfCatalog = observationIds.filter((id) => !promptObservationIdSet.has(id));
+            if (outOfCatalog.length > 0) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfCatalog.join(", ")}`,
+              );
+            }
+            return [buildCluster(cluster, index, [...observationIds])];
+          }
+          const citedRangeIds = stringArray(
+            cluster.evidence_range_ids ?? [],
+            `evidence_clusters[${index}].evidence_range_ids`,
+          );
+
+          // (1) Resolve. An id this launch never emitted is the worker naming something it was not
+          // given — a false claim, so it throws rather than being withheld.
+          const resolved = citedRangeIds.map((rangeId) => {
+            const ref = emittedRanges.get(rangeId);
+            if (ref === undefined) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} cites range ids this dispatch never ` +
+                  `served: ${rangeId}. A citation must name a range the runtime actually emitted.`,
+              );
+            }
+            return ref;
+          });
+
+          // (2) Catalog. Unchanged in meaning: a citation must stay inside the bounded prompt catalog.
+          const outOfPromptIds = resolved
+            .map((ref) => ref.observation_id)
+            .filter((observationId) => !promptObservationIdSet.has(observationId));
+          if (outOfPromptIds.length > 0) {
+            throw new Error(
+              `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfPromptIds.join(", ")}`,
+            );
+          }
+
+          // (3) Delivery. §2.5: "the runtime could not check" must never end the run. A cluster whose
+          // citations cannot be attested is WITHHELD WHOLE — emptying its `evidence_refs` instead would
+          // satisfy this gate and then fail `maturation-validation`'s two-independent-refs obligation a
+          // stage later, killing the run anyway with a message about evidence rather than attestation.
+          if (citableObservations && citableObservations.basis === "unverifiable") {
+            if (citedRangeIds.length === 0) return [buildCluster(cluster, index, [])];
+            withheldEvidenceClusters.push({
+              clusterIndex: index + 1,
+              reason: citableObservations.reason,
+              citedObservationIds: [...new Set(resolved.map((ref) => ref.observation_id))],
+            });
+            return [];
+          }
+          if (citableObservations) {
+            const undelivered = resolved.filter((ref) => !deliveredCoversRange(citableObservations, ref));
+            if (undelivered.length > 0) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} cites ranges that were verified NOT ` +
+                  `to have reached the worker's context: ${
+                    undelivered.map((ref) => `${ref.observation_id}[${ref.body_start},${ref.body_end})`).join(", ")
+                  }. A citation must name content the worker actually received.`,
+              );
+            }
+          }
+          return [buildCluster(cluster, index, [...new Set(resolved.map((ref) => ref.observation_id))])];
+        }),
         directive_author: { owner: "host_llm", author_id: authorId },
       };
     },

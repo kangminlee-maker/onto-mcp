@@ -458,28 +458,39 @@ export function reconcileFacadeDelivery(args: {
  * first is the false statement §12-S3 names. Both refuse the citation — only the sentence differs.
  */
 export type CitableObservations =
-  | { readonly basis: "delivered"; readonly ids: ReadonlySet<string> }
+  | { readonly basis: "delivered"; readonly coverage: readonly ObservationCoverageRecord[] }
   | { readonly basis: "unverifiable"; readonly reason: DeliveryReconciliationRefusal };
 
-/**
- * Project a delivery record into the citable set. A missing record admits nothing.
- *
- * The record carries RANGES; this projection keeps the observations whose coverage is whole, because
- * that is what today's citation names — an observation. It is deliberately a NARROWING of the record
- * rather than its shape: the ranges stay in the artifact so the citation contract can move to them
- * without the evidence having to be re-derived (design `23-…md` §3, S2 before S3).
- */
+/** Project a delivery record into what may be cited. A missing record admits nothing. */
 export function citableFromDeliveryRecord(
   record: ObservationReadDeliveryRecordFile | null,
 ): CitableObservations {
   if (record === null) return { basis: "unverifiable", reason: "delivery_record_unreadable" };
   if (record.status !== "verified") return { basis: "unverifiable", reason: record.reason };
-  return {
-    basis: "delivered",
-    ids: new Set(
-      record.delivered
-        .filter((entry) => coversWholeObservation({ ranges: entry.ranges, bodyLength: entry.body_length ?? undefined }))
-        .map((entry) => entry.observation_id),
-    ),
-  };
+  return { basis: "delivered", coverage: record.delivered };
+}
+
+/**
+ * Did the characters `[start, end)` of THIS content actually arrive?
+ *
+ * The content hash is part of the question, not a detail: offsets only mean something against the body
+ * they were measured on, so coverage of a different version of the same observation answers nothing
+ * here. A range spanning a hole is refused because it is not contained in any single covered segment —
+ * which is the same rule `coversWholeObservation` applies, at range granularity instead of whole-body.
+ */
+export function deliveredCoversRange(
+  citable: { readonly coverage: readonly ObservationCoverageRecord[] },
+  ref: {
+    readonly observation_id: string;
+    readonly observation_content_sha256: string;
+    readonly body_start: number;
+    readonly body_end: number;
+  },
+): boolean {
+  const record = citable.coverage.find((entry) =>
+    entry.observation_id === ref.observation_id &&
+    entry.observation_content_sha256 === ref.observation_content_sha256
+  );
+  if (record === undefined) return false;
+  return record.ranges.some(([start, end]) => start <= ref.body_start && ref.body_end <= end);
 }

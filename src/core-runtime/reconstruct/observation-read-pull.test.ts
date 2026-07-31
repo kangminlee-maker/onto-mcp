@@ -29,6 +29,7 @@ import {
   type ObservationReadFacadeLaunch,
 } from "./observation-read-facade.js";
 import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
+import { observationRangeId } from "./observation-range-id.js";
 
 // Spec basis: design 20260726-observation-catalog-tool §3 (`인용 ⊆ 조회 ⊆ 스냅샷`), §4, §9 stage 3b.
 // Stage 3a made the prompt a navigation catalog; this is the layer that serves the detail behind it and
@@ -44,6 +45,18 @@ const FIXTURE_DIR = path.join(REPO_ROOT, "scripts/fixtures/observation-catalog")
 
 /** Read a repository source file. Lexical inspection is weaker than measurement and is used only where
  *  the alternative is no check at all — here, for properties that are the ABSENCE of a code path. */
+/**
+ * A well-formed range id no dispatch here ever emits — the shape a worker CAN compute (the digest is
+ * derivable from what it sees) and the runtime still refuses, because resolution is a lookup.
+ */
+const NEVER_SERVED_RANGE_ID = observationRangeId({
+  observation_id: "obs_neverserved0001",
+  observation_content_sha256: "f".repeat(64),
+  body_start: 0,
+  body_end: 1,
+  range_content_sha256: "e".repeat(64),
+});
+
 const repoFile = (relativePath: string): string =>
   readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
 const TEMP_ROOT = mkdtempSync(path.join(os.tmpdir(), "onto-observation-pull-"));
@@ -300,6 +313,8 @@ function authorWithWorker(options: {
   /** One entry per `tools/call` the fixture worker makes. Defaults to a single call for `fetchIds`. */
   fetchCalls?: string[][];
   citeIds: string[];
+  /** Range ids to cite verbatim — for the cases where the point is an id the runtime never served. */
+  citeRangeIds?: string[];
   /** Skip the facade entirely — the worker never fetched, and no receipt is written at all. */
   skipFacade?: boolean;
   /**
@@ -310,6 +325,8 @@ function authorWithWorker(options: {
   transcript?: (emissions: string[]) => { sessionId: string; text: string };
 }) {
   const dispatched: { systemPrompt: string; userPrompt: string; config: Record<string, any> }[] = [];
+  /** Range ids the fixture worker was actually served, by observation. */
+  const receivedRangeIds = new Map<string, string[]>();
   const author = createDirectCallReconstructDirectiveAuthor({
     sourceObservationCatalogTool: true,
     llmCall: (systemPrompt: string, userPrompt: string, config?: Record<string, any>) => {
@@ -340,8 +357,17 @@ function authorWithWorker(options: {
               },
             },
             session,
-          )!.result as { isError: boolean };
+          )!.result as { isError: boolean; structuredContent?: { entries?: { observation_id: string; range_id: string }[] } };
           if (result.isError) throw new Error("fixture worker's fetch failed");
+          // What a real worker cites: the `range_id` of each part it was handed. Collected from the
+          // served pages rather than computed, so a test citing "what I fetched" cites the same thing
+          // the runtime emitted — and a test that wants an INVENTED id says so explicitly.
+          for (const entry of result.structuredContent?.entries ?? []) {
+            receivedRangeIds.set(
+              entry.observation_id,
+              [...(receivedRangeIds.get(entry.observation_id) ?? []), entry.range_id],
+            );
+          }
         }
         // the process shell publishes after delivery; the stub plays that role too
         if (batches.length > 0) session.commit();
@@ -384,7 +410,16 @@ function authorWithWorker(options: {
             question_refs: ["q-pull"],
             support_mode: "convergent_source_evidence",
             proposed_answer_summary: "The fetched observations converge.",
-            evidence_observation_ids: options.citeIds,
+            // In pull mode the surface is ranges. `citeIds` still names OBSERVATIONS because that is
+            // what a test wants to talk about; the ids that go out are the ranges of those
+            // observations this dispatch actually received — none, when it fetched none, which is how
+            // "cited something it never fetched" is expressed.
+            ...(launch
+              ? {
+                evidence_range_ids: options.citeRangeIds ??
+                  options.citeIds.flatMap((id) => receivedRangeIds.get(id) ?? []),
+              }
+              : { evidence_observation_ids: options.citeIds }),
             proof_refs: [],
             user_confirmation_refs: [],
             authority_response_refs: [],
@@ -430,24 +465,34 @@ describe("observation read pull layer — fetching is not receiving (design §3 
     expect(ledger.evidence_clusters.length).toBe(0);
   });
 
-  it("admits nothing when the worker fetched nothing at all", async () => {
+  it("refuses a range id the dispatch never served, even having fetched nothing", async () => {
+    // Under the range surface, "cited what it did not receive" is a WELL-FORMED id that resolves to
+    // nothing — forgery is computable, so what refuses it is the lookup in the runtime's own record of
+    // what it emitted, not the id's shape.
     const pull = writePullSources();
-    const { author } = authorWithWorker({ fetchIds: [], citeIds: [allObservationIds[0]!] });
-    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
-    expect(ledger.evidence_clusters.length).toBe(0);
+    const { author } = authorWithWorker({
+      fetchIds: [],
+      citeIds: [],
+      citeRangeIds: [NEVER_SERVED_RANGE_ID],
+    });
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /never served/,
+    );
   });
 
   it("fails closed when the facade never ran at all", async () => {
     const pull = writePullSources();
     const { author } = authorWithWorker({
       fetchIds: [],
-      citeIds: [allObservationIds[0]!],
+      citeIds: [],
+      citeRangeIds: [NEVER_SERVED_RANGE_ID],
       skipFacade: true,
     });
-    // Nothing was emitted and nothing was reconciled, so the citation is unattested rather than
-    // unchecked — the distinction the whole layer exists to keep.
-    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
-    expect(ledger.evidence_clusters.length).toBe(0);
+    // No emissions record at all, so nothing resolves — the citation is refused for the same reason as
+    // above rather than being silently admitted because there was nothing to check against.
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /never served/,
+    );
   });
 
   it("does not apply the served check when the pull layer is absent (push-only stays as it was)", async () => {
@@ -473,7 +518,9 @@ describe("observation read pull layer — fetching is not receiving (design §3 
     expect(announcement.tool_name).toBe(OBSERVATION_READ_TOOL_NAME);
     expect(announcement.how).toContain(String(OBSERVATION_READ_MAX_REQUEST_IDS));
     // The rule the runtime actually enforces must be the rule the worker is told.
-    expect(announcement.citation_rule).toMatch(/did not fetch/);
+    expect(announcement.citation_rule).toMatch(/evidence_range_ids/);
+    // The rule names the failure the layer exists for, not merely the field.
+    expect(announcement.citation_rule).toMatch(/did not serve you|did not reach you/);
     // ...and it is absent without the pull layer, so the prompt never names a tool that does not exist.
     const withoutPull = authorInput(pull) as Record<string, unknown>;
     delete withoutPull.observationReadPull;
@@ -608,7 +655,9 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
               question_refs: ["q-pull"],
               support_mode: "convergent_source_evidence",
               proposed_answer_summary: "Cited without fetching.",
-              evidence_observation_ids: [allObservationIds[0]!],
+              // Under the range surface, citing without fetching means naming a range this dispatch
+              // never served — the facade never started here, so nothing resolves.
+              evidence_range_ids: [NEVER_SERVED_RANGE_ID],
               proof_refs: [],
               user_confirmation_refs: [],
               authority_response_refs: [],
@@ -623,13 +672,8 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
     // Seed a receipt at the path a PREVIOUS naming shape used, then run.
     writeFileSync(stalePath, "placeholder");
     await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
-      /still exists after being cleared|already exists|does not match/,
-    ).catch(async () => {
-      // The facade never started, so nothing is attested and the cluster is withheld instead. Either
-      // outcome is fail-closed; what this arm proves is the PATH property asserted below.
-      const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
-      expect(ledger.evidence_clusters.length).toBe(0);
-    });
+      /still exists after being cleared|already exists|does not match|never served/,
+    );
     expect(observedLaunchToken).toBeTruthy();
     // The precondition is now removed by CONSTRUCTION rather than by clearing: every artifact path
     // carries this launch's token, so a file left by any other dispatch is not even addressed by this
@@ -727,15 +771,17 @@ describe("observation read pull layer — receipt lifecycle across dispatches", 
     // The facade never runs in this dispatch: the worker had no tool and fetched nothing.
     const { author } = authorWithWorker({
       fetchIds: [],
-      citeIds: [allObservationIds[0]!],
+      citeIds: [],
+      citeRangeIds: [NEVER_SERVED_RANGE_ID],
       skipFacade: true,
     });
     // A foreign receipt cannot make this citation admissible — and now it cannot even be consulted,
     // because the receipt stopped being a citation authority. The token check that refused it lives
     // on in `observation-read-facade.test.ts`; what this arm holds is the stronger property that the
     // stale file has no path to admission at all.
-    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
-    expect(ledger.evidence_clusters.length).toBe(0);
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /never served/,
+    );
     expect(existsSync(stalePath)).toBe(true); // untouched: it was never this launch's file
   });
 });
