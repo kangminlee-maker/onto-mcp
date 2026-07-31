@@ -1,0 +1,31 @@
+{
+  "worker_session_id": "019fb712-8e8b-7fa3-9a2c-9e05c6732025",
+  "verified_cli_versions": [
+    "0.145.0"
+  ],
+  "mcp_server_name": "onto_observation",
+  "reconciliation_ms": 6,
+  "record": {
+    "schema_version": "observation-read-delivery/v2",
+    "launch_token": "3d2cd1e4-30b8-4067-af73-6dd46b8f0c5b",
+    "status": "verified",
+    "delivered": [],
+    "attestation": [
+      {
+        "index": 0,
+        "chars": 31951,
+        "disposition": "verbatim_delivery_not_attested"
+      },
+      {
+        "index": 1,
+        "chars": 31955,
+        "disposition": "verbatim_delivery_not_attested"
+      },
+      {
+        "index": 2,
+        "chars": 29236,
+        "disposition": "verbatim_delivery_not_attested"
+      }
+    ]
+  }
+}

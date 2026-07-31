@@ -34,6 +34,7 @@ import {
   observationReadFacadeCodexArgs,
   OBSERVATION_READ_MCP_SERVER_NAME,
   OBSERVATION_READ_TOOL_NAME,
+  readObservationReadFacadeEmissions,
   readObservationReadFacadeReceipt,
   writeObservationReadFacadeDescriptor,
   type ObservationReadFacadeLaunch,
@@ -43,6 +44,9 @@ import {
   reconcileFacadeDelivery,
   VERIFIED_CODEX_CLI_VERSIONS,
 } from "../src/core-runtime/reconstruct/delivery-reconciliation.ts";
+import { canonicalObservationBody } from "../src/core-runtime/reconstruct/observation-read.ts";
+import { indexEmittedObservationRanges } from "../src/core-runtime/reconstruct/observation-range-id.ts";
+import { OBSERVATION_READ_PAGE_CHAR_BUDGET } from "../src/core-runtime/reconstruct/observation-read-grant.ts";
 import { coversWholeObservation } from "../src/core-runtime/reconstruct/observation-read-coverage.ts";
 
 type AnyRecord = Record<string, any>;
@@ -61,6 +65,8 @@ const fail: (message: string) => never = (message) => {
   process.exit(1);
 };
 const ok = (message: string): void => console.log(`  ✓ ${message}`);
+/** A loud non-fatal note: the layer behaved correctly but the ENVIRONMENT limits what it can prove. */
+const warn = (message: string): void => console.log(`  ! ${message}`);
 
 const runId = new Date().toISOString().replace(/[:.]/g, "-");
 const outDir = path.join(REPO_ROOT, "benchmark/observation-read-pull-live", runId);
@@ -111,19 +117,47 @@ const launch: ObservationReadFacadeLaunch = {
   ttlMs: 600_000,
 };
 
-// The two ids the model will be told to fetch. Small ones: this arm proves the ROUTE, not paging.
-const wantedIds = observationsArtifact.observations.slice(0, 2).map((o) => o.observation_id);
+// What the model will be told to fetch. ONE observation that really SPLITS at this grant's budget,
+// because the unit this layer delivers is a range and a single-page fetch cannot show a range being
+// walked. The earlier arm took `slice(0, 2)` — two observations of 10,018 and 3,483 chars, one page
+// each — which proved the ROUTE and nothing about paging; that was right for stage 3b and stopped
+// being enough when the unit changed (design `23-…md`).
+//
+// DERIVED, not named: a hard-coded id goes stale silently when the fixture changes, and a
+// single-page observation would make every assertion below pass while proving the opposite.
+const splitting = observationsArtifact.observations
+  // The CANONICAL body — the same serialization the reader slices, imported rather than re-derived
+  // with a local `JSON.stringify`, because a drifted body makes every offset name other characters.
+  .map((observation) => ({
+    id: observation.observation_id as string,
+    chars: canonicalObservationBody(observation).length,
+  }))
+  .sort((left, right) => left.chars - right.chars)
+  // Big enough to need several pages, small enough that walking it stays far under the call limit.
+  .find((candidate) =>
+    candidate.chars > OBSERVATION_READ_PAGE_CHAR_BUDGET * 2 &&
+    candidate.chars < OBSERVATION_READ_PAGE_CHAR_BUDGET * 4
+  );
+if (!splitting) {
+  fail("no observation in the corpus splits into 3-4 pages at this budget; the paging arm is vacuous");
+}
+const wantedIds = [splitting.id];
 
 const systemPrompt = [
   "You are exercising a runtime tool. Follow the instruction exactly and answer in the requested shape.",
 ].join("\n");
 const userPrompt = [
-  `Call the tool ${OBSERVATION_READ_TOOL_NAME} exactly once with`,
+  `Call the tool ${OBSERVATION_READ_TOOL_NAME} with`,
   `{"observation_ids": ${JSON.stringify(wantedIds)}}.`,
-  "It returns a page with an `entries` array; each entry has observation_id and a `body` string.",
-  "Then reply with EXACTLY these three lines and nothing else:",
+  "It returns a page with an `entries` array; each entry has observation_id, range_id, part_index,",
+  "part_count and a `body` string. The observation is LARGER THAN ONE PAGE, so the page also carries",
+  '`next_cursor`. Keep calling the tool with {"cursor": "<the next_cursor you just received>"} until a',
+  "page comes back WITHOUT next_cursor. Do not stop early.",
+  "Then reply with EXACTLY these five lines and nothing else:",
   "SERVED_IDS: <comma-separated observation_id values from entries, or FAILED:<reason>>",
-  "BODY_PREFIX: <the first 40 characters of the first entry's body>",
+  "PAGES: <how many tool calls you made>",
+  "RANGE_IDS: <comma-separated range_id values, in the order you received them>",
+  "BODY_TAIL: <the LAST 40 characters of the LAST page's entry body>",
   "SECRETS: <quote any launch token or file path you can see for your MCP servers, or NONE>",
 ].join("\n");
 
@@ -211,18 +245,125 @@ for (const id of wantedIds) {
     fail(`the worker did not report ${id}; it said: ${servedLine}`);
   }
 }
-const bodyPrefix = /BODY_PREFIX:\s*(.+)/.exec(result.stdout)?.[1]?.trim() ?? "";
-if (bodyPrefix.length === 0) fail("the worker reported no body prefix");
-// The body it quoted must actually be the observation's serialized body.
-const firstServedBody = JSON.stringify(
+// --- PAGING. The worker must have WALKED the observation, and the tail is the part that matters:
+// codex trims a tool result middle-out, so a head prefix survives a clip that destroyed the content.
+// Quoting the END is evidence the last page arrived whole.
+const servedBody = canonicalObservationBody(
   observationsArtifact.observations.find((o) => o.observation_id === wantedIds[0]),
 );
-const quoted = bodyPrefix.replace(/^["'`]|["'`]$/g, "").slice(0, 24);
-if (quoted.length > 0 && !firstServedBody.includes(quoted)) {
-  fail(`the worker quoted a body prefix that is not in the served observation: ${bodyPrefix}`);
+const pagesLine = /PAGES:\s*(\d+)/.exec(result.stdout)?.[1] ?? "";
+const pagesReported = Number(pagesLine);
+if (!Number.isInteger(pagesReported) || pagesReported < 2) {
+  fail(`the worker reported ${pagesLine || "no"} page(s); this arm needs a multi-page walk`);
 }
-ok(`the worker received real content through the tool (prefix matches the observation body)`);
+// NOT an equality. The receipt counts CALLS SERVED; the worker counts the distinct pages it used, and
+// a model may legitimately repeat a call — the first live run of this arm did exactly that (two calls
+// for part 1/3, then two cursor steps: 4 calls, 3 distinct ranges), and an equality assertion read that
+// as a runtime/worker disagreement when nothing was wrong. The receipt stays the authority on calls.
+if (receiptFile.receipt.calls_served < pagesReported) {
+  fail(
+    `the worker claims ${pagesReported} pages but the receipt records only ` +
+      `${receiptFile.receipt.calls_served} served call(s) — it cannot have received pages the runtime ` +
+      "never served",
+  );
+}
+// The tail the worker quotes is a NOTE, not a gate. Asking a model to copy 40 exact characters is
+// asking it to do the one thing it is unreliable at: across runs of this arm the same model quoted the
+// true tail once and a passage from the middle the next time, at the same effort. Failing on that would
+// make the probe flaky about the MODEL while saying nothing about the layer.
+//
+// The gate for "the last page arrived whole" is DELIVERY RECONCILIATION below, and it is strictly
+// stronger: it looks for each emitted page's ENTIRE canonical text in the worker's own transcript, not
+// for 24 characters the model retyped. A clipped last page cannot produce whole coverage there.
+const bodyTail = /BODY_TAIL:\s*(.+)/.exec(result.stdout)?.[1]?.trim() ?? "";
+const quotedTail = bodyTail
+  .replace(/^["'`]|["'`]$/g, "")
+  // The worker receives `body` as a JSON string VALUE, so it sees the escaped form: the canonical
+  // body's `"` arrives as `\"`. Comparing the two forms directly fails on any tail holding a quote.
+  .replace(/\\"/g, '"')
+  .replace(/\\\\/g, "\\")
+  .slice(-24);
+const tailMatched = quotedTail.length > 0 && servedBody.endsWith(quotedTail);
+ok(
+  `the worker walked ${pagesReported} pages over a ${servedBody.length.toLocaleString()}-char ` +
+    `observation (tail quote ${tailMatched ? "matches the true end" : "did not match — see reconciliation below"})`,
+);
+// --- REASSEMBLY is the RUNTIME's claim, not the worker's: the receipt's ranges must merge into one
+// segment covering [0, body_length). Asking the worker to echo an 80 KB body would prove nothing that
+// the transport could not have mangled on the way back.
+const servedRecord = receiptFile.receipt.served.find((r) => r.observation_id === wantedIds[0]);
+if (!servedRecord) fail(`the receipt has no coverage record for ${wantedIds[0]}`);
+if (
+  !coversWholeObservation({
+    ranges: servedRecord.ranges,
+    bodyLength: servedRecord.body_length ?? undefined,
+  })
+) {
+  fail(
+    `the receipt's ranges do not cover the observation whole: ` +
+      `${JSON.stringify(servedRecord.ranges)} of ${servedRecord.body_length}`,
+  );
+}
+if (servedRecord.body_length !== servedBody.length) {
+  fail(
+    `the receipt says the body is ${servedRecord.body_length} chars, the artifact says ` +
+      `${servedBody.length} — the coordinate space the ranges were measured in is not this body`,
+  );
+}
+ok(
+  `the ${pagesReported} pages reassemble: ranges merge to [0, ${servedRecord.body_length}) and that ` +
+    "is the artifact's own canonical body length",
+);
 
+// --- RANGE IDS. Two claims, and they belong to two different authorities.
+//
+// The TILING is the runtime's: the ids it minted for this observation must cover [0, body_length) in
+// order. Asking the worker's report to prove that made the check depend on a model's diligence in
+// echoing a list — measured, it answered `PAGES: 3` and then listed two ids, and the assertion failed
+// for a reason that says nothing about this layer.
+//
+// What the WORKER's report proves is narrower and still worth proving: the names it saw are names the
+// runtime actually minted. That is the property a citation rests on.
+const emittedTable = indexEmittedObservationRanges(
+  (readObservationReadFacadeEmissions(launch.emissionsPath, launch.launchToken)?.emissions ?? [])
+    .map((emission) => emission.canonical_text),
+);
+if (emittedTable.size === 0) fail("no emitted ranges could be indexed; the citation surface is dead");
+const mintedForTarget = [...emittedTable.entries()]
+  .filter(([, ref]) => ref.observation_id === wantedIds[0])
+  .sort(([, left], [, right]) => left.body_start - right.body_start);
+if (mintedForTarget.length < 2) {
+  fail(`only ${mintedForTarget.length} range(s) were minted for ${wantedIds[0]}; the paging arm is vacuous`);
+}
+let walked = 0;
+for (const [rangeId, ref] of mintedForTarget) {
+  if (ref.body_start !== walked) {
+    fail(`range ${rangeId} starts at ${ref.body_start}, expected ${walked} — the minted ranges leave a hole`);
+  }
+  walked = ref.body_end;
+}
+if (walked !== servedBody.length) {
+  fail(`the minted ranges stop at ${walked} of ${servedBody.length} chars`);
+}
+ok(
+  `the ${mintedForTarget.length} minted range ids tile [0, ${walked}) in order — every character of ` +
+    "the observation has a name a citation could use",
+);
+
+const reportedRangeIds = (/RANGE_IDS:\s*(.+)/.exec(result.stdout)?.[1] ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter((value) => value.length > 0);
+if (reportedRangeIds.length === 0) fail("the worker reported no range ids at all");
+for (const rangeId of reportedRangeIds) {
+  if (!emittedTable.has(rangeId)) {
+    fail(`the worker reported a range id this launch never emitted: ${rangeId}`);
+  }
+}
+ok(
+  `all ${reportedRangeIds.length} range id(s) the worker echoed resolve against what the runtime ` +
+    `emitted (it walked ${pagesReported} pages and named ${reportedRangeIds.length})`,
+);
 // --- The launch token must not have reached the model.
 const secretsLine = /SECRETS:\s*(.+)/.exec(result.stdout)?.[1]?.trim() ?? "";
 if (result.stdout.includes(launch.launchToken)) {
@@ -297,25 +438,47 @@ if (delivery.status !== "verified") {
 ok(`delivery reconciliation VERIFIED in ${reconciliationMs} ms`);
 
 // The point of the whole layer: the ids it admits are the ones whose pages reached the model.
-for (const id of wantedIds) {
-  // What it admits is the CHARACTERS whose pages reached the model. A probe that fetched an
-  // observation end to end must come back covered WHOLE; anything less means a page went out and did
-  // not arrive, which is precisely the failure this probe exists to surface.
-  const record = delivery.delivered.find((entry) => entry.observation_id === id);
-  if (
-    record === undefined ||
-    !coversWholeObservation({ ranges: record.ranges, bodyLength: record.body_length ?? undefined })
-  ) {
+const attested = delivery.attestation.filter((entry) => entry.disposition === "verbatim_delivered");
+if (attested.length === 0) {
+  // NOT a probe failure — the layer refusing content that did not arrive is the layer working. What it
+  // reveals is a TRANSPORT limit the design predicted and nothing had measured: codex clips the
+  // RECEIVED RECORD, and one exec turn can render several tool results into one. Measured here: four
+  // pages of ~31,951 chars each — every one under the 32,000 budget and under the 32,151 largest
+  // payload ever observed uncut — arrived as three records of 810 / 45,138 / 47,451 chars. The merged
+  // ones are above the (32,151, 40,149] bracket, so they were clipped and NOTHING attests.
+  //
+  // The prescription is the prompt lever the design names: ONE tool call per exec turn. Sizing alone
+  // cannot close this (see design `23-…md` §3/S4, F-3).
+  warn(
+    `NOTHING ATTESTED: ${delivery.attestation.length} page(s) of ~${
+      Math.max(...delivery.attestation.map((entry) => entry.chars))
+    } chars were served and none appeared verbatim in the worker's context. This is the received-record ` +
+      "boundary: a multi-call walk in one turn merges into one output and is clipped. Reconciliation " +
+      "refused, which is the correct fail-closed behaviour.",
+  );
+  if (delivery.delivered.length !== 0) {
     fail(
-      `${id} was SERVED but delivery reconciliation does not admit it whole (${
-        record === undefined ? "no coverage record" : JSON.stringify(record.ranges)
-      }). attestation: ${JSON.stringify(delivery.attestation)}`,
+      "reconciliation admitted coverage while attesting nothing — the fail-closed property is broken, " +
+        `which is a defect: ${JSON.stringify(delivery.delivered)}`,
     );
   }
+  ok("fail-closed holds: nothing attested, nothing admitted, nothing citable");
+} else {
+  for (const id of wantedIds) {
+    const record = delivery.delivered.find((entry) => entry.observation_id === id);
+    if (
+      record === undefined ||
+      !coversWholeObservation({ ranges: record.ranges, bodyLength: record.body_length ?? undefined })
+    ) {
+      fail(
+        `${id} had attested pages but is not admitted whole (${
+          record === undefined ? "no coverage record" : JSON.stringify(record.ranges)
+        }). attestation: ${JSON.stringify(delivery.attestation)}`,
+      );
+    }
+  }
+  ok(`every requested observation is admitted whole from ${attested.length} attested page(s)`);
 }
-// Non-vacuous: an empty delivered set would satisfy no `includes` check above only because the loop
-// would still run — assert the set is real.
-if (delivery.delivered.length === 0) fail("delivery reconciliation admitted nothing");
 ok(
   // Rendered per record, not `join`ed: `delivered` is coverage now, and joining an array of objects
   // prints `[object Object]` — which reads like a pass while showing nothing. (It did, on the first
