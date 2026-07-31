@@ -131,7 +131,7 @@ import {
 import type { ObservationPromptPayloadOptions } from "./authoring-prompt-payloads.js";
 import {
   ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT,
-  ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+  answerSupportLedgerSystemPrompt,
   CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   CLAIM_REALIZATION_STANCES,
   CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
@@ -3223,6 +3223,19 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // Present exactly when the pull layer will be registered, so the prompt announces a tool that
       // exists. Computed here because the announcement below is part of the payload the fold measures.
       const pull = observationCatalogTool ? input.observationReadPull : undefined;
+      // The system prompt DECLARES the citation field, and pull mode reads a different one than push
+      // (`evidence_range_ids` vs `evidence_observation_ids`). Selected ONCE and reused by all three
+      // consumers below — the fold's byte measurement, the overflow guard and the dispatch — because
+      // measuring one string and sending another is stage 2's F6 defect in miniature.
+      //
+      // Live 2026-07-31: with the static prompt declaring observation ids while the payload asked for
+      // ranges, a real worker fetched its page and answered `{"evidence_clusters":[]}`.
+      //
+      // The mode split itself left the push projection byte-identical; a LATER fix in the same session
+      // (the required `independence_basis`, D3) deliberately edited BOTH projections, so the authoring
+      // prompt contract sha rotates once. That rotation is the documented safe direction here — the
+      // same treatment `source_breadth_fold` and `source_observation_catalog_tool` already get.
+      const answerSupportSystemPrompt = answerSupportLedgerSystemPrompt(pull ? "ranges" : "observations");
       // The policy block is a function of the ROWS, so the fold measures each rung with the text that
       // rung would actually dispatch and the dispatched text describes the rows that went out. A fixed
       // sentence told the worker summaries were present exactly when `anchor` had removed them; a
@@ -3329,7 +3342,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             catalogObservationCount: promptObservationIds.length,
             projectAtLevel: projectAnswerSupportCatalogAtFoldLevel,
             measure: (projection) =>
-              promptPayloadByteCount(ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT, {
+              promptPayloadByteCount(answerSupportSystemPrompt, {
                 ...answerSupportUserPayloadFor(projection),
                 source_observations: projection,
               }),
@@ -3353,7 +3366,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         // today; that band is covered by the always-on dispatch backstop in llm-caller (PR #265).
         assertPromptPayloadByteLimit({
           artifactName: "AnswerSupportLedger",
-          systemPrompt: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+          systemPrompt: answerSupportSystemPrompt,
           userPayload: answerSupportUserPayload,
           byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
         });
@@ -3431,7 +3444,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         telemetry,
         artifactName: "AnswerSupportLedger",
         maxTokens: 3800,
-        systemPrompt: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+        systemPrompt: answerSupportSystemPrompt,
         userPayload: answerSupportUserPayload,
         onWorkerSession: (session) => {
           workerSession = session;
@@ -3591,6 +3604,23 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             `evidence_clusters[${index}].evidence_range_ids`,
           );
 
+          // (0) Cited at all. BEFORE the basis branch, because it is a fact about the worker's claim
+          // rather than about our evidence — the same reason resolution and catalog come first.
+          //
+          // It used to live inside the `unverifiable` branch only, and the delivered branch had no
+          // equivalent: a cluster naming no range resolved to nothing, was covered by nothing, and was
+          // admitted with an EMPTY `evidence_refs` (measured: `CLUSTERS=1 REFS=[]`). It then failed a
+          // stage later in `maturation-validation` with a message about missing evidence — the cause
+          // and the report in different places. The live 2026-07-31 run reached this through the prompt
+          // contradiction the mode-aware system prompt now removes; the guard is what makes the hole
+          // unreachable rather than merely unlikely.
+          if (citedRangeIds.length === 0) {
+            throw new Error(
+              `AnswerSupportLedger evidence cluster ${index + 1} cites nothing; a cluster must name ` +
+                "at least one range.",
+            );
+          }
+
           // (1) Resolve. An id this launch never emitted is the worker naming something it was not
           // given — a false claim, so it throws rather than being withheld.
           const resolved = citedRangeIds.map((rangeId) => {
@@ -3619,12 +3649,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           // satisfy this gate and then fail `maturation-validation`'s two-independent-refs obligation a
           // stage later, killing the run anyway with a message about evidence rather than attestation.
           if (citableObservations && citableObservations.basis === "unverifiable") {
-            if (citedRangeIds.length === 0) {
-              throw new Error(
-                `AnswerSupportLedger evidence cluster ${index + 1} cites nothing; a cluster must name ` +
-                  "at least one range.",
-              );
-            }
             withheldEvidenceClusters.push({
               clusterIndex: index + 1,
               reason: citableObservations.reason,

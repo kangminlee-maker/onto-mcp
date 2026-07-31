@@ -16,6 +16,7 @@ import { readOpenAIResponsesIncompleteEvidence } from "../llm/openai-responses-i
 import {
   ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT,
   ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+  answerSupportLedgerSystemPrompt,
   CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   COMPETENCY_QUESTIONS_LIMITATION_REPAIR_SYSTEM_PROMPT,
   COMPETENCY_QUESTION_ASSESSMENT_SYSTEM_PROMPT,
@@ -480,6 +481,12 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   maturation_question_frontier: MATURATION_QUESTION_FRONTIER_SYSTEM_PROMPT,
   maturation_closure_frontier: MATURATION_CLOSURE_FRONTIER_SYSTEM_PROMPT,
   answer_support_ledger: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+  // BOTH projections are catalogued, because the reuse key hashes THIS map and the pull path
+  // dispatches the ranges projection. With only the push one here, editing the ranges prompt would
+  // leave the sha unmoved and a pull-mode resume would reuse an artifact authored under the older
+  // contract. (`source_observation_catalog_tool` is already in the reuse key, so the two modes never
+  // share a key — this closes the *edit* case, not the mode case.)
+  answer_support_ledger_ranges: answerSupportLedgerSystemPrompt("ranges"),
   answer_support_judgment: ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT,
   maturation_answer_claims: MATURATION_ANSWER_CLAIMS_SYSTEM_PROMPT,
   ontology_expansion: ONTOLOGY_EXPANSION_SYSTEM_PROMPT,

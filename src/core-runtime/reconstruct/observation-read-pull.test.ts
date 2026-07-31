@@ -28,7 +28,11 @@ import {
   writeObservationReadFacadeDescriptor,
   type ObservationReadFacadeLaunch,
 } from "./observation-read-facade.js";
-import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
+import { canonicalObservationBody, OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
+import {
+  ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+  answerSupportLedgerSystemPrompt,
+} from "./authoring-system-prompts.js";
 import { observationRangeId } from "./observation-range-id.js";
 
 // Spec basis: design 20260726-observation-catalog-tool §3 (`인용 ⊆ 조회 ⊆ 스냅샷`), §4, §9 stage 3b.
@@ -138,6 +142,12 @@ const ledgerArtifact = parseYaml(
   readFileSync(path.join(FIXTURE_DIR, "source-safety-ledger.yaml"), "utf8"),
 ) as Record<string, unknown>;
 const allObservationIds = observationsArtifact.observations.map((o) => o.observation_id);
+/**
+ * The observations `authorInput` puts in the bounded prompt catalog. Declared ONCE because a test that
+ * picks its subject from the whole fixture can pick one the catalog does not carry — the citation is
+ * then refused for being out of catalog, which is a true refusal about the wrong thing.
+ */
+const PROMPT_CATALOG_OBSERVATIONS = observationsArtifact.observations.slice(0, 6);
 
 function writePullSources() {
   tempSeq += 1;
@@ -181,7 +191,7 @@ function writePullSources() {
 const SESSION_ID = "observation-read-pull-fixture";
 
 function authorInput(pull: ReturnType<typeof writePullSources>) {
-  const observations = observationsArtifact.observations.slice(0, 6);
+  const observations = PROMPT_CATALOG_OBSERVATIONS;
   const requestedRef = observations[0]!.source_ref;
   return {
     sessionId: SESSION_ID,
@@ -315,6 +325,21 @@ function authorWithWorker(options: {
   citeIds: string[];
   /** Range ids to cite verbatim — for the cases where the point is an id the runtime never served. */
   citeRangeIds?: string[];
+  /**
+   * Choose the cited ranges from what the fixture worker was actually served, AFTER the fetch. The
+   * subset a partial citation names is not knowable before the pages come back, and hard-coding one
+   * would cite an id the run never minted.
+   */
+  citeRangesFrom?: (receivedByObservation: ReadonlyMap<string, string[]>) => string[];
+  /**
+   * Follow `next_cursor` to the end of each batch instead of taking one page.
+   *
+   * Needed by the case this whole layer exists for: citing SOME of an observation. A single call
+   * delivers one range, so citing it is citing everything that arrived — which cannot distinguish a
+   * partial-citation rule from an all-or-nothing one. Walking delivers several ranges of one
+   * observation, and the citation can then be a proper subset of them.
+   */
+  walkCursor?: boolean;
   /** Skip the facade entirely — the worker never fetched, and no receipt is written at all. */
   skipFacade?: boolean;
   /**
@@ -345,28 +370,39 @@ function authorWithWorker(options: {
         // one batch each, which is a shape the real worker produces too (measurement §9-M4: two execs
         // made four calls apiece).
         const batches = options.fetchCalls ?? (options.fetchIds.length > 0 ? [options.fetchIds] : []);
-        for (const [batchIndex, observationIds] of batches.entries()) {
-          const result = handleFacadeMessage(
-            {
-              jsonrpc: "2.0",
-              id: batchIndex + 1,
-              method: "tools/call",
-              params: {
-                name: OBSERVATION_READ_TOOL_NAME,
-                arguments: { observation_ids: observationIds },
+        let requestId = 0;
+        for (const observationIds of batches) {
+          let args: Record<string, unknown> = { observation_ids: observationIds };
+          for (;;) {
+            requestId += 1;
+            const result = handleFacadeMessage(
+              {
+                jsonrpc: "2.0",
+                id: requestId,
+                method: "tools/call",
+                params: { name: OBSERVATION_READ_TOOL_NAME, arguments: args },
               },
-            },
-            session,
-          )!.result as { isError: boolean; structuredContent?: { entries?: { observation_id: string; range_id: string }[] } };
-          if (result.isError) throw new Error("fixture worker's fetch failed");
-          // What a real worker cites: the `range_id` of each part it was handed. Collected from the
-          // served pages rather than computed, so a test citing "what I fetched" cites the same thing
-          // the runtime emitted — and a test that wants an INVENTED id says so explicitly.
-          for (const entry of result.structuredContent?.entries ?? []) {
-            receivedRangeIds.set(
-              entry.observation_id,
-              [...(receivedRangeIds.get(entry.observation_id) ?? []), entry.range_id],
-            );
+              session,
+            )!.result as {
+              isError: boolean;
+              structuredContent?: {
+                entries?: { observation_id: string; range_id: string }[];
+                next_cursor?: string;
+              };
+            };
+            if (result.isError) throw new Error("fixture worker's fetch failed");
+            // What a real worker cites: the `range_id` of each part it was handed. Collected from the
+            // served pages rather than computed, so a test citing "what I fetched" cites the same thing
+            // the runtime emitted — and a test that wants an INVENTED id says so explicitly.
+            for (const entry of result.structuredContent?.entries ?? []) {
+              receivedRangeIds.set(
+                entry.observation_id,
+                [...(receivedRangeIds.get(entry.observation_id) ?? []), entry.range_id],
+              );
+            }
+            const next = result.structuredContent?.next_cursor;
+            if (options.walkCursor !== true || next === undefined) break;
+            args = { cursor: next };
           }
         }
         // the process shell publishes after delivery; the stub plays that role too
@@ -417,6 +453,7 @@ function authorWithWorker(options: {
             ...(launch
               ? {
                 evidence_range_ids: options.citeRangeIds ??
+                  options.citeRangesFrom?.(receivedRangeIds) ??
                   options.citeIds.flatMap((id) => receivedRangeIds.get(id) ?? []),
               }
               : { evidence_observation_ids: options.citeIds }),
@@ -1116,5 +1153,198 @@ describe("observation read pull layer — 인용 ⊆ 배달 (design §6-7, stage
     // The transcript is what makes that possible, and codex writes none under `--ephemeral`, so the
     // request for it must ride every pull dispatch rather than a flag.
     expect(dispatched[0]!.config.persist_worker_transcript).toBe(true);
+  });
+});
+
+/**
+ * 부분 인용 — the property this whole track exists for (design `26-design-live-citation-arm.md` §1).
+ *
+ * Every arm above moves whole OBSERVATIONS between delivered and not. That cannot distinguish the rule
+ * this layer was rebuilt to support — "read part of a record, cite that part" — from an all-or-nothing
+ * one, because when a single call delivers a single range, citing it is citing everything that arrived.
+ * These cases deliver SEVERAL ranges of ONE observation and cite a proper subset.
+ */
+describe("observation read pull layer — citing part of an observation", () => {
+  /**
+   * The smallest observation that really splits, derived rather than named: a hard-coded id goes stale
+   * when the fixture or the budget moves, and a single-page subject would make every assertion below
+   * pass while proving the opposite. 40,000 chars is comfortably above the per-page content allowance
+   * at the live budget; the `> 1` assertions in each test are what actually enforce the split.
+   */
+  const splittingObservationId = (): string => {
+    const sized = PROMPT_CATALOG_OBSERVATIONS
+      .map((observation: any) => ({
+        id: observation.observation_id as string,
+        chars: canonicalObservationBody(observation).length,
+      }))
+      .filter((row: { chars: number }) => row.chars > 40_000)
+      .sort((left: { chars: number }, right: { chars: number }) => left.chars - right.chars);
+    if (sized.length === 0) {
+      throw new Error("no catalogued observation splits; these cases are vacuous");
+    }
+    return sized[0]!.id;
+  };
+
+  const bodyLengthOf = (observationId: string): number =>
+    canonicalObservationBody(
+      observationsArtifact.observations.find((o: any) => o.observation_id === observationId),
+    ).length;
+
+  it("admits a citation naming SOME of the ranges an observation was delivered in", async () => {
+    const pull = writePullSources();
+    const target = splittingObservationId();
+    let deliveredRangeCount = 0;
+    const { author } = authorWithWorker({
+      fetchIds: [target],
+      citeIds: [target],
+      walkCursor: true,
+      deliveryReconciliation: true,
+      citeRangesFrom: (received) => {
+        const ranges = received.get(target) ?? [];
+        deliveredRangeCount = ranges.length;
+        // The FIRST range only — the shape of "I read the opening of this record and it answers the
+        // question", which under the old observation-unit rule was not expressible at all.
+        return ranges.slice(0, 1);
+      },
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-00000000cccc",
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-00000000cccc",
+          sent: emissions,
+          rendered: emissions,
+        }),
+      }),
+    });
+
+    const ledger = await (author as any).writeAnswerSupportLedger(authorInput(pull));
+
+    // NON-VACUOUS, asserted before the conclusion: the walk must really have delivered more than one
+    // range, or "cited a subset" is the same statement as "cited everything".
+    expect(deliveredRangeCount).toBeGreaterThan(1);
+
+    const refs = ledger.evidence_clusters[0].evidence_refs;
+    expect(refs).toHaveLength(1);
+    const range = refs[0].range;
+    expect(range.observation_id ?? refs[0].observation_id).toBe(target);
+    // A PROPER part of the record: the citation names an interval strictly inside the body, which is
+    // the thing the observation-unit gate could never admit — it asked whether the whole record arrived.
+    expect(range.body_start).toBe(0);
+    expect(range.body_end).toBeLessThan(bodyLengthOf(target));
+  });
+
+  it("still refuses a range of the same observation that never reached the context", async () => {
+    // The contrast that keeps the case above honest. Same observation, same walk — but the transcript
+    // carries only the FIRST page, and the citation names the SECOND range. A rule that admitted a
+    // citation because "this observation was delivered" would pass this; a range-level one must not.
+    const pull = writePullSources();
+    const target = splittingObservationId();
+    let deliveredRangeCount = 0;
+    const { author } = authorWithWorker({
+      fetchIds: [target],
+      citeIds: [target],
+      walkCursor: true,
+      deliveryReconciliation: true,
+      citeRangesFrom: (received) => {
+        const ranges = received.get(target) ?? [];
+        deliveredRangeCount = ranges.length;
+        return ranges.slice(1, 2);
+      },
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-00000000dddd",
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-00000000dddd",
+          sent: emissions,
+          // Only the first page entered the context; the rest were sent and never arrived.
+          rendered: emissions.slice(0, 1),
+        }),
+      }),
+    });
+
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /verified NOT to have reached the worker's context/,
+    );
+    expect(deliveredRangeCount).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * The two defects the LIVE arm found on 2026-07-31, and neither was reachable from here before.
+ *
+ * The suite above always cites something, and it stubs the model — so it never asked the question a
+ * real dispatch asks: can a model actually satisfy the instructions we send it? The answer was no. The
+ * system prompt declared the JSON shape with `evidence_observation_ids` while the pull-mode payload
+ * asked for `evidence_range_ids`, and a real worker resolved the contradiction by fetching its page
+ * and answering `{"evidence_clusters":[]}`.
+ */
+describe("observation read pull layer — the citation contract the model is actually given", () => {
+  it("declares the field this dispatch will READ, not the other one", async () => {
+    const pull = writePullSources();
+    const target = allObservationIds[0]!;
+    const { author, dispatched } = authorWithWorker({
+      fetchIds: [target],
+      citeIds: [target],
+      deliveryReconciliation: true,
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-00000000f001",
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-00000000f001",
+          sent: emissions,
+          rendered: emissions,
+        }),
+      }),
+    });
+    await (author as any).writeAnswerSupportLedger(authorInput(pull));
+
+    const system = dispatched[0]!.systemPrompt;
+    // The runtime reads `evidence_range_ids` here (`direct-call-directive-author.ts`, pull branch), so
+    // that is what the prompt must declare. A model told one thing and asked for another cites nothing.
+    expect(system).toContain('"evidence_range_ids":["..."]');
+    expect(system).not.toContain("evidence_observation_ids");
+    // And the payload's citation rule must agree with it rather than override it.
+    expect(dispatched[0]!.userPrompt).toContain("evidence_range_ids");
+  });
+
+  it("differs between the two modes ONLY where the citation field is named", () => {
+    // The point of one function with two projections rather than two constants: shared guidance is
+    // shared BY CONSTRUCTION. A second constant would let a rule be added to one mode and forgotten in
+    // the other — which is the shape of the defect this describe block exists for, one level up.
+    const push = answerSupportLedgerSystemPrompt("observations").split("\n");
+    const pull = answerSupportLedgerSystemPrompt("ranges").split("\n");
+    expect(push.length).toBe(pull.length);
+    const differing = push
+      .map((line, index) => [line, pull[index] as string] as const)
+      .filter(([a, b]) => a !== b);
+    // Non-vacuous: identical projections would satisfy the loop below while proving nothing.
+    expect(differing.length).toBeGreaterThan(0);
+    for (const [pushLine, pullLine] of differing) {
+      expect(pushLine).toContain("evidence_observation_ids");
+      expect(pullLine).toContain("evidence_range_ids");
+    }
+    expect(ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT).toBe(answerSupportLedgerSystemPrompt("observations"));
+  });
+
+  it("refuses a cluster that names NO range, under a delivered basis too", async () => {
+    // Measured before the fix: `CLUSTERS=1 REFS=[]` — admitted with zero evidence, then failing a
+    // stage later in maturation-validation with a message about evidence rather than about citation.
+    // The `unverifiable` branch already refused this; the delivered branch did not.
+    const pull = writePullSources();
+    const target = allObservationIds[0]!;
+    const { author } = authorWithWorker({
+      fetchIds: [target],
+      citeIds: [target],
+      citeRangeIds: [],
+      deliveryReconciliation: true,
+      transcript: (emissions) => ({
+        sessionId: "01900000-0000-7000-8000-00000000f002",
+        text: plantedTranscript({
+          sessionId: "01900000-0000-7000-8000-00000000f002",
+          sent: emissions,
+          rendered: emissions,
+        }),
+      }),
+    });
+    await expect((author as any).writeAnswerSupportLedger(authorInput(pull))).rejects.toThrow(
+      /cites nothing; a cluster must name at least one range/,
+    );
   });
 });

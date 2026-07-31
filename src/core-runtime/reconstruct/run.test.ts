@@ -7036,7 +7036,17 @@ describe("runReconstruct", () => {
     // 40 = 41 − json_repair: JSON repair became deterministic and stopped dispatching a model
     // (design §13-D2), so the prompt left the catalog. Removing it ROTATES the contract sha on
     // purpose — the rule for accepting an authored artifact changed, so reuse must not carry over.
-    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(40);
+    // 41 = 40 + answer_support_ledger_ranges: the pull path dispatches a DIFFERENT projection of the
+    // answer-support prompt (it declares `evidence_range_ids`, which is the field that mode reads).
+    // Cataloguing it is what makes editing that projection rotate the sha; with only the push entry
+    // here, a pull-mode resume would reuse an artifact authored under an older contract.
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(41);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.answer_support_ledger_ranges).toContain(
+      '"evidence_range_ids":["..."]',
+    );
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.answer_support_ledger).not.toContain(
+      "evidence_range_ids",
+    );
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.json_repair).toBeUndefined();
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.value_read_location).toContain(
       "Select spreadsheet cell locations to read for a value-dependent limitation.",
