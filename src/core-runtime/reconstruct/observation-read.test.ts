@@ -7,15 +7,20 @@ import type { ReconstructSourceSafetyLedgerArtifact } from "./artifact-types.js"
 import {
   assertObservationSnapshotUnchanged,
   fixObservationSnapshot,
+  envelopeContentCost,
   jsonStringContentCost,
   OBSERVATION_READ_MAX_ID_CHARS,
   OBSERVATION_READ_MAX_REQUEST_IDS,
   ObservationReadError,
+  observationReadToolResult,
   readObservationPage,
   type ObservationReadPage,
   type ObservationReadRequest,
   type ObservationSnapshot,
 } from "./observation-read.js";
+// The LIVE budget, imported rather than restated: a test that pins its own number would keep passing
+// after the runtime's value moved, which is how the page-vs-result defect survived its own gate.
+import { OBSERVATION_READ_RESULT_CHAR_BUDGET } from "./observation-read-grant.js";
 
 // Spec basis: development-records/design/20260726-observation-catalog-tool-design.md §4 (contract),
 // §9 Stage 1 done-when — (i) reassembled pages are byte-identical to the source, (ii) every response is
@@ -153,12 +158,12 @@ function reasonOf(run: () => unknown): string {
 function walk(
   fromSnapshot: ObservationSnapshot,
   ids: readonly string[],
-  pageCharBudget: number,
+  resultCharBudget: number,
 ): ObservationReadPage[] {
   const pages: ObservationReadPage[] = [];
   let request: ObservationReadRequest = { observation_ids: ids };
   for (;;) {
-    const page = readObservationPage({ snapshot: fromSnapshot, request, pageCharBudget });
+    const page = readObservationPage({ snapshot: fromSnapshot, request, resultCharBudget });
     pages.push(page);
     if (page.next_cursor === undefined) return pages;
     request = { cursor: page.next_cursor };
@@ -314,7 +319,7 @@ describe("snapshot integrity — a mid-run rewrite must fail, not silently switc
   const firstPage = readObservationPage({
     snapshot,
     request: { observation_ids: [largestScalar.observationId] },
-    pageCharBudget: PAGE_BUDGET,
+    resultCharBudget: PAGE_BUDGET,
   });
 
   it("issues a cursor for a body that does not fit (precondition for the two rejections below)", () => {
@@ -329,7 +334,7 @@ describe("snapshot integrity — a mid-run rewrite must fail, not silently switc
         readObservationPage({
           snapshot: drifted,
           request: { cursor: firstPage.next_cursor as string },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         }),
       ),
     ).toBe("snapshot_drift");
@@ -342,7 +347,7 @@ describe("snapshot integrity — a mid-run rewrite must fail, not silently switc
         readObservationPage({
           snapshot,
           request: { cursor: firstPage.next_cursor as string },
-          pageCharBudget: PAGE_BUDGET / 2,
+          resultCharBudget: PAGE_BUDGET / 2,
         }),
       ),
     ).toBe("cursor_malformed");
@@ -361,14 +366,14 @@ describe("snapshot integrity — a mid-run rewrite must fail, not silently switc
 
 describe("request shape — safety by unrepresentability, checked at the boundary", () => {
   it("refuses anything but exactly one of observation_ids / cursor", () => {
-    expect(reasonOf(() => readObservationPage({ snapshot, request: {}, pageCharBudget: PAGE_BUDGET })))
+    expect(reasonOf(() => readObservationPage({ snapshot, request: {}, resultCharBudget: PAGE_BUDGET })))
       .toBe("request_shape");
     expect(
       reasonOf(() =>
         readObservationPage({
           snapshot,
           request: { observation_ids: [allIds[0] as string], cursor: "x" },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         }),
       ),
     ).toBe("request_shape");
@@ -384,7 +389,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
     for (const observation_ids of rejected) {
       expect(
         reasonOf(() =>
-          readObservationPage({ snapshot, request: { observation_ids }, pageCharBudget: PAGE_BUDGET }),
+          readObservationPage({ snapshot, request: { observation_ids }, resultCharBudget: PAGE_BUDGET }),
         ),
       ).toBe("request_shape");
     }
@@ -393,7 +398,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
         readObservationPage({
           snapshot,
           request: { observation_ids: allIds.slice(0, OBSERVATION_READ_MAX_REQUEST_IDS) },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         }),
       ),
     ).toBe("no-error");
@@ -405,7 +410,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
         readObservationPage({
           snapshot,
           request: { observation_ids: ["obs_not_in_this_snapshot"] },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         }),
       ),
     ).toBe("unknown_observation_id");
@@ -420,7 +425,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
       readObservationPage({
         snapshot,
         request: { observation_ids: [oversized] },
-        pageCharBudget: PAGE_BUDGET,
+        resultCharBudget: PAGE_BUDGET,
       });
     expect(reasonOf(attempt)).toBe("request_shape");
     let message = "";
@@ -437,7 +442,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
         readObservationPage({
           snapshot,
           request: { observation_ids: ["z".repeat(OBSERVATION_READ_MAX_ID_CHARS)] },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         })
       ),
     ).toBe("unknown_observation_id");
@@ -446,7 +451,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
   it("refuses a malformed or out-of-range cursor", () => {
     expect(
       reasonOf(() =>
-        readObservationPage({ snapshot, request: { cursor: "!!!" }, pageCharBudget: PAGE_BUDGET }),
+        readObservationPage({ snapshot, request: { cursor: "!!!" }, resultCharBudget: PAGE_BUDGET }),
       ),
     ).toBe("cursor_malformed");
     const pastTheEnd = Buffer.from(
@@ -462,7 +467,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
     ).toString("base64url");
     expect(
       reasonOf(() =>
-        readObservationPage({ snapshot, request: { cursor: pastTheEnd }, pageCharBudget: PAGE_BUDGET }),
+        readObservationPage({ snapshot, request: { cursor: pastTheEnd }, resultCharBudget: PAGE_BUDGET }),
       ),
     ).toBe("cursor_malformed");
   });
@@ -479,7 +484,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
     const issued = readObservationPage({
       snapshot,
       request: { observation_ids: [largestScalar.observationId] },
-      pageCharBudget: PAGE_BUDGET,
+      resultCharBudget: PAGE_BUDGET,
     }).next_cursor as string;
     const currentVersion = (
       JSON.parse(Buffer.from(issued, "base64url").toString("utf8")) as { v: number }
@@ -490,7 +495,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
         readObservationPage({
           snapshot,
           request: { cursor: forge({ ...base, ids: ["obs_not_in_this_snapshot"] }) },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         }),
       ),
     ).toBe("unknown_observation_id");
@@ -504,7 +509,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
               ids: Array.from({ length: OBSERVATION_READ_MAX_REQUEST_IDS + 1 }, (_, i) => allIds[i]),
             }),
           },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         }),
       ),
     ).toBe("request_shape");
@@ -512,7 +517,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
     const skipped = readObservationPage({
       snapshot,
       request: { cursor: forge({ ...base, ids: [largestScalar.observationId], p: 1 }) },
-      pageCharBudget: PAGE_BUDGET,
+      resultCharBudget: PAGE_BUDGET,
     });
     expect(skipped.entries[0]?.part_index).toBe(2);
     expect(skipped.entries.every((entry) => entry.observation_id === largestScalar.observationId)).toBe(
@@ -526,7 +531,7 @@ describe("request shape — safety by unrepresentability, checked at the boundar
         readObservationPage({
           snapshot,
           request: { observation_ids: [allIds[0] as string] },
-          pageCharBudget: 64,
+          resultCharBudget: 64,
         }),
       ),
     ).toBe("budget_too_small");
@@ -576,7 +581,7 @@ describe("fixObservationSnapshot — fail loud on an artifact the reader cannot 
         readObservationPage({
           snapshot: gated,
           request: { observation_ids: ["obs_b"] },
-          pageCharBudget: PAGE_BUDGET,
+          resultCharBudget: PAGE_BUDGET,
         })
       ),
     ).toBe("unknown_observation_id");
@@ -772,7 +777,14 @@ describe("serialized-cost model — the arithmetic the page budget rests on", ()
       }),
     );
     const body = astralSnapshot.lookup("obs_astral")?.body as string;
-    const pages = walk(astralSnapshot, ["obs_astral"], 800);
+    // 1,600 rather than the 800 this used to pass: the budget now bounds the RENDERED RESULT, which
+    // carries the page twice, so the same decomposition needs twice the number. At 800 the framing alone
+    // (76 result + 584 page + 836 entry = 1,496 rendered chars) exceeds the whole budget and the reader
+    // refuses — correctly. 1,600 leaves 102 rendered chars per part, and an astral code point costs 4 of
+    // them, so this body still splits 22 ways — as fine-grained as the 800 it replaces, which is what
+    // puts a pair boundary in front of the cut over and over.
+    const budget = 1_600;
+    const pages = walk(astralSnapshot, ["obs_astral"], budget);
     const parts = pages.flatMap((page) => page.entries).map((entry) => entry.body);
     expect(parts.length).toBeGreaterThan(1);
     for (const part of parts) {
@@ -780,7 +792,11 @@ describe("serialized-cost model — the arithmetic the page budget rests on", ()
       expect(2 + jsonStringContentCost(part)).toBe(JSON.stringify(part).length);
     }
     expect(parts.join("")).toBe(body);
-    for (const page of pages) expect(JSON.stringify(page).length).toBeLessThanOrEqual(800);
+    // The bound is on the RESULT, not the page: a page is roughly half its rendered cost, so asserting
+    // the page against this number would pass on a reader that overran the budget twice over.
+    for (const page of pages) {
+      expect(JSON.stringify(observationReadToolResult(page)).length).toBeLessThanOrEqual(budget);
+    }
   });
 });
 
@@ -871,7 +887,7 @@ describe("range contract — a page entry says which slice of the body it is", (
       readObservationPage({
         snapshot,
         request: { observation_ids: [splitting] },
-        pageCharBudget: PAGE_BUDGET,
+        resultCharBudget: PAGE_BUDGET,
       }).next_cursor,
     ).toBeDefined();
     const stale = Buffer.from(
@@ -880,7 +896,7 @@ describe("range contract — a page entry says which slice of the body it is", (
     ).toString("base64url");
     expect(
       reasonOf(() =>
-        readObservationPage({ snapshot, request: { cursor: stale }, pageCharBudget: PAGE_BUDGET })
+        readObservationPage({ snapshot, request: { cursor: stale }, resultCharBudget: PAGE_BUDGET })
       ),
     ).toBe("cursor_malformed");
   });
@@ -890,16 +906,147 @@ describe("range contract — a page entry says which slice of the body it is", (
     const first = readObservationPage({
       snapshot,
       request: { observation_ids: [largestScalar.observationId] },
-      pageCharBudget: PAGE_BUDGET,
+      resultCharBudget: PAGE_BUDGET,
     });
     expect(first.next_cursor).toBeDefined();
     const second = readObservationPage({
       snapshot,
       request: { cursor: first.next_cursor as string },
-      pageCharBudget: PAGE_BUDGET,
+      resultCharBudget: PAGE_BUDGET,
     });
     expect(second.entries[0]?.body_start).toBe(
       first.entries[first.entries.length - 1]?.body_end,
     );
+  });
+});
+
+describe("rendered-result cost model — the quantity the transport actually clips", () => {
+  /**
+   * Where every truncated received record landed, measured across a 22-rollout sweep of one day's real
+   * codex transcripts (development-records/benchmark/20260731-range-delivery-live-probe/ §3차). The
+   * budget must sit below this, and the corpus must produce pages that come close to the budget —
+   * otherwise "everything fits" is a statement about small pages, not about the sizing.
+   */
+  const MEASURED_CLIP_CHARS = 40_149;
+
+  it("is exact for EVERY code point, the way the page cost model is", () => {
+    // Same standard as `jsonStringContentCost` above, for the same reason: `codePointEnvelopeCost` is a
+    // hand-derived table over the serializer's escaping classes, and a wrong row UNDER-reserves — the
+    // page fits its budget, ships, and is clipped in transit with nothing to show it. Exhaustive rather
+    // than a battery because the rows that surprise (U+007F is not escaped, a lone surrogate is, an
+    // astral pair is two raw units) are the ones a battery misses.
+    //
+    // The identity: a code point's rendered cost is what its PAGE representation costs re-escaped, plus
+    // that representation's own length — because the result carries the page escaped AND plain.
+    let mismatches = 0;
+    for (let codePoint = 0; codePoint <= 0x10ffff; codePoint += 1) {
+      const text = String.fromCodePoint(codePoint);
+      const inPage = JSON.stringify(text).slice(1, -1);
+      if (envelopeContentCost(text) !== jsonStringContentCost(inPage) + inPage.length) mismatches += 1;
+    }
+    expect(mismatches).toBe(0);
+
+    // Adjacency: a lone high followed by a lone low forms a PAIR, the one place a per-code-point model
+    // can disagree with the serializer.
+    const interesting = [0x22, 0x5c, 0x08, 0x0a, 0x1f, 0x7f, 0x2028, 0xd800, 0xdbff, 0xdc00, 0xdfff, 0x1f600];
+    for (const first of interesting) {
+      for (const second of interesting) {
+        const text = String.fromCodePoint(first) + String.fromCodePoint(second);
+        const inPage = JSON.stringify(text).slice(1, -1);
+        expect(envelopeContentCost(text)).toBe(jsonStringContentCost(inPage) + inPage.length);
+      }
+    }
+
+    // NEGATIVE CONTROL. "Twice the page cost" is the model a ratio would give, and it is wrong on every
+    // escape class: `\n` costs 5 not 4, `\uXXXX` costs 13 not 12. If this harness cannot reject that
+    // model, the sweep above proves nothing about its ability to discriminate.
+    const doubled = (text: string): number => 2 * jsonStringContentCost(text);
+    expect(
+      interesting.filter((codePoint) => {
+        const text = String.fromCodePoint(codePoint);
+        return doubled(text) !== envelopeContentCost(text);
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("keeps every page of the real corpus inside the budget, and the budget under the measured clip", () => {
+    expect(OBSERVATION_READ_RESULT_CHAR_BUDGET).toBeLessThan(MEASURED_CLIP_CHARS);
+    expect(snapshot.entries.length).toBeGreaterThan(0); // non-vacuous subject set
+
+    let largestRendered = 0;
+    let largestPageChars = 0;
+    for (const entry of snapshot.entries) {
+      let cursor: string | undefined;
+      for (;;) {
+        const page: ObservationReadPage = readObservationPage({
+          snapshot,
+          request: cursor === undefined ? { observation_ids: [entry.observation_id] } : { cursor },
+          resultCharBudget: OBSERVATION_READ_RESULT_CHAR_BUDGET,
+        });
+        const rendered = JSON.stringify(observationReadToolResult(page)).length;
+        if (rendered > largestRendered) {
+          largestRendered = rendered;
+          largestPageChars = JSON.stringify(page).length;
+        }
+        cursor = page.next_cursor;
+        if (cursor === undefined) break;
+      }
+    }
+    expect(largestRendered).toBeLessThanOrEqual(OBSERVATION_READ_RESULT_CHAR_BUDGET);
+
+    // NON-VACUOUS. A corpus that only ever produced 3 KB pages would satisfy the bound above while
+    // saying nothing about whether the sizing is right. The budget has to actually bind.
+    expect(largestRendered).toBeGreaterThan(OBSERVATION_READ_RESULT_CHAR_BUDGET * 0.9);
+
+    // THE DEFECT, stated as a contrast. The result runs more than twice its page, so a budget that
+    // bounded the PAGE at this value would have rendered past the clip — which is exactly what shipped
+    // and what the live probe measured (a 29,236-char page, inside a 32,000 page budget, cut at 40,149).
+    const ratio = largestRendered / largestPageChars;
+    expect(ratio).toBeGreaterThan(2);
+    expect(OBSERVATION_READ_RESULT_CHAR_BUDGET * ratio).toBeGreaterThan(MEASURED_CLIP_CHARS);
+  });
+
+  it("holds the budget when escaping makes the result three times the body", () => {
+    // The real corpus escapes lightly (2.05-2.27x), so it cannot discriminate a reader that sizes by
+    // page chars and doubles from one that counts rendered cost per character. Here every character is
+    // `"` or `\` or a newline — the classes that cost 6, 6 and 5 rather than a flat 2x — so a doubling
+    // model under-reserves and the page-level guard would fire.
+    const nasty = '"\\\n'.repeat(20_000);
+    const nastySnapshot = fixSnapshotAdmittingAll(
+      stringifyYaml({
+        schema_version: "1",
+        session_id: "session",
+        created_at: "2026-07-26T00:00:00.000Z",
+        observations: [
+          {
+            observation_id: "obs_nasty",
+            target_material_kind: "code",
+            adapter_id: "test-adapter",
+            source_ref: "/tmp/a.ts",
+            location: "/tmp/a.ts",
+            summary: "pathological escaping",
+            structural_data: { blob: nasty },
+          },
+        ],
+        skipped_refs: [],
+        validation_results: [],
+      }),
+    );
+    let cursor: string | undefined;
+    let pages = 0;
+    for (;;) {
+      const page: ObservationReadPage = readObservationPage({
+        snapshot: nastySnapshot,
+        request: cursor === undefined ? { observation_ids: ["obs_nasty"] } : { cursor },
+        resultCharBudget: OBSERVATION_READ_RESULT_CHAR_BUDGET,
+      });
+      pages += 1;
+      expect(JSON.stringify(observationReadToolResult(page)).length)
+        .toBeLessThanOrEqual(OBSERVATION_READ_RESULT_CHAR_BUDGET);
+      cursor = page.next_cursor;
+      if (cursor === undefined) break;
+    }
+    // Non-vacuous: this body must really split, or the loop asserted one small page.
+    expect(pages).toBeGreaterThan(1);
   });
 });

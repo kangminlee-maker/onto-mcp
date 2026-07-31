@@ -46,7 +46,7 @@ import {
 } from "../src/core-runtime/reconstruct/delivery-reconciliation.ts";
 import { canonicalObservationBody } from "../src/core-runtime/reconstruct/observation-read.ts";
 import { indexEmittedObservationRanges } from "../src/core-runtime/reconstruct/observation-range-id.ts";
-import { OBSERVATION_READ_PAGE_CHAR_BUDGET } from "../src/core-runtime/reconstruct/observation-read-grant.ts";
+import { OBSERVATION_READ_RESULT_CHAR_BUDGET } from "../src/core-runtime/reconstruct/observation-read-grant.ts";
 import { coversWholeObservation } from "../src/core-runtime/reconstruct/observation-read-coverage.ts";
 
 type AnyRecord = Record<string, any>;
@@ -135,8 +135,8 @@ const splitting = observationsArtifact.observations
   .sort((left, right) => left.chars - right.chars)
   // Big enough to need several pages, small enough that walking it stays far under the call limit.
   .find((candidate) =>
-    candidate.chars > OBSERVATION_READ_PAGE_CHAR_BUDGET * 2 &&
-    candidate.chars < OBSERVATION_READ_PAGE_CHAR_BUDGET * 4
+    candidate.chars > OBSERVATION_READ_RESULT_CHAR_BUDGET * 2 &&
+    candidate.chars < OBSERVATION_READ_RESULT_CHAR_BUDGET * 4
   );
 if (!splitting) {
   fail("no observation in the corpus splits into 3-4 pages at this budget; the paging arm is vacuous");

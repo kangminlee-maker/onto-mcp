@@ -308,16 +308,16 @@ describe("delivery reconciliation — folding real pages into delivered ids", ()
   }
 
   /** Serve one request end to end, following the cursor, and return the emitted page strings. */
-  function serveAll(observationIds: readonly string[], pageCharBudget: number): string[] {
+  function serveAll(observationIds: readonly string[], resultCharBudget: number): string[] {
     const texts: string[] = [];
     let page = readObservationPage({
       snapshot,
       request: { observation_ids: [...observationIds] },
-      pageCharBudget,
+      resultCharBudget,
     });
     texts.push(JSON.stringify(page));
     while (page.next_cursor) {
-      page = readObservationPage({ snapshot, request: { cursor: page.next_cursor }, pageCharBudget });
+      page = readObservationPage({ snapshot, request: { cursor: page.next_cursor }, resultCharBudget });
       texts.push(JSON.stringify(page));
     }
     return texts;

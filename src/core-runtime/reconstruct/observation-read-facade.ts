@@ -54,6 +54,7 @@ import {
   OBSERVATION_READ_MAX_ID_CHARS,
   OBSERVATION_READ_MAX_REQUEST_IDS,
   type ObservationReadRequest,
+  observationReadToolResult,
 } from "./observation-read.js";
 import {
   isTerminalObservationReadFailure,
@@ -316,7 +317,7 @@ export function observationReadFacadeCodexArgs(launch: ObservationReadFacadeLaun
 
 /** Written by the facade, read by the runtime after the worker exits. */
 export interface ObservationReadFacadeReceiptFile {
-  readonly schema_version: "observation-read-facade-receipt/v3";
+  readonly schema_version: "observation-read-facade-receipt/v4";
   /**
    * The launch this receipt belongs to. WITHOUT it the file is only evidence that *some* facade once
    * served *something* at this path, and the path is derived from the session root plus a literal round
@@ -373,7 +374,7 @@ const DESCRIPTOR_SCHEMA_VERSION: ObservationReadFacadeDescriptor["schema_version
 // (v2 itself was a MEANING change with no shape change: a v1 receipt is evidence that some facade served
 // something at this path, a v2 receipt is evidence that THIS launch did.)
 const RECEIPT_SCHEMA_VERSION: ObservationReadFacadeReceiptFile["schema_version"] =
-  "observation-read-facade-receipt/v3";
+  "observation-read-facade-receipt/v4";
 
 const EMISSIONS_SCHEMA_VERSION: ObservationReadFacadeEmissionsFile["schema_version"] =
   "observation-read-facade-emissions/v1";
@@ -618,13 +619,14 @@ export class ObservationReadFacadeSession {
       // ONE serialization, recorded and returned. Serializing twice would let the recorded string and
       // the emitted one drift, and reconciliation searches the transcript for exactly this text
       // (design §9-F4) — a second `JSON.stringify` is a second source of truth for the same bytes.
-      const canonicalText = JSON.stringify(page);
-      this.#emissions.push(canonicalText);
-      return {
-        content: [{ type: "text", text: canonicalText }],
-        structuredContent: page,
-        isError: false,
-      };
+      //
+      // The RESULT SHAPE lives in `observation-read.ts` beside the cost model that sizes it: the budget
+      // bounds this object's rendered length, so a copy of the page added here and not there would make
+      // every reservation count a shape the transport no longer carries. That is the 2026-07-31 defect
+      // in its general form, so the literal is single-sourced rather than mirrored.
+      const result = observationReadToolResult(page);
+      this.#emissions.push(result.content[0].text);
+      return result;
     } catch (error) {
       return this.#failureResult(error);
     }

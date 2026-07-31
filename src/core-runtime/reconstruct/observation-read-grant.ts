@@ -88,6 +88,7 @@ import {
   elideMessageValue,
   fixObservationSnapshot,
   ObservationReadError,
+  observationReadToolResult,
   readObservationPage,
   type ObservationReadPage,
   type ObservationReadRequest,
@@ -106,27 +107,32 @@ import {
  *
  * 32,000 because a page has to SURVIVE THE TRIP, and the trip has a ceiling this side cannot see: codex
  * trims a tool result middle-out on the way into the model's context, and the MCP server is never told.
- * Two measurements bracket it — in real transcripts the clipped received records cluster at 40,149–40,150
- * chars (that is the clip length, not the limit) while the largest record that arrived whole is 32,151;
- * a direct probe passed at 32,035 and was clipped at 65,049. So the true limit sits somewhere in
- * (32,151, 40,149] and nobody has measured where. This budget sizes the largest page it can emit
- * (31,960 over the measured corpus) BELOW the largest payload ever observed to arrive intact, rather
- * than below the clip length — evidence rather than arithmetic.
  *
- * The previous value, 65,536, sat on the wrong side of both brackets: a full page could not reach the
- * model whole, which under delivery reconciliation meant it was never attested and under the default
- * receipt path meant the runtime authorized a citation to content the worker never saw.
+ * WHAT THIS BOUNDS, and why the unit matters more than the number. It bounds the RENDERED TOOL RESULT —
+ * `JSON.stringify(observationReadToolResult(page))` — not the page. The two differ by roughly 2x because
+ * the result carries the page twice (escaped in `content[0].text`, plain in `structuredContent`), and
+ * sizing the page instead is a defect this constant already shipped once: at a 32,000 PAGE budget the
+ * three pages of a live paging probe rendered to 66,892 / 70,538 / 66,414 chars and every one was cut at
+ * 40,149, so nothing attested and nothing was citable. The third page was 29,236 page chars — inside the
+ * budget it was checked against — which is what proves the unit, not the value, was wrong.
+ * (`benchmark/20260731-range-delivery-live-probe/` §3차, design `23-…md` §0-1.)
  *
- * THIS IS NECESSARY, NOT SUFFICIENT. The unit codex clips is the RECEIVED RECORD, not the page, and one
- * exec turn can render several tool results into a single record (`delivery-reconciliation.ts` header,
- * measurement 20-… §2). Two pages this size in one turn still exceed the bracket. Sizing alone cannot
- * close that; only transcript-confirmed delivery can, because a clipped record simply fails to attest.
- * See design `23-…md` §3/S4.
+ * WHY 38,000. Measured, not chosen: across a 22-rollout sweep of one day's real transcripts every
+ * truncated record clipped at 40,149–40,153 chars, and the received record is the rendered result plus a
+ * short host prefix (47 chars measured). 38,000 sits below that with ~2,100 chars of headroom. The
+ * earlier bracket reasoning — "somewhere in (32,151, 40,149], nobody has measured where" — was framed on
+ * page size and does not transfer; on the rendered result the clip point is directly observed.
+ *
+ * THIS IS NECESSARY, NOT SUFFICIENT. The unit codex clips is the RECEIVED RECORD, and one exec turn can
+ * still render several tool results into a single record (`delivery-reconciliation.ts` header; measured
+ * live 2026-07-31 in a separate run, 4 payloads into 2 records). Two results this size in one turn still
+ * exceed the clip. Sizing alone cannot close that; only transcript-confirmed delivery can, because a
+ * clipped record simply fails to attest. See design `23-…md` §3/S4.
  */
-export const OBSERVATION_READ_PAGE_CHAR_BUDGET = 32_000;
+export const OBSERVATION_READ_RESULT_CHAR_BUDGET = 38_000;
 
 /**
- * Smallest `pageCharBudget` a grant may be minted with. Both bounds below are MEASURED, not chosen:
+ * Smallest `resultCharBudget` a grant may be minted with. Both bounds below are MEASURED, not chosen:
  *
  * 1. The reader needs 3,376 chars to serve the worst shape-legal request (`OBSERVATION_READ_MAX_REQUEST_IDS`
  *    ids each at `OBSERVATION_READ_MAX_ID_CHARS`), because the page envelope reserves room for a
@@ -134,14 +140,14 @@ export const OBSERVATION_READ_PAGE_CHAR_BUDGET = 32_000;
  *    `budget_too_small` — a grant that cannot serve its own legal requests must not exist.
  * 2. The longest failure message any `serve` can produce is 200 chars, so the per-call reservation
  *    (`floor + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS` = 5,120) covers charging the real message text.
- *    WITHOUT this floor that guarantee fails: cross-family review minted at `pageCharBudget: 1`, where the
+ *    WITHOUT this floor that guarantee fails: cross-family review minted at `resultCharBudget: 1`, where the
  *    total was exactly the 1,025-char reservation, and one legal call charged 1,181 — 156 over its own
  *    budget. The cumulative bound is only a bound if the reservation dominates every charge.
  *
  * Both numbers are asserted in the tests, so raising `OBSERVATION_READ_MAX_ID_CHARS` or the id cap without
  * revisiting this floor fails rather than silently re-opening the overrun.
  */
-export const OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET = 4_096;
+export const OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET = 4_096;
 
 /**
  * Chars charged for the envelope around ONE tool exchange — the call, the result wrapper and the turn
@@ -396,7 +402,7 @@ function parseSafetyLedger(ledgerText: string): ReconstructSourceSafetyLedgerArt
 
 export interface ObservationReadFetchBudget {
   /** Constant per-response ceiling every page of this grant is sized against. */
-  readonly page_char_budget: number;
+  readonly result_char_budget: number;
   /** Total chars this grant may serve across all calls, framing included. */
   readonly total_fetch_char_budget: number;
   /** Calls this grant may serve — a round-trip bound, independent of the char bound above. */
@@ -490,19 +496,19 @@ export function deriveObservationReadFetchBudget(args: {
    * string is the dispatched string rather than a caller's idea of it. */
   systemPrompt: string;
   userPrompt: string;
-  pageCharBudget?: number;
+  resultCharBudget?: number;
 }): ObservationReadFetchBudget {
   const initialPromptChars = codexCombinedPrompt(args.systemPrompt, args.userPrompt).length;
-  const pageCharBudget = args.pageCharBudget ?? OBSERVATION_READ_PAGE_CHAR_BUDGET;
-  if (!Number.isInteger(pageCharBudget) || pageCharBudget < OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET) {
+  const resultCharBudget = args.resultCharBudget ?? OBSERVATION_READ_RESULT_CHAR_BUDGET;
+  if (!Number.isInteger(resultCharBudget) || resultCharBudget < OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET) {
     throw new ObservationReadError(
       "fetch_budget_unservable",
-      `pageCharBudget must be an integer of at least ${OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET}, got ${pageCharBudget}`,
+      `resultCharBudget must be an integer of at least ${OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET}, got ${resultCharBudget}`,
     );
   }
   const totalFetchCharBudget =
     CODEX_PROMPT_INPUT_CHAR_LIMIT - initialPromptChars - OBSERVATION_READ_SESSION_RESERVE_CHARS;
-  const perCallWorstCase = pageCharBudget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS;
+  const perCallWorstCase = resultCharBudget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS;
   if (totalFetchCharBudget < perCallWorstCase) {
     throw new ObservationReadError(
       "fetch_budget_unservable",
@@ -512,7 +518,7 @@ export function deriveObservationReadFetchBudget(args: {
     );
   }
   return Object.freeze({
-    page_char_budget: pageCharBudget,
+    result_char_budget: resultCharBudget,
     total_fetch_char_budget: totalFetchCharBudget,
     max_calls: OBSERVATION_READ_MAX_CALLS,
   });
@@ -554,7 +560,7 @@ export class ObservationReadGrantRegistry {
     systemPrompt: string;
     userPrompt: string;
     ttlMs: number;
-    pageCharBudget?: number;
+    resultCharBudget?: number;
   }): { token: string; receipt: ObservationReadReceipt } {
     if (!Number.isInteger(args.ttlMs) || args.ttlMs <= 0) {
       throw new ObservationReadError(
@@ -565,7 +571,7 @@ export class ObservationReadGrantRegistry {
     const budget = deriveObservationReadFetchBudget({
       systemPrompt: args.systemPrompt,
       userPrompt: args.userPrompt,
-      ...(args.pageCharBudget === undefined ? {} : { pageCharBudget: args.pageCharBudget }),
+      ...(args.resultCharBudget === undefined ? {} : { resultCharBudget: args.resultCharBudget }),
     });
     // COPY the paths. `readonly` is compile-time only and the object arrives by reference, so holding the
     // caller's object let a caller mutate it after mint and redirect every later re-read — cross-family
@@ -667,7 +673,7 @@ export class ObservationReadGrantRegistry {
       );
     }
     const perCallWorstCase =
-      state.budget.page_char_budget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS;
+      state.budget.result_char_budget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS;
     const remaining = state.budget.total_fetch_char_budget - state.charsServed;
     if (remaining < perCallWorstCase) {
       // Admission on the WORST case, never a smaller page: shrinking the page would change the split and
@@ -687,17 +693,27 @@ export class ObservationReadGrantRegistry {
       page = readObservationPage({
         snapshot: state.snapshot,
         request: args.request,
-        pageCharBudget: state.budget.page_char_budget,
+        resultCharBudget: state.budget.result_char_budget,
       });
     } catch (error) {
       // Charge the failure's ACTUAL text, not just the envelope: an error is rendered into the worker's
       // conversation exactly like a result. Bounded by construction — every id is capped at
       // OBSERVATION_READ_MAX_ID_CHARS, so no message approaches a page — which is what makes the
       // reservation above cover this path too.
-      state.charsServed += (error as Error).message.length;
+      // Twice the text, for the same reason the success path charges the rendered result: a failure is
+      // returned as `{content:[{text}], structuredContent, isError}` too, so its message is carried
+      // twice into the worker's context. Still far inside the reservation — messages are capped at 200
+      // chars against a 5,120 floor reservation, which is what keeps this bound rather than exact.
+      state.charsServed += 2 * (error as Error).message.length;
       throw error;
     }
-    state.charsServed += JSON.stringify(page).length;
+    // Charged in the SAME unit the admission above reserves, and the same unit
+    // `total_fetch_char_budget` is derived in: the rendered tool result. Charging the page instead
+    // under-counted by ~2x — the page is one of two copies inside the result — so a session could put
+    // roughly twice the intended volume into the worker's context while this ledger reported it inside
+    // the ceiling. Same defect class as the page-vs-result sizing above, one layer up; found because
+    // the two numbers stopped agreeing once the reservation moved (2026-07-31).
+    state.charsServed += JSON.stringify(observationReadToolResult(page)).length;
     if (state.charsServed > state.budget.total_fetch_char_budget) {
       // The module's core promise, enforced at its own authority: cumulative output never exceeds the
       // ceiling it was derived from. Reaching here means the admission arithmetic above is wrong.

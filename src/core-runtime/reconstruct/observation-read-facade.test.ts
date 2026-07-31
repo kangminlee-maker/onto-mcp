@@ -31,8 +31,13 @@ import {
   fixObservationSnapshot,
   OBSERVATION_READ_MAX_ID_CHARS,
   OBSERVATION_READ_MAX_REQUEST_IDS,
+  readObservationPage,
+  type ObservationReadRequest,
 } from "./observation-read.js";
-import { OBSERVATION_READ_MAX_CALLS } from "./observation-read-grant.js";
+import {
+  OBSERVATION_READ_MAX_CALLS,
+  OBSERVATION_READ_RESULT_CHAR_BUDGET,
+} from "./observation-read-grant.js";
 
 // Spec basis: development-records/design/20260726-observation-catalog-tool-design.md §4 (tool contract)
 // and §9 stage 3b. The facade is the PULL layer's server: it mints a grant from a descriptor the runtime
@@ -66,9 +71,46 @@ const allObservationIds = observationsArtifact.observations.map((o) => o.observa
  * can mint, so a test needing a FULL page has one. Derived rather than named: a hard-coded id would go
  * stale the moment the fixture changed, and silently, because a smaller observation still serves fine.
  */
-const largestObservationId = observationsArtifact.observations
+const observationsBySizeDesc = observationsArtifact.observations
   .map((observation) => ({ id: observation.observation_id, chars: JSON.stringify(observation).length }))
-  .sort((left, right) => right.chars - left.chars)[0]!.id;
+  .sort((left, right) => right.chars - left.chars);
+const largestObservationId = observationsBySizeDesc[0]!.id;
+
+/**
+ * The largest observation ONE GRANT CAN DELIVER WHOLE — what every cursor-walk test below asks for.
+ *
+ * Not the same id as {@link largestObservationId} any more, and the difference is the point: the budget
+ * bounds the rendered result rather than the page, so a page carries about half what it used to and the
+ * corpus's two largest observations now need 52 and 38 pages against a 32-call cap. A walk of either ends
+ * in `call_limit_exhausted` partway through the body, which is a real property of the grant — not
+ * something a test about reassembly or emission order should be asserting by accident.
+ *
+ * Derived by PAGING, with the real reader at the real budget: page count is not a function of body size
+ * (escaping density moves it), so an estimate would pick a wrong id silently, and a named one would go
+ * stale the moment the budget or the fixture moved.
+ */
+const { id: largestPullableObservationId, pages: largestPullablePageCount } = (() => {
+  const snapshot = fixObservationSnapshot(
+    readFileSync(OBSERVATIONS_FIXTURE, "utf8"),
+    ledgerArtifact as unknown as Parameters<typeof fixObservationSnapshot>[1],
+  );
+  for (const { id } of observationsBySizeDesc) {
+    let pages = 0;
+    let request: ObservationReadRequest = { observation_ids: [id] };
+    for (;;) {
+      const page = readObservationPage({
+        snapshot,
+        request,
+        resultCharBudget: OBSERVATION_READ_RESULT_CHAR_BUDGET,
+      });
+      pages += 1;
+      if (page.next_cursor === undefined) break;
+      request = { cursor: page.next_cursor };
+    }
+    if (pages > 1 && pages <= OBSERVATION_READ_MAX_CALLS) return { id, pages };
+  }
+  throw new Error("no observation in this fixture both splits and fits inside the call cap");
+})();
 
 /**
  * Write the three artifacts plus a `valid` validation for them. The ledger must NAME the observations
@@ -315,11 +357,9 @@ describe("observation read facade — serving and the receipt (design §3)", () 
   it("reassembles a split observation across cursor pages, byte-identically", () => {
     const { descriptor } = writeDescriptor();
     const session = new ObservationReadFacadeSession({ descriptor });
-    // The largest observation in the real corpus needs several pages; walking the cursor must recover
-    // its body exactly (the stage-1 property, now through the MCP surface).
-    const [biggest] = [...observationsArtifact.observations]
-      .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length);
-    let request: Record<string, unknown> = { observation_ids: [biggest!.observation_id] };
+    // The largest observation one grant can carry to the end needs several pages; walking the cursor must
+    // recover its body exactly (the stage-1 property, now through the MCP surface).
+    let request: Record<string, unknown> = { observation_ids: [largestPullableObservationId] };
     const parts: string[] = [];
     let pages = 0;
     for (;;) {
@@ -332,8 +372,9 @@ describe("observation read facade — serving and the receipt (design §3)", () 
       if (pages > 40) throw new Error("cursor walk did not terminate");
     }
     expect(pages).toBeGreaterThan(1); // non-vacuous: this observation really does split
+    expect(pages).toBe(largestPullablePageCount); // ...and the facade paged it exactly as sized
     const reassembled = JSON.parse(parts.join(""));
-    expect(reassembled.observation_id).toBe(biggest!.observation_id);
+    expect(reassembled.observation_id).toBe(largestPullableObservationId);
   });
 
   it("withholds an observation the ledger does not admit — as an UNKNOWN id, not a refusal", () => {
@@ -718,14 +759,14 @@ describe("observation read facade — receipt reading is fail-closed (design §8
     // the citation check.
     const { descriptor, receiptPath } = writeDescriptor();
     const session = new ObservationReadFacadeSession({ descriptor });
-    const [biggest] = [...observationsArtifact.observations]
-      .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length);
-    const first = callTool(session, { observation_ids: [biggest!.observation_id] });
+    // The observation has to be one a grant can finish, or "now it is citable" would never be reachable
+    // and the second half of this test would assert nothing (see `largestPullableObservationId`).
+    const first = callTool(session, { observation_ids: [largestPullableObservationId] });
     expect(first.structuredContent.next_cursor).toBeTruthy(); // non-vacuous: it really does split
     const partial = readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token)!;
-    expect(partial.receipt.served.some((r) => r.observation_id === biggest!.observation_id))
+    expect(partial.receipt.served.some((r) => r.observation_id === largestPullableObservationId))
       .toBe(true); // the receipt DOES record the fragment...
-    expect(observationIdsServed(partial).has(biggest!.observation_id)).toBe(false); // ...but it is not citable
+    expect(observationIdsServed(partial).has(largestPullableObservationId)).toBe(false); // ...not citable
 
     // Walk it to the end; now the whole observation was received and the id becomes citable.
     let cursor = first.structuredContent.next_cursor as string | undefined;
@@ -733,8 +774,9 @@ describe("observation read facade — receipt reading is fail-closed (design §8
       const next = callTool(session, { cursor }, page + 2);
       cursor = next.structuredContent?.next_cursor as string | undefined;
     }
+    expect(cursor).toBeUndefined(); // the walk ENDED, rather than running out of calls partway
     const complete = readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token)!;
-    expect(observationIdsServed(complete).has(biggest!.observation_id)).toBe(true);
+    expect(observationIdsServed(complete).has(largestPullableObservationId)).toBe(true);
   });
 
   it("refuses a same-version receipt whose served records are malformed", () => {
@@ -753,7 +795,7 @@ describe("observation read facade — receipt reading is fail-closed (design §8
       writeFileSync(
         forged,
         JSON.stringify({
-          schema_version: "observation-read-facade-receipt/v3",
+          schema_version: "observation-read-facade-receipt/v4",
           launch_token: token,
           receipt: { grant_id: "g", served },
           rejected_before_grant: 0,
@@ -1046,9 +1088,7 @@ describe("observation read facade — emissions record and the start right", () 
   it("records every page of a split observation, in emission order", () => {
     const { descriptor, emissionsPath } = writeDescriptor();
     const session = new ObservationReadFacadeSession({ descriptor });
-    const [biggest] = [...observationsArtifact.observations]
-      .sort((left, right) => JSON.stringify(right).length - JSON.stringify(left).length);
-    const first = callTool(session, { observation_ids: [biggest!.observation_id] });
+    const first = callTool(session, { observation_ids: [largestPullableObservationId] });
     const emitted = [first.content[0].text as string];
     let cursor = (first.structuredContent as { next_cursor?: string }).next_cursor;
     expect(cursor, "the fixture must actually split, or this proves nothing").toBeTruthy();
@@ -1059,6 +1099,10 @@ describe("observation read facade — emissions record and the start right", () 
       emitted.push(next.content[0].text as string);
       cursor = (next.structuredContent as { next_cursor?: string }).next_cursor;
     }
+    // Every call in `emitted` has to have SERVED. A walk cut short by the call cap ends on a refusal
+    // whose text is pushed here too, and the mismatch below would then be about the cap rather than
+    // about emission order.
+    expect(cursor).toBeUndefined();
     const emissions = readObservationReadFacadeEmissions(emissionsPath, descriptor.launch_token)!;
     expect(emissions.emissions.map((entry) => entry.canonical_text)).toEqual(emitted);
   });
@@ -1181,31 +1225,36 @@ describe("observation read facade — emissions record and the start right", () 
 });
 
 // ── Stage S4 of the RANGE contract (design 20260727 `23-…md` §3/S4).
-describe("page budget — the value the LIVE facade mints with, not the one a harness passes", () => {
-  it("mints at 32,000 and serves pages that fit inside the measured lossless bracket", () => {
+describe("result budget — the value the LIVE facade mints with, not the one a harness passes", () => {
+  it("mints at 38,000 and serves results that fit inside the measured lossless bracket", () => {
     const { descriptor, receiptPath } = writeDescriptor();
     const session = new ObservationReadFacadeSession({ descriptor });
 
-    // The LITERAL, not the constant. Asserting `=== OBSERVATION_READ_PAGE_CHAR_BUDGET` would pass no
+    // The LITERAL, not the constant. Asserting `=== OBSERVATION_READ_RESULT_CHAR_BUDGET` would pass no
     // matter what that constant became; asserting it here pins the value AND the wiring, because the
     // number has to travel through `mint` — which is handed no budget at all
     // (`observation-read-facade.ts`, the `#registry.mint({...})` call) and therefore uses the default.
     // Cross-family review raised exactly this: a completion condition measured by calling
-    // `readObservationPage({ pageCharBudget: 32000 })` from a test is satisfied while the live path
+    // `readObservationPage({ resultCharBudget: 38000 })` from a test is satisfied while the live path
     // keeps the old default, because nothing on the live path ever sees the test's argument.
     const opening = readObservationReadFacadeReceipt(receiptPath, descriptor.launch_token);
-    expect(opening?.receipt.budget.page_char_budget).toBe(32_000);
+    expect(opening?.receipt.budget.result_char_budget).toBe(38_000);
 
-    // And the budget has to be REACHED, or "pages fit" is a statement about pages nobody served. The
+    // And the budget has to be REACHED, or "results fit" is a statement about results nobody served. The
     // corpus's largest observation splits at this budget, so the first page is a full one.
     const result = callTool(session, { observation_ids: [largestObservationId] });
     expect(result.isError).toBe(false);
-    const served = JSON.stringify(result.structuredContent);
-    expect(served.length).toBeGreaterThan(30_000);
-    expect(served.length).toBeLessThanOrEqual(32_000);
-    // 32,151 is the largest tool result observed to arrive in a worker's context uncut (measurement
-    // 20-… §5). Below it is the evidence-backed side of the bracket; the clip length (40,149) is not.
-    expect(served.length).toBeLessThan(32_151);
+    // The RENDERED RESULT, not the page: the result carries the page twice (escaped in `content[0].text`,
+    // plain in `structuredContent`), so a page-sized assertion here would be satisfied by a result of
+    // twice the size — which is exactly how three live pages sized at 32,000 page chars rendered to
+    // 66,892 / 70,538 / 66,414 and were all clipped (design `23-…md` §0-1, measured 2026-07-31).
+    const rendered = JSON.stringify(result);
+    expect(rendered.length).toBeGreaterThan(36_000);
+    expect(rendered.length).toBeLessThanOrEqual(38_000);
+    // The bracket, now directly observed rather than inferred: across a 22-rollout sweep of one day's
+    // real transcripts every truncated record was cut at 40,149-40,153 chars, and the received record is
+    // this rendered result plus a 47-char host prefix. Arriving whole means staying under that.
+    expect(rendered.length + 47).toBeLessThan(40_149);
     expect(result.structuredContent.next_cursor).toBeDefined();
   });
 });

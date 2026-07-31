@@ -67,8 +67,13 @@ export const OBSERVATION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
  * 62,528 to 62,395, so 133 characters would be served twice and reported as consecutive parts. The
  * version is what refuses it. (Cross-family review; the migration note that said the budget binding
  * already covered this was wrong — it covers a budget CHANGE, which this is not.)
+ *
+ * v3: the budget's UNIT changed from page chars to rendered result chars (design `23-…md` §3, "S4
+ * 재개방"). The same numeric `b` therefore names a different decomposition, and the cost per code point
+ * changed with it, so every boundary moves. `b` alone cannot refuse a v2 cursor — it compares equal
+ * whenever the two budgets happen to share a number — which is the same hole v2 was minted to close.
  */
-const OBSERVATION_CURSOR_VERSION = 2;
+const OBSERVATION_CURSOR_VERSION = 3;
 
 /**
  * Upper bound reserved for the part_index / part_count digit width when sizing a part, and the hard cap
@@ -556,7 +561,60 @@ export function jsonStringContentCost(text: string): number {
 }
 
 /**
- * Split a body into parts whose SERIALIZED cost is ≤ `allowance`, cutting only on code-point boundaries
+ * What a serialized fragment of the page costs in the RENDERED TOOL RESULT — the quantity the transport
+ * actually clips, and therefore the one every reservation below is denominated in.
+ *
+ * The result carries the page TWICE: escaped inside `content[0].text` and plain as `structuredContent`
+ * (see {@link observationReadToolResult}). The worker's runtime renders the whole result object into its
+ * transcript, so a fragment pays its re-escaped length PLUS its own. Because that is additive over the
+ * concatenation the serializer produces, per-fragment accounting stays exact rather than a ratio.
+ *
+ * This is the correction of 2026-07-31 (design `23-…md` §0-1). Sizing the PAGE was measuring the wrong
+ * thing: at a 32,000-char page budget every page rendered to 66,892-70,538 chars and was clipped at
+ * 40,149 — including one of 29,236 chars, comfortably under its own budget.
+ */
+function envelopeCostOfSerialized(serialized: string): number {
+  return jsonStringContentCost(serialized) + serialized.length;
+}
+
+/**
+ * Chars one body code point costs in the rendered result — that is, the cost of ITS REPRESENTATION
+ * inside the serialized page, counted once escaped and once plain.
+ *
+ * Derived from {@link codePointJsonCost}'s cases, not from a ratio: `"` serializes to `\"` (2 chars),
+ * which re-escapes to `\\\"` (4), so it costs 6; `\n` serializes to `\n` (2), re-escaping to `\\n` (3),
+ * so 5; a `\uXXXX` escape is 6 chars re-escaping to 7, so 13; a plain char is 1 and 1, so 2. The
+ * per-entry parity check in `readObservationPage` is what keeps these numbers honest against the real
+ * serializer.
+ */
+function codePointEnvelopeCost(codePoint: number): number {
+  if (codePoint === 0x22 || codePoint === 0x5c) return 6;
+  if (
+    codePoint === 0x08 ||
+    codePoint === 0x09 ||
+    codePoint === 0x0a ||
+    codePoint === 0x0c ||
+    codePoint === 0x0d
+  ) {
+    return 5;
+  }
+  if (codePoint < 0x20) return 13;
+  if (codePoint >= 0xd800 && codePoint <= 0xdfff) return 13;
+  return codePoint > 0xffff ? 4 : 2;
+}
+
+export function envelopeContentCost(text: string): number {
+  let cost = 0;
+  for (let i = 0; i < text.length; ) {
+    const codePoint = text.codePointAt(i) as number;
+    cost += codePointEnvelopeCost(codePoint);
+    i += codePoint > 0xffff ? 2 : 1;
+  }
+  return cost;
+}
+
+/**
+ * Split a body into parts whose RENDERED cost is ≤ `allowance`, cutting only on code-point boundaries
  * so a surrogate pair is never torn in half (a torn pair would turn 2 emitted chars into two 6-char
  * escapes and break the exactness above). Order-preserving and loss-free by construction: the parts are
  * consecutive `slice`s of the input, so concatenating them returns the input character-for-character.
@@ -564,14 +622,14 @@ export function jsonStringContentCost(text: string): number {
  * The split is a function of (body, allowance) ALONE — never of how far a page happened to be filled —
  * so `part_count` is stable and a resumed cursor walks the identical decomposition.
  */
-function splitBodyByJsonCost(body: string, allowance: number): string[] {
+function splitBodyByRenderedCost(body: string, allowance: number): string[] {
   const parts: string[] = [];
   let start = 0;
   let cost = 0;
   for (let i = 0; i < body.length; ) {
     const codePoint = body.codePointAt(i) as number;
     const units = codePoint > 0xffff ? 2 : 1;
-    const charCost = codePointJsonCost(codePoint);
+    const charCost = codePointEnvelopeCost(codePoint);
     if (cost > 0 && cost + charCost > allowance) {
       parts.push(body.slice(start, i));
       start = i;
@@ -584,13 +642,47 @@ function splitBodyByJsonCost(body: string, allowance: number): string[] {
   return parts;
 }
 
-/** Chars the page envelope costs around its entries, for a given digest and (optional) cursor. */
-function pageFramingChars(snapshotDigest: string, cursor: string | undefined): number {
+/**
+ * The MCP `tools/call` result the facade returns for a served page — declared HERE, beside the cost
+ * model that must size it, because the two are one contract. A copy of the page added there and not
+ * here would change what the transport carries while every reservation kept counting the old shape,
+ * which is exactly the defect this function exists to make unrepresentable.
+ */
+export function observationReadToolResult(page: ObservationReadPage): {
+  /** A 1-TUPLE, not an array: the emission recorded for reconciliation is `content[0].text`, and a
+   * plain array type would make that access nullable and invite a `!` at the one place the bytes are
+   * bound to the transcript search. */
+  content: [{ type: "text"; text: string }];
+  structuredContent: ObservationReadPage;
+  isError: false;
+} {
+  return {
+    content: [{ type: "text", text: JSON.stringify(page) }],
+    structuredContent: page,
+    isError: false,
+  };
+}
+
+/**
+ * Chars the result costs around the serialized page itself. Constant by construction — the serializer
+ * emits a fixed prefix, the escaped page, a fixed middle, the plain page, and a fixed suffix — and
+ * DERIVED from {@link observationReadToolResult} rather than counted by hand.
+ */
+const RESULT_FRAMING_CHARS = (() => {
+  const page: ObservationReadPage = { snapshot_digest: "", entries: [] };
+  return (
+    JSON.stringify(observationReadToolResult(page)).length -
+    envelopeCostOfSerialized(JSON.stringify(page))
+  );
+})();
+
+/** The page's own framing string around its entries, for a given digest and (optional) cursor. */
+function pageFraming(snapshotDigest: string, cursor: string | undefined): string {
   return JSON.stringify(
     cursor === undefined
       ? { snapshot_digest: snapshotDigest, entries: [] }
       : { snapshot_digest: snapshotDigest, entries: [], next_cursor: cursor },
-  ).length;
+  );
 }
 
 /**
@@ -630,8 +722,12 @@ function pageEntryOf(args: {
   };
 }
 
-/** Chars one entry costs excluding its body content (the `""` quotes are included). */
-function entryFramingChars(
+/**
+ * One entry's serialized framing, excluding its body content (the `""` quotes are included). Returns
+ * the STRING rather than a length because the two quantities derived from it — page chars and rendered
+ * cost — must come from the same bytes; a length alone cannot say what re-escaping will cost.
+ */
+function entryFraming(
   observationId: string,
   contentSha256: string,
   partIndex: number,
@@ -641,7 +737,7 @@ function entryFramingChars(
   bodyEnd: number,
   rangeContentSha256: string,
   rangeId: string,
-): number {
+): string {
   return JSON.stringify(
     pageEntryOf({
       observationId,
@@ -655,7 +751,7 @@ function entryFramingChars(
       rangeId,
       body: "",
     }),
-  ).length;
+  );
 }
 
 /** A hash-shaped placeholder for reserving a range hash before the slice that produces it is known. */
@@ -753,8 +849,14 @@ function assertRequestedIds(ids: readonly string[]): void {
 /**
  * Serve one page of the requested observations from the fixed snapshot.
  *
- * `pageCharBudget` bounds the SERIALIZED page (`JSON.stringify(page).length`) — the transport measure,
- * not a raw-body estimate, so JSON escaping cannot push a page over the ceiling it was sized against.
+ * `resultCharBudget` bounds the RENDERED TOOL RESULT (`JSON.stringify(observationReadToolResult(page))`)
+ * — what the worker's transcript actually has to hold, which is the thing the transport clips. It is
+ * NOT the page's own size: the result carries the page twice (escaped in `content`, plain in
+ * `structuredContent`), so a page runs roughly half its rendered cost and sizing the page instead let
+ * every page at a 32,000 budget render to 66,892-70,538 chars and be cut at 40,149 — one of them at
+ * 29,236 page chars, comfortably inside the budget it was checked against (design `23-…md` §0-1,
+ * measured 2026-07-31).
+ *
  * Stage 1 takes the budget as an argument on purpose: design §4.2 derives it from the remaining headroom
  * of the existing `CODEX_PROMPT_INPUT_CHAR_LIMIT` rather than minting a new ceiling, and that cumulative
  * accounting is Stage 2's.
@@ -787,13 +889,13 @@ function assertRequestedIds(ids: readonly string[]): void {
 export function readObservationPage(args: {
   snapshot: ObservationSnapshot;
   request: ObservationReadRequest;
-  pageCharBudget: number;
+  resultCharBudget: number;
 }): ObservationReadPage {
-  const { snapshot, request, pageCharBudget } = args;
-  if (!Number.isInteger(pageCharBudget) || pageCharBudget <= 0) {
+  const { snapshot, request, resultCharBudget } = args;
+  if (!Number.isInteger(resultCharBudget) || resultCharBudget <= 0) {
     throw new ObservationReadError(
       "budget_too_small",
-      `pageCharBudget must be a positive integer, got ${pageCharBudget}`,
+      `resultCharBudget must be a positive integer, got ${resultCharBudget}`,
     );
   }
 
@@ -820,10 +922,10 @@ export function readObservationPage(args: {
         "cursor was issued against a different snapshot; re-request the ids against the current one",
       );
     }
-    if (cursor.b !== pageCharBudget) {
+    if (cursor.b !== resultCharBudget) {
       throw new ObservationReadError(
         "cursor_malformed",
-        `cursor was issued at a page budget of ${cursor.b}, not ${pageCharBudget}`,
+        `cursor was issued at a page budget of ${cursor.b}, not ${resultCharBudget}`,
       );
     }
     ids = cursor.ids;
@@ -848,17 +950,21 @@ export function readObservationPage(args: {
   const maxCursorChars = encodeCursor({
     v: OBSERVATION_CURSOR_VERSION,
     d: snapshot.snapshot_digest,
-    b: pageCharBudget,
+    b: resultCharBudget,
     ids: [...ids],
     o: ids.length,
     p: PART_NUMBER_SENTINEL,
   }).length;
-  const framingChars = pageFramingChars(snapshot.snapshot_digest, "x".repeat(maxCursorChars));
-  const maxEntryFramingChars = requested.reduce(
+  // Everything below is denominated in RENDERED cost, not page chars: the budget bounds the result the
+  // worker's transcript has to hold, and the page is only one of the two copies inside it.
+  const framingCost = envelopeCostOfSerialized(
+    pageFraming(snapshot.snapshot_digest, "x".repeat(maxCursorChars)),
+  );
+  const maxEntryFramingCost = requested.reduce(
     (max, entry) =>
       Math.max(
         max,
-        entryFramingChars(
+        envelopeCostOfSerialized(entryFraming(
           entry.observation_id,
           entry.observation_content_sha256,
           PART_NUMBER_SENTINEL,
@@ -870,15 +976,16 @@ export function readObservationPage(args: {
           PART_NUMBER_SENTINEL,
           SHA256_HEX_PLACEHOLDER,
           RANGE_ID_PLACEHOLDER,
-        ),
+        )),
       ),
     0,
   );
-  const partAllowance = pageCharBudget - framingChars - maxEntryFramingChars;
+  const partAllowance =
+    resultCharBudget - RESULT_FRAMING_CHARS - framingCost - maxEntryFramingCost;
   if (partAllowance < MIN_PART_ALLOWANCE_CHARS) {
     throw new ObservationReadError(
       "budget_too_small",
-      `pageCharBudget ${pageCharBudget} leaves ${partAllowance} chars for content after ${framingChars} of page framing and ${maxEntryFramingChars} of entry framing; at least ${MIN_PART_ALLOWANCE_CHARS} are needed`,
+      `resultCharBudget ${resultCharBudget} leaves ${partAllowance} chars of rendered room for content after ${RESULT_FRAMING_CHARS} of result framing, ${framingCost} of page framing and ${maxEntryFramingCost} of entry framing; at least ${MIN_PART_ALLOWANCE_CHARS} are needed`,
     );
   }
 
@@ -898,7 +1005,7 @@ export function readObservationPage(args: {
   }> = [];
   const firstPartOfObservation: number[] = [];
   requested.forEach((entry, observationIndex) => {
-    const parts = splitBodyByJsonCost(entry.body, partAllowance);
+    const parts = splitBodyByRenderedCost(entry.body, partAllowance);
     if (parts.length > PART_NUMBER_SENTINEL) {
       throw new ObservationReadError(
         "budget_too_small",
@@ -949,11 +1056,11 @@ export function readObservationPage(args: {
   }
 
   const entries: ObservationReadPageEntry[] = [];
-  let used = framingChars;
+  let used = RESULT_FRAMING_CHARS + framingCost;
   let flat = startFlat;
   for (; flat < pending.length; flat += 1) {
     const part = pending[flat] as (typeof pending)[number];
-    const framingChars = entryFramingChars(
+    const framing = entryFraming(
       part.entry.observation_id,
       part.entry.observation_content_sha256,
       part.partIndex + 1,
@@ -964,8 +1071,10 @@ export function readObservationPage(args: {
       part.rangeContentSha256,
       part.rangeId,
     );
-    const cost = framingChars + jsonStringContentCost(part.body) + (entries.length > 0 ? 1 : 0);
-    if (entries.length > 0 && used + cost > pageCharBudget) break;
+    // The `,` separating entries is one page char, hence two rendered chars.
+    const cost = envelopeCostOfSerialized(framing) + envelopeContentCost(part.body) +
+      (entries.length > 0 ? 2 : 0);
+    if (entries.length > 0 && used + cost > resultCharBudget) break;
     const entry = pageEntryOf({
       observationId: part.entry.observation_id,
       contentSha256: part.entry.observation_content_sha256,
@@ -984,13 +1093,26 @@ export function readObservationPage(args: {
     // or every reservation above it is wrong. Checking it here fires on the FIRST entry, where the
     // page-level assertion below fires only once a page grows past its budget — which the corpus's small
     // observations never do. Both stay: this covers the entry, that covers the page envelope.
-    const emittedChars = JSON.stringify(entry).length;
-    if (emittedChars !== framingChars + jsonStringContentCost(part.body)) {
+    const emitted = JSON.stringify(entry);
+    if (emitted.length !== framing.length + jsonStringContentCost(part.body)) {
       throw new ObservationReadError(
         "budget_too_small",
-        `entry for ${part.entry.observation_id} part ${part.partIndex + 1} serialized to ${emittedChars} chars, ` +
-          `but its framing reserved ${framingChars} plus ${jsonStringContentCost(part.body)} of content; ` +
+        `entry for ${part.entry.observation_id} part ${part.partIndex + 1} serialized to ${emitted.length} chars, ` +
+          `but its framing reserved ${framing.length} plus ${jsonStringContentCost(part.body)} of content; ` +
           "the reserved shape and the emitted shape disagree",
+      );
+    }
+    // The SAME parity, one level up: the rendered cost model must equal what re-escaping this entry
+    // actually spends. `codePointEnvelopeCost` is a hand-derived table over `codePointJsonCost`'s cases,
+    // and a wrong row there would under-reserve silently — the page would fit its budget and be clipped
+    // in transit, which is precisely the failure this change exists to close.
+    const reservedCost = envelopeCostOfSerialized(framing) + envelopeContentCost(part.body);
+    if (envelopeCostOfSerialized(emitted) !== reservedCost) {
+      throw new ObservationReadError(
+        "budget_too_small",
+        `entry for ${part.entry.observation_id} part ${part.partIndex + 1} renders to ${
+          envelopeCostOfSerialized(emitted)
+        } chars, but the cost model reserved ${reservedCost}; the rendered-cost table is wrong`,
       );
     }
     entries.push(entry);
@@ -1006,7 +1128,7 @@ export function readObservationPage(args: {
           next_cursor: encodeCursor({
             v: OBSERVATION_CURSOR_VERSION,
             d: snapshot.snapshot_digest,
-            b: pageCharBudget,
+            b: resultCharBudget,
             ids: [...ids],
             o: nextPart.observationIndex,
             p: nextPart.partIndex,
@@ -1015,14 +1137,16 @@ export function readObservationPage(args: {
       : {}),
   };
 
-  // The module's core promise, enforced at its own authority rather than asserted downstream: no page it
-  // emits exceeds the budget it was sized against. A miscount in the arithmetic above fails loud here
-  // instead of reaching a worker as an opaque provider rejection.
-  const serializedChars = JSON.stringify(page).length;
-  if (serializedChars > pageCharBudget) {
+  // The module's core promise, enforced at its own authority rather than asserted downstream: no RESULT
+  // it emits exceeds the budget it was sized against. Measured on the result rather than on the page,
+  // because the page is not what the transport clips — a page well under its own size still rendered to
+  // 66,892 chars and was cut at 40,149 (design `23-…md` §0-1, 2026-07-31). A miscount in the arithmetic
+  // above fails loud here instead of reaching a worker as content that silently never arrived.
+  const renderedChars = JSON.stringify(observationReadToolResult(page)).length;
+  if (renderedChars > resultCharBudget) {
     throw new ObservationReadError(
       "budget_too_small",
-      `page serialized to ${serializedChars} chars, above the ${pageCharBudget} budget it was sized against`,
+      `page rendered to ${renderedChars} result chars, above the ${resultCharBudget} budget it was sized against`,
     );
   }
   return page;

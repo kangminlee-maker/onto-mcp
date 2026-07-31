@@ -14,6 +14,7 @@ import {
   OBSERVATION_READ_MAX_ID_CHARS,
   OBSERVATION_READ_MAX_REQUEST_IDS,
   ObservationReadError,
+  observationReadToolResult,
   promptContextAdmittedObservationIds,
   type ObservationReadPage,
 } from "./observation-read.js";
@@ -22,8 +23,8 @@ import {
   ObservationReadGrantRegistry,
   OBSERVATION_READ_EXCHANGE_FRAMING_CHARS,
   OBSERVATION_READ_MAX_CALLS,
-  OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET,
-  OBSERVATION_READ_PAGE_CHAR_BUDGET,
+  OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET,
+  OBSERVATION_READ_RESULT_CHAR_BUDGET,
   OBSERVATION_READ_SESSION_RESERVE_CHARS,
   type ObservationReadGrantSources,
 } from "./observation-read-grant.js";
@@ -220,7 +221,7 @@ function walkGrant(
 function mintOver(
   registry: ObservationReadGrantRegistry,
   sources: ObservationReadGrantSources,
-  overrides?: { initialPromptChars?: number; pageCharBudget?: number; ttlMs?: number },
+  overrides?: { initialPromptChars?: number; resultCharBudget?: number; ttlMs?: number },
 ): { token: string; receipt: ReturnType<ObservationReadGrantRegistry["receipt"]> } {
   return registry.mint({
     sources,
@@ -229,7 +230,7 @@ function mintOver(
     systemPrompt: "",
     userPrompt: promptOf(Math.max(0, (overrides?.initialPromptChars ?? 0) - SEPARATOR_CHARS)),
     ttlMs: overrides?.ttlMs ?? TTL_MS,
-    ...(overrides?.pageCharBudget === undefined ? {} : { pageCharBudget: overrides.pageCharBudget }),
+    ...(overrides?.resultCharBudget === undefined ? {} : { resultCharBudget: overrides.resultCharBudget }),
   });
 }
 
@@ -279,7 +280,7 @@ describe("coverage is char ranges, so it survives what part indexes could not", 
     // coordinate space per body, so the same two pages leave a visible hole instead.
     const registry = new ObservationReadGrantRegistry();
     const sources = writeSources(OBSERVATIONS_TEXT);
-    const { token } = mintOver(registry, sources, { pageCharBudget: 8_192 });
+    const { token } = mintOver(registry, sources, { resultCharBudget: 8_192 });
     const big = [...fullArtifact.observations]
       .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
 
@@ -308,7 +309,7 @@ describe("coverage is char ranges, so it survives what part indexes could not", 
     // agree about. A mid-sized observation, because the largest needs more calls than a grant has.
     const registry = new ObservationReadGrantRegistry();
     const sources = writeSources(OBSERVATIONS_TEXT);
-    const { token } = mintOver(registry, sources, { pageCharBudget: 8_192 });
+    const { token } = mintOver(registry, sources, { resultCharBudget: 8_192 });
     const sized = [...fullArtifact.observations]
       .map((observation) => ({ id: observation.observation_id, chars: JSON.stringify(observation).length }))
       .sort((a, b) => a.chars - b.chars);
@@ -339,7 +340,7 @@ describe("coverage is char ranges, so it survives what part indexes could not", 
     // the reader's coordinate handling rather than the fold.
     const registry = new ObservationReadGrantRegistry();
     const sources = writeSources(OBSERVATIONS_TEXT);
-    const { token } = mintOver(registry, sources, { pageCharBudget: 8_192 });
+    const { token } = mintOver(registry, sources, { resultCharBudget: 8_192 });
     const big = [...fullArtifact.observations]
       .sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0]!.observation_id;
     const others = allIds.filter((id) => id !== big).slice(0, 15);
@@ -669,8 +670,8 @@ describe("session scope binding — a token reaches its own session and nothing 
     const registry = new ObservationReadGrantRegistry();
     const big = largestObservationId();
     const text = artifactTextWith([big]);
-    const first = mintOver(registry, writeSources(text), { pageCharBudget: 8_192 });
-    const second = mintOver(registry, writeSources(text), { pageCharBudget: 8_192 });
+    const first = mintOver(registry, writeSources(text), { resultCharBudget: 8_192 });
+    const second = mintOver(registry, writeSources(text), { resultCharBudget: 8_192 });
     expect(second.receipt.snapshot_digest).toBe(first.receipt.snapshot_digest);
 
     const page = registry.serve({ token: first.token, request: { observation_ids: [big] } });
@@ -685,9 +686,9 @@ describe("session scope binding — a token reaches its own session and nothing 
     const registry = new ObservationReadGrantRegistry();
     const big = largestObservationId();
     const { token: tokenA } = mintOver(registry, writeSources(artifactTextWith([big, ...smallIds.slice(0, 2)])), {
-      pageCharBudget: 4_096,
+      resultCharBudget: 4_096,
     });
-    const { token: tokenB } = mintOver(registry, writeSources(artifactTextWith([big])), { pageCharBudget: 4_096 });
+    const { token: tokenB } = mintOver(registry, writeSources(artifactTextWith([big])), { resultCharBudget: 4_096 });
     const page = registry.serve({ token: tokenA, request: { observation_ids: [big] } });
     expect(page.next_cursor).toBeDefined();
     expect(reasonOf(() => registry.serve({ token: tokenB, request: { cursor: page.next_cursor as string } })))
@@ -723,7 +724,7 @@ describe("revocation and expiry — a reclaimed session cannot be replayed", () 
   it("answers grant_revoked after revoke, including for a cursor issued before it", () => {
     const registry = new ObservationReadGrantRegistry();
     const big = largestObservationId();
-    const { token } = mintOver(registry, writeSources(artifactTextWith([big])), { pageCharBudget: 4_096 });
+    const { token } = mintOver(registry, writeSources(artifactTextWith([big])), { resultCharBudget: 4_096 });
     const page = registry.serve({ token, request: { observation_ids: [big] } });
     expect(page.next_cursor).toBeDefined();
 
@@ -791,13 +792,13 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
     });
     const expectedTotal =
       CODEX_PROMPT_INPUT_CHAR_LIMIT - initialPromptChars - OBSERVATION_READ_SESSION_RESERVE_CHARS;
-    expect(budget.page_char_budget).toBe(OBSERVATION_READ_PAGE_CHAR_BUDGET);
+    expect(budget.result_char_budget).toBe(OBSERVATION_READ_RESULT_CHAR_BUDGET);
     expect(budget.total_fetch_char_budget).toBe(expectedTotal);
     expect(budget.max_calls).toBe(OBSERVATION_READ_MAX_CALLS);
     // The two bounds must be able to bind in EITHER order, else one is unreachable code: at this
     // realistic prompt size the chars run out first, and the call cap is what a small-page loop hits.
     expect(
-      budget.max_calls * (budget.page_char_budget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS),
+      budget.max_calls * (budget.result_char_budget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS),
     ).toBeGreaterThan(budget.total_fetch_char_budget);
   });
 
@@ -805,7 +806,7 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
     const registry = new ObservationReadGrantRegistry();
     const tooBig =
       CODEX_PROMPT_INPUT_CHAR_LIMIT - OBSERVATION_READ_SESSION_RESERVE_CHARS -
-      OBSERVATION_READ_PAGE_CHAR_BUDGET - OBSERVATION_READ_EXCHANGE_FRAMING_CHARS + 1;
+      OBSERVATION_READ_RESULT_CHAR_BUDGET - OBSERVATION_READ_EXCHANGE_FRAMING_CHARS + 1;
     expect(reasonOf(() => mintOver(registry, writeSources(smallText), { initialPromptChars: tooBig })))
       .toBe("fetch_budget_unservable");
     // One char less and it mints, funding exactly one page — the boundary is exact, not approximate.
@@ -813,7 +814,7 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
       initialPromptChars: tooBig - 1,
     });
     expect(receipt.budget.total_fetch_char_budget)
-      .toBe(OBSERVATION_READ_PAGE_CHAR_BUDGET + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS);
+      .toBe(OBSERVATION_READ_RESULT_CHAR_BUDGET + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS);
 
     // And it must actually SERVE that one page, then refuse the next. Asserting only the derived scalar
     // left `remaining < reservation` and `remaining <= reservation` indistinguishable — the off-by-one that
@@ -829,11 +830,13 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
     // stays green everywhere — zeroing OBSERVATION_READ_EXCHANGE_FRAMING_CHARS removed all exchange framing
     // from both the reservation and the charge with a fully green suite (cross-family review, lens B).
     // These are the only literals; changing a constant is a deliberate act that updates this test with it.
-    // 32,000 since the range contract (design `23-…md` §3/S4): a page must survive codex's middle-out
-    // trim of a tool result, and the largest result ever observed to arrive uncut is 32,151 chars. The
-    // previous 65,536 sat above every bracket — a full page could not reach the model whole.
-    expect(OBSERVATION_READ_PAGE_CHAR_BUDGET).toBe(32_000);
-    expect(OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET).toBe(4_096);
+    // 38,000 since the 2026-07-31 unit correction (design `23-…md` §0-1): the number bounds the RENDERED
+    // TOOL RESULT, not the page, because that is what codex trims middle-out. The previous 32,000 was the
+    // same intent in the wrong unit — pages inside it rendered to 66,892-70,538 chars and were all cut at
+    // 40,149, one of them from only 29,236 page chars. 38,000 sits below the measured clip point (40,149
+    // -40,153 across a 22-rollout sweep) with room for the host's 47-char record prefix.
+    expect(OBSERVATION_READ_RESULT_CHAR_BUDGET).toBe(38_000);
+    expect(OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET).toBe(4_096);
     expect(OBSERVATION_READ_EXCHANGE_FRAMING_CHARS).toBe(1_024);
     expect(OBSERVATION_READ_SESSION_RESERVE_CHARS).toBe(8_192);
     expect(OBSERVATION_READ_MAX_CALLS).toBe(32);
@@ -842,18 +845,18 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
   });
 
   it("holds a page-budget floor that keeps every charge inside its own reservation", () => {
-    // The floor is measured, not chosen (see OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET). Both measurements are
+    // The floor is measured, not chosen (see OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET). Both measurements are
     // re-derived here, so raising the id cap or lowering the floor fails instead of silently re-opening the
-    // overrun cross-family review found at `pageCharBudget: 1` (charged 1,181 against a 1,025 total).
+    // overrun cross-family review found at `resultCharBudget: 1` (charged 1,181 against a 1,025 total).
     const registry = new ObservationReadGrantRegistry();
-    for (const pageCharBudget of [1, 100, 1_000, OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET - 1]) {
-      expect(reasonOf(() => mintOver(registry, writeSources(smallText), { pageCharBudget })))
+    for (const resultCharBudget of [1, 100, 1_000, OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET - 1]) {
+      expect(reasonOf(() => mintOver(registry, writeSources(smallText), { resultCharBudget })))
         .toBe("fetch_budget_unservable");
     }
 
     // (1) At the floor the reader serves the WORST shape-legal request rather than refusing it.
     const atFloor = mintOver(registry, writeSources(smallText), {
-      pageCharBudget: OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET,
+      resultCharBudget: OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET,
     });
     const worstIds = Array.from(
       { length: OBSERVATION_READ_MAX_REQUEST_IDS },
@@ -867,7 +870,7 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
     // (2) The charge for that worst case stays inside one reservation, at the tightest budget allowed.
     const spent = registry.receipt(atFloor.token);
     expect(spent.chars_served)
-      .toBeLessThan(OBSERVATION_READ_MIN_PAGE_CHAR_BUDGET + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS);
+      .toBeLessThan(OBSERVATION_READ_MIN_RESULT_CHAR_BUDGET + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS);
     expect(spent.chars_served).toBeLessThanOrEqual(spent.budget.total_fetch_char_budget);
   });
 
@@ -894,7 +897,10 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
         };
       }
       calls += 1;
-      servedChars += JSON.stringify(page).length;
+      // The RENDERED result, mirroring what the ledger charges — the per-response cap and the session
+      // ceiling are both in that unit, so accumulating page chars here would compare two different
+      // quantities and read as "the walk stayed small" when it did not.
+      servedChars += JSON.stringify(observationReadToolResult(page)).length;
       if (page.next_cursor === undefined) return { reason: "completed", calls, servedChars };
       request = { cursor: page.next_cursor };
     }
@@ -903,13 +909,13 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
   it("stops on the CHAR bound, at or under the ceiling, and does not charge the refused call", () => {
     const registry = new ObservationReadGrantRegistry();
     const big = largestObservationId();
-    const pageCharBudget = 8_192;
-    const perCall = pageCharBudget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS;
-    // Fund exactly 6 worst-case calls — fewer than the 32-call cap, so chars bind first.
+    const resultCharBudget = 8_192;
+    const perCall = resultCharBudget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS;
+    // Fund exactly 6 worst-case RESERVATIONS — fewer than the 32-call cap, so chars bind first.
     const initialPromptChars =
       CODEX_PROMPT_INPUT_CHAR_LIMIT - OBSERVATION_READ_SESSION_RESERVE_CHARS - 6 * perCall;
     const { token, receipt } = mintOver(registry, writeSources(artifactTextWith([big])), {
-      pageCharBudget,
+      resultCharBudget,
       initialPromptChars,
     });
     expect(receipt.budget.max_calls).toBe(OBSERVATION_READ_MAX_CALLS);
@@ -917,12 +923,19 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
 
     const walk = walkUntilRefused(registry, token, [big]);
     expect(walk.reason).toBe("fetch_budget_exhausted");
+    // SIX, and the number is the contract: admission reserves a whole rendered result and the ledger
+    // charges one, so funding exactly six reservations buys exactly six calls and no more.
+    //
+    // This briefly read 10 while the reservation counted rendered chars and the charge still counted the
+    // PAGE — a real ~2x under-charge, because the ceiling is derived from the worker's context and a page
+    // is only one of the two copies that enter it. Ten calls fitting a six-call budget IS that defect
+    // stated as a number; the two agreeing again is what closed it.
     expect(walk.calls).toBe(6);
     // THE cumulative invariant. A budget policed only per response would have overshot here: every page
     // obeyed the per-response cap, yet the pages together are many times its size.
     const spent = registry.receipt(token);
     expect(spent.chars_served).toBeLessThanOrEqual(spent.budget.total_fetch_char_budget);
-    expect(walk.servedChars).toBeGreaterThan(pageCharBudget * 4);
+    expect(walk.servedChars).toBeGreaterThan(resultCharBudget * 4);
 
     // The refusal itself must be free — otherwise a spent session keeps consuming the ceiling it ran out
     // of, and `chars_served` above would be a bound the code only happens to respect.
@@ -936,12 +949,12 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
   it("stops on the CALL bound when pages are small enough that chars never bind", () => {
     const registry = new ObservationReadGrantRegistry();
     const big = largestObservationId();
-    const pageCharBudget = 8_192;
-    const { token, receipt } = mintOver(registry, writeSources(artifactTextWith([big])), { pageCharBudget });
+    const resultCharBudget = 8_192;
+    const { token, receipt } = mintOver(registry, writeSources(artifactTextWith([big])), { resultCharBudget });
     // Non-vacuity: the char total must be far larger than 32 small pages, else this arm would prove
     // nothing about which bound fired.
     expect(receipt.budget.total_fetch_char_budget).toBeGreaterThan(
-      OBSERVATION_READ_MAX_CALLS * (pageCharBudget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS),
+      OBSERVATION_READ_MAX_CALLS * (resultCharBudget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS),
     );
 
     const walk = walkUntilRefused(registry, token, [big]);
@@ -993,10 +1006,12 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
       .toBe("unknown_observation_id");
     const after = registry.receipt(token);
     expect(after.calls_served).toBe(before.calls_served + 1);
-    // The envelope AND the message text: the failure is rendered into the conversation like a result.
+    // The envelope AND the message text TWICE: the failure is rendered into the conversation like a
+    // result, and a result carries its payload in both `content[0].text` and `structuredContent`. Same
+    // unit as the success path — charging it once would under-count the context a failure really takes.
     const message = messageOf(() => registry.serve({ token, request: { observation_ids: ["obs_nope"] } }));
     expect(after.chars_served)
-      .toBe(before.chars_served + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS + message.length);
+      .toBe(before.chars_served + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS + 2 * message.length);
     expect(after.served).toEqual([]);
   });
 
@@ -1011,23 +1026,34 @@ describe("cumulative budget — pushed and pulled share one ceiling", () => {
       .toBe("unknown_observation_id");
     const receipt = registry.receipt(token);
     expect(receipt.chars_served)
-      .toBeLessThan(receipt.budget.page_char_budget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS);
+      .toBeLessThan(receipt.budget.result_char_budget + OBSERVATION_READ_EXCHANGE_FRAMING_CHARS);
     expect(receipt.chars_served).toBeLessThanOrEqual(receipt.budget.total_fetch_char_budget);
   });
 
   it("keeps the page budget constant so a whole cursor walk never hits the budget binding", () => {
     const registry = new ObservationReadGrantRegistry();
-    const big = largestObservationId();
-    const { token } = mintOver(registry, writeSources(artifactTextWith([big])), { pageCharBudget: 65_536 });
-    const pages = walkGrant(registry, token, [big]);
+    // NOT the largest observation any more. Once the ledger charges the RENDERED result — the unit the
+    // session ceiling is derived in — the 780,114-char record costs ~1.6M chars against a ~1.04M
+    // ceiling, so it cannot be walked whole in one session and never could have been: the old
+    // page-chars charge simply under-counted it by half. This test is about the DECOMPOSITION staying
+    // constant across a walk, so it needs a subject the ceiling can actually fund.
+    const subject = splittingObservationIdWithinCeiling();
+    const { token } = mintOver(registry, writeSources(artifactTextWith([subject])), {
+      resultCharBudget: 65_536,
+    });
+    const pages = walkGrant(registry, token, [subject]);
+    // Non-vacuous: a single-page subject would satisfy every assertion below while proving nothing
+    // about a walk staying on one decomposition.
     expect(pages.length).toBeGreaterThan(1);
-    for (const page of pages) expect(JSON.stringify(page).length).toBeLessThanOrEqual(65_536);
+    for (const page of pages) {
+      expect(JSON.stringify(observationReadToolResult(page)).length).toBeLessThanOrEqual(65_536);
+    }
 
     // Reassembly is the proof the walk stayed on one decomposition: a budget that shifted mid-walk would
     // have been refused as cursor_malformed, and a silently re-split one would not concatenate.
     const body = pages.flatMap((page) => page.entries).map((entry) => entry.body).join("");
     const expected = JSON.stringify(
-      fullArtifact.observations.find((observation) => observation.observation_id === big),
+      fullArtifact.observations.find((observation) => observation.observation_id === subject),
     );
     expect(body).toBe(expected);
     const receipt = registry.receipt(token);
@@ -1185,11 +1211,15 @@ describe("drift — the artifacts must not move under a live grant", () => {
 describe("receipt — what the runtime served, deterministically", () => {
   it("records ids, content hashes and part indexes, ascending", () => {
     const registry = new ObservationReadGrantRegistry();
-    const big = largestObservationId();
+    // The largest observation the ceiling can fund a WHOLE walk of — see the helper. This test asserts
+    // the receipt records a completed multi-part walk, so a subject the session runs out of budget
+    // partway through would fail it for a reason that says nothing about the receipt.
+    const big = splittingObservationIdWithinCeiling();
     const { token } = mintOver(registry, writeSources(artifactTextWith([big, ...smallIds.slice(0, 2)])), {
-      pageCharBudget: 65_536,
+      resultCharBudget: 65_536,
     });
     const pages = walkGrant(registry, token, [smallIds[1] as string, big, smallIds[0] as string]);
+    expect(pages.length).toBeGreaterThan(1); // non-vacuous: a one-page walk proves nothing about parts
     const receipt = registry.receipt(token);
     expect(receipt.served.map((record) => record.observation_id))
       .toEqual([...[big, smallIds[0], smallIds[1]].sort()]);
@@ -1239,6 +1269,33 @@ describe("receipt — what the runtime served, deterministically", () => {
       .toBe(JSON.stringify(registry.serve({ token: first.token, request })));
   });
 });
+
+/**
+ * The largest observation ONE session can still walk whole — derived, never named.
+ *
+ * The ledger charges the RENDERED result, which runs 2.05-2.27x the serialized record, so the corpus's
+ * biggest records no longer fit a single session's ceiling. They never did: the old page-chars charge
+ * under-counted them by half and let the walk finish while the worker's context took twice what the
+ * ceiling allowed. A third of the ceiling covers that ratio plus per-call framing with room to spare.
+ *
+ * Throws rather than returning an arbitrary id: if nothing fits, every test built on this is vacuous
+ * and must say so instead of quietly walking a single-page observation.
+ */
+function splittingObservationIdWithinCeiling(): string {
+  const ceiling = deriveObservationReadFetchBudget({
+    systemPrompt: "",
+    userPrompt: "",
+  }).total_fetch_char_budget;
+  let best = { id: "", size: 0 };
+  for (const observation of fullArtifact.observations) {
+    const size = JSON.stringify(observation).length;
+    if (size > best.size && size * 3 < ceiling) best = { id: observation.observation_id, size };
+  }
+  if (best.id === "") {
+    throw new Error("no observation fits a third of the session ceiling; this helper's premise is gone");
+  }
+  return best.id;
+}
 
 /** The corpus's largest observation — the one that certainly needs many pages at any real budget. */
 function largestObservationId(): string {

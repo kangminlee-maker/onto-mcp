@@ -31,16 +31,16 @@ const ref = (overrides: Partial<ObservationRangeRef> = {}): ObservationRangeRef 
 });
 
 /** Serve one observation to exhaustion at a budget that really splits it. */
-function serveAll(observationId: string, pageCharBudget: number): string[] {
+function serveAll(observationId: string, resultCharBudget: number): string[] {
   const texts: string[] = [];
   let page = readObservationPage({
     snapshot,
     request: { observation_ids: [observationId] },
-    pageCharBudget,
+    resultCharBudget,
   });
   texts.push(JSON.stringify(page));
   while (page.next_cursor !== undefined) {
-    page = readObservationPage({ snapshot, request: { cursor: page.next_cursor }, pageCharBudget });
+    page = readObservationPage({ snapshot, request: { cursor: page.next_cursor }, resultCharBudget });
     texts.push(JSON.stringify(page));
   }
   return texts;
