@@ -144,7 +144,9 @@
 | S6 하류 range 보존 | **완료** | `4995621` |
 | S5 파티션 제거 | **불필요** — S2가 교체였으므로 남은 구 권위 0건(전수 확인) | — |
 
-**S1~S6이 전부 끝났고 구현 잔여는 없다.** 남은 것은 `source_observation_catalog_tool` 승격 결정 하나다.
+**S1~S6이 전부 끝났고 구현 잔여는 없다.** 라이브 프로브도 PASS했다
+(2026-07-31, `benchmark/20260731-range-delivery-live-probe/`) — 다만 **부분 인용은 라이브 미실증**이다.
+남은 것은 `source_observation_catalog_tool` 승격 결정 하나다.
 진입점: `handoff/20260731-range-delivery-s6-start-here.md`(§2는 완료로 읽을 것).
 
 ## 3. 단계 계획

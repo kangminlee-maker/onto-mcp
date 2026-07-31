@@ -317,7 +317,18 @@ for (const id of wantedIds) {
 // would still run — assert the set is real.
 if (delivery.delivered.length === 0) fail("delivery reconciliation admitted nothing");
 ok(
-  `delivered = ${delivery.delivered.length} observation(s): ${delivery.delivered.join(", ")} ` +
+  // Rendered per record, not `join`ed: `delivered` is coverage now, and joining an array of objects
+  // prints `[object Object]` — which reads like a pass while showing nothing. (It did, on the first
+  // live run after the range change.)
+  `delivered = ${delivery.delivered.length} observation(s): ${
+    delivery.delivered
+      .map((entry) =>
+        `${entry.observation_id} ${
+          entry.ranges.map(([start, end]) => `[${start},${end})`).join("+")
+        }/${entry.body_length ?? "?"}`
+      )
+      .join(", ")
+  } ` +
     `(${delivery.attestation.filter((entry) => entry.disposition === "verbatim_delivered").length}/` +
     `${delivery.attestation.length} emissions found verbatim in the worker's context)`,
 );

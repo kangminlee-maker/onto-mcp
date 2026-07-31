@@ -1,0 +1,29 @@
+{
+  "schema_version": "observation-read-facade-emissions/v1",
+  "emission_count": 1,
+  "entries": [
+    {
+      "observation_id": "obs_eb90f83378bd57a0",
+      "observation_content_sha256": "5e4b3b899f5c4eaf1f37480d75bd66c7614ffe459a61aca3c9c529d3fe0be660",
+      "part_index": 1,
+      "part_count": 1,
+      "part_allowance": 31253,
+      "body_start": 0,
+      "body_end": 10018,
+      "range_content_sha256": "5e4b3b899f5c4eaf1f37480d75bd66c7614ffe459a61aca3c9c529d3fe0be660",
+      "range_id": "orng_v1_a953dfac112996682e475b7adc523553"
+    },
+    {
+      "observation_id": "obs_9f291d6235fdb41c",
+      "observation_content_sha256": "e40de961abd920ae86017495026ebebb56840fa7c0e1f268396eaf1b14628005",
+      "part_index": 1,
+      "part_count": 1,
+      "part_allowance": 31253,
+      "body_start": 0,
+      "body_end": 3483,
+      "range_content_sha256": "e40de961abd920ae86017495026ebebb56840fa7c0e1f268396eaf1b14628005",
+      "range_id": "orng_v1_6a85b2785071ba780f61813ef014a3c6"
+    }
+  ],
+  "serialized_page_chars": 15528
+}
