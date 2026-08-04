@@ -31,7 +31,16 @@ RUNTIME_RE="$ONTO_MAP_TRIGGER_RE"
 # 된다. 초록은 검사한 결과여야지 못 본 결과일 수 없다.
 acquire_changed() {
   local range="$1" out rc
-  out="$(git diff --name-only "$range" 2>&1)"; rc=$?
+  # `-`로 시작하는 인자는 범위가 아니라 git 옵션으로 먹힌다. `-M` 같은 유효 옵션은
+  # 에러 없이 빈 목록을 주므로 "변경 없음"으로 읽혀 통과한다 — 범위를 한 번도 보지
+  # 않은 채로. 범위 자리에 옵션이 오는 것은 결정 가능한 오용이라 거절한다.
+  case "$range" in
+    -*) echo "범위 자리에 옵션이 왔다: '$range'" >&2; return 1 ;;
+  esac
+  # `core.quotePath=false`: 비ASCII 경로를 git이 `"\346..."`로 인용해 내보내면
+  # 아래 경로 매칭이 조용히 빗나간다. 지금 이 레포에는 그런 경로가 없지만, 매칭이
+  # 경로 문자에 의존하지 않게 해 두는 편이 싸다.
+  out="$(git -c core.quotePath=false diff --name-only "$range" 2>&1)"; rc=$?
   if [ "$rc" -ne 0 ]; then
     printf '%s\n' "$out" >&2
     return 1
@@ -108,6 +117,8 @@ if [ "${1:-}" = "--self-test" ]; then
   expect fail "설정 단독"          $'.onto/settings.json'
   expect fail "집행 코드 단독"     $'scripts/check-push-currency.sh'
   expect fail "훅 단독"            $'.githooks/pre-push'
+  expect fail "CI 워크플로 단독"   $'.github/workflows/invariants.yml'
+  expect fail "lock 단독"          $'package-lock.json'
   expect fail "계약 .onto 단독"    $'.onto/processes/review/record-contract.md'
   expect pass "문서만"             $'docs/architecture/repo-layout.md\ndevelopment-records/x.md'
   expect pass "유효 범위·변경 없음" ''
@@ -124,6 +135,13 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "self-test: FAIL — 해석 불가능한 범위인데 취득이 성공을 보고했다" >&2; st=1
   else
     echo "self-test: 취득(무효) OK (fail-closed)"
+  fi
+  # `-M`은 git이 받아들이는 옵션이라 에러 없이 빈 목록을 준다 — 거절하지 않으면
+  # 범위를 한 번도 보지 않고 "변경 없음"으로 통과한다.
+  if acquire_changed '-M' >/dev/null 2>&1; then
+    echo "self-test: FAIL — 옵션을 범위로 넘겼는데 취득이 성공을 보고했다" >&2; st=1
+  else
+    echo "self-test: 취득(옵션 거절) OK (fail-closed)"
   fi
 
   exit "$st"

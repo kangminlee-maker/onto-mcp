@@ -10,8 +10,8 @@
 # | `.onto/{authority,principles,processes,roles,domains}/` | ✔ | ✔ | 배포되는 계약 |
 # | `docs/` | ✔ | ✘ | 문서가 문서를 바꾼 것은 맵을 낡게 만들지 않는다 |
 # | `.onto/settings.json` | ✘ | ✔ | 산문이 아니라 값이다. 그런데 opt-in을 켜고 끄므로 맵의 현황표를 낡게 만든다 |
-# | `scripts/`·`.githooks/` | ✘ | ✔ | 집행 코드. 하니스는 자기 출력 경로를 이름 부를 수 있어 산문 검사에서 빠지지만, 게이트가 바뀌면 검증 체계 서술이 낡는다 |
-# | `bin/`·`vendor/`·`packaging/`·`package.json`·`tsconfig*.json` | ✘ | ✔ | 배포·빌드 산출에 직접 영향 |
+# | `scripts/`·`.githooks/`·`.github/` | ✘ | ✔ | 집행 코드와 그 배선. 하니스는 자기 출력 경로를 이름 부를 수 있어 산문 검사에서 빠지지만, 게이트가 바뀌면 맵의 검증 체계 서술이 낡는다 — 워크플로가 게이트 스텝을 지워도 마찬가지다 |
+# | `bin/`·`vendor/`·`packaging/`·`package.json`·`package-lock.json`·`tsconfig*.json` | ✘ | ✔ | 배포·빌드 산출에 직접 영향. lock은 의존 버전을 고정하므로 런타임 동작을 바꾼다 |
 
 # G13 산문 검사 대상 — git이 소스로 보는 파일 중 이 최상위 경로들.
 ONTO_PROSE_SUBJECT_PATHS='src
@@ -19,7 +19,7 @@ ONTO_PROSE_SUBJECT_PATHS='src
 docs'
 
 # G15가 "맵을 함께 옮겨야 한다"고 판정하는 변경 경로.
-ONTO_MAP_TRIGGER_RE='^(src|bin|vendor|packaging|scripts|\.githooks)/|^\.onto/(authority|principles|processes|roles|domains)/|^\.onto/settings\.json$|^package\.json$|^tsconfig.*\.json$'
+ONTO_MAP_TRIGGER_RE='^(src|bin|vendor|packaging|scripts|\.githooks|\.github)/|^\.onto/(authority|principles|processes|roles|domains)/|^\.onto/settings\.json$|^package(-lock)?\.json$|^tsconfig.*\.json$'
 
 # 지도 — 이력이 어디 사는지 말하는 것이 일인 문서. G13의 격리 검사에서 빠지되
 # dangling 검사에는 포함된다. 추측이 아니라 열거다.
