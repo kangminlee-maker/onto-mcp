@@ -1,0 +1,21 @@
+schema_version: "1"
+pipeline: review
+batch_label: issue-stance
+created_at: 2026-08-04T16:56:23+09:00
+breaker:
+  tripped: false
+  failure_class: null
+  consecutive_item_count: null
+  threshold: 3
+completed_item_ids:
+  - issue-stance:logic
+  - issue-stance:structure
+  - issue-stance:dependency
+  - issue-stance:semantics
+  - issue-stance:pragmatics
+  - issue-stance:evolution
+  - issue-stance:coverage
+  - issue-stance:conciseness
+  - issue-stance:axiology
+dead_letter: []
+incomplete_item_ids: []
