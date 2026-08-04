@@ -18,6 +18,8 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - name: ripgrep (G13이 요구 — grep은 이 트리의 비ASCII 파일을 바이너리로 오인해 매치를 놓친다)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
       - name: TS typecheck (M3 benchmark scripts)
         # scripts/ run via tsx → covered by neither the src-only tsconfig nor
         # vitest's transform. Gates the typecheck-clean M3 set (tsconfig.scripts.json).
