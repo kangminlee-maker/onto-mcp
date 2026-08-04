@@ -252,9 +252,9 @@ export function reconstructSynthesizeCertJudgeReplayInputs(args: {
 // ── SG1 — deterministic STRUCTURAL grounding verifier (owner decision 2026-07-07,
 //    post opus-rejudge R7 cut) ────────────────────────────────────────────────
 //
-// The R7 human audit (development-records/.../local/r7-grounding-audit.md,
-// Group A) found gpt-5.5's holistic grounding pass/fail conflates two
-// different questions: whether the summary's INTERPRETIVE gloss is
+// A holistic LLM grounding pass/fail conflates two different questions, so this
+// verifier does not ask for one. The two questions are: whether the summary's
+// INTERPRETIVE gloss is
 // reasonable (a genuinely semantic judgement — R7/human territory, never
 // re-enforced here) and whether the summary CITES facts the packet does not
 // support (a purely structural question: a cited row/label/transition either

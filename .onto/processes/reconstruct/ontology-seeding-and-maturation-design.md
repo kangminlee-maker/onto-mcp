@@ -1748,9 +1748,7 @@ validated, satisfied value-discharge that the matrix builder/validator both
 re-derive (derive-and-assert) may move a row to `value_resolved`; a continuation
 carrying `value_resolved` rows projects at most `actionable_limited` (never
 `actionable_ready`, which requires L4). value_resolved rows are claimable
-(included in `claim_scope`) like closed rows. See the maturation value-read cut
-design (`development-records/design/20260630-maturation-value-read-cut-design.md`
-§13).
+(included in `claim_scope`) like closed rows.
 
 `blocking_question_refs` is the reverse link from a row to the maturation
 frontier question(s) that block it from closing. It is the mirror of the
@@ -3157,8 +3155,6 @@ resume/timeout/scout/repair/snapshot behavior — is owned by
 `reconstruct-contract-registry.yaml` and surfaced in `IMPLEMENTATION_MAP.html`.
 This contract intentionally does not restate present-tense implementation status
 (it goes stale the moment runtime changes and nothing consumes it for dispatch).
-A point-in-time snapshot of the prior recomposition status is isolated at
-`development-records/archive/20260614-reconstruct-maturation-design-relocated-narrative.md` §A.
 
 Required test path for each implementation slice:
 
@@ -3458,10 +3454,7 @@ program completeness.
 
 ## 16. Maturation Completion Criteria
 
-Seeding completion criteria are consolidated in §5.1. The one-time recomposition
-completion checklist (seeding portion) is isolated at
-`development-records/archive/20260614-reconstruct-maturation-design-relocated-narrative.md` §B;
-it is historical and is not current authority.
+Seeding completion criteria are consolidated in §5.1.
 
 Maturation is complete when the required target artifacts are promoted into the
 registry and a fresh run can continue from that seed and produce:

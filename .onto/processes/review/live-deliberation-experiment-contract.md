@@ -3,7 +3,6 @@
 > 상태: **Experimental** (Phase 2 · roadmap S3 — claude 전용 실험 평면)
 > 목적: deliberation 유닛의 **동료 관점 수송**을 살아있는 lens teammate 간 SendMessage 교환으로 실현하는 host-side 실험 계약을 고정한다. 런타임 변경 0 — live 심의는 기존 B 라운드 계약(`host-orchestration-contract.md`) 위의 host 실현 자유다.
 > Authority: rank-1 `.onto/authority/core-lexicon.yaml` → `ReviewOrchestrationOwner`(신규 개념 없음 — host의 unit 실행 실현 자유 재사용). rank-5 형제: `host-orchestration-contract.md` §7(controlled 심의), `nesting-batch-worker-contract.md`(S2).
-> 기준 문서: `development-records/design/phase2-s3-live-deliberation-design.md`
 
 ---
 

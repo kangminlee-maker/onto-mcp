@@ -38,7 +38,7 @@
 
 8. **최적화가 재설계로 커지면**, 원래 성공기준("품질 손상 없음")을 새 스코프에서 다시 측정한다.
 
-> 위 규칙들의 구조적 강제(가드)는 [docs/architecture/structural-guardrails-enforcement.md](docs/architecture/structural-guardrails-enforcement.md)를 따른다. G1~G6 구현 완료 — 실행 명령·불변식 매핑은 [INVARIANTS.md](INVARIANTS.md) §강제 수단 구현 현황. 빠른 일괄 확인: `npm run check:invariant-drift`.
+> 위 규칙들의 구조적 강제(가드)는 [docs/architecture/structural-guardrails-enforcement.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/structural-guardrails-enforcement.md)를 따른다. G1~G6 구현 완료 — 실행 명령·불변식 매핑은 [INVARIANTS.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/INVARIANTS.md) §강제 수단 구현 현황. 빠른 일괄 확인: `npm run check:invariant-drift`.
 
 ---
 
@@ -76,7 +76,7 @@
 ### 폴더 구조
 
 폴더 구조·배치 원칙의 SSOT는
-[docs/architecture/repo-layout.md](docs/architecture/repo-layout.md)다.
+[docs/architecture/repo-layout.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/repo-layout.md)다.
 top-level 역할 표, `src/core-runtime/` 내부 구조, `.onto/review/*` 세션 산출물
 제외 규칙을 그 문서가 소유한다. 여기 재서술하지 않는다.
 
@@ -105,8 +105,8 @@ target material 관련 작업 시 추가로 읽을 문서:
 17. [pipeline-execution-ledger-contract.md](.onto/processes/shared/pipeline-execution-ledger-contract.md)
 18. [record-contract.md](.onto/processes/review/record-contract.md)
 19. [record-field-mapping.md](.onto/processes/review/record-field-mapping.md)
-20. [review-continuation-surface.md](docs/architecture/review-continuation-surface.md)
-21. [mcp-native-tool-surface.md](docs/architecture/mcp-native-tool-surface.md)
+20. [review-continuation-surface.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/review-continuation-surface.md)
+21. [mcp-native-tool-surface.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/mcp-native-tool-surface.md)
 
 `reconstruct` 작업 시 추가로 읽을 문서:
 
@@ -272,7 +272,7 @@ core 제품화 계층은 TypeScript다.
 
 현재 host-facing review entrypoint는 MCP tool call이다.
 
-광고되는 canonical tool surface는 12종(consolidated)이다. SSOT는 [src/mcp/tool-schemas.ts](src/mcp/tool-schemas.ts) `OntoToolNames`이며, 정합은 `tool-surface.test.ts`가 핀한다.
+광고되는 canonical tool surface는 12종(consolidated)이다. SSOT는 [src/mcp/tool-schemas.ts](https://github.com/kangminlee-maker/onto-mcp/blob/main/src/mcp/tool-schemas.ts) `OntoToolNames`이며, 정합은 `tool-surface.test.ts`가 핀한다.
 
 review tools:
 
@@ -300,7 +300,7 @@ reconstruct·list tools:
 `onto mcp`는 stdio MCP 서버 시작 명령이며 단발성 review 실행 명령이 아니다.
 `src/core-runtime/cli/review-invoke.ts`는 내부 argv adapter와 live E2E 검증 entry로만 취급한다.
 
-관련 설정: [package.json](package.json), [tsconfig.json](tsconfig.json)
+관련 설정: [package.json](package.json), [tsconfig.json](https://github.com/kangminlee-maker/onto-mcp/blob/main/tsconfig.json)
 
 ---
 
@@ -344,9 +344,9 @@ onto의 테스트는 evidence class를 분리한다.
 
 기준 문서:
 
-- [DD-010](docs/decisions/DD-010-onto-mcp-native-tool-surface.md)
-- [repo-layout.md](docs/architecture/repo-layout.md)
-- [mcp-native-tool-surface.md](docs/architecture/mcp-native-tool-surface.md)
+- [DD-010](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/decisions/DD-010-onto-mcp-native-tool-surface.md)
+- [repo-layout.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/repo-layout.md)
+- [mcp-native-tool-surface.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/mcp-native-tool-surface.md)
 
 ---
 
