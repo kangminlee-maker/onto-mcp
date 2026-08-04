@@ -1,0 +1,170 @@
+session_id: 20260804-bf8d8be3
+session_root: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3
+execution_realization: worker
+host_runtime: codex
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+review_mode: full
+execution_status: running
+execution_started_at: 2026-08-04T21:43:02+09:00
+execution_completed_at: null
+total_duration_ms: null
+max_concurrent_lenses: 4
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000
+  salvage:
+    enabled: true
+    delta_completion: unit_llm
+  resubmit:
+    enabled: true
+  dispatch_breaker:
+    enabled: true
+    systemic_threshold: 3
+    per_call_max_attempts: 3
+    backoff_initial_ms: 3000
+    backoff_cap_ms: 30000
+planned_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+participating_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 9
+synthesis_executed: false
+error_log_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/error-log.md
+lens_execution_results:
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/logic.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/logic.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/structure.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/structure.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: dependency
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/dependency.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/dependency.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/semantics.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/semantics.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: pragmatics
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/pragmatics.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/pragmatics.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/evolution.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/evolution.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/coverage.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/coverage.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: conciseness
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/conciseness.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/conciseness.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/axiology.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/round1/axiology.findings.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/prompt-packets/finding-ledger.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260804-bf8d8be3/finding-ledger.yaml
+    status: completed
+    started_at: 2026-08-04T21:44:55+09:00
+    completed_at: 2026-08-04T21:44:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
