@@ -428,6 +428,20 @@ describe("mid-run execution-result tells the truth about itself", () => {
     expect(onDisk.total_duration_ms).toBeNull();
   });
 
+  it("dates the run from the caller's start, not from when the scaffold was seeded", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    // The onto path seeds only after the lens phase; without the real start the
+    // artifact would date the run from that moment and the progress projection
+    // would understate elapsed time by the whole lens phase.
+    const startedAtMs = Date.parse("2026-08-04T21:37:08+09:00");
+    const seeded = buildInitialExecutionResultScaffold(plan, startedAtMs);
+    expect(Date.parse(seeded.execution_started_at)).toBe(startedAtMs);
+    // The host path seeds on its first advance, where "now" is the start.
+    const hostSeeded = buildInitialExecutionResultScaffold(plan);
+    expect(Date.parse(hostSeeded.execution_started_at)).toBeGreaterThan(startedAtMs);
+  });
+
   it("refuses to yield a terminal projection while it is still running", async () => {
     const root = await tempSessionRoot();
     const plan = executionPlan(root);

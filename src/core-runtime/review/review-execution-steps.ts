@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   fileExists,
+  isoFromTimestamp,
   isoNow,
   readYamlDocument,
   writeYamlDocument,
@@ -1319,9 +1320,16 @@ export async function reviewRound(
  *
  * The artifact is upserted mid-run, so every field here must be readable as
  * "not finished": `running` status, and no completion stamp or duration.
+ *
+ * `executionStartedAtMs` is the run's real start. The onto path (A) seeds this
+ * scaffold after the lens phase and must pass it, or the artifact would date the
+ * run from the seed and understate elapsed time by the whole lens phase — the
+ * progress projection reads this field as the session start. The host path (B)
+ * seeds on its first advance, where "now" is the start.
  */
 export function buildInitialExecutionResultScaffold(
   plan: ReviewExecutionPlan,
+  executionStartedAtMs?: number,
 ): ReviewExecutionResultArtifact {
   const plannedLensIds = plan.lens_execution_seats.map((seat) => seat.lens_id);
   return {
@@ -1335,7 +1343,10 @@ export function buildInitialExecutionResultScaffold(
     ),
     review_mode: plan.review_mode,
     execution_status: "running",
-    execution_started_at: isoNow(),
+    execution_started_at:
+      executionStartedAtMs === undefined
+        ? isoNow()
+        : isoFromTimestamp(executionStartedAtMs),
     execution_completed_at: null,
     total_duration_ms: null,
     max_concurrent_lenses: plan.max_concurrent_lenses ?? plannedLensIds.length,

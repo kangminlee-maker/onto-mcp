@@ -4990,9 +4990,13 @@ async function seedLensResultsForFrontier(args: {
   sessionRoot: string;
   executionPlan: ReviewExecutionPlan;
   outcomes: ExecutionOutcome[];
+  executionStartedAtMs: number;
 }): Promise<void> {
   let base: ReviewExecutionResultArtifact | undefined =
-    buildInitialExecutionResultScaffold(args.executionPlan);
+    buildInitialExecutionResultScaffold(
+      args.executionPlan,
+      args.executionStartedAtMs,
+    );
   for (const outcome of args.outcomes) {
     await mergeOutcomeIntoFrontierLedger({
       sessionRoot: args.sessionRoot,
@@ -7855,6 +7859,7 @@ export async function executeReviewPromptExecution(
     outcomes: executionOutcomes.filter(
       (outcome): outcome is ExecutionOutcome => outcome !== undefined,
     ),
+    executionStartedAtMs,
   });
 
   let controlledDeliberation!: Awaited<
