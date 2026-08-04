@@ -39,6 +39,15 @@ import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js"
 import { isRecord, isoNow, sha256File } from "./run-primitives.js";
 import { exists, readYamlDocument, readYamlDocumentIfPresent } from "./semantic-map-resume.js";
 
+/**
+ * Bumped when an authored artifact's ACCEPTANCE rules change without its inputs changing — a parser or
+ * validator rule, not a prompt. Reuse otherwise keys on input alone and would hand back an artifact the
+ * current rules would refuse.
+ *
+ * 2 — the answer-claims author bounds a claim's supporting evidence to its own cited clusters.
+ */
+export const AUTHORED_OUTPUT_CONTRACT_VERSION = 2;
+
 export interface AuthoredArtifactReuseMatch {
   session_id: string;
   intent_sha256: string;
@@ -81,9 +90,23 @@ export interface AuthoredArtifactReuseMatch {
   judge_model_identity: string;
   // DET-1 (CG-1): sha256 of the authoring prompt-template contract — every host-LLM
   // authoring prompt template (RECONSTRUCT_AUTHORING_PROMPT_CONTRACT). Editing any
-  // authoring prompt rotates this sha, so a resume after a prompt edit regenerates
-  // instead of reusing artifacts authored under the prior template. The realization
-  // tag + model identity above carry no template text; this is the only path for it.
+  // authoring prompt rotates this sha, so artifacts authored under the prior template
+  // are never reused under the new one. The realization tag + model identity above
+  // carry no template text; this is the only path for it.
+  //
+  // ROTATING THIS BREAKS RESUMES IN FLIGHT — it does not quietly regenerate them. An
+  // earlier version of this note claimed regeneration; that is wrong, and the note at
+  // `delivered_citation_rule_version` below has always had it right. `reuseExisting` is
+  // set only for `resumeMode === "reuse_existing_authored_artifacts"` (`run.ts`), and on
+  // that path a mismatched `reuse_match_hash` THROWS (`writeFreshAuthoredYamlDocument`
+  // below). Regeneration happens only when no artifact exists yet, which never consults
+  // this key. So a run that already authored under the old contract cannot be resumed —
+  // it must start fresh or be superseded.
+  //
+  // That is the intended posture for a contract change, not an accident: an artifact
+  // produced under different acceptance rules must not be silently adopted. But it is a
+  // cost to state deliberately before rotating, and to weigh against scoping the change
+  // so only affected keys move (see `delivered_citation_rule_version`).
   authoring_prompt_contract_sha256: string;
   // The seed-stage document projection budget shapes the authored prompts (how
   // much of a captured document reaches seed authoring), so a budget change — e.g.
@@ -94,6 +117,14 @@ export interface AuthoredArtifactReuseMatch {
   // authored directive's detail rung on an overflowing candidate catalog, so — like the projection
   // budget above — it invalidates reuse even when the captured observations are byte-identical.
   source_breadth_fold: boolean;
+  // Observation-catalog-tool push layer (design 20260726 §6, stage 3a): flipping it changes the
+  // answer-support ledger's authored prompt (navigation catalog of every approved observation vs a
+  // capped detailed one), so — like source_breadth_fold above — a resume across a flag change must
+  // regenerate rather than reuse an artifact authored in the other mode.
+  source_observation_catalog_tool: boolean;
+  // Rotates when an opt-in author's acceptance rules change with its inputs unchanged (see the
+  // constant). ABSENT when that opt-in is off, so keys for runs the rule cannot reach never move.
+  authored_output_contract_version?: number;
   // P1-C2-A (R2/R8): the order-independent aggregate of the per-observation leaf-read
   // llm_touch_fingerprints (ⓐ+ⓑ). Folding the fingerprint VALUE — never the leaf-read OUTPUT —
   // rotates the seed key when the leaf-reader model/prompt or a low-confidence region changes, so a
@@ -364,6 +395,38 @@ export function authoredArtifactReuseMatch(args: {
     // flag change must regenerate rather than silently reuse the other rung's selection. Always-present
     // boolean (over-rotates every key ONCE at upgrade — the documented safe direction).
     source_breadth_fold: args.directiveAuthor.sourceBreadthFold === true,
+    // Stage 3a: an answer-support prompt-projection knob, same treatment and same reason as the
+    // fold above. Always-present boolean (over-rotates every key ONCE at upgrade — the documented
+    // safe direction).
+    source_observation_catalog_tool:
+      args.directiveAuthor.sourceObservationCatalogTool === true,
+    // What the AUTHOR will accept from the model, versioned — and present ONLY under the opt-in whose
+    // acceptance rule it versions.
+    //
+    // Every other field here describes the author's INPUT — prompts, flags, artifacts — on the premise
+    // that identical input means an identical artifact is still admissible. A rule that lives only in
+    // the parser breaks that premise: the answer-claims author now rejects supporting evidence outside
+    // the clusters a claim cites, and nothing about the input changed, so a resume reused a pre-rule
+    // artifact and skipped the rule entirely.
+    //
+    // Always-present would have rotated OFF keys too, and a rotated key is not a regeneration here — a
+    // resume with a mismatched hash THROWS. So an ON-only rule would have made every historical OFF
+    // resume fail for a rule that never applied to it. Bump the constant when an ON acceptance rule
+    // changes; scope any future one to the flag that gates it.
+    ...(args.directiveAuthor.sourceObservationCatalogTool === true
+      ? { authored_output_contract_version: AUTHORED_OUTPUT_CONTRACT_VERSION }
+      : {}),
+    // Which citation rule the author ACCEPTED under, with no change to its input. A ledger authored
+    // while citations were judged against the SERVED set is not admissible under a rule that judges
+    // them against the DELIVERED set, so a resume across that change must regenerate rather than reuse.
+    //
+    // Keyed on the CATALOG TOOL now, not on a separate reconciliation flag: the pull layer implies
+    // transcript-confirmed delivery, so "catalog tool on" and "delivered rule" are the same condition.
+    // Version 2 because that is the change — v1 marked runs whose reconciliation flag was on beside a
+    // `served` fallback, and those ledgers were authored under a rule this build no longer applies.
+    ...(args.directiveAuthor.sourceObservationCatalogTool === true
+      ? { delivered_citation_rule_version: 2 }
+      : {}),
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
     // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —

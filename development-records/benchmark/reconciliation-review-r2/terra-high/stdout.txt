@@ -1,0 +1,37 @@
+VERDICT
+SOUND WITH CONDITIONS — the exact-string test is sound for the stated property if it searches only a decoded, version-gated post-trim payload bound to this worker session: a whole emitted page string there means that page body entered that worker’s context. The design correctly prefers conservative under-counting to invented delivery. Its main risk is not the reconciliation idea, but accidentally preserving the current pre-trim `served` path or broadening transcript parsing beyond that exact evidence boundary.
+
+FINDINGS
+MATERIAL — The post-trim extractor must be closed over one decoded payload field, not a recursive transcript search. Concrete break: the raw `event_msg/mcp_tool_call_end` record contains the whole page, while the corresponding `custom_tool_call_output` lost its interior. A generic search finds the raw record and admits the observation although its body was trimmed. Fix: parse JSONL, accept only listed CLI-version record shapes, extract only the decoded actual output value, and compare the emitted JavaScript strings there.
+
+MATERIAL — The existing grant accumulator is explicitly pre-trim “served” state. Concrete break: if `ObservationReadGrantRegistry.receipt()` or the current facade receipt remains reachable as a fallback, a page is committed after server stdout succeeds, codex trims it, and the old receipt still reports every part; `observationIdsServed` admits the citation. Fix: make the in-dispatch state/emission journal non-delivery-named and non-consumable; `DeliveryReconciliation` must be the only path that can create a consumable receipt.
+
+MATERIAL — `verified_cli_versions` cannot be declared verified from the stated two runs. Trimming is already observed to be nondeterministic, and structural validation cannot establish that a field still represents model context. Fix: require real-path, mutation-sensitive acceptance evidence for each admitted version/topology, with at least the repository’s required repeated runs and fixtures; an unknown version must remain `unverifiable`.
+
+MINOR — Reconciliation should validate every replayed emission against the fixed dispatch snapshot before reducing it: decoded page schema, snapshot digest, observation ids, hashes, and coherent part metadata. Concrete break: a future journal/parser bug mixes an emission from another snapshot with a bound transcript payload; the reducer’s current inline rule assumes trusted pages. Fix: validate provenance and page shape before the shared reducer; do not re-split or derive allowances.
+
+ANSWERS TO THE SEVEN QUESTIONS
+1. No, not under the stated closed extractor and session binding. A false admission requires an implementation violation: for example, searching raw `mcp_tool_call_end` as well as post-trim output. Then a trimmed page is admitted from the raw server result.
+
+2. Pretty-printing, JSON re-encoding, escaping differences, partial projection, or a string spanning payloads should all under-count, not admit. Compare decoded string values, never raw JSONL bytes. Repeated identical pages are safe: the identical body was in context at least once. The same string from another session is unsafe only if session binding fails; the page’s snapshot digest helps detect that. Several MCP calls inside one `exec` are also safe if each exact page occurs wholly in the one actual output payload; otherwise they under-count. The challenge protocol was correctly rejected as a full-body proof: it can survive while the page body does not.
+
+3. Dropping pairing loses attribution, call-level diagnostics, and can under-count when rendering changes. It is not a correctness loss for the asserted predicate: if the exact page is anywhere in this worker’s post-trim context, the worker has the body, regardless of which call placed it there.
+
+4. Yes. Replaying the delivered subset in original emission order gives the same state as serving only that subset: the allowance-change reset makes the reducer order-sensitive, but it has no hidden dependence on omitted pages. Emission order is therefore the right order. Extract the reducer unchanged, and add validation for impossible inconsistent metadata before replay.
+
+5. Yes. `unverifiable` explains why the empty projection occurred and preserves operator evidence; verified-empty means “we proved no whole page arrived.” It is not a second authority if `DeliveryReconciliation` is the sole producer of both states and only `verified` may publish a receipt.
+
+6. It avoids the recurring duplicate-mechanism failure only if the extracted reducer is the single declaration of allowance-reset behavior and the old server-side receipt cannot be consumed as delivery evidence. The new emission journal is evidence; reconciliation is authority; the receipt is its projection. Preserve those roles.
+
+7. It does not disqualify the approach. A pinned verified-version list, exact runtime structure validation, and fail-closed rejection is an acceptable provider-capability boundary. It does mean this is a supported-Codex-version feature, not a generic MCP guarantee, and each version/topology admission needs real-path evidence rather than schema resemblance.
+
+WHAT I WOULD MEASURE BEFORE BUILDING
+1. For codex 0.145.0, repeated real dispatches across at least two corpora and the required repeated runs, with known whole-page markers, proving raw versus post-trim correspondence and exercising both trim and intact outcomes.
+
+2. The exact decoded transcript schema for one, multiple, and nested MCP calls inside one `exec`; establish whether all outputs share one post-trim payload and whether page boundaries can be preserved.
+
+3. Session binding under concurrent launches, stale rollout files, changed cwd, retries, and ambiguous/missing stderr banners.
+
+4. Mutation tests for the reconciler: delete one character, move a page into the raw MCP record only, change encoding, mix snapshot digests, reorder allowance-changing emissions, and tear the journal. Each must produce under-counting or `unverifiable`, never admission.
+
+5. A version-admission canary that fails closed on any CLI upgrade or transcript-shape change before a product-path citation is accepted.

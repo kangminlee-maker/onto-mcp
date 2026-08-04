@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "session_id": "observation-citation-live",
+  "created_at": "2026-07-31T17:18:30.399Z",
+  "round_id": "maturation-round-1",
+  "evidence_clusters": [
+    {
+      "evidence_cluster_id": "cluster-citation-transcriptions",
+      "question_refs": [
+        "q-citation"
+      ],
+      "support_mode": "direct_authority",
+      "proposed_answer_summary": "The module exposes the public Transcriptions class, whose create method accepts transcription parameters and returns transcription responses or a streaming result. The class definition and create overloads establish this caller-facing surface.",
+      "evidence_refs": [
+        {
+          "observation_id": "obs_020ed9af3779fd3d",
+          "target_material_kind": "code",
+          "source_ref": "/Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-value-bench-2026-07-26T00-35-47-767Z/off/corpus/audio/transcriptions.ts",
+          "location": "/Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-value-bench-2026-07-26T00-35-47-767Z/off/corpus/audio/transcriptions.ts",
+          "range": {
+            "range_id": "orng_v1_4df871df530d1a78d0e4e5b9b7e823da",
+            "observation_content_sha256": "cc1609596de258b7cfdc41295791644ae181f41fe3977f3c134e0a362a12b557",
+            "body_start": 0,
+            "body_end": 16812,
+            "range_content_sha256": "a16ef1ab1f021fbd9e42fda14348cddfe60d66e93b3ac5099086c10149d88458"
+          }
+        }
+      ],
+      "proof_refs": [],
+      "user_confirmation_refs": [],
+      "authority_response_refs": [],
+      "independence_basis": "The observed source directly and deterministically declares the exported class and its public create method overloads.",
+      "contradiction_refs": [],
+      "limitation_refs": []
+    }
+  ],
+  "directive_author": {
+    "owner": "host_llm",
+    "author_id": "citation-live"
+  }
+}

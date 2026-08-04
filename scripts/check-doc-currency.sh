@@ -107,12 +107,19 @@ tracked() {
     | sort -u | grep -v '\.test\.ts$'
 }
 
-# 격리 검사 대상 = 활성 런타임.
+# 지도 — 이력이 어디 사는지 말하는 것이 일인 문서. 격리 검사에서 빠진다: 이력의
+# 장부를 이름 부를 수 없으면 레포의 모양을 서술할 수 없다. 대신 dangling 검사에는
+# 포함된다 — 죽은 링크는 지도에서도 죽은 링크다.
 #
-# README.md·AGENTS.md·CLAUDE.md는 여기서 빠진다. 이 셋은 런타임의 포인터가 아니라
-# 지도다: 이력이 어디 사는지 말하는 것이 그들의 일이라 격리 폴더를 이름 부를 수
-# 있어야 한다. 대신 dangling 검사에는 포함된다 — 죽은 링크는 지도에서도 죽은 링크다.
-isolation_files=$(tracked src .onto docs)
+# 추측이 아니라 열거다. 지도를 늘리려면 여기에 추가한다. 그러지 않으면 "설명이니까
+# 괜찮다"가 모든 파일에 적용되고 규칙이 사라진다.
+MAPS='README.md
+AGENTS.md
+CLAUDE.md
+docs/architecture/repo-layout.md'
+
+# 격리 검사 대상 = 활성 런타임 빼기 지도.
+isolation_files=$(tracked src .onto docs | grep -Fxv -f <(printf '%s\n' "$MAPS"))
 
 # dangling 검사 대상 = 활성 런타임 + 지도.
 #

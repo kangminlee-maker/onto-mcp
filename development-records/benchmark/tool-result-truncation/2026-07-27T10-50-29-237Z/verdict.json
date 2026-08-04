@@ -1,0 +1,93 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "tool_output_token_limit": null,
+  "quantiles": 9,
+  "rows": [
+    {
+      "index": 0,
+      "requested_size": 2000,
+      "actual_chars": 2015,
+      "filler": "alpha",
+      "nonces": [
+        "18c92cd5b8",
+        "2a5d53dd12",
+        "3e46a969a3",
+        "9a335586fa",
+        "fdaa261864",
+        "a145de264a",
+        "a8afafc694",
+        "db23034ccc",
+        "34372b4ea6"
+      ],
+      "outcome": "lossless",
+      "survival_map": "#########",
+      "notice": null
+    },
+    {
+      "index": 1,
+      "requested_size": 8000,
+      "actual_chars": 8001,
+      "filler": "hex",
+      "nonces": [
+        "180ed74aa8",
+        "2e8cc347cb",
+        "4772b1cde9",
+        "74406edd72",
+        "0463fa9c18",
+        "25595b9aa7",
+        "a251a5e522",
+        "f4057c3bda",
+        "199aafa775"
+      ],
+      "outcome": "lossless",
+      "survival_map": "#########",
+      "notice": null
+    },
+    {
+      "index": 2,
+      "requested_size": 32000,
+      "actual_chars": 32035,
+      "filler": "alpha",
+      "nonces": [
+        "8ea5ca3063",
+        "63a04fda57",
+        "def0718dc7",
+        "7c11662233",
+        "dbd72321f7",
+        "e6958bc61b",
+        "da601e31e4",
+        "1ecf480803",
+        "c02a451f6d"
+      ],
+      "outcome": "truncated",
+      "shape": "HEAD_KEPT",
+      "survival_map": "###......",
+      "probe_points_lost": 6,
+      "notice": null
+    },
+    {
+      "index": 3,
+      "requested_size": 128000,
+      "actual_chars": 128007,
+      "filler": "hex",
+      "nonces": [
+        "8b179d378a",
+        "fb854dcbf0",
+        "84cd3fc0b5",
+        "bc4820d08e",
+        "12a2c64039",
+        "2ea5ca36c3",
+        "7717bd13e0",
+        "d5aa3ca5bc",
+        "68f2fec770"
+      ],
+      "outcome": "truncated",
+      "shape": "TAIL_KEPT",
+      "survival_map": ".......##",
+      "probe_points_lost": 7,
+      "notice": null
+    }
+  ]
+}

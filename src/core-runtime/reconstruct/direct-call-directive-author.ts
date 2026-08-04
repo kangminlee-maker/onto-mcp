@@ -10,13 +10,27 @@
  * this module being loaded at all.
  */
 import { callLlm } from "../llm/llm-caller.js";
-import type { LlmCallConfig } from "../llm/llm-caller.js";
+import type { LlmCallConfig, LlmCallResult } from "../llm/llm-caller.js";
+import {
+  type CitableObservations,
+  citableFromDeliveryRecord,
+  deliveredCoversRange,
+  readObservationReadDeliveryRecord,
+  reconcileFacadeDelivery,
+} from "./delivery-reconciliation.js";
+import {
+  type ObservationRangeRef,
+  citedRangeText,
+  indexEmittedObservationRanges,
+} from "./observation-range-id.js";
 import { SemanticMapDispatchAccounting } from "../llm/sealed-dispatch-capability.js";
 import type { ResolvedLlmDispatchCapability } from "../llm/sealed-dispatch-capability.js";
 import { readStructuredDispatchFailureEvidence } from "../llm/structured-dispatch-error.js";
 import { readTargetedCellValues } from "../spreadsheet-structure-observer.js";
 import { TARGET_MATERIAL_KINDS } from "../target-material-kind.js";
 import type {
+  ReconstructEvidenceRef,
+  ReconstructAnswerSupportLedgerArtifact,
   ReconstructCandidateInventoryArtifact,
   ReconstructClaimRealizationStance,
   ReconstructCompetencyQuestionAnswerStatus,
@@ -117,7 +131,7 @@ import {
 import type { ObservationPromptPayloadOptions } from "./authoring-prompt-payloads.js";
 import {
   ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT,
-  ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+  answerSupportLedgerSystemPrompt,
   CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   CLAIM_REALIZATION_STANCES,
   CODE_SEMANTIC_MAP_SEED_PROMPT_NOTE,
@@ -171,7 +185,13 @@ import type {
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
 import { CODE_SET_TIER_SEED_PROMPT_NOTE } from "./comprehension-set-tier.js";
-import type { ReconstructDirectiveAuthor } from "./directive-author-contract.js";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import type {
+  BreadthFoldDisclosureRecord,
+  WithheldEvidenceClusterRecord,
+  ReconstructDirectiveAuthor,
+} from "./directive-author-contract.js";
 import { createReconstructExecutionTelemetryCollector } from "./execution-telemetry.js";
 import type { ReconstructExecutionTelemetryCollector } from "./execution-telemetry.js";
 import { isGracefulTerminalSignal } from "./graceful-terminal.js";
@@ -204,12 +224,22 @@ import {
 import { SEMANTIC_MAP_ROUTABLE_KINDS } from "./semantic-map-projection.js";
 import type { SemanticMapAnyProjection } from "./semantic-map-projection.js";
 import {
+  navigationRowFieldsFromRows,
+  OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
   SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
   foldObservationsToBudget,
   projectBreadthFoldTailRung,
 } from "./source-breadth-fold.js";
-import type { BreadthFoldDisclosure, BreadthFoldLevel } from "./source-breadth-fold.js";
+import { DEFAULT_WORKER_TIMEOUT_MS } from "../llm/llm-caller.js";
+import { OBSERVATION_READ_MAX_REQUEST_IDS } from "./observation-read.js";
+import {
+  observationReadFacadeLaunchPaths,
+  OBSERVATION_READ_TOOL_NAME,
+  readObservationReadFacadeEmissions,
+  prepareObservationReadFacadeLaunch,
+} from "./observation-read-facade.js";
+import type { BreadthFoldLevel } from "./source-breadth-fold.js";
 
 export function createDirectCallReconstructDirectiveAuthor(args: {
   llmConfig?: Partial<LlmCallConfig>;
@@ -246,6 +276,22 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * treatment as documentExcerptProjectionBudget).
    */
   sourceBreadthFold?: boolean;
+  /**
+   * Observation-catalog-tool opt-in (design 20260726-observation-catalog-tool §6, stage 3a — the
+   * PUSH layer), resolved from reconstruct.execution.source_observation_catalog_tool. Default
+   * undefined/false = today's answer-support projection: at most
+   * ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT (64) observations WITH detail, supplemental ids past the
+   * cap dropped silently (design §1.2). Explicit true switches that prompt to a navigation catalog —
+   * EVERY consumption-approved observation, pinned at the `one_line` rung, no cap — and demotes down
+   * the tail rungs only if the catalog itself would overflow, failing loud pre-dispatch when even
+   * `anchor` does not fit. Projection-only: mints/mutates no observation. It changes the authored
+   * ledger, so it is folded into the resume reuse key like sourceBreadthFold.
+   *
+   * Stage 3a lands the push layer ALONE: with this on and no pull layer yet, the prompt carries ids
+   * and summaries but not the detail the fetch tool will serve. That is why the key stays default
+   * OFF until stage 3b wires the facade.
+   */
+  sourceObservationCatalogTool?: boolean;
   /**
    * DD10 (§10 v2.1): render-label root for the semantic-map prompt surfaces this author renders
    * (observation replace + seed payload) — absolute code node_ref.file paths label as
@@ -313,10 +359,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // it after authoring (and clears it per run, like executionTelemetry).
   const documentExcerptProjectionTruncations: DocumentExcerptProjectionTruncation[] =
     [];
-  // Run-scoped sink for admission-surface breadth-fold demotions (the admission artifact has no
-  // in-artifact free-text channel the directive's open_questions provides). runReconstruct reads it
-  // after the admission stage and clears it per run, exactly like the truncation sink above.
-  const sourceBreadthFoldDisclosures: BreadthFoldDisclosure[] = [];
+  // Run-scoped sink for breadth-fold demotions on the surfaces whose artifact has no in-artifact
+  // free-text channel the directive's open_questions provides — admission-selection and (stage 3a)
+  // maturation answer-support. Each entry names its surface. runReconstruct reads it after the
+  // producing stage and clears it per run, exactly like the truncation sink above.
+  const sourceBreadthFoldDisclosures: BreadthFoldDisclosureRecord[] = [];
+  // Clusters held back because delivery could not be VERIFIED (design §2.5). Same lifecycle as the two
+  // sinks above: filled during authoring, drained and cleared by runReconstruct.
+  const withheldEvidenceClusters: WithheldEvidenceClusterRecord[] = [];
   const recordDocumentExcerptProjectionTruncation = (
     truncation: DocumentExcerptProjectionTruncation,
   ): void => {
@@ -509,8 +559,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
     sourceBreadthFold: args.sourceBreadthFold === true,
+    sourceObservationCatalogTool: args.sourceObservationCatalogTool === true,
     documentExcerptProjectionTruncations,
     sourceBreadthFoldDisclosures,
+    withheldEvidenceClusters,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
     // Effective synthesize identity — consumed by the semantic-map stage's
@@ -1137,7 +1189,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // open_questions channel, so the disclosure goes to the run-scoped sink runReconstruct records
       // durably. `full` = no demotion → nothing recorded (byte-parity intact).
       if (admissionBreadthFold && admissionBreadthFold.disclosure.fold_level !== "full") {
-        sourceBreadthFoldDisclosures.push(admissionBreadthFold.disclosure);
+        sourceBreadthFoldDisclosures.push({
+          surface: "source_admission_selection",
+          disclosure: admissionBreadthFold.disclosure,
+        });
       }
       // Always-on total-size safety net (design 20260723 §7, Alt-5b): the admitted-outline catalog
       // scales with the admitted file count — the second count-scaling dispatch surface. Same codex
@@ -3150,67 +3205,310 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeAnswerSupportLedger(input) {
+      // Stage 3a (design 20260726 §6): in catalog-tool mode this prompt carries NAVIGATION for every
+      // consumption-approved observation instead of detail for at most 64 of them. Off = today's
+      // capped detailed projection, byte-identical.
+      const observationCatalogTool = args.sourceObservationCatalogTool === true;
       const promptCatalog = maturationAnswerSupportPromptCatalog({
         sourceObservations: input.sourceObservations,
         maturationQuestionFrontier: input.maturationQuestionFrontier,
         maturationClosureFrontier: input.maturationClosureFrontier,
+        ...(observationCatalogTool ? { observationCatalogTool: true } : {}),
       });
+      // No-op in catalog-tool mode by construction (nothing is omitted when nothing is capped); kept
+      // unconditional so the OFF path is untouched and the invariant is asserted either way.
       assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(promptCatalog);
       const promptObservationIds = promptCatalog.promptObservationIds;
       const promptObservationIdSet = new Set(promptObservationIds);
+      // Present exactly when the pull layer will be registered, so the prompt announces a tool that
+      // exists. Computed here because the announcement below is part of the payload the fold measures.
+      const pull = observationCatalogTool ? input.observationReadPull : undefined;
+      // The system prompt DECLARES the citation field, and pull mode reads a different one than push
+      // (`evidence_range_ids` vs `evidence_observation_ids`). Selected ONCE and reused by all three
+      // consumers below — the fold's byte measurement, the overflow guard and the dispatch — because
+      // measuring one string and sending another is stage 2's F6 defect in miniature.
+      //
+      // Live 2026-07-31: with the static prompt declaring observation ids while the payload asked for
+      // ranges, a real worker fetched its page and answered `{"evidence_clusters":[]}`.
+      //
+      // The mode split itself left the push projection byte-identical; a LATER fix in the same session
+      // (the required `independence_basis`, D3) deliberately edited BOTH projections, so the authoring
+      // prompt contract sha rotates once. That rotation is the documented safe direction here — the
+      // same treatment `source_breadth_fold` and `source_observation_catalog_tool` already get.
+      const answerSupportSystemPrompt = answerSupportLedgerSystemPrompt(pull ? "ranges" : "observations");
+      // The policy block is a function of the ROWS, so the fold measures each rung with the text that
+      // rung would actually dispatch and the dispatched text describes the rows that went out. A fixed
+      // sentence told the worker summaries were present exactly when `anchor` had removed them; a
+      // rung-keyed one was then false for region rows, which keep `location` at every rung
+      // (cross-family review, third and fourth rounds).
+      const answerSupportUserPayloadFor = (projection: readonly unknown[]) => ({
+        round_id: input.roundId,
+        question_frontier_ref: input.maturationQuestionFrontierRef,
+        question_frontier_validation:
+          input.maturationQuestionFrontierValidation,
+        questions: input.maturationQuestionFrontier.questions,
+        closure_frontier: input.maturationClosureFrontier,
+        closure_frontier_validation: input.maturationClosureFrontierValidation,
+        authority_response: input.maturationAuthorityResponse,
+        authority_response_validation:
+          input.maturationAuthorityResponseValidation,
+        source_observation_prompt_policy: {
+          projection_kind: observationCatalogTool
+            ? "maturation_answer_support_navigation_catalog"
+            : "maturation_answer_support_bounded_catalog",
+          selection_basis: observationCatalogTool
+            ? "Runtime projects EVERY consumption-approved source observation as a navigation row " +
+              `(${navigationRowFieldsFromRows(projection)}) with no per-observation detail and no slot ` +
+              "cap, closure-prioritized refs first; semantic answer support remains LLM-owned."
+            : "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
+          source_observation_count: input.sourceObservations.observations.length,
+          prioritized_observation_count:
+            promptCatalog.prioritizedObservationIds.length,
+          prompt_observation_count: promptObservationIds.length,
+          prompt_visible_prioritized_observation_count:
+            promptCatalog.promptVisiblePrioritizedObservationIds.length,
+          prompt_visible_supplemental_observation_count:
+            promptCatalog.promptVisibleSupplementalObservationIds.length,
+          omitted_prioritized_observation_count:
+            promptCatalog.omittedPrioritizedObservationIds.length,
+          // null, not the constant: in catalog-tool mode there IS no slot cap, and reporting one
+          // would tell the reader a bound applies that no code applies.
+          observation_limit: observationCatalogTool
+            ? null
+            : ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
+          content_excerpt_char_limit: observationCatalogTool
+            ? null
+            : POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+        },
+        // Codex does not advertise MCP tools to the model: measured 2026-07-27 (design §5.5), the
+        // request payload carries only `exec`/`wait`/`request_user_input`, and MCP tools live inside
+        // that sandbox to be discovered. So the prompt NAMES the tool. In the payload rather than the
+        // system prompt on purpose: the system prompt is module-static and its sha keys artifact
+        // reuse, so editing it would rotate every OFF run's reuse key for an opt-in nobody enabled.
+        ...(pull
+          ? {
+            source_observation_fetch_tool: {
+              tool_name: OBSERVATION_READ_TOOL_NAME,
+              why: "source_observations above is a NAVIGATION catalog: ids, refs and summaries, with no " +
+                "detail. This tool is the only way to read an observation's content.",
+              how: `Call ${OBSERVATION_READ_TOOL_NAME} with {"observation_ids": [...]} using up to ` +
+                `${OBSERVATION_READ_MAX_REQUEST_IDS} ids from prompt_visible_observation_ids, or with ` +
+                '{"cursor": "..."} to continue a previous page. An observation larger than one page ' +
+                "arrives split: concatenate part_index 1..part_count to recover its body exactly.",
+              budget: "Fetches and this prompt share one ceiling, and failed calls are charged too. " +
+                "Fetch what you will actually cite. You do NOT have to read an observation whole — " +
+                "cite the parts you read.",
+              citation_rule: 'In this dispatch a cluster cites ranges, not observations: put the ' +
+                '"range_id" of each page part you are relying on into evidence_range_ids, copied ' +
+                "exactly as it arrived. A range_id this dispatch did not serve you is rejected, and so " +
+                "is one whose page did not reach you — the runtime checks every citation against the " +
+                "worker transcript, not against what it meant to send.",
+            },
+          }
+          : {}),
+        prompt_visible_observation_ids: promptObservationIds,
+      });
+      const answerSupportUserPayloadBase = answerSupportUserPayloadFor([]);
+      // Catalog rungs. `one_line` is the PINNED start (design §6) — the tail rungs exist so an
+      // extreme corpus demotes detail rather than dropping observations, exactly as on the two
+      // count-scaling surfaces. Tail rows are DERIVED from the one_line rows by dropping keys, so the
+      // ladder stays non-increasing structurally (see projectBreadthFoldTailRung).
+      const projectAnswerSupportCatalogAtFoldLevel = (
+        level: BreadthFoldLevel,
+      ): unknown[] => {
+        if (level === "summary_anchor" || level === "anchor") {
+          return projectBreadthFoldTailRung(
+            projectAnswerSupportCatalogAtFoldLevel("one_line"),
+            level,
+          );
+        }
+        // Fail loud instead of silently serving one_line rows under a finer rung's NAME: the fold's
+        // disclosure and the reader would then both be told a rung that never ran. Reachable only by
+        // handing this projector a ladder it does not implement.
+        if (level !== "one_line") {
+          throw new Error(
+            `AnswerSupportLedger navigation catalog has no projection for fold level '${level}'. ` +
+              "The catalog ladder is pinned at 'one_line' (OBSERVATION_CATALOG_TOOL_FOLD_LEVELS).",
+          );
+        }
+        return projectObservationsForPrompt(input.sourceObservations, {
+          observationIds: promptObservationIds,
+          includeStructuralData: false,
+        }) as unknown[];
+      };
+      const catalogFold = observationCatalogTool
+        ? foldObservationsToBudget({
+            budget: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+            catalogObservationCount: promptObservationIds.length,
+            projectAtLevel: projectAnswerSupportCatalogAtFoldLevel,
+            measure: (projection) =>
+              promptPayloadByteCount(answerSupportSystemPrompt, {
+                ...answerSupportUserPayloadFor(projection),
+                source_observations: projection,
+              }),
+            levels: OBSERVATION_CATALOG_TOOL_FOLD_LEVELS,
+          })
+        : null;
+      const answerSupportProjection = catalogFold
+        ? catalogFold.projection
+        : (projectObservationsForPrompt(input.sourceObservations, {
+            observationIds: promptObservationIds,
+            contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }) as unknown[]);
+      const answerSupportUserPayload = {
+        ...answerSupportUserPayloadFor(answerSupportProjection),
+        source_observations: answerSupportProjection,
+      };
+      if (catalogFold) {
+        // Design §6: "even `anchor` does not fit" fails BEFORE the worker starts, with the measured
+        // size — not as codex's opaque nonzero exit. Gated with the mode because an always-on guard
+        // here would refuse the narrow band between this budget and the ceiling that OFF runs reach
+        // today; that band is covered by the always-on dispatch backstop in llm-caller (PR #265).
+        assertPromptPayloadByteLimit({
+          artifactName: "AnswerSupportLedger",
+          systemPrompt: answerSupportSystemPrompt,
+          userPayload: answerSupportUserPayload,
+          byteLimit: SOURCE_OBSERVATION_PROMPT_BYTE_BUDGET,
+        });
+        // R2 no-silent-truncation disclosure, recorded ONLY AFTER the guard passes. `one_line` is the
+        // pinned start, so recording it would be noise; anything COARSER means the catalog could not
+        // carry summaries and the LM chose ids with less to choose by — that must be auditable. The
+        // ledger artifact has no free-text channel, so it goes to the run-scoped sink runReconstruct
+        // drains.
+        //
+        // Order matters: recorded BEFORE the guard, an over-budget run pushed a disclosure that the
+        // run-level `finally` then emitted as "every observation stayed selectable" for a catalog that
+        // was never dispatched (cross-family review, third round — a defect the `finally` itself
+        // introduced). After the guard, a disclosure existing MEANS the payload it describes went out
+        // or died in dispatch, which is exactly what the drain claims.
+        if (catalogFold.disclosure.fold_level !== "one_line") {
+          sourceBreadthFoldDisclosures.push({
+            surface: "maturation_answer_support",
+            disclosure: catalogFold.disclosure,
+          });
+        }
+      }
+      // Stage 3b PULL layer. The catalog above is navigation only; the detail behind those ids is
+      // fetched by the worker through a facade codex launches for THIS dispatch. The route writes the
+      // descriptor (so its prompt parts are the dispatched ones by construction) and this reads the
+      // receipt back — the `조회` term of `인용 ⊆ 조회 ⊆ 스냅샷`.
+      // Not a secret and not a capability (see the facade module header): it binds this descriptor to
+      // this launch so a crossed pair refuses instead of serving another snapshot.
+      //
+      // It is also in every artifact PATH below, which is what keeps two dispatches from sharing one.
+      // Keyed by round id alone, two overlapping launches wrote the same files — and since
+      // `prepareObservationReadFacadeLaunch` clears those paths, the second one DELETED the first's
+      // start-right file and then created its own, leaving two live grants on one launch
+      // (codex ultracode review, PR #271; the hole design §11-L2 warned about, reopened by the very
+      // clear that exists for resume). Unique paths remove the collision instead of policing it: the
+      // clear can no longer reach another dispatch's evidence, and `O_CREAT|O_EXCL` still refuses a
+      // second facade on the SAME launch, which is the case it was for.
+      const launchToken = randomUUID();
+      const launchPaths = pull
+        ? observationReadFacadeLaunchPaths({
+          workDir: pull.workDir,
+          roundId: input.roundId,
+          launchToken,
+        })
+        : undefined;
+      const facadeLaunch = pull && launchPaths
+        ? prepareObservationReadFacadeLaunch({
+          sources: {
+            observationsPath: pull.observationsPath,
+            safetyLedgerPath: pull.safetyLedgerPath,
+            safetyLedgerValidationPath: pull.safetyLedgerValidationPath,
+          },
+          descriptorPath: launchPaths.descriptorPath,
+          receiptPath: launchPaths.receiptPath,
+          // Where the facade records what it emitted AND claims the right to start (design §11-L2).
+          emissionsPath: launchPaths.emissionsPath,
+          launchToken,
+          // The grant must not outlive its worker. The worker's own timeout is that lifetime, so it is
+          // read from the config this dispatch will use rather than restated as a second number.
+          ttlMs: llmConfig.timeout_ms ?? DEFAULT_WORKER_TIMEOUT_MS,
+        })
+        : undefined;
+      let workerSession: LlmCallResult["worker_session"];
       const raw = await callJsonAuthor({
         llmCall,
-        llmConfig,
+        llmConfig: facadeLaunch
+          ? {
+            ...llmConfig,
+            observation_read_facade: facadeLaunch,
+            // Delivery reconciliation reads the worker's own transcript, and codex writes none under
+            // `--ephemeral` (measured). The pull layer now REQUIRES that reconciliation (see the
+            // citation authority below), so the transcript is asked for whenever the facade launches.
+            persist_worker_transcript: true,
+          }
+          : llmConfig,
         telemetry,
         artifactName: "AnswerSupportLedger",
         maxTokens: 3800,
-        systemPrompt: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
-        userPayload: {
-          round_id: input.roundId,
-          question_frontier_ref: input.maturationQuestionFrontierRef,
-          question_frontier_validation:
-            input.maturationQuestionFrontierValidation,
-          questions: input.maturationQuestionFrontier.questions,
-          closure_frontier: input.maturationClosureFrontier,
-          closure_frontier_validation: input.maturationClosureFrontierValidation,
-          authority_response: input.maturationAuthorityResponse,
-          authority_response_validation:
-            input.maturationAuthorityResponseValidation,
-          source_observation_prompt_policy: {
-            projection_kind: "maturation_answer_support_bounded_catalog",
-            selection_basis:
-              "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
-            source_observation_count: input.sourceObservations.observations.length,
-            prioritized_observation_count:
-              promptCatalog.prioritizedObservationIds.length,
-            prompt_observation_count: promptObservationIds.length,
-            prompt_visible_prioritized_observation_count:
-              promptCatalog.promptVisiblePrioritizedObservationIds.length,
-            prompt_visible_supplemental_observation_count:
-              promptCatalog.promptVisibleSupplementalObservationIds.length,
-            omitted_prioritized_observation_count:
-              promptCatalog.omittedPrioritizedObservationIds.length,
-            observation_limit: ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
-            content_excerpt_char_limit:
-              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
-          },
-          prompt_visible_observation_ids: promptObservationIds,
-          source_observations: projectObservationsForPrompt(input.sourceObservations, {
-            observationIds: promptObservationIds,
-            contentExcerptCharLimit:
-              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
-          }),
+        systemPrompt: answerSupportSystemPrompt,
+        userPayload: answerSupportUserPayload,
+        onWorkerSession: (session) => {
+          workerSession = session;
         },
       });
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        evidence_clusters: records(
-          raw.evidence_clusters ?? [],
-          "evidence_clusters",
-        ).map((cluster, index) => ({
+      // Delivery reconciliation (design §6-2 stage 3a-2). Runs HERE because it needs the worker to be
+      // gone — its transcript is only complete once codex has exited.
+      //
+      // Gated on the PULL LAYER alone, no longer on a separate key. It used to be opt-in beside a
+      // `served` fallback, and that pairing was unsound: codex clips a tool result middle-out on the way
+      // into the model, the unit it clips is the RECEIVED RECORD, and one exec turn can render several
+      // tool results into one record — so two legally sized pages in a turn still get clipped while the
+      // facade, whose write succeeded, records both as served. Sizing cannot close that (the server
+      // speaks `initialize`/`tools/list`/`tools/call`/`ping` and has no notion of a turn, so it cannot
+      // enforce one page per turn; and sizing for the worst-case cumulative record would need a budget
+      // below the minimum). Only asking "did these bytes actually appear in the worker's context" closes
+      // it, because a clipped record fails to contain the emitted page. Making it unconditional is what
+      // stops the unsafe combination from being a procedure someone has to remember.
+      const deliveryRecordPath = launchPaths?.deliveryRecordPath ?? null;
+      if (facadeLaunch && deliveryRecordPath) {
+        reconcileFacadeDelivery({
+          launch: facadeLaunch,
+          workerSession,
+          recordPath: deliveryRecordPath,
+          toolName: OBSERVATION_READ_TOOL_NAME,
+        });
+      }
+      // What a citation may name. Read AFTER the dispatch — the worker is gone by now — and FAIL-CLOSED
+      // either way: a missing, torn or foreign artifact admits nothing rather than leaving citations
+      // unchecked.
+      //
+      // The authority is the DELIVERED set — what the worker's own transcript shows arrived — and there
+      // is no second basis to fall back to. An unverified codex version or an unrecognised transcript
+      // shape resolves to `unverifiable`, which admits nothing and says so in those words; §2.5 turns
+      // that into a withheld cluster and a disclosure rather than a dead run.
+      //
+      // The `served` basis is gone on purpose. It answered "did the runtime send this", which is not the
+      // question a citation asks, and the gap between the two is not hypothetical: the transport clips
+      // whole records, the facade cannot see it, and its write succeeded. Keeping it as an opt-out would
+      // leave the unsound answer reachable by configuration.
+      const citableObservations: CitableObservations | null = !facadeLaunch || !deliveryRecordPath
+        ? null
+        : citableFromDeliveryRecord(
+          readObservationReadDeliveryRecord(deliveryRecordPath, facadeLaunch.launchToken),
+        );
+      // What each `orng_v1_…` the worker cites actually names. Built from the pages THIS launch
+      // emitted, so an id naming a range that was never sent resolves to nothing — forgery fails by
+      // absence rather than by a check that could be wrong. Empty when the facade never ran, which is
+      // the same answer for a different reason and is handled identically below.
+      const emittedRanges = facadeLaunch
+        ? indexEmittedObservationRanges(
+          (readObservationReadFacadeEmissions(facadeLaunch.emissionsPath, facadeLaunch.launchToken)
+            ?.emissions ?? []).map((emission) => emission.canonical_text),
+        )
+        : new Map<string, ObservationRangeRef>();
+      /**
+       * The cluster record itself. Hoisted out of the pass above so the ORDER of the checks stays
+       * readable in one place: resolve, then catalog, then delivery — see the comment there.
+       */
+      const buildCluster = (
+        cluster: Record<string, unknown>,
+        index: number,
+        evidenceRefs: ReconstructEvidenceRef[],
+      ) => ({
           evidence_cluster_id: optionalString(cluster.evidence_cluster_id) ??
             `evidence-cluster-${index + 1}`,
           question_refs: stringArray(
@@ -3232,25 +3530,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             cluster.proposed_answer_summary,
             `evidence_clusters[${index}].proposed_answer_summary`,
           ),
-          evidence_refs: (() => {
-            const observationIds = stringArray(
-              cluster.evidence_observation_ids ?? [],
-              `evidence_clusters[${index}].evidence_observation_ids`,
-            );
-            const outOfPromptIds = observationIds.filter((observationId) =>
-              !promptObservationIdSet.has(observationId)
-            );
-            if (outOfPromptIds.length > 0) {
-              throw new Error(
-                `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfPromptIds.join(", ")}`,
-              );
-            }
-            return evidenceRefsFromIds({
-              observationIds,
-              sourceObservations: input.sourceObservations,
-              fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
-            });
-          })(),
+          evidence_refs: evidenceRefs,
           proof_refs: stringArray(
             cluster.proof_refs ?? [],
             `evidence_clusters[${index}].proof_refs`,
@@ -3275,7 +3555,143 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             cluster.limitation_refs ?? [],
             `evidence_clusters[${index}].limitation_refs`,
           ),
-        })),
+      });
+
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        evidence_clusters: records(
+          raw.evidence_clusters ?? [],
+          "evidence_clusters",
+        ).flatMap((cluster, index) => {
+          // ORDER MATTERS, and it used to be wrong (cross-family review, F-5). The `unverifiable`
+          // withhold ran in a `filter` BEFORE the catalog and citability checks in the `map`, so a
+          // cluster citing an id the worker invented was withheld instead of refused whenever delivery
+          // could not be verified — and the completion condition "an id that was never emitted is
+          // rejected" could not hold. Resolution and catalog membership are facts about the WORKER'S
+          // claim and are checked first; the delivery basis is a fact about OUR evidence and is applied
+          // last.
+          // WITHOUT the pull layer the worker was never given range ids — the catalog carries detail
+          // inline — so the citation surface stays `evidence_observation_ids` there and only the
+          // catalog gate applies. Branching here rather than accepting both fields everywhere keeps
+          // each mode's contract exact: a range id in push mode names nothing, and an observation id in
+          // pull mode is a claim about content the worker did not necessarily read.
+          if (!facadeLaunch) {
+            const observationIds = stringArray(
+              cluster.evidence_observation_ids ?? [],
+              `evidence_clusters[${index}].evidence_observation_ids`,
+            );
+            const outOfCatalog = observationIds.filter((id) => !promptObservationIdSet.has(id));
+            if (outOfCatalog.length > 0) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfCatalog.join(", ")}`,
+              );
+            }
+            return [buildCluster(
+              cluster,
+              index,
+              evidenceRefsFromIds({
+                observationIds: [...observationIds],
+                sourceObservations: input.sourceObservations,
+                fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
+              }),
+            )];
+          }
+          const citedRangeIds = stringArray(
+            cluster.evidence_range_ids ?? [],
+            `evidence_clusters[${index}].evidence_range_ids`,
+          );
+
+          // (0) Cited at all. BEFORE the basis branch, because it is a fact about the worker's claim
+          // rather than about our evidence — the same reason resolution and catalog come first.
+          //
+          // It used to live inside the `unverifiable` branch only, and the delivered branch had no
+          // equivalent: a cluster naming no range resolved to nothing, was covered by nothing, and was
+          // admitted with an EMPTY `evidence_refs` (measured: `CLUSTERS=1 REFS=[]`). It then failed a
+          // stage later in `maturation-validation` with a message about missing evidence — the cause
+          // and the report in different places. The live 2026-07-31 run reached this through the prompt
+          // contradiction the mode-aware system prompt now removes; the guard is what makes the hole
+          // unreachable rather than merely unlikely.
+          if (citedRangeIds.length === 0) {
+            throw new Error(
+              `AnswerSupportLedger evidence cluster ${index + 1} cites nothing; a cluster must name ` +
+                "at least one range.",
+            );
+          }
+
+          // (1) Resolve. An id this launch never emitted is the worker naming something it was not
+          // given — a false claim, so it throws rather than being withheld.
+          const resolved = citedRangeIds.map((rangeId) => {
+            const ref = emittedRanges.get(rangeId);
+            if (ref === undefined) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} cites range ids this dispatch never ` +
+                  `served: ${rangeId}. A citation must name a range the runtime actually emitted.`,
+              );
+            }
+            return ref;
+          });
+
+          // (2) Catalog. Unchanged in meaning: a citation must stay inside the bounded prompt catalog.
+          const outOfPromptIds = resolved
+            .map((ref) => ref.observation_id)
+            .filter((observationId) => !promptObservationIdSet.has(observationId));
+          if (outOfPromptIds.length > 0) {
+            throw new Error(
+              `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfPromptIds.join(", ")}`,
+            );
+          }
+
+          // (3) Delivery. §2.5: "the runtime could not check" must never end the run. A cluster whose
+          // citations cannot be attested is WITHHELD WHOLE — emptying its `evidence_refs` instead would
+          // satisfy this gate and then fail `maturation-validation`'s two-independent-refs obligation a
+          // stage later, killing the run anyway with a message about evidence rather than attestation.
+          if (citableObservations && citableObservations.basis === "unverifiable") {
+            withheldEvidenceClusters.push({
+              clusterIndex: index + 1,
+              reason: citableObservations.reason,
+              citedObservationIds: [...new Set(resolved.map((ref) => ref.observation_id))],
+            });
+            return [];
+          }
+          if (citableObservations) {
+            const undelivered = resolved.filter((ref) => !deliveredCoversRange(citableObservations, ref));
+            if (undelivered.length > 0) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} cites ranges that were verified NOT ` +
+                  `to have reached the worker's context: ${
+                    undelivered.map((ref) => `${ref.observation_id}[${ref.body_start},${ref.body_end})`).join(", ")
+                  }. A citation must name content the worker actually received.`,
+              );
+            }
+          }
+          // ONE REF PER CITED RANGE, not per observation. Collapsing to observations here is what let
+          // the judge below see the whole record and support a claim from a range nobody cited — owner
+          // decision A (§4-4) is that the range travels all the way down, so this is where it starts.
+          return [buildCluster(
+            cluster,
+            index,
+            resolved.map((ref, refIndex) => {
+              const [base] = evidenceRefsFromIds({
+                observationIds: [ref.observation_id],
+                sourceObservations: input.sourceObservations,
+                fieldName: `evidence_clusters[${index}].evidence_range_ids[${refIndex}]`,
+              });
+              return {
+                ...(base as ReconstructEvidenceRef),
+                range: {
+                  range_id: citedRangeIds[refIndex] as string,
+                  observation_content_sha256: ref.observation_content_sha256,
+                  body_start: ref.body_start,
+                  body_end: ref.body_end,
+                  range_content_sha256: ref.range_content_sha256,
+                },
+              };
+            }),
+          )];
+        }),
         directive_author: { owner: "host_llm", author_id: authorId },
       };
     },
@@ -3317,6 +3733,32 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ),
         ),
       ];
+      // RANGE-SCOPED JUDGING (owner decision A, design §4-4). When the citation named ranges, the judge
+      // is shown those ranges and NOTHING ELSE of the observation. Without this the judge re-selected
+      // the whole record by id and could support a claim from a passage the worker never cited — the
+      // citation gate is range-level, so a judge that is not makes the gate decorative.
+      //
+      // The text is re-sliced from the record and hashed against the value the page carried
+      // (`citedRangeText`), so this cannot quietly show the judge the wrong characters.
+      const observationById = new Map(
+        input.sourceObservations.observations.map((observation) => [observation.observation_id, observation]),
+      );
+      const citedRanges = convergentClusters.flatMap((cluster) =>
+        cluster.evidence_refs.flatMap((ref) => {
+          if (!ref.range) return [];
+          const observation = observationById.get(ref.observation_id);
+          if (!observation) return [];
+          return [{
+            evidence_cluster_id: cluster.evidence_cluster_id,
+            observation_id: ref.observation_id,
+            range_id: ref.range.range_id,
+            source_ref: ref.source_ref,
+            location: ref.location,
+            cited_text: citedRangeText(observation, ref.range),
+          }];
+        })
+      );
+      const judgesRanges = citedRanges.length > 0;
       const raw = await callJsonAuthor({
         llmCall,
         // Per-stage judge config (opt-in). Defaults to llmConfig (== author) so
@@ -3338,14 +3780,28 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             evidence_observation_ids: cluster.evidence_refs.map(
               (ref) => ref.observation_id,
             ),
+            ...(judgesRanges
+              ? {
+                evidence_range_ids: cluster.evidence_refs.flatMap((ref) =>
+                  ref.range ? [ref.range.range_id] : []
+                ),
+              }
+              : {}),
           })),
-          source_observations: projectObservationsForPrompt(
-            input.sourceObservations,
-            {
-              observationIds: judgePromptObservationIds,
-              contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
-            },
-          ),
+          // Exactly one of the two. With ranges the judge gets `cited_ranges` and NO observation
+          // content — sending both would put the whole record back in front of it and make the
+          // narrowing cosmetic. Without ranges (push mode) the projection is unchanged.
+          ...(judgesRanges
+            ? { cited_ranges: citedRanges }
+            : {
+              source_observations: projectObservationsForPrompt(
+                input.sourceObservations,
+                {
+                  observationIds: judgePromptObservationIds,
+                  contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+                },
+              ),
+            }),
         },
       });
       const judgments = records(raw.judgments ?? [], "judgments").map(
@@ -3398,6 +3854,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeMaturationAnswerClaims(input) {
+      // Same opt-in as the ledger's catalog/pull layer — see the boundary note at the resolution site.
+      const observationCatalogTool = args.sourceObservationCatalogTool === true;
       if (input.answerSupportLedger.evidence_clusters.length === 0) {
         return {
           schema_version: "1",
@@ -3429,7 +3887,49 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         created_at: isoNow(),
         round_id: input.roundId,
         answer_claims: records(raw.answer_claims ?? [], "answer_claims")
-          .map((claim, index) => ({
+          .map((claim, index) => {
+            const evidenceClusterRefs = stringArray(
+              claim.evidence_cluster_refs,
+              `answer_claims[${index}].evidence_cluster_refs`,
+            );
+            // The observations THIS claim's own cited clusters carry — the citable boundary under the
+            // opt-in, and also the KNOWABLE one: the claims prompt shows the model its clusters and no
+            // observation catalog, so the set it could NAME was wider than the set it could SEE and the
+            // difference could only be guessed at. Under the pull layer an id outside them is
+            // additionally content no dispatch fetched, which `인용 ⊆ 조회` refuses one artifact upstream.
+            //
+            // Gated on the SAME opt-in as the pull layer: the mismatch exists with the flag off too, but
+            // narrowing there would change a default-path contract that
+            // `.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md` does not require
+            // and no validator enforces.
+            const citedObservationIds = new Set<string>();
+            if (observationCatalogTool) {
+              const cited = new Set(evidenceClusterRefs);
+              for (const cluster of input.answerSupportLedger.evidence_clusters) {
+                if (!cited.has(cluster.evidence_cluster_id)) continue;
+                for (const ref of cluster.evidence_refs) citedObservationIds.add(ref.observation_id);
+              }
+            }
+            const supportingObservationIds = stringArray(
+              claim.supporting_evidence_observation_ids ?? [],
+              `answer_claims[${index}].supporting_evidence_observation_ids`,
+            );
+            // REJECT the whole list, do not resolve what is left of it. `evidenceRefsFromIds` drops
+            // unknown ids whenever at least one resolves, so narrowing the set alone turned a partly
+            // outside citation into a silently SHORTENED one — the claim survived carrying materially
+            // different evidence, and validation only ever saw the altered list. Design §8: the runtime
+            // rejects a citation, it does not repair it.
+            const outsideClusterIds = supportingObservationIds.filter((observationId) =>
+              !citedObservationIds.has(observationId)
+            );
+            if (observationCatalogTool && outsideClusterIds.length > 0) {
+              throw new Error(
+                `answer_claims[${index}].supporting_evidence_observation_ids names observations ` +
+                  `outside the evidence clusters it cites: ${outsideClusterIds.join(", ")}. A claim's ` +
+                  "supporting evidence must come from the clusters it names.",
+              );
+            }
+            return {
             answer_claim_id: optionalString(claim.answer_claim_id) ??
               `maturation-answer-claim-${index + 1}`,
             question_id: stringValue(
@@ -3453,15 +3953,23 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               ] as const,
               `answer_claims[${index}].support_mode`,
             ),
-            evidence_cluster_refs: stringArray(
-              claim.evidence_cluster_refs,
-              `answer_claims[${index}].evidence_cluster_refs`,
-            ),
+            evidence_cluster_refs: evidenceClusterRefs,
+            // Resolved against the observations THIS claim's own cited clusters carry, not against
+            // every approved observation.
+            //
+            // The claims payload above shows the model its clusters and NO observation catalog, so the
+            // set it can name was always wider than the set it can see, and the difference could only
+            // be filled by guessing. Under the pull layer it is worse than a guess: an id outside the
+            // clusters is content no dispatch ever fetched, which is exactly what design §3's
+            // `인용 ⊆ 조회` refuses one artifact upstream.
+            //
+            // Narrowing the resolution SET rather than adding a validation rule keeps the treatment the
+            // consumption gate already established: an id this author may not use is simply an id that
+            // does not exist (design §3.1). Widening it later is the other coherent option, but it has
+            // to bring the pull tool with it — a catalog without a way to READ what it lists would
+            // institutionalise the citing-what-you-never-read that this stage exists to stop.
             supporting_evidence_refs: evidenceRefsFromIds({
-              observationIds: stringArray(
-                claim.supporting_evidence_observation_ids ?? [],
-                `answer_claims[${index}].supporting_evidence_observation_ids`,
-              ),
+              observationIds: supportingObservationIds,
               sourceObservations: input.sourceObservations,
               fieldName:
                 `answer_claims[${index}].supporting_evidence_observation_ids`,
@@ -3482,7 +3990,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               claim.limitation_refs ?? [],
               `answer_claims[${index}].limitation_refs`,
             ),
-          })),
+            };
+          }),
         directive_author: { owner: "host_llm", author_id: authorId },
       };
     },

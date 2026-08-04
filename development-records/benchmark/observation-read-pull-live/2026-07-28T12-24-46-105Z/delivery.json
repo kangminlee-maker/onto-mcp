@@ -1,0 +1,16 @@
+{
+  "schema_version": "observation-read-delivery/v1",
+  "launch_token": "02be9bec-b0fc-4be2-929b-95ac4f9e93ac",
+  "status": "verified",
+  "delivered": [
+    "obs_9f291d6235fdb41c",
+    "obs_eb90f83378bd57a0"
+  ],
+  "attestation": [
+    {
+      "index": 0,
+      "chars": 15177,
+      "disposition": "verbatim_delivered"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": "observation-read-facade-receipt/v3",
+  "launch_token": "3d2cd1e4-30b8-4067-af73-6dd46b8f0c5b",
+  "receipt": {
+    "grant_id": "obsgrant_b34acc7c629b4a4a",
+    "snapshot_digest": "ca433f54b741161b82629c0eaee12f941ca0ba7060d1c6b4087b0bf67f19ae17",
+    "admitted_observation_count": 59,
+    "withheld_observation_count": 0,
+    "budget": {
+      "page_char_budget": 32000,
+      "total_fetch_char_budget": 1039426,
+      "max_calls": 32
+    },
+    "calls_served": 3,
+    "chars_served": 96214,
+    "served": [
+      {
+        "observation_id": "obs_020ed9af3779fd3d",
+        "observation_content_sha256": "cc1609596de258b7cfdc41295791644ae181f41fe3977f3c134e0a362a12b557",
+        "ranges": [
+          [
+            0,
+            82717
+          ]
+        ],
+        "body_length": 82717
+      }
+    ]
+  },
+  "rejected_before_grant": 0,
+  "failures": [],
+  "dropped_failure_count": 0
+}

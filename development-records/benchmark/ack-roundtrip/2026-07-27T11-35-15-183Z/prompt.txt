@@ -1,0 +1,14 @@
+You are exercising a two-step tool protocol. Follow it literally.
+
+For EACH index in this order: 0, 1, 2
+
+  Step 1. Call probe_read with {"index": <k>}.
+  Step 2. The result text contains a marker of the form [ACK_CHALLENGE:value] somewhere inside it.
+          Find it and immediately call probe_ack with {"challenge": "<that value>"}, copied EXACTLY.
+
+If — and only if — a result contains no [ACK_CHALLENGE:...] marker at all, skip its probe_ack call and
+move to the next index. Do not invent, guess or reuse a value from another chunk: an invented value is
+worse than a skipped acknowledgement.
+
+When you have finished all indices, reply with EXACTLY one line and nothing else:
+DONE acked=<comma separated list of the indices you acknowledged, or NONE>

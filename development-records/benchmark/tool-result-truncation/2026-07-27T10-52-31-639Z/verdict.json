@@ -1,0 +1,83 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "tool_output_token_limit": null,
+  "quantiles": 9,
+  "rows": [
+    {
+      "index": 0,
+      "requested_size": 2000,
+      "actual_chars": 2015,
+      "filler": "alpha",
+      "nonces": [
+        "02e42d7a8c",
+        "8c86d7c215",
+        "2acc674d25",
+        "d113ff78c1",
+        "49f4349498",
+        "cf7f746bc6",
+        "968b8b14c5",
+        "784c6a1ad0",
+        "24c1e12876"
+      ],
+      "outcome": "fetched_undescribed"
+    },
+    {
+      "index": 1,
+      "requested_size": 8000,
+      "actual_chars": 8001,
+      "filler": "hex",
+      "nonces": [
+        "daadcf8bd8",
+        "7ec8446869",
+        "805ffa466e",
+        "734a16d0bc",
+        "a894c4f030",
+        "08f7b00b6b",
+        "fda26b3606",
+        "24bbbc6603",
+        "4df2b50b7b"
+      ],
+      "outcome": "fetched_undescribed"
+    },
+    {
+      "index": 2,
+      "requested_size": 32000,
+      "actual_chars": 32035,
+      "filler": "alpha",
+      "nonces": [
+        "21a1cb1342",
+        "369fddf906",
+        "d38b296903",
+        "4cb4f98b2f",
+        "df40beb520",
+        "24478271a4",
+        "5c2536ca9e",
+        "ab8b1830bd",
+        "627115b20e"
+      ],
+      "outcome": "lossless",
+      "survival_map": "#########",
+      "notice": null
+    },
+    {
+      "index": 3,
+      "requested_size": 128000,
+      "actual_chars": 128007,
+      "filler": "hex",
+      "nonces": [
+        "f17a255a1f",
+        "c0d9ba705d",
+        "d20b7fc832",
+        "b7f8c66c50",
+        "933fcbce9c",
+        "ada175525d",
+        "5452340f89",
+        "dc990f15aa",
+        "436c76e524"
+      ],
+      "outcome": "fetched_undescribed"
+    }
+  ]
+}

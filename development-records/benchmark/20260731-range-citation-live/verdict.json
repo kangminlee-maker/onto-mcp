@@ -1,0 +1,22 @@
+{
+  "subject_id": "obs_020ed9af3779fd3d",
+  "subject_body_chars": 82717,
+  "result_char_budget": 38000,
+  "emitted_ranges": 1,
+  "delivered_ranges": [
+    [
+      0,
+      16812
+    ]
+  ],
+  "cited_range_ids": [
+    "orng_v1_4df871df530d1a78d0e4e5b9b7e823da"
+  ],
+  "cited_chars": 16812,
+  "attested": 1,
+  "attestation_total": 1,
+  "largest_attested_page_chars": 18186,
+  "uncited_delivered_ranges": 0,
+  "undelivered_emitted_ranges": 0,
+  "elapsed_ms": 25981
+}

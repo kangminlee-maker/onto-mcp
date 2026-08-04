@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { canonicalObservationBody } from "./observation-read.js";
 import { afterEach, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -1035,27 +1037,20 @@ describe("runReconstruct", () => {
     });
   });
 
-  it("repairs malformed direct-call JSON once before schema coercion", async () => {
+  // Repair is deterministic and deletion-only (design §6-3, decision §13-D2), so this exercises the
+  // wiring end to end: a surplus punctuation character is removed WITHOUT a second dispatch. The
+  // malformation is the shape actually observed in a transcript — a complete document with a stray
+  // separator — not a synthetic one.
+  it("repairs malformed direct-call JSON deterministically, without a second dispatch", async () => {
     let callCount = 0;
     const author = createDirectCallReconstructDirectiveAuthor({
-      llmCall: (systemPrompt) => {
+      llmCall: () => {
         callCount += 1;
-        if (systemPrompt.includes("Repair malformed JSON")) {
-          return Promise.resolve({
-            text: JSON.stringify({
-              selected_observations: [
-                {
-                  observation_id: "obs-1",
-                  selection_rationale: "Shows the dashboard actor.",
-                },
-              ],
-              open_questions: [],
-            }),
-          } satisfies LlmCallResult);
-        }
         return Promise.resolve({
+          // Prose prefix too: the repair must run on the SAME substring the parser judges (fences
+          // off, first `{` through last `}`), or it would refuse documents the parser can reach.
           text:
-            "{\"selected_observations\":[{\"observation_id\":\"obs-1\",\"selection_rationale\":\"Shows the dashboard actor.\"}],\"open_questions\":[\"unfinished\" \\u0635}",
+            "Here is the directive:\n{\"selected_observations\":[{\"observation_id\":\"obs-1\",\"selection_rationale\":\"Shows the dashboard actor.\",}],\"open_questions\":[]}",
         } satisfies LlmCallResult);
       },
     });
@@ -1100,14 +1095,22 @@ describe("runReconstruct", () => {
       },
     });
 
-    expect(callCount).toBe(2);
+    // ONE dispatch: the repair costs no call, and the artifact is still produced.
+    expect(callCount).toBe(1);
     expect(result.selected_observations).toHaveLength(1);
     expect(result.selected_observations[0]?.observation_id).toBe("obs-1");
+    expect(result.selected_observations[0]?.selection_rationale).toBe(
+      "Shows the dashboard actor.",
+    );
 
     const telemetry = author.executionTelemetry?.unitTelemetry(
       "observation_directive",
     );
-    expect(telemetry?.llm_call_count).toBe(2);
+    // ONE dispatch, TWO attempts: the model's output did not parse, and the unit produced its
+    // artifact anyway. Recording only the first made a completed unit read as terminally failed
+    // downstream (codex review, PR #271) — recording the repair as an LLM attempt would instead have
+    // claimed a call that never happened.
+    expect(telemetry?.llm_call_count).toBe(1);
     expect(telemetry?.attempt_count).toBe(2);
     expect(
       telemetry?.attempts.map((attempt) => ({
@@ -1119,6 +1122,8 @@ describe("runReconstruct", () => {
       { kind: "initial", status: "failed", failure_class: "malformed_json" },
       { kind: "parse_repair", status: "succeeded", failure_class: null },
     ]);
+    // THE consequence: a unit that succeeded must not project a terminal failure into the ledger.
+    expect(terminalFailureMessageFromTelemetry(telemetry)).toBeNull();
     expect(telemetry?.prompt_chars).toBeGreaterThan(0);
     expect(telemetry?.prompt_policy_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(telemetry?.source_identity_refs).toContain(
@@ -1126,7 +1131,7 @@ describe("runReconstruct", () => {
     );
   });
 
-  it("records terminal parse_repair_failure telemetry when repair also fails", async () => {
+  it("records a terminal failure when deterministic repair refuses the output", async () => {
     const author = createDirectCallReconstructDirectiveAuthor({
       llmCall: () =>
         Promise.resolve({ text: "{not json" } satisfies LlmCallResult),
@@ -1172,7 +1177,7 @@ describe("runReconstruct", () => {
           validation_results: [],
         },
       }),
-    ).rejects.toThrow(/invalid JSON and repair failed/);
+    ).rejects.toThrow(/deterministic repair refused it \(truncated_or_unrepairable_by_deletion\)/);
 
     const telemetry = author.executionTelemetry?.unitTelemetry(
       "observation_directive",
@@ -1185,11 +1190,6 @@ describe("runReconstruct", () => {
       })),
     ).toEqual([
       { kind: "initial", status: "failed", failure_class: "malformed_json" },
-      {
-        kind: "parse_repair",
-        status: "failed",
-        failure_class: "parse_repair_failure",
-      },
     ]);
     expect(terminalFailureMessageFromTelemetry(telemetry))
       .toMatch(/returned no JSON object/);
@@ -2876,6 +2876,90 @@ describe("runReconstruct", () => {
       violations: [],
     };
   }
+
+  it("shows the judge the CITED range and nothing else of the observation", async () => {
+    // S6 / owner decision A (design `23-…md` §4-4). The citation gate is range-level; if the judge is
+    // not, the gate is decorative — the judge re-selects the whole record by id and can support a claim
+    // from a passage the worker never cited. The negative fixture is exactly that: the answer lives ONLY
+    // in a range the cluster does not cite.
+    const { sourceObservations } = answerSupportPromptFixture();
+    const observation = sourceObservations.observations[0]!;
+    const body = canonicalObservationBody(observation);
+    // Cite the FRONT half. The sentinels are positions in the real canonical body, not invented text,
+    // so "cited" and "uncited" are the same string the runtime would slice.
+    const cut = Math.floor(body.length / 2);
+    const citedText = body.slice(0, cut);
+    const uncitedText = body.slice(cut);
+    // Non-vacuous on both sides: the halves must be non-empty AND distinguishable, or "the uncited half
+    // is absent" could hold because it is empty or because it also appears inside the cited half.
+    expect(citedText.length).toBeGreaterThan(40);
+    expect(uncitedText.length).toBeGreaterThan(40);
+    const uncitedProbe = uncitedText.slice(-40);
+    expect(citedText.includes(uncitedProbe)).toBe(false);
+    const citedProbe = citedText.slice(0, 40);
+
+    const range = {
+      range_id: "orng_v1_" + "0".repeat(32),
+      observation_content_sha256: createHash("sha256").update(body, "utf8").digest("hex"),
+      body_start: 0,
+      body_end: cut,
+      range_content_sha256: createHash("sha256").update(citedText, "utf8").digest("hex"),
+    };
+    const ledger: ReconstructAnswerSupportLedgerArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: "2026-06-15T00:00:00.000Z",
+      round_id: "maturation-round-1",
+      evidence_clusters: [{
+        evidence_cluster_id: "cluster-range-scope",
+        question_refs: ["q-1"],
+        support_mode: "convergent_source_evidence",
+        proposed_answer_summary: "Backed by the cited range only.",
+        evidence_refs: [{
+          observation_id: observation.observation_id,
+          target_material_kind: observation.target_material_kind,
+          source_ref: observation.source_ref,
+          location: observation.location,
+          range,
+        }],
+        proof_refs: [],
+        user_confirmation_refs: [],
+        authority_response_refs: [],
+        independence_basis: "AUTHOR-SELF-JUSTIFICATION-WITHHELD",
+        contradiction_refs: [],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+
+    let capturedPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (systemPrompt, userPrompt) => {
+        capturedPayload = JSON.parse(userPrompt) as Record<string, any>;
+        return reconstructFixtureLlm(systemPrompt, userPrompt);
+      },
+    });
+    await author.writeAnswerSupportJudgment({
+      sessionId: sourceObservations.session_id,
+      roundId: "maturation-round-1",
+      answerSupportLedger: ledger,
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      answerSupportLedgerValidation: validJudgeLedgerValidation(sourceObservations.session_id, 1),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      sourceObservations,
+    });
+
+    const payload = JSON.stringify(capturedPayload);
+    // The cited half reached the judge...
+    expect(payload).toContain(JSON.stringify(citedProbe).slice(1, -1));
+    // ...and the uncited half did not. This is the assertion the whole stage exists for.
+    expect(payload).not.toContain(JSON.stringify(uncitedProbe).slice(1, -1));
+    // And the whole-observation projection is GONE rather than merely trimmed: sending both would put
+    // the record back in front of the judge and make the narrowing cosmetic.
+    expect(capturedPayload).not.toHaveProperty("source_observations");
+    expect(capturedPayload!.cited_ranges).toHaveLength(1);
+    expect(capturedPayload!.cited_ranges[0].range_id).toBe(range.range_id);
+  });
 
   it("judges each cited evidence with context isolation and lifts evidence_ref deterministically", async () => {
     const { sourceObservations } = answerSupportPromptFixture();
@@ -6949,7 +7033,21 @@ describe("runReconstruct", () => {
     // site to keep map-absent prompts byte-identical)
     // 37 = 34 + leaf_read (P1-C2-A: the leaf-read prompt is an authoring template too)
     //    + value_read_location + value_read_judgment (maturation value-read cut, design §15.4).
+    // 40 = 41 − json_repair: JSON repair became deterministic and stopped dispatching a model
+    // (design §13-D2), so the prompt left the catalog. Removing it ROTATES the contract sha on
+    // purpose — the rule for accepting an authored artifact changed, so reuse must not carry over.
+    // 41 = 40 + answer_support_ledger_ranges: the pull path dispatches a DIFFERENT projection of the
+    // answer-support prompt (it declares `evidence_range_ids`, which is the field that mode reads).
+    // Cataloguing it is what makes editing that projection rotate the sha; with only the push entry
+    // here, a pull-mode resume would reuse an artifact authored under an older contract.
     expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(41);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.answer_support_ledger_ranges).toContain(
+      '"evidence_range_ids":["..."]',
+    );
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.answer_support_ledger).not.toContain(
+      "evidence_range_ids",
+    );
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.json_repair).toBeUndefined();
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.value_read_location).toContain(
       "Select spreadsheet cell locations to read for a value-dependent limitation.",
     );

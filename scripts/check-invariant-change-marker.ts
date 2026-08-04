@@ -63,7 +63,12 @@ const PROTECTED_TARGETS: ProtectedTarget[] = [
     // `enabled`/`semantic_map_authoring`도 감지: 안전/회복 opt-in의 DEFAULT 토글
     // (예: 2026-07-15 breaker-observation 승격)은 제품 전역 동작을 바꾸므로 마커 필수.
     file: "src/core-runtime/discovery/settings-chain.ts",
-    linePattern: /Schema\b|max_retries|retry_initial_delay_ms|enabled|semantic_map_authoring/,
+    // `source_`/`code_`/`semantic_`-prefixed lines catch ADDING an accepted execution scalar key.
+    // Without it the key list was an uncovered path into the settings schema: `source_delivery_
+    // reconciliation` was added and this gate reported 0 protected changes (codex review, PR #271).
+    // An accepted key IS the schema — AGENTS §0-2 protects it whether or not a default moved.
+    linePattern:
+      /Schema\b|max_retries|retry_initial_delay_ms|enabled|semantic_map_authoring|^[+-]\s*"(source|code|semantic)_[a-z_]+",/,
     invariants: ["INV-CFG-1"],
   },
   {

@@ -1,0 +1,25 @@
+{
+  "schema_version": "observation-read-delivery/v2",
+  "launch_token": "be45617d-2ac8-4c4f-bf29-b78e5551987f",
+  "status": "verified",
+  "delivered": [
+    {
+      "observation_id": "obs_020ed9af3779fd3d",
+      "observation_content_sha256": "cc1609596de258b7cfdc41295791644ae181f41fe3977f3c134e0a362a12b557",
+      "ranges": [
+        [
+          0,
+          16812
+        ]
+      ],
+      "body_length": null
+    }
+  ],
+  "attestation": [
+    {
+      "index": 0,
+      "chars": 18186,
+      "disposition": "verbatim_delivered"
+    }
+  ]
+}

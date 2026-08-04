@@ -137,7 +137,21 @@ export function sourceSafetyRowIdForObservation(
   observation: ReconstructSourceObservation,
   intendedConsumption: ReconstructSourceSafetyIntendedConsumption = "prompt_context",
 ): string {
-  return `source_safety:${observation.observation_id}:${intendedConsumption}`;
+  return sourceSafetyRowIdForObservationId(observation.observation_id, intendedConsumption);
+}
+
+/**
+ * The row-id format, keyed by observation id alone. Consumers that hold an id without the observation
+ * record (the observation-read grant resolves ids against a fixed snapshot of bodies, not artifact
+ * objects) join the ledger through THIS function rather than re-spelling the format — one authority for
+ * the key means a format change cannot leave a second consumer silently missing every row, which for a
+ * fail-closed gate reads as "withhold everything" and for a fail-open one as "admit everything".
+ */
+export function sourceSafetyRowIdForObservationId(
+  observationId: string,
+  intendedConsumption: ReconstructSourceSafetyIntendedConsumption = "prompt_context",
+): string {
+  return `source_safety:${observationId}:${intendedConsumption}`;
 }
 
 function explicitConsumptionAuthorizations(

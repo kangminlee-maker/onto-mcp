@@ -1,0 +1,29 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "tool_output_token_limit": null,
+  "quantiles": 9,
+  "rows": [
+    {
+      "index": 0,
+      "requested_size": 32000,
+      "actual_chars": 32004,
+      "filler": "hex",
+      "nonces": [
+        "c0364cc7ef",
+        "633898a061",
+        "f1702575fc",
+        "52c5da19ef",
+        "794981c887",
+        "bf27c625e8",
+        "ca11043af1",
+        "a11d50a0f1",
+        "997856a0d4"
+      ],
+      "outcome": "lossless",
+      "survival_map": "#########",
+      "notice": null
+    }
+  ]
+}

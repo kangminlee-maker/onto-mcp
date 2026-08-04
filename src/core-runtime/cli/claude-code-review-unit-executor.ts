@@ -5,6 +5,10 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { claudeOauthWorkerEnv } from "../llm/claude-oauth-worker-env.js";
+import {
+  assertReasoningEffortAccepted,
+  loadModelReasoningEffortRegistry,
+} from "../discovery/model-reasoning-efforts.js";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { awaitChildExit } from "../child-process-exit.js";
@@ -621,6 +625,25 @@ export async function runClaudeCodeReviewUnitExecutorCli(
     values["reasoning-effort"].length > 0
       ? values["reasoning-effort"]
       : undefined;
+
+  // Validate the effort against the (surface, model) authority. This is the one
+  // route where the gate is load-bearing rather than merely early: the Claude
+  // Code CLI FAILS OPEN on a value it does not know — it warns on stderr, exits
+  // 0, and runs at the DEFAULT effort — so a unit that asked for `max` and
+  // silently got the default is indistinguishable from a correct one in the
+  // artifact. Nothing downstream can recover that, so it is refused here.
+  if (model !== undefined && reasoningEffort !== undefined) {
+    assertReasoningEffortAccepted({
+      registry: loadModelReasoningEffortRegistry(),
+      lookup: {
+        executionAdapter: "claude_code",
+        provider: "anthropic",
+        model,
+      },
+      effort: reasoningEffort,
+      context: "claude-code review unit executor",
+    });
+  }
 
   // Observability symmetry with the codex executor: one [plan:executor] line
   // per unit. The claude worker is spawned directly (not via callLlm).

@@ -1,0 +1,44 @@
+{
+  "worker_session_id": "019fb6ac-d8a6-7c23-b301-55f93ad6032b",
+  "verified_cli_versions": [
+    "0.145.0"
+  ],
+  "mcp_server_name": "onto_observation",
+  "reconciliation_ms": 4,
+  "record": {
+    "schema_version": "observation-read-delivery/v2",
+    "launch_token": "41111683-ca26-454f-bcaf-020a0d7cecd9",
+    "status": "verified",
+    "delivered": [
+      {
+        "observation_id": "obs_9f291d6235fdb41c",
+        "observation_content_sha256": "e40de961abd920ae86017495026ebebb56840fa7c0e1f268396eaf1b14628005",
+        "ranges": [
+          [
+            0,
+            3483
+          ]
+        ],
+        "body_length": 3483
+      },
+      {
+        "observation_id": "obs_eb90f83378bd57a0",
+        "observation_content_sha256": "5e4b3b899f5c4eaf1f37480d75bd66c7614ffe459a61aca3c9c529d3fe0be660",
+        "ranges": [
+          [
+            0,
+            10018
+          ]
+        ],
+        "body_length": 10018
+      }
+    ],
+    "attestation": [
+      {
+        "index": 0,
+        "chars": 15528,
+        "disposition": "verbatim_delivered"
+      }
+    ]
+  }
+}

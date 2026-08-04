@@ -1,0 +1,258 @@
+# Reasoning-effort authority — which effort values each (execution surface, model)
+# actually accepts.
+#
+# WHY THIS IS KEYED BY EXECUTION SURFACE, NOT BY MODEL ALONE
+# The accepted effort set is a property of the (execution_adapter, model) pair.
+# `max` and `ultra` arrived as GPT-5.6-era levels — max deepens a single agent,
+# ultra runs sub-agents in parallel — and gpt-5.5 tops out at `xhigh`; so far
+# that is a model dimension. The SURFACE dimension is separate and measured:
+# `ultra` is accepted through the codex CLI on all three 5.6 variants, while the
+# `reasoning.effort` schema enum that same endpoint quotes when it rejects an
+# unknown value lists only none/minimal/low/medium/high/xhigh/max. Whatever
+# reconciles those two facts sits below this file; what it records is per-surface
+# acceptance, which is what a gate can act on. On the Anthropic side `ultracode`
+# is likewise accepted by Claude Code but absent from its `--help` enum.
+# A single per-provider set cannot express any of this, and the one this file
+# replaced was wrong in both directions: it accepted `minimal` (which the gpt-5.6
+# deployments reject) and refused `max` (which they accept).
+#
+# WHY A GATE IS NEEDED AT ALL
+# The two CLI surfaces fail in opposite ways on a bad value. The codex CLI fails
+# loud — the provider returns 400 and the run dies. The Claude Code CLI FAILS
+# OPEN: it prints `Warning: Unknown --effort value '<x>' — ignoring it and using
+# the default effort` to stderr, returns 0, and silently runs at the default.
+# A run that asked for `max` and quietly got the default is indistinguishable
+# from a correct one in the artifact. On that route this authority is the only
+# thing that fails loud, which is the whole reason the check is worth having.
+#
+# ADMISSION RULE (deliberately different from supported-models.yaml)
+# An entry here records a PUBLISHED-OR-MEASURED capability of a model surface,
+# so it is admitted on a vendor-doc citation or a reproducible probe. It does NOT
+# assert that the model is a selectable seat — that remains supported-models.yaml's
+# question, and its own admission rule (a benchmark record showing an end-to-end
+# run) is untouched. A model may appear here and not there.
+#
+# `efforts: []` means the surface accepts NO effort value — the parameter itself
+# is invalid, not merely some of its values (claude-haiku-4-5 on the direct API).
+# Every entry cites its source in `provenance`; a set without a citation is not
+# admissible.
+#
+# UNDER-PERMITTING IS THE SAFE DIRECTION. Where a value is plausible but was not
+# verified on that exact surface, it is LEFT OUT and the omission is stated in
+# `provenance`. A missing value costs a rejected dispatch the operator can fix; a
+# wrongly-listed one costs a live 400 or a silent effort downgrade.
+schema_version: "1"
+entries:
+  # --- openai / direct API (openai_sdk) ------------------------------------
+  - execution_adapter: openai_sdk
+    provider: openai
+    model: gpt-5.5
+    efforts: [none, low, medium, high, xhigh]
+    verification: documented
+    provenance: >-
+      OpenAI API model reference (developers.openai.com/api/docs/models/gpt-5.5,
+      retrieved 2026-07-28): "none, low, medium (default), high and xhigh".
+      `minimal` and `max` are in the API-wide schema enum but are not listed for
+      this model.
+  - execution_adapter: openai_sdk
+    provider: openai
+    model: gpt-5.6-sol
+    efforts: [none, low, medium, high, xhigh, max]
+    verification: documented
+    provenance: >-
+      OpenAI latest-model guide
+      (developers.openai.com/api/docs/guides/latest-model, retrieved 2026-07-28):
+      "GPT-5.6 supports none, low, medium, high, xhigh, and max", stated for the
+      family without differentiating sol/terra/luna. `minimal` omitted: it is in
+      the schema enum but not in the model's list, and the codex deployment of
+      this model rejects it outright (see the codex_cli entry).
+  - execution_adapter: openai_sdk
+    provider: openai
+    model: gpt-5.6-terra
+    efforts: [none, low, medium, high, xhigh, max]
+    verification: documented
+    provenance: >-
+      Same source and reasoning as the gpt-5.6-sol openai_sdk entry — the guide
+      states the effort set for the GPT-5.6 family as a whole.
+  - execution_adapter: openai_sdk
+    provider: openai
+    model: gpt-5.6-luna
+    efforts: [none, low, medium, high, xhigh, max]
+    verification: documented
+    provenance: >-
+      Same source and reasoning as the gpt-5.6-sol openai_sdk entry — the guide
+      states the effort set for the GPT-5.6 family as a whole.
+
+  # --- openai / codex CLI worker (codex_cli) -------------------------------
+  - execution_adapter: codex_cli
+    provider: openai
+    model: gpt-5.5
+    efforts: [none, low, medium, high, xhigh]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      Measured 2026-07-28 via scripts/probe-reasoning-effort.mts. `none` and `xhigh`
+      accepted (rc=0), `medium` accepted as the harness control, and the provider
+      enumerated the rest in its own rejection: "Supported values are: 'none',
+      'minimal', 'low', 'medium', 'high', and 'xhigh'." REFUSED here: `max` (absent
+      from that list) and `ultra` — note the rejection names 'max', not 'ultra',
+      so a request for ultra resolves to max somewhere below this file for a model
+      that has neither; both are GPT-5.6-era levels and 5.5 stops at xhigh, which
+      is exactly the set recorded here. `minimal` is refused too but for a different
+      reason worth keeping distinct: "The following tools cannot be used with
+      reasoning.effort 'minimal': web_search" — a valid enum value this surface's
+      tool set forbids, not an unknown one.
+  - execution_adapter: codex_cli
+    provider: openai
+    model: gpt-5.6-sol
+    efforts: [none, low, medium, high, xhigh, max, ultra]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      Measured 2026-07-28, evidence development-records/benchmark/reasoning-effort-probe/ (the
+      manifest lists every probe). `none`/`max`/`ultra` each returned rc=0 with the expected
+      output; `minimal` returned rc=1 and the provider named the deployment and
+      its set: "Unsupported value: 'minimal' is not supported with the
+      'gpt-5.6-sol-1p-codexswic-ev3' model. Supported values are: 'none', 'low',
+      'medium', 'high', and 'xhigh'." NEGATIVE CONTROL: `--effort banana`
+      returned rc=1 with the schema enum error, which is what makes an rc=0 here
+      evidence of acceptance rather than of a silently ignored flag. `max` and
+      `ultra` are accepted even though neither appears in the list that rejection
+      quotes — the two are GPT-5.6-era levels (ultra runs sub-agents in parallel,
+      max deepens one), and this surface takes both. The quoted list is not a
+      complete account of what the endpoint accepts, which is precisely why this
+      entry records measured acceptance instead of citing that message as a set.
+  - execution_adapter: codex_cli
+    provider: openai
+    model: gpt-5.6-terra
+    efforts: [none, low, medium, high, xhigh, max, ultra]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      `ultra` measured 2026-07-28 (rc=0, evidence
+      development-records/benchmark/reasoning-effort-probe/raw/gpt-5.6-terra-ultra.*); `high`
+      exercised by a full review dispatch the same day. Remaining values carried
+      from the gpt-5.6 family doc set and the codex CLI vocabulary, which the sol
+      probe confirms the CLI applies uniformly.
+  - execution_adapter: codex_cli
+    provider: openai
+    model: gpt-5.6-luna
+    efforts: [none, low, medium, high, xhigh, max, ultra]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      `ultra` measured 2026-07-28 (rc=0, evidence
+      development-records/benchmark/reasoning-effort-probe/raw/gpt-5.6-luna-ultra.*); `high`
+      exercised by a full review dispatch the same day. Remaining values as for
+      gpt-5.6-terra.
+
+  # --- anthropic / direct API (anthropic_sdk) ------------------------------
+  - execution_adapter: anthropic_sdk
+    provider: anthropic
+    model: claude-fable-5
+    efforts: [low, medium, high, xhigh, max]
+    verification: documented
+    provenance: >-
+      Anthropic thinking/effort reference (retrieved 2026-07-28): effort is
+      `output_config.effort` with levels low/medium/high/xhigh/max. `ultracode`
+      is a Claude Code CLI vocabulary value and is NOT an API value — see the
+      claude_code entry.
+  - execution_adapter: anthropic_sdk
+    provider: anthropic
+    model: claude-opus-5
+    efforts: [low, medium, high, xhigh, max]
+    verification: documented
+    provenance: >-
+      Anthropic thinking/effort reference (retrieved 2026-07-28): all five
+      levels. Separate constraint NOT expressible here: `thinking:{type:disabled}`
+      is accepted only at `high` or below, so disabled-thinking plus xhigh/max is
+      a 400 — that is a thinking/effort interaction, not an effort-enum fact.
+  - execution_adapter: anthropic_sdk
+    provider: anthropic
+    model: claude-opus-4-8
+    efforts: [low, medium, high, xhigh, max]
+    verification: documented
+    provenance: >-
+      Anthropic thinking/effort reference (retrieved 2026-07-28): all five levels.
+  - execution_adapter: anthropic_sdk
+    provider: anthropic
+    model: claude-sonnet-5
+    efforts: [low, medium, high, xhigh, max]
+    verification: documented
+    provenance: >-
+      Anthropic thinking/effort reference (retrieved 2026-07-28): all five levels.
+  - execution_adapter: anthropic_sdk
+    provider: anthropic
+    model: claude-haiku-4-5
+    efforts: []
+    verification: documented
+    provenance: >-
+      Anthropic thinking/effort reference (retrieved 2026-07-28): the effort
+      parameter "errors on Sonnet 4.5 / Haiku 4.5" — this model takes no effort
+      value at all on the direct API. Empty set is the point of this entry: the
+      replaced per-provider set applied the five Anthropic levels to every
+      Anthropic model, including this one.
+
+  # --- anthropic / Claude Code CLI worker (claude_code) --------------------
+  - execution_adapter: claude_code
+    provider: anthropic
+    model: claude-opus-5
+    efforts: [low, medium, high, xhigh, max, ultracode]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      Measured 2026-07-28 against Claude Code 2.1.220, evidence
+      development-records/benchmark/reasoning-effort-probe/. `--help` registers low/medium/high/
+      xhigh/max; `ultracode` is accepted although undocumented there —
+      `--effort ultracode` returned rc=0 with NO stderr warning
+      (raw/opus5-ultracode.*), while the NEGATIVE CONTROL `--effort banana`
+      returned rc=0 WITH `Warning: Unknown --effort value 'banana' — ignoring it
+      and using the default effort` (raw/neg-claude.err). The presence or absence
+      of that warning is the discriminator; rc alone proves nothing on this
+      surface because it fails open.
+  - execution_adapter: claude_code
+    provider: anthropic
+    model: claude-fable-5
+    efforts: [low, medium, high, xhigh, max, ultracode]
+    verification: documented
+    provenance: >-
+      `--help` enum for Claude Code 2.1.220 plus owner statement that ultracode
+      applies to the opus/fable tier. NOT probed on this model: fable-5 is under a
+      monthly spend limit in this environment, so the ultracode acceptance shown
+      for claude-opus-5 is carried across the tier rather than measured here.
+  - execution_adapter: claude_code
+    provider: anthropic
+    model: claude-opus-4-8
+    efforts: [low, medium, high, xhigh, max, ultracode]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      Measured 2026-07-28 via scripts/probe-reasoning-effort.mts: `ultracode` and
+      `xhigh` both accepted with NO unknown-effort warning, against the `banana`
+      control which produced one. Base set is the Claude Code 2.1.220 `--help`
+      enum, which does not list `ultracode` — the CLI accepts it regardless.
+  - execution_adapter: claude_code
+    provider: anthropic
+    model: claude-sonnet-5
+    efforts: [low, medium, high, xhigh, max, ultracode]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      Measured 2026-07-28 via scripts/probe-reasoning-effort.mts: `ultracode` and
+      `xhigh` both accepted with NO unknown-effort warning, against the `banana`
+      control which produced one. Base set is the Claude Code 2.1.220 `--help`
+      enum, which does not list `ultracode` — the CLI accepts it regardless.
+  - execution_adapter: claude_code
+    provider: anthropic
+    model: claude-haiku-4-5
+    efforts: [low, medium, high, xhigh, max, ultracode]
+    verification: measured
+    evidence_ref: development-records/benchmark/reasoning-effort-probe/
+    provenance: >-
+      Measured 2026-07-28: `--effort high` and `--effort ultracode` both accepted
+      with no effort warning (raw/haiku-high.*, raw/haiku-ultracode.*), against the
+      `banana` control which warned. `ultracode` is listed because acceptance is what
+      this authority decides and acceptance was measured — note only that its EFFECT
+      on a model whose direct API refuses effort entirely is unknown. The CLI does
+      not surface that API-side restriction, which is why the anthropic_sdk entry
+      for this same model is empty.

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  breadthFoldRungDetailLoss,
   foldObservationsToBudget,
+  navigationRowFieldsFromRows,
   projectBreadthFoldTailRung,
   SOURCE_BREADTH_FOLD_LEVELS,
   SOURCE_BREADTH_FOLD_SKELETON_INVENTORY_CHAR_BUDGET,
@@ -32,6 +34,93 @@ import type { CodeSymbolSpan } from "../code-structure-observer.js";
 // is tested directly.
 
 const pretty = (value: unknown): number => JSON.stringify(value, null, 2).length;
+
+describe("breadthFoldRungDetailLoss — the R2 disclosure's wording follows the ladder", () => {
+  it("names a DISTINCT loss for every rung, and never says summaries went at summary_anchor", () => {
+    const losses = SOURCE_BREADTH_FOLD_LEVELS.map((level) => breadthFoldRungDetailLoss(level));
+    expect(losses.length).toBeGreaterThan(0); // the ladder is not empty: the checks below can fail
+    for (const loss of losses) expect(loss.length).toBeGreaterThan(0);
+    expect(new Set(losses).size).toBe(losses.length); // no two rungs share a description
+    // The exact drift a cross-family review caught: summary_anchor keeps `summary` (only a
+    // source_ref-redundant `location` goes), anchor is the rung that costs the summaries.
+    expect(breadthFoldRungDetailLoss("summary_anchor")).toContain("location");
+    expect(breadthFoldRungDetailLoss("summary_anchor")).not.toContain("summaries");
+    expect(breadthFoldRungDetailLoss("anchor")).toContain("summaries");
+    // And the wording matches what the rung key-sets actually declare.
+    expect(SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS.summary_anchor).toContain("summary");
+    expect(SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS.anchor).not.toContain("summary");
+  });
+});
+
+describe("navigationRowFieldsFromRows — the dispatched field list follows the ROWS", () => {
+  const row = (keys: readonly string[]): Record<string, unknown> =>
+    Object.fromEntries(keys.map((key) => [key, key]));
+
+  it("lists exactly the keys the rows carry, in canonical navigation order", () => {
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref", "location", "summary"]),
+    ])).toBe("observation_id, target_material_kind, source_ref, location, summary");
+    // Whole-file rows at summary_anchor: the source_ref-redundant `location` is gone.
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref", "summary"]),
+    ])).toBe("observation_id, target_material_kind, source_ref, summary");
+    // ...and at anchor the summary goes too.
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref"]),
+    ])).toBe("observation_id, target_material_kind, source_ref");
+  });
+
+  it("keeps `location` when a REGION row keeps it — the case a rung-keyed list got wrong", () => {
+    // projectBreadthFoldTailRung keeps `location` wherever it is not redundant with source_ref, so at
+    // `anchor` a region corpus still carries it. A list keyed on the RUNG said it did not.
+    const regionRows = [
+      row(["observation_id", "target_material_kind", "source_ref", "location"]),
+      row(["observation_id", "target_material_kind", "source_ref", "location"]),
+    ];
+    expect(navigationRowFieldsFromRows(regionRows)).toContain("location");
+    // Cross-check against the real tail projector rather than a hand-written row shape.
+    const projected = projectBreadthFoldTailRung(
+      [{
+        observation_id: "obs-1",
+        target_material_kind: "code",
+        source_ref: "/file.ts",
+        location: "L1-9",
+        summary: "region",
+      }],
+      "anchor",
+    );
+    expect(navigationRowFieldsFromRows(projected)).toContain("location");
+    expect(navigationRowFieldsFromRows(projected)).not.toContain("summary");
+  });
+
+  it("separates what EVERY row carries from what only SOME do, and never drops an unknown key", () => {
+    // A MIXED catalog is real: the tail rungs keep `location` per-row (only where it is not redundant
+    // with `source_ref`), so region rows that kept it can sit beside whole-file rows that did not. A
+    // bare union would name a field some rows lack; an intersection would hide one some rows carry.
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "source_ref"]),
+      row(["observation_id", "source_ref", "summary"]),
+    ])).toBe("observation_id, source_ref; summary on some rows only");
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "target_material_kind", "source_ref", "location"]),
+      row(["observation_id", "target_material_kind", "source_ref"]),
+    ])).toBe("observation_id, target_material_kind, source_ref; location on some rows only");
+    // Homogeneous rows keep the plain list — no "on some rows only" noise.
+    expect(navigationRowFieldsFromRows([
+      row(["observation_id", "source_ref"]),
+      row(["observation_id", "source_ref"]),
+    ])).toBe("observation_id, source_ref");
+    expect(navigationRowFieldsFromRows([row(["observation_id", "zz_new_key"])])).toBe(
+      "observation_id, zz_new_key",
+    );
+    expect(navigationRowFieldsFromRows([])).toBe("");
+    // No key shared by every row: unreachable through the real projector (observation_id is always
+    // there), but the clause must still be a sentence rather than one starting with "; ".
+    expect(navigationRowFieldsFromRows([row(["source_ref"]), row(["summary"])])).toBe(
+      "source_ref, summary on some rows only",
+    );
+  });
+});
 
 describe("foldObservationsToBudget — pick the finest rung that fits (pure selection)", () => {
   // A monotone ladder: each rung projects a smaller payload than the finer one. `measure` returns the
@@ -716,9 +805,10 @@ describe("PR-4a — the fold reaches the ADMISSION surface (the count-scaling su
     // R2 disclosure: the demoted rung landed on the run-scoped sink runReconstruct records durably.
     const disclosures = author.sourceBreadthFoldDisclosures ?? [];
     expect(disclosures.length).toBe(1);
-    expect(disclosures[0]!.fold_level).not.toBe("full");
-    expect(disclosures[0]!.catalog_observation_count).toBe(2500);
-    expect(disclosures[0]!.over_budget).toBe(false);
+    expect(disclosures[0]!.surface).toBe("source_admission_selection");
+    expect(disclosures[0]!.disclosure.fold_level).not.toBe("full");
+    expect(disclosures[0]!.disclosure.catalog_observation_count).toBe(2500);
+    expect(disclosures[0]!.disclosure.over_budget).toBe(false);
     expect(JSON.stringify(inventory)).toBe(beforeSnapshot);
   });
 

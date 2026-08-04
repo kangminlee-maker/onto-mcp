@@ -4,16 +4,19 @@
  * `callLlmRecorded` is the single place a reconstruct run reaches an LLM for authoring: it stamps
  * the model identity and prompt-contract hash onto the call, runs it, and writes the recorded
  * result. `callJsonAuthor` layers the JSON contract on top — classify the output
- * (`jsonOutputClassifier`), parse it (`parseLlmJsonObject`), and on a format failure retry through
- * the repair prompt rather than accepting a malformed answer. Routing every call through here is
- * what makes the run's LLM spend and provenance complete by construction.
+ * (`jsonOutputClassifier`), parse it (`parseLlmJsonObject`), and on a format failure hand the text to
+ * a DETERMINISTIC deletion-only repair (`authoring-json-repair.ts`) rather than to a second model
+ * turn. Routing every call through here is what makes the run's LLM spend and provenance complete by
+ * construction — and there is exactly one dispatch per authored artifact.
  */
 import crypto from "node:crypto";
 import type { LlmCallConfig, LlmCallResult } from "../llm/llm-caller.js";
+import { repairJsonSyntaxByDeletion } from "./authoring-json-repair.js";
 import { readOpenAIResponsesIncompleteEvidence } from "../llm/openai-responses-incomplete-error.js";
 import {
   ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT,
   ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+  answerSupportLedgerSystemPrompt,
   CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   COMPETENCY_QUESTIONS_LIMITATION_REPAIR_SYSTEM_PROMPT,
   COMPETENCY_QUESTION_ASSESSMENT_SYSTEM_PROMPT,
@@ -38,7 +41,6 @@ import {
   SOURCE_PURPOSE_MINIMAL_KERNEL_SYSTEM_PROMPT,
   VALUE_READ_JUDGMENT_PROMPT,
   VALUE_READ_LOCATION_PROMPT,
-  authoringJsonRepairSystemPrompt,
   candidateDispositionSystemPrompt,
   candidateInventoryCoverageRepairSystemPrompt,
   candidateInventorySystemPrompt,
@@ -62,7 +64,6 @@ import {
   readReconstructLlmDispatchFailureError,
 } from "./llm-dispatch-failure.js";
 import type { ReconstructLlmCallKind } from "./llm-dispatch-failure.js";
-import { RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS } from "./output-budget.js";
 import { sha256Text, stableJson } from "./run-primitives.js";
 import {
   CODE_SEMANTIC_MAP_PROMPT_NOTE,
@@ -83,15 +84,25 @@ function stripJsonFences(text: string): string {
   return fenced?.[1]?.trim() ?? trimmed;
 }
 
-export function parseLlmJsonObject(text: string, artifactName: string): Record<string, unknown> {
+/**
+ * The substring a response is judged as: fences off, first `{` through last `}`. Declared once so the
+ * deterministic repair works on exactly the text the parser would have accepted — repairing a wider
+ * string would refuse documents the parser can already reach, and a narrower one is not a document.
+ */
+function jsonObjectCandidate(text: string): string | null {
   const stripped = stripJsonFences(text);
   const start = stripped.indexOf("{");
   const end = stripped.lastIndexOf("}");
-  if (start < 0 || end < start) {
+  return start < 0 || end < start ? null : stripped.slice(start, end + 1);
+}
+
+export function parseLlmJsonObject(text: string, artifactName: string): Record<string, unknown> {
+  const candidate = jsonObjectCandidate(text);
+  if (candidate === null) {
     throw new Error(`${artifactName} author returned no JSON object.`);
   }
   try {
-    const parsed = JSON.parse(stripped.slice(start, end + 1)) as unknown;
+    const parsed = JSON.parse(candidate) as unknown;
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("top-level value is not an object");
     }
@@ -105,13 +116,6 @@ export function parseLlmJsonObject(text: string, artifactName: string): Record<s
       }`,
     );
   }
-}
-
-function jsonRepairMaxTokens(originalText: string, requestedMaxTokens: number): number {
-  return Math.min(
-    RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS.json_parse_repair,
-    Math.max(requestedMaxTokens * 2, Math.ceil(originalText.length / 3) + 1024),
-  );
 }
 
 type ReconstructLlmAttemptKind = Exclude<Parameters<
@@ -281,6 +285,13 @@ export async function callJsonAuthor(args: {
   maxTokens: number;
   telemetry?: ReconstructExecutionTelemetryCollector;
   allowParseRepair?: boolean;
+  /**
+   * Observes the dispatched call's worker session, when the route reported one. Delivery
+   * reconciliation needs it to find THIS dispatch's transcript, and it is handed over as a callback
+   * rather than added to the return type because exactly one of nineteen call sites wants it — a
+   * wider return would make the other eighteen carry a value they must then ignore.
+   */
+  onWorkerSession?: (session: LlmCallResult["worker_session"]) => void;
 }): Promise<Record<string, unknown>> {
   const initialSink: JsonOutputSink = { parsed: null, failureMessage: null };
   const result = await callLlmRecorded({
@@ -298,37 +309,39 @@ export async function callJsonAuthor(args: {
       sink: initialSink,
     }),
   });
+  args.onWorkerSession?.(result.worker_session);
   if (initialSink.parsed) return initialSink.parsed;
   const initialErrorMessage = initialSink.failureMessage ??
     `${args.artifactName} author returned no parseable JSON object.`;
   if (args.allowParseRepair === false) {
     throw new Error(initialErrorMessage);
   }
-  const repairSink: JsonOutputSink = { parsed: null, failureMessage: null };
-  await callLlmRecorded({
-    telemetry: args.telemetry,
-    artifactName: args.artifactName,
-    kind: "parse_repair",
-    llmCall: args.llmCall,
-    llmConfig: args.llmConfig,
-    systemPrompt: authoringJsonRepairSystemPrompt(args.artifactName),
-    userPrompt: JSON.stringify({
-      artifact_name: args.artifactName,
-      parse_error: initialErrorMessage,
-      malformed_json_text: result.text,
-    }, null, 2),
-    maxTokens: jsonRepairMaxTokens(result.text, args.maxTokens),
-    classifyOutput: jsonOutputClassifier({
-      artifactName: args.artifactName,
-      failureClass: "parse_repair_failure",
-      sink: repairSink,
-    }),
-  });
-  if (repairSink.parsed) return repairSink.parsed;
+  // Repair is DETERMINISTIC and deletion-only (design §6-3, decision §13-D2). It used to be a second
+  // LLM dispatch told to fix punctuation and change nothing else, which nothing enforced: that worker
+  // never receives the observations the first one fetched, so an artifact it invented was authorised
+  // by the first dispatch's evidence receipt (design §12-S1). Deleting characters cannot invent, and
+  // a response cut off at max_tokens is refused rather than completed — its tail does not exist.
+  //
+  // Removing that dispatch also restores "one authored artifact, one child", which the reconciliation
+  // design depends on for binding a transcript to the dispatch that held the facade (design §11-L3).
+  const candidate = jsonObjectCandidate(result.text);
+  const repair = candidate === null
+    ? ({ ok: false, refusal: "truncated_or_unrepairable_by_deletion" } as const)
+    : repairJsonSyntaxByDeletion(candidate);
+  if (repair.ok) {
+    const repaired = parseLlmJsonObject(repair.text, args.artifactName);
+    // The model's output really did not parse, and this unit really did produce its artifact. Both
+    // facts belong in the lineage — recording only the first made a completed unit read as terminally
+    // failed downstream.
+    args.telemetry?.recordDeterministicJsonRepair({
+      unitId: unitIdForAuthoredArtifactName(args.artifactName),
+      deletedCharCount: repair.deleted_char_count,
+    });
+    return repaired;
+  }
   throw new Error(
-    `${args.artifactName} author returned invalid JSON and repair failed: ${
-      repairSink.failureMessage ?? "no parseable JSON object"
-    }`,
+    `${args.artifactName} author returned invalid JSON and deterministic repair refused it ` +
+      `(${repair.refusal}): ${initialErrorMessage}`,
   );
 }
 
@@ -398,7 +411,6 @@ export const AUTHORING_PROMPT_CONTRACT_VERSION =
 // branch so neither branch's edits can hide from the hash.
 export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   base_system: RECONSTRUCT_AUTHORING_BASE_SYSTEM,
-  json_repair: authoringJsonRepairSystemPrompt("<<artifact_name>>"),
   source_observation_directive: SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT,
   lens_judgment: lensJudgmentSystemPrompt({
     lensId: "<<lens_id>>",
@@ -469,6 +481,12 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   maturation_question_frontier: MATURATION_QUESTION_FRONTIER_SYSTEM_PROMPT,
   maturation_closure_frontier: MATURATION_CLOSURE_FRONTIER_SYSTEM_PROMPT,
   answer_support_ledger: ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT,
+  // BOTH projections are catalogued, because the reuse key hashes THIS map and the pull path
+  // dispatches the ranges projection. With only the push one here, editing the ranges prompt would
+  // leave the sha unmoved and a pull-mode resume would reuse an artifact authored under the older
+  // contract. (`source_observation_catalog_tool` is already in the reuse key, so the two modes never
+  // share a key — this closes the *edit* case, not the mode case.)
+  answer_support_ledger_ranges: answerSupportLedgerSystemPrompt("ranges"),
   answer_support_judgment: ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT,
   maturation_answer_claims: MATURATION_ANSWER_CLAIMS_SYSTEM_PROMPT,
   ontology_expansion: ONTOLOGY_EXPANSION_SYSTEM_PROMPT,

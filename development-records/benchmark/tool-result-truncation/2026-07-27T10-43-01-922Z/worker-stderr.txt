@@ -1,0 +1,46 @@
+OpenAI Codex v0.145.0
+--------
+workdir: /Users/kangmin/Documents/onto-mcp
+model: gpt-5.6-luna
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: low
+reasoning summaries: none
+session id: 019fa32b-dd61-7fa2-8b4c-8c789070a2fa
+--------
+user
+You are measuring a tool, not writing code. Follow these steps literally.
+
+Call the tool probe_fetch once for EACH index in this order: 0, 1, 2, 3.
+Each call takes exactly {"index": <k>}. That is 4 calls total.
+
+Each result is a long text built from markers of the form [M0001], [M0002], [M0003] ... in increasing
+order, separated by filler text. A complete result ends with a final marker of the form [MEND:<value>].
+
+For each index, report three things about the text YOU actually received:
+  last  = the highest [Mnnnn] marker number present in the text you received (digits only)
+  end   = the <value> inside the final [MEND:...] marker if that marker is present, otherwise ABSENT
+  extra = any text in the result that is NOT part of the marker/filler pattern -- for example a note
+          saying that content was omitted, elided or truncated -- quoted verbatim. If there is no such
+          text, write NONE.
+
+Do not guess or extrapolate any of these values. Report only what is present in the text you received.
+
+Then reply with EXACTLY 4 lines and nothing else, one per index, in this format:
+IDX <k> last=<n> end=<value or ABSENT> extra=<verbatim text or NONE>
+mcp: probe/probe_fetch started
+mcp: probe/probe_fetch (completed)
+mcp: probe/probe_fetch started
+mcp: probe/probe_fetch (completed)
+mcp: probe/probe_fetch started
+mcp: probe/probe_fetch (completed)
+mcp: probe/probe_fetch started
+mcp: probe/probe_fetch (completed)
+codex
+IDX 0 last=10 end=8c483a1a59d0 extra=NONE
+IDX 1 last=40 end=9380ea590fbc extra=NONE
+IDX 2 last=160 end=6f0fbf4317a1 extra=NONE
+IDX 3 last=640 end=1ed4d7e21718 extra=NONE
+tokens used
+65,901

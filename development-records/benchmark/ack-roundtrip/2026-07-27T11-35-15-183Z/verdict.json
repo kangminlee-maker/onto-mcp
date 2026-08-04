@@ -1,0 +1,74 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "tool_output_token_limit": 2000,
+  "challenge_bits": 128,
+  "rows": [
+    {
+      "index": 0,
+      "chars": 4024,
+      "expect": "intact",
+      "served": true,
+      "acked": true,
+      "verdict": "ACK EXACT — round trip works, value arrived byte-identical"
+    },
+    {
+      "index": 1,
+      "chars": 6076,
+      "expect": "intact",
+      "served": true,
+      "acked": true,
+      "verdict": "ACK EXACT — round trip works, value arrived byte-identical"
+    },
+    {
+      "index": 2,
+      "chars": 60108,
+      "expect": "trimmed",
+      "served": true,
+      "acked": true,
+      "verdict": "*** ACK ON TRIMMED CHUNK *** — the mid challenge SURVIVED the trim: mid-placement does NOT fail closed"
+    }
+  ],
+  "unmatched_acks": [],
+  "events": [
+    {
+      "event": "served",
+      "index": 0,
+      "chars": 4024
+    },
+    {
+      "event": "ack",
+      "received": "83129e2c7256e423cdf8f7b85ab243cd",
+      "matched_index": 0,
+      "exact": true
+    },
+    {
+      "event": "served",
+      "index": 1,
+      "chars": 6076
+    },
+    {
+      "event": "ack",
+      "received": "8b5a770b3b251c810bab3e361f1c20dc",
+      "matched_index": 1,
+      "exact": true
+    },
+    {
+      "event": "served",
+      "index": 2,
+      "chars": 60108
+    },
+    {
+      "event": "served",
+      "index": 2,
+      "chars": 60108
+    },
+    {
+      "event": "ack",
+      "received": "b67e5ab696b7e2276ef9bd6aff042f57",
+      "matched_index": 2,
+      "exact": true
+    }
+  ]
+}

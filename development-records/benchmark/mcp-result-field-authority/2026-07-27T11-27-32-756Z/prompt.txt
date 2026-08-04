@@ -1,0 +1,17 @@
+You are measuring a tool, not writing code. Follow these steps literally.
+
+Call the tool probe_fetch once for EACH index in this order: 0, 1.
+Each call takes exactly {"index": <k>}. That is 2 call(s) total.
+
+Each result contains tags of the form [P0:value] [P1:value] ... spread through it. Tags may appear in
+more than one part of the result; report every distinct tag you can see, wherever it appears.
+
+For each index report:
+  seen = every tag you can find, as P<number>:<value>, comma separated. Copy each value exactly.
+         If a tag is not present, leave it out.
+
+The values are random. Never guess, infer or reconstruct a value — if you cannot see it, omitting it is
+the correct answer. Missing tags are an expected outcome; report exactly what you find.
+
+Reply with EXACTLY 2 line(s) and nothing else:
+IDX <k> seen=<P0:value,P1:value,...>

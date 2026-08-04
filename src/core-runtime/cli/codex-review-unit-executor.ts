@@ -8,6 +8,10 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { awaitChildExit } from "../child-process-exit.js";
 import {
+  assertReasoningEffortAccepted,
+  loadModelReasoningEffortRegistry,
+} from "../discovery/model-reasoning-efforts.js";
+import {
   appendRuntimeStreamChunkSync,
   appendRuntimeStreamEventSync,
 } from "../observability/runtime-stream-observation.js";
@@ -175,6 +179,22 @@ async function runCodexWorker(
   ];
 
   if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
+    // Validate against the (surface, model) authority before spending the
+    // dispatch: codex rejects an unaccepted value with a provider 400 after the
+    // worker has already started, and this surface's set is not the API's (it
+    // takes `ultra`, which the endpoint's schema-enum message does not list).
+    if (typeof model === "string" && model.length > 0) {
+      assertReasoningEffortAccepted({
+        registry: loadModelReasoningEffortRegistry(),
+        lookup: {
+          executionAdapter: "codex_cli",
+          provider: "openai",
+          model,
+        },
+        effort: reasoningEffort,
+        context: "codex review unit executor",
+      });
+    }
     codexArgs.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
   }
 

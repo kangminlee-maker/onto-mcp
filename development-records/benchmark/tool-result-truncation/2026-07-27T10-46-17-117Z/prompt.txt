@@ -1,0 +1,22 @@
+You are measuring a tool, not writing code. Follow these steps literally.
+
+Call the tool probe_fetch once for EACH index in this order: 0.
+Each call takes exactly {"index": <k>}. That is 1 calls total.
+
+Each result is a long text built from markers of the form [M0001], [M0002], [M0003] ... in increasing
+order, separated by filler text. A complete result ends with a final marker of the form [MEND:<value>].
+
+For each index, report four things about the text YOU actually received:
+  first = the LOWEST [Mnnnn] marker number present in the text you received (digits only)
+  last  = the highest [Mnnnn] marker number present in the text you received (digits only)
+  end   = the <value> inside the final [MEND:...] marker if that marker is present, otherwise ABSENT
+  extra = any text in the result that is NOT part of the marker/filler pattern -- for example a note
+          saying that content was omitted, elided or truncated -- quoted verbatim. If there is no such
+          text, write NONE.
+
+Do not guess or extrapolate any of these values. Report only what is present in the text you received.
+If markers are missing from the MIDDLE of a result, first and last will still be the outermost ones you
+can see; that is the correct answer, so report it exactly.
+
+Then reply with EXACTLY 1 lines and nothing else, one per index, in this format:
+IDX <k> first=<n> last=<n> end=<value or ABSENT> extra=<verbatim text or NONE>

@@ -1,0 +1,74 @@
+{
+  "codex_version": "0.145.0",
+  "model": "gpt-5.6-luna",
+  "effort": "low",
+  "tool_output_token_limit": 2000,
+  "challenge_bits": 128,
+  "rows": [
+    {
+      "index": 0,
+      "chars": 4001,
+      "expect": "intact",
+      "served": true,
+      "acked": true,
+      "verdict": "ACK EXACT — round trip works, value arrived byte-identical"
+    },
+    {
+      "index": 1,
+      "chars": 6008,
+      "expect": "intact",
+      "served": true,
+      "acked": true,
+      "verdict": "ACK EXACT — round trip works, value arrived byte-identical"
+    },
+    {
+      "index": 2,
+      "chars": 60053,
+      "expect": "trimmed",
+      "served": true,
+      "acked": true,
+      "verdict": "INCONCLUSIVE — this chunk was not measurably trimmed, so it tests nothing about fail-closed"
+    }
+  ],
+  "unmatched_acks": [],
+  "events": [
+    {
+      "event": "served",
+      "index": 0,
+      "chars": 4001
+    },
+    {
+      "event": "ack",
+      "received": "a937fce2b16bcf52f6af00e8ed4969cb",
+      "matched_index": 0,
+      "exact": true
+    },
+    {
+      "event": "served",
+      "index": 1,
+      "chars": 6008
+    },
+    {
+      "event": "ack",
+      "received": "57f33ba978e00c0ea8ca4136696f6093",
+      "matched_index": 1,
+      "exact": true
+    },
+    {
+      "event": "served",
+      "index": 2,
+      "chars": 60053
+    },
+    {
+      "event": "served",
+      "index": 2,
+      "chars": 60053
+    },
+    {
+      "event": "ack",
+      "received": "1be7754774f3cf9840d1cd15d291e1f0",
+      "matched_index": 2,
+      "exact": true
+    }
+  ]
+}

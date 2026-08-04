@@ -144,17 +144,6 @@ export const RECONSTRUCT_AUTHORING_BASE_SYSTEM = [
   "Runtime will validate ids and refs. If evidence is insufficient, mark gaps or open questions instead of guessing.",
 ].join("\n");
 
-export function authoringJsonRepairSystemPrompt(artifactName: string): string {
-  return [
-    "Repair malformed JSON for a runtime artifact.",
-    `Artifact: ${artifactName}`,
-    "Return exactly one valid JSON object and nothing else.",
-    "Preserve all existing keys, ids, strings, arrays, and object values.",
-    "Only add, remove, or replace JSON punctuation needed to make the object parse.",
-    "Do not add new facts, do not summarize, and do not translate text.",
-  ].join("\n");
-}
-
 export const SOURCE_OBSERVATION_DIRECTIVE_SYSTEM_PROMPT = [
   RECONSTRUCT_AUTHORING_BASE_SYSTEM,
   "Select observations that should become evidence candidates for the declared reconstruct purpose.",
@@ -498,16 +487,47 @@ export const MATURATION_CLOSURE_FRONTIER_SYSTEM_PROMPT = [
   "JSON shape: {\"source_requests\":[{\"source_request_id\":\"...\",\"question_refs\":[\"...\"],\"member_scope_refs\":[\"...\"],\"member_source_refs\":[\"...\"],\"cross_material_ref_refs\":[\"...\"],\"requested_source_ref\":\"...\",\"requested_location\":\"... or null\",\"target_material_kind\":\"code|spreadsheet|document|database|mixed|unknown\",\"expected_evidence_kind\":\"...\",\"reason\":\"...\"}],\"authority_requests\":[{\"authority_request_id\":\"...\",\"question_refs\":[\"...\"],\"authority_kind\":\"user|external_system|domain_standard|runtime_capability\",\"authority_scope\":\"...\",\"request_summary\":\"...\",\"request_rationale\":\"...\",\"blocking_if_unavailable\":true,\"expected_response_kind\":\"confirmation|value|policy|capability|external_reference|unavailable_reason\",\"limitation_refs\":[\"...\"]}]}",
 ].join("\n");
 
-export const ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT = [
-  RECONSTRUCT_AUTHORING_BASE_SYSTEM,
-  "Author answer-support-ledger.yaml. Include evidence clusters only when the current evidence or explicit authority can positively support an answer.",
-  "Do not create clusters for unsupported, deferred, contradicted, blocked, or limitation-only rows.",
-  "For convergent_source_evidence, cite at least two independent evidence_observation_ids unless the answer is direct_authority.",
-  "Choose support_mode by what backs the answer: use direct_authority when a deterministically observed source itself supports the answer (cite that source via evidence_observation_ids; proof_refs stays empty). Use runtime_proof ONLY when a separate runtime query/execution proof artifact backs the answer, in which case proof_refs is required and must be non-empty. Do not use runtime_proof for a plain structural source observation.",
-  "source_observations is a bounded candidate catalog for this maturation answer-support prompt, not the full source-observations artifact. If the bounded catalog or explicit authority does not support an answer, omit the cluster.",
-  "Every evidence_observation_ids value must come from prompt_visible_observation_ids. Prompt visibility is not source-safety or material validation; downstream validation remains authoritative.",
-  "JSON shape: {\"evidence_clusters\":[{\"evidence_cluster_id\":\"...\",\"question_refs\":[\"...\"],\"support_mode\":\"direct_authority|runtime_proof|user_confirmation|authority_response|convergent_source_evidence\",\"proposed_answer_summary\":\"...\",\"evidence_observation_ids\":[\"...\"],\"proof_refs\":[\"...\"],\"user_confirmation_refs\":[\"...\"],\"authority_response_refs\":[\"...\"],\"independence_basis\":\"...\",\"contradiction_refs\":[\"...\"],\"limitation_refs\":[\"...\"]}]}",
-].join("\n");
+/**
+ * Which field a cluster cites with. The runtime reads ONE of these per dispatch and ignores the other
+ * (`direct-call-directive-author.ts`: push mode reads `evidence_observation_ids`, pull mode reads
+ * `evidence_range_ids`), so the system prompt has to declare the one that dispatch will actually read.
+ *
+ * Two projections of one prompt rather than two prompts: a copied constant drifts, and this one is
+ * eight lines of which four name the citation field. That is exactly the shape a live run caught —
+ * the system prompt declared `evidence_observation_ids` while the pull-mode payload asked for
+ * `evidence_range_ids`, and the model resolved the contradiction by citing nothing at all
+ * (2026-07-31, design `26-design-live-citation-arm.md`).
+ */
+export type AnswerSupportCitationSurface = "observations" | "ranges";
+
+export function answerSupportLedgerSystemPrompt(
+  surface: AnswerSupportCitationSurface = "observations",
+): string {
+  const ranges = surface === "ranges";
+  const field = ranges ? "evidence_range_ids" : "evidence_observation_ids";
+  return [
+    RECONSTRUCT_AUTHORING_BASE_SYSTEM,
+    "Author answer-support-ledger.yaml. Include evidence clusters only when the current evidence or explicit authority can positively support an answer.",
+    "Do not create clusters for unsupported, deferred, contradicted, blocked, or limitation-only rows.",
+    ranges
+      ? `For convergent_source_evidence, cite at least two independent ${field} that resolve to different observations unless the answer is direct_authority.`
+      : `For convergent_source_evidence, cite at least two independent ${field} unless the answer is direct_authority.`,
+    `Choose support_mode by what backs the answer: use direct_authority when a deterministically observed source itself supports the answer (cite that source via ${field}; proof_refs stays empty). Use runtime_proof ONLY when a separate runtime query/execution proof artifact backs the answer, in which case proof_refs is required and must be non-empty. Do not use runtime_proof for a plain structural source observation.`,
+    "source_observations is a bounded candidate catalog for this maturation answer-support prompt, not the full source-observations artifact. If the bounded catalog or explicit authority does not support an answer, omit the cluster.",
+    // Stated because it is ENFORCED: the author rejects an empty independence_basis for every support
+    // mode. The shape line below listed the field without saying it was required, and a real worker
+    // read direct_authority as having no independence to describe and sent "" — a well-formed cluster
+    // the runtime then refused (live 2026-07-31, reproduced at two effort levels, so not a seat issue).
+    "independence_basis is REQUIRED and must be non-empty for every cluster: say why this evidence stands on its own. For direct_authority that is the observed source's own determinism, not an empty string.",
+    ranges
+      ? `Every ${field} value must be a range_id this dispatch served you, copied exactly as it arrived, and it must resolve to an observation in prompt_visible_observation_ids. A cluster that names no range is rejected: omit the cluster instead. Prompt visibility is not source-safety or material validation; downstream validation remains authoritative.`
+      : `Every ${field} value must come from prompt_visible_observation_ids. Prompt visibility is not source-safety or material validation; downstream validation remains authoritative.`,
+    `JSON shape: {"evidence_clusters":[{"evidence_cluster_id":"...","question_refs":["..."],"support_mode":"direct_authority|runtime_proof|user_confirmation|authority_response|convergent_source_evidence","proposed_answer_summary":"...","${field}":["..."],"proof_refs":["..."],"user_confirmation_refs":["..."],"authority_response_refs":["..."],"independence_basis":"...","contradiction_refs":["..."],"limitation_refs":["..."]}]}`,
+  ].join("\n");
+}
+
+/** The push-mode projection, kept as a constant because that is how every existing caller reads it. */
+export const ANSWER_SUPPORT_LEDGER_SYSTEM_PROMPT = answerSupportLedgerSystemPrompt("observations");
 
 export const ANSWER_SUPPORT_JUDGMENT_SYSTEM_PROMPT = [
   RECONSTRUCT_AUTHORING_BASE_SYSTEM,

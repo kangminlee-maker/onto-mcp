@@ -1,0 +1,21 @@
+{
+  "codex_exit": 0,
+  "tool_output_token_limit": "500",
+  "served": [
+    {
+      "index": 0,
+      "payload_chars": 8054,
+      "serialized_frame_bytes": 8143
+    },
+    {
+      "index": 1,
+      "payload_chars": 32000,
+      "serialized_frame_bytes": 32089
+    },
+    {
+      "index": 1,
+      "payload_chars": 32000,
+      "serialized_frame_bytes": 32089
+    }
+  ]
+}

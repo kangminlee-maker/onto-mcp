@@ -1,0 +1,1 @@
+codex-run --profile hermetic --model gpt-5.6-luna --effort high --sandbox read-only --cd /Users/kangmin/Documents/onto-mcp < 14-crossverify-packet-reconciliation-r2.md

@@ -1,14 +1,18 @@
 # 관측 카탈로그 도구 — 단계 2 착수 안내 (2026-07-26)
 
-> **다음 세션은 여기서 시작한다.** 설계 SSOT: [design/20260726-observation-catalog-tool-design.md](../design/20260726-observation-catalog-tool-design.md)
+> **대체됨(2026-07-26)** — 단계 2가 완료됐다. 다음 세션은
+> [20260726-observation-catalog-tool-stage3-start-here.md](20260726-observation-catalog-tool-stage3-start-here.md)에서 시작한다.
+> 이 파일은 단계 2 착수 시점의 기록으로 남긴다.
+>
+> 설계 SSOT: [design/20260726-observation-catalog-tool-design.md](../design/20260726-observation-catalog-tool-design.md)
 > 이전 안내(단계 1): [20260726-observation-catalog-tool-stage1-start-here.md](20260726-observation-catalog-tool-stage1-start-here.md) — 함정 ①~④는 여전히 유효하다
 
-## 0. 지금 어디인가
+## 0. 지금 어디인가 (단계 2 착수 시점 기록)
 
 ```
-브랜치  feat/observation-read-stage1  (미푸시 · owner 승인 전 push/PR 금지)
+브랜치  feat/observation-read-stage1  → 이후 PR #269로 main 머지됨 (3178127)
 설계    승인 완료 · 단계 0a·0b·1 완료
-다음    단계 2 — 세션 범위 결속 + 누적 예산
+다음    단계 2 — 세션 범위 결속 + 누적 예산   → 완료, 설계 §9.2
 ```
 
 | 단계 | 상태 | 착지 |

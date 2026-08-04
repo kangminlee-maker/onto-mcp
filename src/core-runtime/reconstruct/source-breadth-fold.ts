@@ -99,6 +99,23 @@ export const SOURCE_BREADTH_FOLD_LEVELS: readonly BreadthFoldLevel[] = [
   "anchor",
 ];
 
+/**
+ * Ladder for the observation-catalog-tool surface (design 20260726 §6, stage 3a). Same rungs, same
+ * order, same projector — it just STARTS at `one_line` instead of `full`.
+ *
+ * The two finer rungs are absent by design rather than by budget: in tool mode the prompt's job is
+ * navigation (pick ids), and the detail those rungs carry is what the pull layer fetches on demand.
+ * Pinning the start makes this prompt MORE deterministic than today's, where the rung is chosen by
+ * whatever the corpus happens to measure. The tail rungs stay reachable so an extreme corpus demotes
+ * instead of dropping observations, and `over_budget` at `anchor` is the pre-dispatch fail-loud
+ * (design §6: "최소 anchor조차 안 들어가면 워커 기동 전에 실패한다").
+ */
+export const OBSERVATION_CATALOG_TOOL_FOLD_LEVELS: readonly BreadthFoldLevel[] = [
+  "one_line",
+  "summary_anchor",
+  "anchor",
+];
+
 /** The rungs BELOW `one_line`, which are derived from its rows rather than re-projected (PR-4b). */
 export type BreadthFoldTailLevel = Extract<BreadthFoldLevel, "summary_anchor" | "anchor">;
 
@@ -125,6 +142,106 @@ export const SOURCE_BREADTH_FOLD_TAIL_RUNG_KEYS: Readonly<
 function locationIsRedundantWithSourceRef(row: Record<string, unknown>): boolean {
   if (!("location" in row)) return true;
   return row.location === row.source_ref;
+}
+
+/**
+ * What a rung costs the reader, in one clause, for the R2 disclosure. Lives here because the ladder
+ * owns which keys each rung drops: a disclosure written at a call site drifts from the ladder the
+ * moment a rung changes, and a cross-family review caught exactly that — one message that said
+ * "summaries were dropped" for BOTH tail rungs, when `summary_anchor` keeps `summary` and drops only
+ * a `location` that repeated `source_ref`. Total over BreadthFoldLevel so a new rung fails the
+ * exhaustiveness test rather than silently reporting the fallback.
+ */
+export function breadthFoldRungDetailLoss(level: BreadthFoldLevel): string {
+  switch (level) {
+    case "full":
+      return "no detail was dropped";
+    case "inventory_skeleton":
+      return "per-observation code inventory was tightened to a skeleton";
+    case "one_line":
+      return "per-observation structural detail was dropped";
+    case "summary_anchor":
+      return "per-observation `location` was dropped where it merely repeated `source_ref`";
+    case "anchor":
+      return "per-observation summaries were dropped — the catalog carries navigation identity only";
+  }
+}
+
+/**
+ * The navigation fields the DISPATCHED rows actually carry, for the prompt policy that describes them.
+ *
+ * Derived from the rows, not from the rung: `projectBreadthFoldTailRung` keeps `location` on any row
+ * where it is NOT redundant with `source_ref` — every region row — so a rung-keyed field list is false
+ * for a region corpus at `summary_anchor`/`anchor` (cross-family review, fourth round, after a
+ * rung-keyed version replaced a fixed one that was false at `anchor`). A list read off the rows cannot
+ * disagree with the rows.
+ *
+ * Keys render in canonical navigation order; anything unexpected is appended rather than dropped, so a
+ * new key shows up in the contract instead of vanishing from it.
+ *
+ * BOUND: the ROW projection is non-increasing down the ladder by construction (each tail row is a key
+ * subset of its parent), but this clause can grow by a constant when a rung makes row shapes DIVERGE —
+ * a two-row corpus of one region plus one whole-file row saves ~20 chars of row text at
+ * `summary_anchor` and spends ~25 on ", location on some rows only". So the MEASURED total is not
+ * strictly non-increasing in that corner; a rung can be skipped. The guarantee the fold needs is
+ * unaffected: it dispatches a rung that fits or the caller's guard fails loud, and `anchor` (which
+ * drops `summary` from every row) is always far smaller than the clause is long.
+ */
+export function navigationRowFieldsFromRows(rows: readonly unknown[]): string {
+  const CANONICAL_ORDER = [
+    "observation_id",
+    "target_material_kind",
+    "source_ref",
+    "location",
+    "summary",
+  ];
+  const order = (keys: Iterable<string>): string[] => {
+    const set = new Set(keys);
+    return [
+      ...CANONICAL_ORDER.filter((key) => set.has(key)),
+      ...[...set].filter((key) => !CANONICAL_ORDER.includes(key)).sort(),
+    ];
+  };
+  const records = rows.filter(
+    (row): row is Record<string, unknown> => row !== null && typeof row === "object",
+  );
+  const union = new Set<string>();
+  for (const row of records) for (const key of Object.keys(row)) union.add(key);
+  // A MIXED catalog really does have rows of different shapes: the tail rungs keep `location`
+  // per-row, only where it is not redundant with `source_ref`, so one corpus can hold region rows
+  // that kept it beside whole-file rows that did not. A bare union would then name a field some rows
+  // lack, and an intersection would hide a field some rows carry — both are false contracts. Split
+  // them: what EVERY row has, and what only SOME have.
+  const always = order(
+    [...union].filter((key) => records.every((row) => key in row)),
+  );
+  const sometimes = order([...union].filter((key) => !always.includes(key)));
+  if (sometimes.length === 0) return always.join(", ");
+  // No key common to every row is not reachable through the real projector (`observation_id` is always
+  // present), but a clause starting with "; " would be malformed if it ever were.
+  if (always.length === 0) return `${sometimes.join(", ")} on some rows only`;
+  return `${always.join(", ")}; ${sometimes.join(", ")} on some rows only`;
+}
+
+/**
+ * The FULL R2 disclosure sentence for the answer-support navigation catalog, as a pure function of the
+ * disclosure. Assembled here rather than at the emit site so the emitted text IS this function's
+ * output: a call site that invoked `breadthFoldRungDetailLoss` and then wrote its own sentence
+ * satisfied every "wired" check while still saying the wrong thing (cross-family review, third round).
+ * The rung's cost comes from {@link breadthFoldRungDetailLoss}, so it can never disagree with the
+ * ladder.
+ */
+export function answerSupportFoldDisclosureMessage(
+  disclosure: BreadthFoldDisclosure,
+): string {
+  return (
+    `Runtime folded the answer-support navigation catalog to '${disclosure.fold_level}' detail ` +
+    `(${disclosure.catalog_observation_count} observations, ` +
+    `${disclosure.measured_prompt_bytes}/${disclosure.prompt_byte_budget} bytes) so every ` +
+    `consumption-approved observation stayed selectable; ` +
+    `${breadthFoldRungDetailLoss(disclosure.fold_level)} ` +
+    "(retained in full in source-observations)."
+  );
 }
 
 /**
@@ -171,9 +288,17 @@ export const CODEX_PROMPT_STDIN_BYTE_LIMIT = CODEX_PROMPT_INPUT_CHAR_LIMIT;
  * stdin ceiling. Set a margin BELOW the ceiling because the measured payload (systemPrompt + userPrompt)
  * is not the whole dispatch: callCodexCli joins them with a "\n\n---\n\n" separator and codex adds its own
  * framing, so the guard must fire slightly before the raw ceiling. The margin (~8 KiB) keeps the guard
- * conservative — it only ever refuses payloads codex would ALSO reject (so every currently-succeeding run
- * stays byte-identical), while the narrow over-refusal band (codex-accepts-but-guard-refuses) fails loud
- * with a deterministic budget error rather than a codex opaque exit. The generic error text says "split
+ * conservative, and the narrow over-refusal band (codex-accepts-but-guard-refuses) fails loud with a
+ * deterministic budget error rather than a codex opaque exit.
+ *
+ * UNIT ASYMMETRY, measured (cross-family review, 2026-07-27): this budget counts UTF-8 BYTES while the
+ * provider counts CHARACTERS, and UTF-8 bytes ≥ UTF-16 code units for every string. So on a multibyte-
+ * heavy payload the guard can refuse something codex would accept — a reviewer constructed 2,661 anchor
+ * rows with CJK paths measuring 1,040,549 bytes but only 614,796 characters. The direction is safe
+ * (refuse-early, never admit-late) and ASCII corpora — every corpus measured so far — see byte == char,
+ * which is why an earlier version of this note claimed the guard "only ever refuses payloads codex would
+ * also reject". That claim is false for multibyte input; correcting the UNIT would change all three
+ * surfaces that share this budget and is deliberately not done here. The generic error text says "split
  * or reduce the projection"; for the DIRECTIVE surface the operator's concrete remedy is to enable
  * source_breadth_fold (this module's fold), which the directive runs BEFORE the guard. Tightenable via
  * the DW-2c probe.
@@ -214,7 +339,11 @@ export interface FoldObservationsToBudgetArgs {
   catalogObservationCount: number;
   /** Deterministic projection of the catalog at a given rung (all N observations, demoted detail). */
   projectAtLevel: (level: BreadthFoldLevel) => unknown[];
-  /** Deterministic byte measurement of the FULL dispatch payload built around `projection`. */
+  /**
+   * Deterministic byte measurement of the FULL dispatch payload built around `projection`. A caller
+   * whose payload DESCRIBES the rows (a policy block naming the fields they carry) derives that text
+   * from `projection` here, so what is measured is what is dispatched.
+   */
   measure: (projection: unknown[]) => number;
   /** Override the ladder (tests / future rungs). Defaults to SOURCE_BREADTH_FOLD_LEVELS. */
   levels?: readonly BreadthFoldLevel[];

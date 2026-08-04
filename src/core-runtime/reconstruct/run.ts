@@ -226,6 +226,7 @@ import { runSemanticMapStageWithDispatchFallback } from "./semantic-map-dispatch
 import {
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
 } from "./semantic-map-stage.js";
+import { answerSupportFoldDisclosureMessage } from "./source-breadth-fold.js";
 import {
   writeAuthoredArtifactReuseProvenance,
   writeFreshAuthoredYamlDocument,
@@ -1219,6 +1220,7 @@ export async function runReconstruct(
   // carry a prior run's truncations into this run's durable record/final output).
   directiveAuthor.documentExcerptProjectionTruncations?.splice(0);
   directiveAuthor.sourceBreadthFoldDisclosures?.splice(0);
+  directiveAuthor.withheldEvidenceClusters?.splice(0);
   const reuseExistingAuthoredArtifacts =
     params.resumeMode === "reuse_existing_authored_artifacts";
   let currentAuthoredArtifactReuseMatch: AuthoredArtifactReuseMatch | null = null;
@@ -1593,7 +1595,11 @@ export async function runReconstruct(
   // R2 disclosure for the admission surface's breadth fold: record the demoted rung durably right
   // after the stage that produced it (the source-frontier artifact has no free-text channel of its
   // own). Empty on every off / fitting run, so nothing is emitted unless detail was actually demoted.
-  for (const disclosure of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+  // Answer-support entries (stage 3a) are produced LATER in the run and drained at their own site;
+  // filtering by surface here keeps each stage's event next to the stage that caused it.
+  for (const record of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+    if (record.surface !== "source_admission_selection") continue;
+    const disclosure = record.disclosure;
     appendRuntimeStatusEventSync({
       pipeline: "reconstruct",
       sessionRoot,
@@ -3935,22 +3941,87 @@ export async function runReconstruct(
     artifactRef: maturationAuthorityResponseValidationPath,
     validation: maturationAuthorityResponseValidation,
   });
-  const answerSupportLedger = await writeAuthoredYamlDocument(
-    answerSupportLedgerPath,
-    "answer-support-ledger.yaml",
-    () => directiveAuthor.writeAnswerSupportLedger({
-      sessionId,
-      roundId: "maturation-round-1",
-      maturationQuestionFrontier,
-      maturationQuestionFrontierRef: maturationQuestionFrontierPath,
-      maturationQuestionFrontierValidation,
-      maturationClosureFrontier,
-      maturationClosureFrontierValidation,
-      maturationAuthorityResponse,
-      maturationAuthorityResponseValidation,
-      sourceObservations: promptSourceObservations,
-    }),
-  );
+  // R2 disclosure for the answer-support navigation catalog (design 20260726 §6, stage 3a). The
+  // catalog is PINNED at `one_line`, so an entry here means the corpus was large enough that even
+  // summaries had to go — the LM chose ids with less to choose by, which must not be silent. Empty
+  // on every OFF run and on every ON run that fit the pinned rung. Reuse (a resumed ledger) authors
+  // nothing, so it discloses nothing — the disclosure for the artifact in use was written by the run
+  // that authored it.
+  //
+  // In a `finally`: the sink is filled BEFORE dispatch, so a failed authoring (malformed output,
+  // worker timeout, provider error) is exactly the case where "the catalog was demoted" is the
+  // diagnostic — draining only on success would lose it, and the next run clears the sink
+  // (cross-family review, two lenses independently). Best-effort by design: the status sink swallows
+  // its own write errors so observation can never affect execution.
+  const drainAnswerSupportFoldDisclosures = (): void => {
+    for (const record of directiveAuthor.sourceBreadthFoldDisclosures ?? []) {
+      if (record.surface !== "maturation_answer_support") continue;
+      // The WHOLE sentence comes from the module that owns the ladder, so no wording can be written
+      // here that disagrees with the rung (cross-family review: calling the rung helper and then
+      // writing your own sentence passes every "wired" check and still lies).
+      appendRuntimeStatusEventSync({
+        pipeline: "reconstruct",
+        sessionRoot,
+        sourceLabel: "source-breadth-fold",
+        stageId: "maturation_answer_support",
+        message: answerSupportFoldDisclosureMessage(record.disclosure),
+      });
+    }
+    // §2.5: a ledger that came back smaller must say why. Drained beside the fold disclosures and in
+    // the same `finally`, so a withheld cluster survives a later authoring failure — that is exactly
+    // when "the runtime could not verify delivery" is the diagnostic. Never phrased as "not
+    // delivered": the runtime did not observe the run, it failed to observe the transport.
+    for (const record of directiveAuthor.withheldEvidenceClusters ?? []) {
+      appendRuntimeStatusEventSync({
+        pipeline: "reconstruct",
+        sessionRoot,
+        sourceLabel: "delivery-reconciliation",
+        stageId: "maturation_answer_support",
+        message:
+          `Runtime withheld answer-support evidence cluster ${record.clusterIndex}: delivery of the ` +
+          `observations it cites could not be verified (${record.reason}). The run continued and the ` +
+          `remaining clusters are unaffected. Withheld citations: ${record.citedObservationIds.join(", ")}.`,
+      });
+    }
+  };
+  let answerSupportLedger: Awaited<
+    ReturnType<typeof directiveAuthor.writeAnswerSupportLedger>
+  >;
+  try {
+    answerSupportLedger = await writeAuthoredYamlDocument(
+      answerSupportLedgerPath,
+      "answer-support-ledger.yaml",
+      () => directiveAuthor.writeAnswerSupportLedger({
+        sessionId,
+        roundId: "maturation-round-1",
+        maturationQuestionFrontier,
+        maturationQuestionFrontierRef: maturationQuestionFrontierPath,
+        maturationQuestionFrontierValidation,
+        maturationClosureFrontier,
+        maturationClosureFrontierValidation,
+        maturationAuthorityResponse,
+        maturationAuthorityResponseValidation,
+        sourceObservations: promptSourceObservations,
+        // Stage 3b PULL layer, opt-in only. PATHS, so the facade re-reads and re-checks drift itself;
+        // `workDir` is the session root, which the runtime owns — the author never picks a location.
+        // The grant must not outlive the dispatch, so its ttl is the worker's own timeout.
+        // The AUTHOR's own mode decides, not a second copy of the flag in run params: the catalog it
+        // projects and the pull layer that serves that catalog's detail cannot disagree.
+        ...(directiveAuthor.sourceObservationCatalogTool === true
+          ? {
+            observationReadPull: {
+              observationsPath: preparationRefs.source_observations,
+              safetyLedgerPath: sourceSafetyLedgerPath,
+              safetyLedgerValidationPath: sourceSafetyLedgerValidationPath,
+              workDir: sessionRoot,
+            },
+          }
+          : {}),
+      }),
+    );
+  } finally {
+    drainAnswerSupportFoldDisclosures();
+  }
   const answerSupportLedgerValidation =
     await writeAnswerSupportLedgerValidationArtifact({
       answerSupportLedgerPath,

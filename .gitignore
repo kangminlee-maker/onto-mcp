@@ -31,10 +31,6 @@ build/
 # local env secrets (never commit)
 .env
 
-# harness working area. Nothing durable lives here — a document that cites probe
-# output promotes the record into development-records/benchmark/, and an active
-# document's grounds go to evidence/ (docs/architecture/repo-layout.md).
-benchmark/
 
 # B4 synthesize-cert bench: the durable record+capsule in each run dir ARE
 # tracked; the local/ sidecar holds real-workbook-derived child-summary PROSE
@@ -68,3 +64,12 @@ evidence/review-cert/*/review-cert-record.rejected.json
 evidence/review-cert/*/run*.log
 evidence/review-cert/*/shim/
 scripts/.code-probe-out/
+
+# Probe/benchmark WORKING area at the repo root. Harnesses under `scripts/` write here
+# (raw transcripts, input copies, reviewer reasoning traces), and it grows without bound —
+# 19 MB by 2026-07-29. Nothing durable lives here: a record a document CITES is promoted
+# out — into `development-records/benchmark/<name>/` when an isolated document cites it,
+# into `evidence/` when an active one does. Both are tracked; see that tree's
+# PROVENANCE-promoted.md and evidence/README.md, and docs/architecture/repo-layout.md
+# for which destination applies to whom.
+/benchmark/

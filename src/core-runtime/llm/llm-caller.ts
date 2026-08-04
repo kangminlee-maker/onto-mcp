@@ -28,6 +28,11 @@ import {
   type LlmExecutionAdapter,
   type NormalizedLlmSelection,
 } from "./model-switcher.js";
+import {
+  observationReadFacadeCodexArgs,
+  type ObservationReadFacadeLaunch,
+  writeObservationReadFacadeDescriptor,
+} from "../reconstruct/observation-read-facade.js";
 import { resolveClaudeBin } from "./claude-bin.js";
 import { awaitChildExit } from "../child-process-exit.js";
 import {
@@ -93,6 +98,27 @@ export interface LlmCallConfig {
   thinking_mode?: "disabled";
   /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
   service_tier?: string;
+  /**
+   * codex-only: register the observation-read facade for THIS dispatch (design 20260726 §4, stage 3b).
+   * The route writes the descriptor itself — filling in the two prompt parts it is about to dispatch —
+   * and registers the server plus the measured approval lever. Absent = no facade, byte-identical.
+   *
+   * Guarded, not ignored, on other routes: a surface that asked for the pull layer and silently got a
+   * worker without it would fail later as "the model never fetched", which is a different diagnosis.
+   */
+  observation_read_facade?: ObservationReadFacadeLaunch;
+  /**
+   * Keep the codex worker's transcript on disk, by NOT passing `--ephemeral`.
+   *
+   * Delivery reconciliation derives what reached the model from that transcript, and MEASURED
+   * 2026-07-28: with `--ephemeral` codex still prints a session id but writes no rollout at all, so a
+   * dispatch that keeps the flag can only ever be reported `unverifiable`. Absent (the default) leaves
+   * today's flags exactly as they are — the transcript is not kept, and nothing looks for one.
+   *
+   * The cost when set is real and belongs to the operator: every worker call leaves a session file
+   * under `CODEX_HOME`, which is what `--ephemeral` was there to avoid.
+   */
+  persist_worker_transcript?: boolean;
   /**
    * Per-call transport timeout (ms) for the direct-call CLI worker route
    * (codex_cli/claude_code). Absent → the route's DEFAULT_WORKER_TIMEOUT_MS.
@@ -321,6 +347,36 @@ export interface LlmCallResult {
   effective_base_url?: string;
   /** Declarative billing classification for audit output. */
   declared_billing_mode?: "subscription" | "per_token" | "local";
+  /**
+   * The codex worker's own session identity and lifetime, when the CLI announced one.
+   *
+   * codex prints `session id: <uuid>` on stderr and names its transcript after it, so this is how a
+   * dispatch finds ITS transcript without a "newest file" guess (design §1-2, §9-M1). Absent for every
+   * other route, and absent when the banner was not exactly one — see `codexWorkerSessionId`.
+   */
+  worker_session?: {
+    readonly id: string;
+    readonly startedAtMs: number;
+    readonly endedAtMs: number;
+  };
+}
+
+/**
+ * The codex session id from ONE child's stderr, or null.
+ *
+ * Requires EXACTLY one banner. Zero means the CLI never announced one; two or more means this buffer
+ * is not one child's, and binding a transcript on a guess is the failure mode design §9-M1 exists to
+ * prevent — "first UUID-looking string" and "newest matching rollout" are both forbidden. Null here is
+ * not "no transcript"; it is "we cannot say which", which reconciliation reports as unverifiable.
+ *
+ * Measured against 14 real worker transcripts: exactly one banner each, `session id: <uuid>`.
+ */
+export function codexWorkerSessionId(stderr: string): string | null {
+  const matches = stderr.match(
+    /^session id: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/gim,
+  );
+  if (matches === null || matches.length !== 1) return null;
+  return matches[0]!.slice("session id: ".length).trim();
 }
 
 // Phase 3 production found 30s too tight for large audit batches (37 items
@@ -335,7 +391,11 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000;
 // on the claude-opus-4-8 reconstruct route; give the CLI workers a longer
 // default so supported models complete without an unencoded env override. The
 // `ONTO_LLM_TIMEOUT_MS` override still applies to both paths when set.
-const DEFAULT_WORKER_TIMEOUT_MS =
+/**
+ * Exported for the stage-3b grant ttl: a grant must not outlive the worker it was minted for, and the
+ * only honest source for that lifetime is the timeout this route enforces.
+ */
+export const DEFAULT_WORKER_TIMEOUT_MS =
   Number(process.env.ONTO_LLM_TIMEOUT_MS) || 600_000;
 // Grace period after a timeout SIGTERM before escalating to SIGKILL. A worker
 // that traps/ignores SIGTERM would otherwise leave the run hanging indefinitely
@@ -954,6 +1014,20 @@ async function callOpenAIResponses(
 export const CODEX_PROMPT_INPUT_CHAR_LIMIT = 1_048_576;
 
 /**
+ * The exact string `callCodexCli` writes to the worker's stdin, from the two parts it is given.
+ *
+ * Extracted so anything that must MEASURE the dispatched prompt derives it from the same code that
+ * dispatches it. The observation-read grant sizes its fetch budget as this ceiling minus the pushed
+ * prompt's length; cross-family review showed that with the length supplied independently, passing the
+ * user prompt alone under-measured by the system prompt plus separator (a 100k system + 900k user prompt
+ * granted 140,384 fetch chars while codex dispatched 1,000,007). A caller can still pass the wrong PARTS,
+ * but it can no longer disagree about how they combine.
+ */
+export function codexCombinedPrompt(systemPrompt: string, userPrompt: string): string {
+  return `${systemPrompt}\n\n---\n\n${userPrompt}`;
+}
+
+/**
  * Total-size backstop for the codex stdin route — the ONE place every prompt-bearing surface passes
  * through. Per-surface budgets (e.g. the source-observation breadth fold) fold BEFORE dispatch and are
  * the operator's remedy; this guard exists because those are wired surface-by-surface, so a surface
@@ -977,21 +1051,37 @@ function assertCodexPromptWithinInputLimit(combinedPrompt: string): void {
   );
 }
 
+interface CodexCliOptions {
+  modelId?: string | undefined;
+  reasoningEffort?: string | undefined;
+  serviceTier?: string | undefined;
+  timeoutMs?: number | undefined;
+  /** Stage 3b: register the observation-read facade for this dispatch. */
+  observationReadFacade?: ObservationReadFacadeLaunch | undefined;
+  /** Stage 4: keep the worker's rollout, which delivery reconciliation reads (see the config field). */
+  persistWorkerTranscript?: boolean | undefined;
+}
+
+/**
+ * Options object rather than a positional tail: three call sites pass these through, and the stage-3b
+ * facade would have been a seventh positional argument next to three optional strings.
+ */
 async function callCodexCli(
   systemPrompt: string,
   userPrompt: string,
-  modelId?: string,
-  reasoningEffort?: string,
-  serviceTier?: string,
-  timeoutMs?: number,
+  options: CodexCliOptions = {},
 ): Promise<LlmCallResult> {
+  const { modelId, reasoningEffort, serviceTier, timeoutMs } = options;
   const { spawn } = await import("node:child_process");
   const workerTimeoutMs = timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
 
   const args: string[] = [
     "exec",
     "--skip-git-repo-check",
-    "--ephemeral",
+    // Dropped ONLY when a caller needs the transcript: measured 2026-07-28, `--ephemeral` suppresses
+    // the rollout file entirely while still printing a session id, so delivery reconciliation would
+    // find nothing to reconcile against. Default keeps the flag and today's behaviour.
+    ...(options.persistWorkerTranscript === true ? [] : ["--ephemeral"]),
     // Pin the worker's execution posture instead of inheriting the operator's global codex config.
     // onto asks this worker to READ material and return text; nothing in either pipeline routes a
     // file write through the model — the runtime writes every artifact itself. Left unpinned, the
@@ -1039,9 +1129,25 @@ async function callCodexCli(
   if (modelId) args.push("-m", modelId);
   if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
   if (serviceTier) args.push("-c", `service_tier="${serviceTier}"`);
+  // Stage 3b: the facade is registered ON TOP of the hardening above — `--ignore-user-config` drops the
+  // operator's servers, and this adds back exactly one, scoped to this dispatch. Measured 2026-07-27
+  // (design §5.5): `-c` overrides survive `--ignore-user-config`, and the worker's call needs this
+  // server's own approval mode or it dies as `user cancelled MCP tool call`.
+  //
+  // The descriptor is written HERE so its prompt parts are, by construction, the parts written to stdin
+  // below — the divergence stage 2's review removed from the grant API cannot reappear through a
+  // caller that measured a different string.
+  if (options.observationReadFacade) {
+    writeObservationReadFacadeDescriptor({
+      launch: options.observationReadFacade,
+      systemPrompt,
+      userPrompt,
+    });
+    args.push(...observationReadFacadeCodexArgs(options.observationReadFacade));
+  }
   args.push("-");
 
-  const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+  const combinedPrompt = codexCombinedPrompt(systemPrompt, userPrompt);
   // BEFORE spawn: a doomed call must not leave a child process to tear down.
   assertCodexPromptWithinInputLimit(combinedPrompt);
 
@@ -1049,6 +1155,7 @@ async function callCodexCli(
     `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${workerTimeoutMs}`,
   );
 
+  const workerStartedAtMs = Date.now();
   const child = spawn("codex", args, {
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -1174,6 +1281,7 @@ async function callCodexCli(
     `codex success: model_id=${modelId ?? "codex-default"} input_tokens~=${in_tokens} output_tokens~=${out_tokens}`,
   );
 
+  const workerSessionId = codexWorkerSessionId(stderr);
   return {
     text,
     input_tokens: in_tokens,
@@ -1181,6 +1289,15 @@ async function callCodexCli(
     model_id: modelId ?? "codex-default",
     effective_base_url: "codex-cli://oauth",
     declared_billing_mode: "subscription",
+    ...(workerSessionId === null ? {} : {
+      worker_session: {
+        id: workerSessionId,
+        startedAtMs: workerStartedAtMs,
+        // The child has exited by here, so this bounds its life from the outside — a transcript
+        // stamped outside the window belongs to a different run (design §9-M1).
+        endedAtMs: Date.now(),
+      },
+    }),
   };
 }
 
@@ -1419,14 +1536,14 @@ async function dispatchByPlan(
 
   if (plan.provider_identity === "codex") {
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.codex;
-    return callCodexCli(
-      systemPrompt,
-      userPrompt,
+    return callCodexCli(systemPrompt, userPrompt, {
       modelId,
-      config.reasoning_effort,
-      config.service_tier,
-      config.timeout_ms,
-    );
+      reasoningEffort: config.reasoning_effort,
+      serviceTier: config.service_tier,
+      timeoutMs: config.timeout_ms,
+      observationReadFacade: config.observation_read_facade,
+      persistWorkerTranscript: config.persist_worker_transcript,
+    });
   }
   if (plan.provider_identity === "anthropic") {
     const apiKey = readEnvApiKey(
@@ -1554,6 +1671,25 @@ export async function callLlm(
     );
   }
 
+  // Stage 3b: the facade only exists on the codex route. Mirrors the headroom guard above — a per-call
+  // capability that reached an unsupported route fails loud instead of being dropped.
+  //
+  // The provider is derived with the SAME precedence dispatch uses: a plan wins outright (see the
+  // `config.plan` branch immediately below), so consulting both fields disjunctively would let
+  // `provider: "codex"` vouch for a plan that routes to anthropic — the guard passes, the plan branch
+  // drops the facade, and the run fails much later as a missing fetch. One field decides here because
+  // one field decides there.
+  if (
+    config?.observation_read_facade !== undefined &&
+    (config.plan ? config.plan.provider_identity : config.provider) !== "codex"
+  ) {
+    throw new Error(
+      "the observation-read facade reached a non-codex dispatch route. It is served by an MCP server " +
+        "codex launches; on any other route the worker would have no tool and the run would fail later " +
+        "as a missing fetch.",
+    );
+  }
+
   if (config?.plan) {
     return dispatchByPlan(
       systemPrompt,
@@ -1563,14 +1699,14 @@ export async function callLlm(
   }
 
   if (isLegacyCodexCliProvider(config)) {
-    return callCodexCli(
-      systemPrompt,
-      userPrompt,
-      config.model_id ?? config.models_per_provider?.codex,
-      config.reasoning_effort,
-      config.service_tier,
-      config.timeout_ms,
-    );
+    return callCodexCli(systemPrompt, userPrompt, {
+      modelId: config.model_id ?? config.models_per_provider?.codex,
+      reasoningEffort: config.reasoning_effort,
+      serviceTier: config.service_tier,
+      timeoutMs: config.timeout_ms,
+      observationReadFacade: config.observation_read_facade,
+      persistWorkerTranscript: config.persist_worker_transcript,
+    });
   }
 
   // Anthropic OAuth → Claude Code CLI worker. The model-switcher keeps
@@ -1642,14 +1778,14 @@ export async function callLlm(
   switch (resolved.provider) {
     case "codex": {
       const modelId = config?.model_id ?? perProviderModel;
-      return callCodexCli(
-        systemPrompt,
-        userPrompt,
+      return callCodexCli(systemPrompt, userPrompt, {
         modelId,
-        config?.reasoning_effort,
-        config?.service_tier,
-        config?.timeout_ms,
-      );
+        reasoningEffort: config?.reasoning_effort,
+        serviceTier: config?.service_tier,
+        timeoutMs: config?.timeout_ms,
+        observationReadFacade: config?.observation_read_facade,
+        persistWorkerTranscript: config?.persist_worker_transcript,
+      });
     }
     case "anthropic": {
       const modelId = config?.model_id ?? perProviderModel;

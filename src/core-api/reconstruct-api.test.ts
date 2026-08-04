@@ -59,7 +59,7 @@ describe("createOntoReconstructCoreApi", () => {
           llm: {
             provider: "openai",
             auth: "api_key",
-            model: "test-model",
+            model: "gpt-5.5",
             effort: "medium",
             api_key_env: "TEST_PRIMARY_KEY",
           },
@@ -69,7 +69,7 @@ describe("createOntoReconstructCoreApi", () => {
           llm: {
             provider: "openai",
             auth: "api_key",
-            model: "test-model",
+            model: "gpt-5.5",
           },
           operation: "semantic_map_verify",
         }),
@@ -78,6 +78,30 @@ describe("createOntoReconstructCoreApi", () => {
         "semantic_map_synthesize",
       );
       expect(unsupported).toBeUndefined();
+    } finally {
+      delete process.env.TEST_PRIMARY_KEY;
+    }
+  });
+
+  it("surfaces an unaccepted effort instead of reporting the primary as absent", async () => {
+    process.env.TEST_PRIMARY_KEY = "test-only";
+    try {
+      // `ultra` is a codex-CLI vocabulary value; the direct OpenAI SDK surface
+      // does not take it. The eligibility probe swallows failures by design, so
+      // without the typed rethrow this misconfiguration would read as "no sealed
+      // primary for this operation" and route elsewhere in silence.
+      await expect(
+        tryCreateEligiblePrimarySealedDispatchCapability({
+          llm: {
+            provider: "openai",
+            auth: "api_key",
+            model: "gpt-5.5",
+            effort: "ultra",
+            api_key_env: "TEST_PRIMARY_KEY",
+          },
+          operation: "semantic_map_synthesize",
+        }),
+      ).rejects.toThrow(/rejects reasoning effort 'ultra'/);
     } finally {
       delete process.env.TEST_PRIMARY_KEY;
     }

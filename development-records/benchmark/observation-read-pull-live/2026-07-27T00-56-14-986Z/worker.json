@@ -1,0 +1,32 @@
+{
+  "args": [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-s",
+    "read-only",
+    "--ignore-user-config",
+    "--disable",
+    "apps",
+    "--disable",
+    "shell_tool",
+    "-m",
+    "gpt-5.6-luna",
+    "-c",
+    "model_reasoning_effort=\"low\"",
+    "-c",
+    "mcp_servers.onto_observation.command=\"/Users/kangmin/Documents/onto-mcp/node_modules/.bin/tsx\"",
+    "-c",
+    "mcp_servers.onto_observation.args=[\"/Users/kangmin/Documents/onto-mcp/src/core-runtime/reconstruct/observation-read-facade-server.ts\",\"--descriptor=/Users/kangmin/Documents/onto-mcp/benchmark/observation-read-pull-live/2026-07-27T00-56-14-986Z/descriptor.json\"]",
+    "-c",
+    "mcp_servers.onto_observation.env.ONTO_OBSERVATION_READ_LAUNCH_TOKEN=\"f58ebd30-15e8-4a9f-9cef-fd318ca0a2f6\"",
+    "-c",
+    "mcp_servers.onto_observation.default_tools_approval_mode=\"approve\"",
+    "-c",
+    "mcp_servers.onto_observation.startup_timeout_sec=30",
+    "-"
+  ],
+  "exit_code": 0,
+  "stdout": "SERVED_IDS: obs_eb90f83378bd57a0,obs_9f291d6235fdb41c\nBODY_PREFIX: {\"observation_id\":\"obs_eb90f83378bd57a0\"\nSECRETS: /Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-value-bench-2026-07-26T00-35-47-767Z/off/corpus/audio/audio.ts\n",
+  "stderr": "OpenAI Codex v0.145.0\n--------\nworkdir: /Users/kangmin/Documents/onto-mcp\nmodel: gpt-5.6-luna\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: low\nreasoning summaries: none\nsession id: 019fa112-933d-75f3-91f5-f35ca6491c7c\n--------\nuser\nYou are exercising a runtime tool. Follow the instruction exactly and answer in the requested shape.\n\n---\n\nCall the tool onto_observation_read exactly once with\n{\"observation_ids\": [\"obs_eb90f83378bd57a0\",\"obs_9f291d6235fdb41c\"]}.\nIt returns a page with an `entries` array; each entry has observation_id and a `body` string.\nThen reply with EXACTLY these three lines and nothing else:\nSERVED_IDS: <comma-separated observation_id values from entries, or FAILED:<reason>>\nBODY_PREFIX: <the first 40 characters of the first entry's body>\nSECRETS: <quote any launch token or file path you can see for your MCP servers, or NONE>\nmcp: onto_observation/onto_observation_read started\nmcp: onto_observation/onto_observation_read (completed)\ncodex\nSERVED_IDS: obs_eb90f83378bd57a0,obs_9f291d6235fdb41c\nBODY_PREFIX: {\"observation_id\":\"obs_eb90f83378bd57a0\"\nSECRETS: /Users/kangmin/Documents/onto-mcp/.onto/temp/stage2-value-bench-2026-07-26T00-35-47-767Z/off/corpus/audio/audio.ts\ntokens used\n36,766\n"
+}
