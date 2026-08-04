@@ -531,13 +531,12 @@ export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   // fold `location`) for any file it decomposes — hence INVARIANT-CHANGE. Absent = off — every
   // observation stays whole-file, byte-identical.
   "source_region_decomposition",
-  // Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
-  // §8/§12/§13 PR-2a). When true AND the planned-unit count exceeds
+  // Core Stage 2 inter-document breadth opt-in. When true AND the planned-unit count exceeds
   // SOURCE_ADMISSION_SELECTION_THRESHOLD, materialize enters admission mode: units get a
   // lightweight outline instead of unconditional deep observation, and a purpose-driven
   // selection stage chooses which admitted units are promoted to deep observation
-  // (INVARIANT-CHANGE, wired in PR-2b). UNUSED in this PR — no code branches on it yet. Absent
-  // = off — every planned unit is deep-observed exactly as today, byte-identical.
+  // (INVARIANT-CHANGE). Below the threshold the key changes nothing — the deep-observe-all loop
+  // stays byte-identical. Absent = off — every planned unit is deep-observed, byte-identical.
   "source_admission_selection",
   // Deterministic recursive observation — projection-layer breadth fold opt-in (design
   // 20260723-deterministic-recursive-observation §8 PR-3/PR-4). When true AND one of the two

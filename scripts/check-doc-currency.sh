@@ -116,6 +116,7 @@ tracked() {
 MAPS='README.md
 AGENTS.md
 CLAUDE.md
+IMPLEMENTATION_MAP.html
 docs/architecture/repo-layout.md'
 
 # 격리 검사 대상 = 활성 런타임 빼기 지도.
@@ -125,7 +126,8 @@ isolation_files=$(tracked src .onto docs | grep -Fxv -f <(printf '%s\n' "$MAPS")
 #
 # `evidence/`에서는 README만 본다. 승격된 기록은 자기 실행이 만든 아티팩트를
 # 이름 부르는데, 그 아티팩트는 그 실행의 사실이지 지금 존재해야 할 파일이 아니다.
-dangling_files=$(tracked src .onto docs README.md AGENTS.md CLAUDE.md INVARIANTS.md llms.txt evidence/README.md)
+dangling_files=$(tracked src .onto docs README.md AGENTS.md CLAUDE.md IMPLEMENTATION_MAP.html \
+                         INVARIANTS.md llms.txt evidence/README.md)
 
 fail=0
 

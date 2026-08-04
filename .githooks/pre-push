@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# 커밋되는 pre-push 훅. 클론마다 한 번 켠다:
+#
+#   git config core.hooksPath .githooks
+#
+# `.git/hooks`가 아니라 레포 안에 사는 이유는, 규칙이 노트북 한 대가 아니라
+# 코드와 함께 이동해야 하기 때문이다.
+#
+# stdin으로 들어오는 것: <local ref> <local sha> <remote ref> <remote sha>
+set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ZERO='0000000000000000000000000000000000000000'
+fail=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue          # 브랜치 삭제
+  if [ "$remote_sha" = "$ZERO" ]; then
+    # 원격에 처음 올리는 브랜치: 머지될 base 기준으로 판정한다.
+    base="$(git merge-base origin/main "$local_sha" 2>/dev/null || echo '')"
+    [ -z "$base" ] && continue
+    range="$base..$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  bash "$ROOT/scripts/check-push-currency.sh" "$range" || fail=1
+done
+
+exit "$fail"
