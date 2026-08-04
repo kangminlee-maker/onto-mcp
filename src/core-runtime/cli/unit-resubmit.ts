@@ -33,9 +33,6 @@
  * spec construction, idempotent packet projection, and the correlated
  * escalation decision. File I/O and dispatch stay in
  * run-review-prompt-execution.
- *
- * Design: development-records/design/20260704-review-unit-resubmit-and-limit-breaker-design.md (설계 A),
- *   development-records/design/20260707-s4-6a-deliberation-resubmit-design.md (§4-6a 확대).
  */
 
 /** Marker delimiting the runtime-owned error spec section inside a packet.

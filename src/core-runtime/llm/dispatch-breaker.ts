@@ -2,8 +2,7 @@
  * Dispatch limit/transport circuit breaker — pure policy logic (no I/O, no
  * timers of its own, no LLM calls).
  *
- * 설계 B (development-records/design/20260704-review-unit-resubmit-and-limit-breaker-design.md §4):
- * an unattended batch must not throw a retry storm at a dead rate limit and
+ * 제약: an unattended batch must not throw a retry storm at a dead rate limit and
  * lose items. The repo has no common dispatch surface (§8 재앵커링), so the
  * policy is injected per loop. Currently wired: the reconstruct semantic-map
  * judgment loop and the review lens/stance fan-out pools — both the flat
@@ -207,8 +206,7 @@ export interface DispatchBreakerPolicy {
    * completed/dead-letter/incomplete classification depend only on WHICH items
    * failed systemically, not on their completion order. Sequential callers
    * (reconstruct semantic-map, canonical order) omit it and keep the
-   * poison-vs-systemic-via-later-success attribution. See design note
-   * development-records/design/20260707-breaker-concurrent-determinism-f1-design.md. */
+   * poison-vs-systemic-via-later-success attribution. */
   concurrent?: boolean;
 }
 

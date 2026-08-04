@@ -4,9 +4,7 @@ import {
 } from "../target-material-kind.js";
 
 /**
- * Stage 2 — per-obligation shardability gate (design:
- * development-records/design/20260624-stage2-shardability-gate-design.md;
- * SSOT: 20260622-onto-review-depth-aware-multiagent-redesign.md §5.3).
+ * Stage 2 — per-obligation shardability gate.
  *
  * fail-closed SCAFFOLDING — behavior-0. Stage 2 declares how each review obligation MAY be
  * sharded and locks the ILC-2 protection (a relational obligation must not be sharded as

@@ -9,8 +9,6 @@
  * invention guard sentinel, and the missing-rows merge. The LLM calls and
  * file I/O stay in the executor; validation/serialization stay in
  * worker-structured-output (same validator as self-submitted payloads).
- *
- * Design: development-records/design/submit-salvage-recovery-design.md.
  */
 
 /** Invention guard: the transcription model must answer this when the frozen

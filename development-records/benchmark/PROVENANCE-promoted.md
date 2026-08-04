@@ -5,9 +5,16 @@ Harnesses under `scripts/` write their raw output to `/benchmark/` at the repo r
 read again. On 2026-07-29 it held 19 MB and was neither tracked nor ignored, while committed documents
 already cited paths inside it — dangling references to a directory that only existed on one machine.
 
-The rule now: **a document may only cite evidence that lives here.** Anything a design note, handoff or
-comment points at gets promoted into `development-records/benchmark/<name>/`, preserving its relative
-path. Everything else stays in the working area and is expected to be deleted.
+The rule now: **a document may only cite a record that has been promoted out of the working area.**
+Where it goes depends on who cites it. An **isolated** document — a design note, handoff, or backlog
+entry under `development-records/` — cites a record promoted to `development-records/benchmark/<name>/`,
+preserving its relative path; that is history citing history, and this file is its ledger. An **active**
+document — runtime code comments, `.onto/` contracts, `docs/`, and the maps — cites `evidence/` instead,
+because an authority's grounds are not history and the isolation rule would otherwise forbid an authority
+from citing its own basis. `docs/architecture/repo-layout.md` owns that split; `evidence/README.md` is
+the ledger for the active side.
+
+Everything else stays in the working area and is expected to be deleted.
 
 ## Promoted on 2026-07-29 (19 MB → 856 KB)
 

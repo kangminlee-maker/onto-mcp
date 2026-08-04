@@ -70,7 +70,7 @@ npm run benchmark:review:pipeline -- \
   --sweep-effort high \
   --runs 1 \
   --fixture review-pipeline-target-v1 \
-  --output development-records/benchmark/review-unit-effort-preliminary.json
+  --output benchmark/review-unit-effort-preliminary.json
 ```
 
 결정 근거가 필요한 경우 아래처럼 반복과 fixture 조건을 충족한다.
@@ -83,5 +83,5 @@ npm run benchmark:review:pipeline -- \
   --runs 3 \
   --fixture review-pipeline-target-v1 \
   --fixture retry-policy-target-v1 \
-  --output development-records/benchmark/review-unit-effort-decision-grade.json
+  --output benchmark/review-unit-effort-decision-grade.json
 ```

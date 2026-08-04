@@ -83,7 +83,7 @@ const ReviewActorLlmSettingsSchema = z
 // timeout_ms) — those stay settings-owned so a per-call override cannot select an
 // arbitrary endpoint or credential env. The chosen provider's transport resolves
 // from settings exactly as a settings edit would. .strict() rejects the excluded
-// fields. See development-records/design/per-call-llm-override-design-v4.md.
+// fields.
 export const PerCallLlmOverrideSchema = LlmSettingsSchema.pick({
   provider: true,
   auth: true,
@@ -866,7 +866,6 @@ export interface ReviewExecutionSettings {
  * its regular retries with `output_contract`, recover the already-produced
  * semantics without re-engaging the violating model. The original failure
  * stays recorded; the salvage attempt carries `recovery: "salvaged_submit"`.
- * Contract: development-records/design/submit-salvage-recovery-design.md.
  */
 export interface ReviewSubmitSalvageSettingsInput {
   enabled?: boolean | undefined;

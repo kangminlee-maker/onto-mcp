@@ -26,13 +26,43 @@ The active runtime lives here and must run without reaching into another
 | `scripts/` | repository-local verification, conformance, and benchmark harnesses |
 | `docs/architecture/` | current architecture, continuation, operational notes |
 | `docs/decisions/` | accepted direction and architecture decisions |
-| `development-records/` | development history, audits, designs, handoff records — outside the authority hierarchy; `development-records/archive/` isolates retired CLI/process/learning/govern/evolve material; `development-records/benchmark/` is the tracked home for probe evidence a document cites |
-| `benchmark/` | **gitignored** working area where `scripts/` harnesses dump raw probe output. Nothing durable lives here — evidence a document cites is promoted into `development-records/benchmark/` (see its `PROVENANCE-promoted.md`) |
+| `benchmark/` | **gitignored** working area where `scripts/` harnesses dump raw probe output. Nothing durable lives here — a probe writes everything, including what nobody will read again |
+| `evidence/` | execution records an **active** document cites as its grounds. Active runtime may point here; [evidence/README.md](../../evidence/README.md) owns what qualifies and how a record is promoted |
+| `development-records/` | development history, audits, designs, handoff records — outside the authority hierarchy; `development-records/archive/` isolates retired CLI/process/learning/govern/evolve material; `development-records/benchmark/` is the tracked home for probe output an **isolated** document cites (see its `PROVENANCE-promoted.md`) |
 | `IMPLEMENTATION_MAP.html` | visual architecture and roadmap dashboard |
 
 `.onto/review/*` and `.onto/reconstruct/*` are execution session outputs, not
 source. Exclude them from runtime naming, code audits, docs audits, and
 migration searches unless the task is about session artifacts themselves.
+
+## Active runtime does not point into history
+
+Active runtime — tracked sources under `src/`, `.onto/`, and `docs/` — must not
+reference a file inside `development-records/`. Naming the folder is describing
+the repo's shape and stays allowed; naming a file inside it sends a reader into
+a superseded design that reads as current fact. `README.md`, `AGENTS.md`, and
+`CLAUDE.md` are exempt: their job is to say where history lives.
+
+### Where a cited record lives
+
+A probe writes to the gitignored `benchmark/`, and **a document may only cite a
+record that has been promoted out of it.** Which destination depends on who is
+citing — that is the whole of the rule:
+
+| Citing document | Destination | Why |
+|---|---|---|
+| isolated — a design note, handoff, or backlog entry under `development-records/` | `development-records/benchmark/<name>/` | history citing history. The record is a fact about the moment that design was written |
+| active — runtime code comments, `.onto/` contracts, `docs/`, and the maps | `evidence/` | an authority's grounds are not history. If the grounds sat in the isolated tree, the rule would forbid an authority from citing its own basis |
+
+Promotion is deliberate in both directions: `development-records/benchmark/PROVENANCE-promoted.md`
+records what came out of the working area, and [evidence/README.md](../../evidence/README.md)
+records what an active document cites. A record whose last active citer
+disappears goes back to `development-records/benchmark/`.
+
+`scripts/check-doc-currency.sh` (`npm run check:doc-currency`, CI gate G13)
+enforces the active row and the rule that every repo document path an active
+file names exists on disk. The isolated row is not machine-checked — history
+citing history harms nobody.
 
 ## src/core-runtime internal structure
 

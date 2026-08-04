@@ -95,7 +95,6 @@ export async function durableAtomicWriteFile(
  * (`asserted_obligation_ids`): validators stamp it and the coverage harvest reads it off the in-memory
  * return value — no consumer reads it from disk. Keeping it out of persistence lets the reuse-hashed /
  * scout-captured validators be instrumented with zero hash rotation and no resume migration.
- * See development-records/design/20260623-deferred7-obligation-telemetry-design.md.
  */
 const IN_MEMORY_ONLY_ARTIFACT_FIELDS: readonly string[] = ["asserted_obligation_ids"];
 
