@@ -20,14 +20,14 @@
 | 8 | 개발 기록 | development-records/ |
 
 .onto/authority/ 구성: 개념 SSOT + runtime lens registry (core-lens-registry.yaml)
-.onto/principles/ 구성: rank 2~4 개발 규범 문서 7개 (배포 제외)
+.onto/principles/ 구성: rank 2~4 개발 규범 문서 7개 (npm 패키지에 함께 배포된다)
 위계 밖: development-records/ (이력/참조)
 
 이 위계표가 SSOT다. [AGENTS.md](AGENTS.md) §2는 빠른 참조용 미러이며, 위계를 바꿀 때는 여기를 먼저 고치고 AGENTS.md §2를 동기화한다. 이중 존재는 아래 "동일 순위 충돌 해소"의 상호 참조·범위 명기 예외를 따른다.
 
 ## repo / runtime 구조
 
-구조 SSOT: [docs/architecture/repo-layout.md](docs/architecture/repo-layout.md)
+구조 SSOT: [docs/architecture/repo-layout.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/repo-layout.md)
 — top-level 폴더 역할, `src/core-runtime/` 내부 구조, 배치 원칙, 세션 산출물
 제외 규칙을 그 문서가 소유한다. 여기 재서술하지 않는다.
 

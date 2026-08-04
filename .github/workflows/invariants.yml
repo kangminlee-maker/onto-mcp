@@ -42,6 +42,14 @@ jobs:
         run: npx tsx scripts/check-graceful-signal-rethrow.ts
       - name: G12 Linguist catalog drift (generated == regeneration)
         run: npx tsx scripts/check-linguist-drift.ts
+      - name: G13 doc-currency self-test (게이트가 실패할 수 있는지 먼저 증명)
+        run: bash scripts/check-doc-currency.sh --self-test
+      - name: G13 doc-currency (활성 런타임 → 이력 참조 · dangling 경로)
+        run: bash scripts/check-doc-currency.sh
+      - name: G14 shipped-links self-test (게이트가 실패할 수 있는지 먼저 증명)
+        run: node scripts/check-shipped-links.mjs --self-test
+      - name: G14 shipped-links (배포 문서 링크가 설치본에서 풀리는가)
+        run: node scripts/check-shipped-links.mjs
       - name: Full vitest suite (unit + integration merge gate)
         # vitest.config include set; superset of the G3 invariant subset above.
         # Live/benchmark scripts (npm test, benchmark:*) stay out — they need credentials.

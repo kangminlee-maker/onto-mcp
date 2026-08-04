@@ -109,8 +109,6 @@ settings `review.execution.retry.salvage.enabled`(기본 false)로만 활성화�
    실패는 `child_results`로 보존된다(자력 제출률 vs 회수 완료율 분리 가능).
    회수 실패 시 기존 실패 종단과 동일하게 끝난다.
 
-설계·실측 근거: `development-records/design/submit-salvage-recovery-design.md`.
-
 ## 4. Read-only boundary
 
 A structured-output unit must not mutate the repository; the canonical write

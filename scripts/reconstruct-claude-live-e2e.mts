@@ -28,7 +28,7 @@ const EFFORT = process.env.E2E_EFFORT ?? "medium";
 const MAX_ATTEMPTS = Number(process.env.E2E_ATTEMPTS ?? "3");
 const FIXTURE = "reconstruct-golden-target-v1" as const;
 const EVIDENCE_REL =
-  "development-records/benchmark/reconstruct-pipeline-live-claude-20260615.json";
+  "evidence/reconstruct-pipeline-live-claude-20260615.json";
 
 function log(msg: string): void {
   process.stdout.write(`[claude-live-e2e] ${msg}\n`);

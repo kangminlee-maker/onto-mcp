@@ -26,12 +26,26 @@ The active runtime lives here and must run without reaching into another
 | `scripts/` | repository-local verification, conformance, and benchmark harnesses |
 | `docs/architecture/` | current architecture, continuation, operational notes |
 | `docs/decisions/` | accepted direction and architecture decisions |
-| `development-records/` | development history, audits, designs, handoff records — outside the authority hierarchy; `development-records/archive/` isolates retired CLI/process/learning/govern/evolve material |
+| `evidence/` | execution records an **active** authority document cites as its grounds. Active runtime may point here; [evidence/README.md](../../evidence/README.md) owns what qualifies and how a record is promoted |
+| `development-records/` | development history, audits, designs, handoff records — outside the authority hierarchy; `development-records/archive/` isolates retired CLI/process/learning/govern/evolve material; `development-records/benchmark/` holds tracked probe output no active document cites |
 | `IMPLEMENTATION_MAP.html` | visual architecture and roadmap dashboard |
 
 `.onto/review/*` and `.onto/reconstruct/*` are execution session outputs, not
 source. Exclude them from runtime naming, code audits, docs audits, and
 migration searches unless the task is about session artifacts themselves.
+
+## Active runtime does not point into history
+
+Active runtime — tracked sources under `src/`, `.onto/`, and `docs/` — must not
+reference a file inside `development-records/`. Naming the folder is describing
+the repo's shape and stays allowed; naming a file inside it sends a reader into
+a superseded design that reads as current fact. `README.md`, `AGENTS.md`, and
+`CLAUDE.md` are exempt: their job is to say where history lives.
+
+When an active document needs a record as grounds, the record is promoted into
+`evidence/` and cited there. `scripts/check-doc-currency.sh`
+(`npm run check:doc-currency`, CI gate G13) enforces both this and the rule that
+every repo document path an active file names exists on disk.
 
 ## src/core-runtime internal structure
 

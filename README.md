@@ -657,10 +657,9 @@ Metered billing is never chosen by default: it happens only when the seat states
 Supported model ids are authored in
 [`.onto/authority/supported-models.yaml`](https://github.com/kangminlee-maker/onto-mcp/blob/main/.onto/authority/supported-models.yaml).
 `effort` is not validated at the tool boundary — it is checked at dispatch
-against
-[`.onto/authority/model-reasoning-efforts.yaml`](https://github.com/kangminlee-maker/onto-mcp/blob/main/.onto/authority/model-reasoning-efforts.yaml),
-which is keyed by (execution surface × model) because the accepted set differs
-per surface. This gate is what makes a bad effort fail loud on the Claude Code
+against the provider-keyed accepted set in
+[`src/core-runtime/llm/sealed-dispatch-capability.ts`](https://github.com/kangminlee-maker/onto-mcp/blob/main/src/core-runtime/llm/sealed-dispatch-capability.ts).
+This gate is what makes a bad effort fail loud on the Claude Code
 worker route, which otherwise warns and silently falls back to its default.
 
 ```json

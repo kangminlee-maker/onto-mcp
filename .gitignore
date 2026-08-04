@@ -31,6 +31,11 @@ build/
 # local env secrets (never commit)
 .env
 
+# harness working area. Nothing durable lives here — a document that cites probe
+# output promotes the record into development-records/benchmark/, and an active
+# document's grounds go to evidence/ (docs/architecture/repo-layout.md).
+benchmark/
+
 # B4 synthesize-cert bench: the durable record+capsule in each run dir ARE
 # tracked; the local/ sidecar holds real-workbook-derived child-summary PROSE
 # (source-safety: sha-referenced from the capsule, never committed).
@@ -51,4 +56,15 @@ development-records/benchmark/review-cert/*/shim/
 development-records/benchmark/review-cert/20260712-101717/capture/
 development-records/benchmark/review-cert/20260712-101717/review-cert-record.json
 development-records/benchmark/review-cert/20260712-101717/runs/rows.progress.jsonl
+
+# evidence/: promoting a run dir carries its untracked sidecars along on disk, so
+# the same rules hold at the new location. The source-safety one is why: local/
+# holds real-workbook-derived prose that is sha-referenced from the capsule and
+# never committed — a promotion must not be a way around that.
+evidence/synthesize-cert/*/local/
+evidence/review-cert/*/runs/*
+!evidence/review-cert/*/runs/rows.progress.jsonl
+evidence/review-cert/*/review-cert-record.rejected.json
+evidence/review-cert/*/run*.log
+evidence/review-cert/*/shim/
 scripts/.code-probe-out/

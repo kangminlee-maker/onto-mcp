@@ -87,6 +87,6 @@ reconstruct mode 에서는 resolved epsilon material (합의, 규칙 해소, adj
 
 - **공통 불변 규칙 (review / reconstruct 양쪽)**: 비발명 원칙, participation completeness 측정, adjudication boundary, provenance obligation, preserved-material-only rule. 이들은 review / reconstruct 에서 동일하게 유지된다
 - **review 고유 obligation**: §Output obligation 의 12 section 집합, deliberation_status frontmatter, axiology proposal 전용 slot
-- **reconstruct 고유 obligation**: 입력이 탐색 방향 epsilon, 출력이 탐색 지시. review 의 12 section schema 는 적용되지 않으며, reconstruct 전용 output contract 가 별도 authority 를 가진다 (`.onto/processes/reconstruct.md` 해당 section)
+- **reconstruct 고유 obligation**: 입력이 탐색 방향 epsilon, 출력이 탐색 지시. review 의 12 section schema 는 적용되지 않으며, reconstruct 전용 output contract 가 별도 authority 를 가진다
 
 review mode 와 reconstruct mode 의 차이는 본 role 문서의 "adjudication boundary 조건" 과 "provenance obligation field" 에는 영향을 주지 않는다.

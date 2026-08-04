@@ -1,5 +1,4 @@
-// Spreadsheet structure observer (S1 — design:
-// development-records/design/20260617-spreadsheet-extraction-adapter-s1-design.md).
+// Spreadsheet structure observer (S1).
 //
 // L1 format adapter: turns a workbook into a deterministic, runtime-owned
 // `WorkbookStructuralInventory`. This is the missing "readable representation"

@@ -7,7 +7,6 @@
 > 기준 문서:
 > - `.onto/processes/review/prompt-execution-runner-contract.md`
 > - `.onto/processes/review/external-oauth-worker-contract.md`
-> - `development-records/design/phase2-stage1-host-orchestration-design.md`
 
 ---
 
