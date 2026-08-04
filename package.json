@@ -79,6 +79,8 @@
     "check:doc-currency:self-test": "bash scripts/check-doc-currency.sh --self-test",
     "check:shipped-links": "node scripts/check-shipped-links.mjs",
     "check:shipped-links:self-test": "node scripts/check-shipped-links.mjs --self-test",
+    "check:push-currency": "bash scripts/check-push-currency.sh",
+    "check:push-currency:self-test": "bash scripts/check-push-currency.sh --self-test",
     "test": "npm run test:e2e",
     "test:vitest": "vitest run",
     "test:review:live": "npm run build:ts-core && tsx scripts/review-mcp-live-e2e.ts",

@@ -107,25 +107,22 @@ tracked() {
     | sort -u | grep -v '\.test\.ts$'
 }
 
-# 지도 — 이력이 어디 사는지 말하는 것이 일인 문서. 격리 검사에서 빠진다: 이력의
-# 장부를 이름 부를 수 없으면 레포의 모양을 서술할 수 없다. 대신 dangling 검사에는
-# 포함된다 — 죽은 링크는 지도에서도 죽은 링크다.
-#
-# 추측이 아니라 열거다. 지도를 늘리려면 여기에 추가한다. 그러지 않으면 "설명이니까
-# 괜찮다"가 모든 파일에 적용되고 규칙이 사라진다.
-MAPS='README.md
-AGENTS.md
-CLAUDE.md
-docs/architecture/repo-layout.md'
+# 어느 경로가 산문 검사 대상이고 어느 것이 지도인가는
+# `scripts/lib/active-paths.sh`가 소유한다 — G15와 같은 파일을 읽어야 두 게이트가
+# 같은 경로를 두고 다른 답을 내지 않는다.
+# shellcheck source=lib/active-paths.sh
+. "$ROOT/scripts/lib/active-paths.sh"
+MAPS="$ONTO_MAP_DOCS"
 
-# 격리 검사 대상 = 활성 런타임 빼기 지도.
-isolation_files=$(tracked src .onto docs | grep -Fxv -f <(printf '%s\n' "$MAPS"))
+# 격리 검사 대상 = 산문 검사 대상 빼기 지도.
+isolation_files=$(tracked $ONTO_PROSE_SUBJECT_PATHS | grep -Fxv -f <(printf '%s\n' "$MAPS"))
 
 # dangling 검사 대상 = 활성 런타임 + 지도.
 #
 # `evidence/`에서는 README만 본다. 승격된 기록은 자기 실행이 만든 아티팩트를
 # 이름 부르는데, 그 아티팩트는 그 실행의 사실이지 지금 존재해야 할 파일이 아니다.
-dangling_files=$(tracked src .onto docs README.md AGENTS.md CLAUDE.md INVARIANTS.md llms.txt evidence/README.md)
+dangling_files=$(tracked $ONTO_PROSE_SUBJECT_PATHS README.md AGENTS.md CLAUDE.md IMPLEMENTATION_MAP.html \
+                         INVARIANTS.md llms.txt evidence/README.md)
 
 fail=0
 

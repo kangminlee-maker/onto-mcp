@@ -75,11 +75,12 @@ export interface RunReconstructParams {
    *  "already observed" means for that ref — INVARIANT-CHANGE). Self-contained: independent of the
    *  code opt-ins. Absent = off — every observation stays whole-file, byte-identical. */
   sourceRegionDecomposition?: boolean;
-  /** Core Stage 2 inter-document breadth opt-in (design 20260722-inter-document-breadth-stage2
-   *  §8/§12/§13 PR-2a): set from reconstruct.execution.source_admission_selection. UNUSED in
-   *  this PR — no code branches on it yet (materialize keeps deep-observing every planned unit
-   *  regardless; PR-2b wires the threshold-gated admission-selection stage). Absent = off,
-   *  byte-identical. */
+  /** Core Stage 2 inter-document breadth opt-in: set from
+   *  reconstruct.execution.source_admission_selection. When true AND the planned-unit count
+   *  exceeds SOURCE_ADMISSION_SELECTION_THRESHOLD, materialize enters admission mode — units get
+   *  a lightweight outline instead of unconditional deep observation, and a purpose-driven
+   *  selection stage promotes the admitted ones. Under the threshold the deep-observe-all loop is
+   *  byte-identical either way. Absent = off, byte-identical. */
   sourceAdmissionSelection?: boolean;
 }
 
