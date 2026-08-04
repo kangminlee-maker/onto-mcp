@@ -1,6 +1,10 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import ts from "typescript";
+
+const execFileAsync = promisify(execFile);
 
 export interface BenchCandidateTokenPolicyFile {
   path: string;
@@ -177,42 +181,43 @@ export function findB4BenchCandidateHookBindingViolations(
   return violations;
 }
 
-async function collectFilesUnder(
+/** 대상은 **git이 소스로 보는 파일** — 추적 중이거나, 새로 만들었지만 ignore되지
+ *  않은 것. `.onto/` 아래에는 실행 세션 산출물(`review/`, `reconstruct/`)과 벤치
+ *  작업 영역(`temp/`)이 함께 사는데 그것들은 소스가 아니다. 파일시스템을 그냥
+ *  순회하면 그 산출물까지 읽어 이 게이트가 로컬에서 상시 실패한다 — 실제로 그랬다.
+ *
+ *  git 열거가 실패하면 **던진다.** 조용히 파일시스템 순회로 되돌아가면 그 순간
+ *  이 주석이 거짓이 되고, 게이트는 자기가 무엇을 봤는지 모르게 된다. */
+async function collectGitSourceFiles(
   repoRoot: string,
-  relativeRoot: string,
+  relativeRoots: readonly string[],
 ): Promise<BenchCandidateTokenPolicyFile[]> {
-  const absoluteRoot = path.join(repoRoot, relativeRoot);
-  try {
-    const stat = await fs.stat(absoluteRoot);
-    if (!stat.isDirectory()) return [];
-  } catch {
-    return [];
-  }
+  const { stdout } = await execFileAsync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "--", ...relativeRoots],
+    { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024 },
+  );
+  const relPaths = [...new Set(stdout.split("\n").filter((line) => line.length > 0))];
   const out: BenchCandidateTokenPolicyFile[] = [];
-  const walk = async (absoluteDir: string): Promise<void> => {
-    const entries = await fs.readdir(absoluteDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const absolutePath = path.join(absoluteDir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(absolutePath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const relPath = normalizeRepoRelativePath(path.relative(repoRoot, absolutePath));
-      out.push({ path: relPath, text: await fs.readFile(absolutePath, "utf8") });
+  for (const relPath of relPaths) {
+    let text: string;
+    try {
+      text = await fs.readFile(path.join(repoRoot, relPath), "utf8");
+    } catch {
+      // 열거된 뒤 사라진 파일(예: 방금 지운 미추적 파일)은 검사 대상이 아니다.
+      continue;
     }
-  };
-  await walk(absoluteRoot);
+    out.push({ path: normalizeRepoRelativePath(relPath), text });
+  }
   return out;
 }
 
 export async function collectBenchCandidateTokenPolicyFiles(
   repoRoot: string,
 ): Promise<BenchCandidateTokenPolicyFile[]> {
-  const files: BenchCandidateTokenPolicyFile[] = [];
-  for (const root of SCANNED_ROOTS) {
-    files.push(...await collectFilesUnder(repoRoot, root));
-  }
+  const files: BenchCandidateTokenPolicyFile[] = [
+    ...await collectGitSourceFiles(repoRoot, SCANNED_ROOTS),
+  ];
   for (const rootFile of SCANNED_ROOT_FILES) {
     const absolutePath = path.join(repoRoot, rootFile);
     try {
