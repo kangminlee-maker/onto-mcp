@@ -54,6 +54,18 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "self-test: dangling 검사 OK (심은 위반에 죽는다)"
   fi
 
+  # NUL 바이트를 가진 파일. rg는 그런 파일을 바이너리로 판단해 매치 대신
+  # "binary file matches" 통지만 내보내는데, 그러면 차단 검사가 그 파일을 조용히
+  # 건너뛴다 — 실제로 `src/`에 리터럴 NUL을 쓰는 소스가 있다(해시 구분자).
+  # `--text`가 그것을 막는지 여기서 확인한다.
+  printf 'canary: development-records/design/some-superseded-design.md\nsep\000tail\n' > "$ROOT/$probe"
+  if bash "$0" >/dev/null 2>&1; then
+    echo "self-test: FAIL — NUL 든 파일의 위반을 게이트가 건너뛴다" >&2
+    st=1
+  else
+    echo "self-test: NUL 파일 OK (바이너리로 오인해 건너뛰지 않는다)"
+  fi
+
   rm -f "$ROOT/$probe"
   if ! bash "$0" >/dev/null 2>&1; then
     echo "self-test: FAIL — 위반을 치웠는데 게이트가 여전히 죽는다 (레포에 실제 위반이 있다)" >&2
@@ -122,7 +134,7 @@ echo "=== 1. 격리 (차단) ==="
 # `-H`는 파일명을 강제한다. xargs가 마지막 배치에 파일 하나만 넘기면 rg가 파일명을
 # 생략하고, 그러면 아래 파일 수 집계가 조용히 틀린다.
 iso_hits=$(printf '%s\n' "$isolation_files" | tr '\n' '\0' \
-  | xargs -0 rg -H -n -o -e "$HISTORY_FILE_RE" 2>/dev/null | sort -u || true)
+  | xargs -0 rg --text -H -n -o -e "$HISTORY_FILE_RE" 2>/dev/null | sort -u || true)
 if [ -n "$iso_hits" ]; then
   printf '%s\n' "$iso_hits" | sed 's/^/  /'
   n=$(printf '%s\n' "$iso_hits" | grep -c .)
@@ -137,7 +149,7 @@ fi
 echo "=== 2. dangling (차단) ==="
 # `...`이 든 경로는 문서가 형태를 보여주는 예시다 — 실재해야 할 포인터가 아니다.
 doc_refs=$(printf '%s\n' "$dangling_files" | tr '\n' '\0' \
-  | xargs -0 rg -o -I -e "$DOC_REF_RE" 2>/dev/null | grep -v '\.\.\.' | sort -u || true)
+  | xargs -0 rg --text -o -I -e "$DOC_REF_RE" 2>/dev/null | grep -v '\.\.\.' | sort -u || true)
 
 dangling=""
 while IFS= read -r ref; do
@@ -165,7 +177,7 @@ echo "=== 3. 과거 서사 (보고만) ==="
 # 현재의 사실을 서술할 수 없는 표지만 고른다: 각각이 "지금과 달랐다"를 주장한다.
 TENSE='예전에는|이전 판|기각됐|폐기됐|라운드 [0-9]|used to be|used to live|used to read|previously |an earlier |earlier revision|a review found|rejected in review|had been'
 tense_hits=$(printf '%s\n' "$isolation_files" | tr '\n' '\0' \
-  | xargs -0 rg -H -n -e "^[[:space:]]*(//|\*|#|>)" 2>/dev/null | rg -e "$TENSE" || true)
+  | xargs -0 rg --text -H -n -e "^[[:space:]]*(//|\*|#|>)" 2>/dev/null | rg -e "$TENSE" || true)
 if [ -n "$tense_hits" ]; then
   n=$(printf '%s\n' "$tense_hits" | grep -c .)
   printf '%s\n' "$tense_hits" | head -20 | sed 's/^/  /'
