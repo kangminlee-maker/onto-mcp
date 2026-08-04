@@ -20,9 +20,25 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
 
-# 런타임 = 배포되거나 빌드되는 것. 문서·이력·증거·CI 설정은 아니다.
-# `.onto/`의 계약은 npm 패키지에 실려 나가므로 런타임이다.
-RUNTIME_RE='^(src|bin|vendor|packaging)/|^\.onto/(authority|principles|processes|roles|domains)/|^package\.json$|^tsconfig.*\.json$'
+# 무엇이 맵을 낡게 만드는가는 `scripts/lib/active-paths.sh`가 소유한다 — G13과
+# 같은 파일을 읽어야 두 게이트가 같은 경로를 두고 다른 답을 내지 않는다.
+# shellcheck source=lib/active-paths.sh
+. "$ROOT/scripts/lib/active-paths.sh"
+RUNTIME_RE="$ONTO_MAP_TRIGGER_RE"
+
+# 변경 목록 취득. **실패를 삼키지 않는다.** `git diff`가 죽으면 빈 목록이 나오고,
+# 빈 목록은 "변경 없음"과 구분되지 않는다 — 그러면 해석 불가능한 범위가 초록이
+# 된다. 초록은 검사한 결과여야지 못 본 결과일 수 없다.
+acquire_changed() {
+  local range="$1" out rc
+  out="$(git diff --name-only "$range" 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf '%s\n' "$out" >&2
+    return 1
+  fi
+  printf '%s\n' "$out"
+  return 0
+}
 
 # 판정. 파일 목록만 받는다 — git을 부르지 않으므로 self-test가 레포를 건드리지
 # 않고도 이 함수를 falsifiable하게 검사할 수 있다.
@@ -89,21 +105,34 @@ if [ "${1:-}" = "--self-test" ]; then
   expect fail "런타임 + README만"  $'src/core-runtime/logger.ts\nREADME.md'
   expect pass "런타임 + 맵"        $'src/core-runtime/logger.ts\nIMPLEMENTATION_MAP.html'
   expect pass "런타임 + 둘 다"     $'src/core-runtime/logger.ts\nREADME.md\nIMPLEMENTATION_MAP.html'
-  expect pass "계약 아닌 .onto"    $'.onto/settings.json'
+  expect fail "설정 단독"          $'.onto/settings.json'
+  expect fail "집행 코드 단독"     $'scripts/check-push-currency.sh'
+  expect fail "훅 단독"            $'.githooks/pre-push'
   expect fail "계약 .onto 단독"    $'.onto/processes/review/record-contract.md'
   expect pass "문서만"             $'docs/architecture/repo-layout.md\ndevelopment-records/x.md'
-  expect pass "빈 범위"            ''
+  expect pass "유효 범위·변경 없음" ''
 
-  # 취득 경로가 살아 있는지 — 목록이 늘 비면 위 판정은 한 번도 쓰이지 않는다.
-  probe="$(git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -c . || true)"
-  if [ "${probe:-0}" -lt 1 ]; then
-    echo "self-test: FAIL — git diff 취득 경로가 빈 목록을 준다 (판정이 공허해진다)" >&2; st=1
+  # 취득 경로를 **실제 함수로** 양방향 확인한다. 유효 범위는 목록을 주고, 해석
+  # 불가능한 범위는 실패로 전파되어야 한다 — 후자가 조용히 빈 목록이 되면 위
+  # "변경 없음 → pass"가 그 구멍을 승인하는 장치로 바뀐다.
+  if out="$(acquire_changed 'HEAD~1..HEAD' 2>/dev/null)" && [ -n "$out" ]; then
+    echo "self-test: 취득(유효) OK ($(printf '%s\n' "$out" | grep -c .)개 파일)"
   else
-    echo "self-test: 취득 경로 OK (HEAD~1..HEAD 에서 ${probe}개 파일)"
+    echo "self-test: FAIL — 유효 범위인데 취득이 빈 목록/실패를 준다" >&2; st=1
+  fi
+  if acquire_changed 'onto-nonexistent-ref..HEAD' >/dev/null 2>&1; then
+    echo "self-test: FAIL — 해석 불가능한 범위인데 취득이 성공을 보고했다" >&2; st=1
+  else
+    echo "self-test: 취득(무효) OK (fail-closed)"
   fi
 
   exit "$st"
 fi
 
 RANGE="${1:-origin/main..HEAD}"
-verdict_for_files "$(git diff --name-only "$RANGE" 2>/dev/null)" "$RANGE"
+if ! changed="$(acquire_changed "$RANGE")"; then
+  echo "push-currency: FAILED — 범위 '$RANGE'를 해석할 수 없다."
+  echo "  검사하지 못한 것은 통과가 아니다. base가 없거나 ref가 사라졌는지 확인한다."
+  exit 2
+fi
+verdict_for_files "$changed" "$RANGE"

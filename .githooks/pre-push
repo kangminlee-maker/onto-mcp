@@ -16,8 +16,16 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue          # 브랜치 삭제
   if [ "$remote_sha" = "$ZERO" ]; then
     # 원격에 처음 올리는 브랜치: 머지될 base 기준으로 판정한다.
-    base="$(git merge-base origin/main "$local_sha" 2>/dev/null || echo '')"
-    [ -z "$base" ] && continue
+    #
+    # base를 못 구하면 건너뛰지 않는다 — 건너뛰기는 통과처럼 보이는데 실제로는
+    # 아무것도 검사하지 않은 것이다. origin/main을 fetch하지 않은 클론에서 정확히
+    # 그렇게 되고, 그 클론에서는 게이트가 영원히 조용하다.
+    if ! base="$(git merge-base origin/main "$local_sha" 2>/dev/null)" || [ -z "$base" ]; then
+      echo "pre-push: FAILED — origin/main 과의 merge-base를 구할 수 없다." >&2
+      echo "  검사하지 못한 것은 통과가 아니다. 'git fetch origin main' 후 다시 push 한다." >&2
+      fail=1
+      continue
+    fi
     range="$base..$local_sha"
   else
     range="$remote_sha..$local_sha"
