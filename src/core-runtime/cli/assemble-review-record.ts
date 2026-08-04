@@ -15,6 +15,7 @@ import type {
   SharedPhenomenonClaimRelation,
   SharedPhenomenonSummaryEntry,
 } from "../review/artifact-types.js";
+import { requireTerminalExecutionResult } from "../review/artifact-types.js";
 import { fileSha256IfPresent } from "../pipeline-execution-ledger.js";
 import {
   fileExists,
@@ -387,7 +388,13 @@ async function deriveRecordStatus(
   finalOutputPath: string,
 ): Promise<ReviewRecordStatus> {
   if (executionResult) {
-    return executionResult.execution_status;
+    // A record is a terminal artifact, so it cannot inherit a mid-run status.
+    // Before `running` existed the scaffold said `halted_partial`, and assembling
+    // against a still-executing session silently recorded the review as halted.
+    return requireTerminalExecutionResult(
+      executionResult,
+      `Review record assembly for session ${executionResult.session_id}`,
+    ).execution_status;
   }
 
   const finalOutputExists = await fileExists(finalOutputPath);
@@ -575,7 +582,12 @@ export async function runAssembleReviewRecordCli(
         !participatingLensIds.includes(lensId) && !degradedLensIds.includes(lensId),
     );
   const updatedAtSource = executionResult
-    ? Date.parse(executionResult.execution_completed_at)
+    ? Date.parse(
+        requireTerminalExecutionResult(
+          executionResult,
+          `Review record assembly for session ${sessionId}`,
+        ).execution_completed_at,
+      )
     : (await fs.stat(sessionRoot)).mtimeMs;
   if (synthesisExecuted) {
     await assertSynthesisDeliberationPerformed(synthesisPath);

@@ -75,10 +75,26 @@ export type ReviewActionCandidate =
   | "continue_review"
   | "retry_execution";
 export type DeliberationStatus = "performed" | "not_performed";
+/**
+ * Status of a review execution as recorded in `execution-result.yaml`.
+ *
+ * `running` is the only non-terminal value: the artifact is upserted mid-run, so
+ * it must be able to say "not finished" without borrowing a terminal word. It
+ * shares the token with the `ReviewRunResult.status` union so the artifact and
+ * the run handle speak one vocabulary. Terminal artifacts (ReviewRecord,
+ * degradation summary) take {@link ReviewTerminalExecutionStatus}, which excludes
+ * it — assembling a record from a `running` result fails loud.
+ */
 export type ReviewExecutionStatus =
+  | "running"
   | "completed"
   | "completed_with_degradation"
   | "halted_partial";
+/** Execution statuses a finished run can hold. Excludes the mid-run `running`. */
+export type ReviewTerminalExecutionStatus = Exclude<
+  ReviewExecutionStatus,
+  "running"
+>;
 export type ReviewUnitKind =
   | "lens"
   | "issue_artifact"
@@ -889,8 +905,14 @@ export interface ReviewExecutionResultArtifact {
   review_mode: ReviewMode;
   execution_status: ReviewExecutionStatus;
   execution_started_at: string;
-  execution_completed_at: string;
-  total_duration_ms: number;
+  /**
+   * Wall-clock completion stamp, or `null` while `execution_status` is
+   * `running`. A mid-run artifact has no completion time; stamping "now" made a
+   * still-executing run read as one that had already finished.
+   */
+  execution_completed_at: string | null;
+  /** Total wall-time, or `null` while `execution_status` is `running`. */
+  total_duration_ms: number | null;
   max_concurrent_lenses: number;
   observed_dispatch_width?: number;
   retry_policy: ReviewRetrySettings;
@@ -927,6 +949,46 @@ export interface ReviewExecutionResultArtifact {
   synthesis_map_execution_results?: ReviewUnitExecutionResult[];
 }
 
+/**
+ * A {@link ReviewExecutionResultArtifact} that has reached a terminal status, so
+ * its completion stamp and duration are populated.
+ */
+export interface ReviewTerminalExecutionResultArtifact
+  extends ReviewExecutionResultArtifact {
+  execution_status: ReviewTerminalExecutionStatus;
+  execution_completed_at: string;
+  total_duration_ms: number;
+}
+
+/**
+ * Gate for consumers that may only read a finished run — record assembly,
+ * degradation summaries, final-output rendering.
+ *
+ * `execution-result.yaml` is upserted mid-run, so a terminal consumer can be
+ * handed an artifact that is still executing. Reading one used to produce a
+ * plausible-looking terminal verdict from mid-run values; this refuses instead.
+ */
+export function requireTerminalExecutionResult(
+  artifact: ReviewExecutionResultArtifact,
+  context: string,
+): ReviewTerminalExecutionResultArtifact {
+  if (
+    artifact.execution_status === "running" ||
+    artifact.execution_completed_at === null ||
+    artifact.total_duration_ms === null
+  ) {
+    throw new Error(
+      `${context}: execution-result.yaml is still running (execution_status=${artifact.execution_status}); a terminal artifact cannot be derived from it. Poll onto_review_read until the run reaches a terminal status.`,
+    );
+  }
+  return {
+    ...artifact,
+    execution_status: artifact.execution_status,
+    execution_completed_at: artifact.execution_completed_at,
+    total_duration_ms: artifact.total_duration_ms,
+  };
+}
+
 export type ReviewDegradationKind =
   | "lens_degradation"
   | "halted_partial"
@@ -952,7 +1014,7 @@ export interface ReviewDegradationSummaryArtifact {
   created_at: string;
   source_execution_result_ref: string;
   source_error_log_ref: string | null;
-  execution_status: ReviewExecutionStatus;
+  execution_status: ReviewTerminalExecutionStatus;
   degradation_kinds: ReviewDegradationKind[];
   degraded_lens_ids: string[];
   excluded_lens_ids: string[];

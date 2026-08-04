@@ -699,6 +699,7 @@ worker route, which otherwise warns and silently falls back to its default.
 |---|---|
 | review session status | `prepared`, `running`, `completed`, `completed_with_degradation`, `halted_partial`, `failed`, `unknown` |
 | review run return status | `running`, `completed`, `completed_with_degradation`, `halted_partial` |
+| `execution-result.yaml` `execution_status` | `running`, `completed`, `completed_with_degradation`, `halted_partial` (`running` = upserted mid-run; `execution_completed_at`/`total_duration_ms` are null until it terminates) |
 | `ReviewRecord.record_status` | `completed`, `completed_with_degradation`, `halted_partial` |
 | deliberation status | `performed`, `not_performed` |
 | finding severity | `blocker`, `high`, `medium`, `low`, `info` |

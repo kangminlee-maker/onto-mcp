@@ -9,8 +9,10 @@ import type {
   ReviewIssueArtifactId,
   ReviewUnitExecutionResult,
 } from "./artifact-types.js";
+import { requireTerminalExecutionResult } from "./artifact-types.js";
 import type { ReviewContinuationUnit } from "./continuation-plan.js";
 import {
+  buildInitialExecutionResultScaffold,
   computeReviewFrontier,
   ensureUnitPacket,
   finalizeStageGate,
@@ -161,10 +163,14 @@ function lensOnlyExecutionResult(
   };
 }
 
+// The production seed, not a look-alike. A local fixture used to declare
+// `execution_status: "completed"` with the lens counters pre-filled — the exact
+// inverse of what the runtime writes — so no test ever exercised the real
+// mid-run shape and the artifact could contradict itself unnoticed.
 function scaffoldExecutionResult(
   plan: ReviewExecutionPlan,
 ): ReviewExecutionResultArtifact {
-  return { ...lensOnlyExecutionResult(plan), lens_execution_results: [] };
+  return buildInitialExecutionResultScaffold(plan);
 }
 
 function lensFrontierUnit(
@@ -383,6 +389,56 @@ describe("mergeUnitResultIntoExecutionResult", () => {
     expect(frontierIds).toContain("finding-ledger");
     expect(frontierIds).not.toContain("logic");
   });
+});
+
+// Regression: a mid-run execution-result read as a terminal one. Observed live
+// on 2026-08-04 (development-records/benchmark/20260804-review-interim-artifact)
+// — a session with nine completed lenses reported `halted_partial` /
+// `executed_lens_count: 0`, and was read as a dead review.
+describe("mid-run execution-result tells the truth about itself", () => {
+  it("says running, and its lens summary matches its own lens results", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+
+    let base: ReviewExecutionResultArtifact | undefined =
+      buildInitialExecutionResultScaffold(plan);
+    for (const seat of plan.lens_execution_seats) {
+      const unit = lensFrontierUnit(plan, seat.lens_id);
+      await writeOutput(unit.outputPath!);
+      const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+      await mergeUnitResultIntoExecutionResult({ sessionRoot: root, result, base });
+      base = undefined;
+    }
+
+    const onDisk = YAML.parse(
+      await fs.readFile(path.join(root, "execution-result.yaml"), "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    const completedLensIds = onDisk.lens_execution_results
+      .filter((result) => result.status === "completed")
+      .map((result) => result.unit_id);
+
+    // The subject set must be non-empty or every claim below passes vacuously.
+    expect(completedLensIds.length).toBeGreaterThan(0);
+    expect(onDisk.execution_status).toBe("running");
+    expect(onDisk.executed_lens_count).toBe(completedLensIds.length);
+    expect(onDisk.participating_lens_ids).toEqual(completedLensIds);
+    // No terminal stamps on a run that has not terminated.
+    expect(onDisk.execution_completed_at).toBeNull();
+    expect(onDisk.total_duration_ms).toBeNull();
+  });
+
+  it("refuses to yield a terminal projection while it is still running", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    expect(() =>
+      requireTerminalExecutionResult(
+        buildInitialExecutionResultScaffold(plan),
+        "test",
+      ),
+    ).toThrow(/still running/);
+  });
+
 });
 
 // Minimal-but-valid boundary fields so writeIssueArtifactPromptPacket can render

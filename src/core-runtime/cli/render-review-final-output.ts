@@ -11,6 +11,7 @@ import type {
   ReviewResultClassificationSummary,
   ReviewResultIssueProjection,
   ReviewSessionMetadata,
+  ReviewTerminalExecutionStatus,
 } from "../review/artifact-types.js";
 import type {
   ReviewSynthesisLedgerArtifact,
@@ -35,7 +36,12 @@ function requireString(
   return value;
 }
 
-const REVIEW_EXECUTION_STATUSES = new Set([
+/**
+ * Terminal statuses only — final output renders a finished run, so a mid-run
+ * `running` artifact must be rejected here rather than rendered as a result. The
+ * type binding keeps this set from drifting out of the artifact vocabulary.
+ */
+const REVIEW_EXECUTION_STATUSES = new Set<ReviewTerminalExecutionStatus>([
   "completed",
   "completed_with_degradation",
   "halted_partial",
@@ -115,7 +121,7 @@ function requireArtifactStringArray(
 function requireArtifactEnum(
   artifact: Record<string, unknown>,
   field: string,
-  allowedValues: Set<string>,
+  allowedValues: ReadonlySet<string>,
   artifactPath: string,
 ): string {
   const value = requireArtifactString(artifact, field, artifactPath);

@@ -43,6 +43,7 @@ import type {
   ReviewUnitExecutionResult,
   ReviewUnitFailureKind,
 } from "../review/artifact-types.js";
+import { requireTerminalExecutionResult } from "../review/artifact-types.js";
 import {
   appendMarkdownLogEntry,
   fileExists,
@@ -3016,15 +3017,21 @@ async function writeDegradationSummaryArtifact(
     await removeFileIfExists(summaryPath);
     return;
   }
+  // A degradation summary describes a finished run; every caller reaches here
+  // from a halt or final write.
+  const terminal = requireTerminalExecutionResult(
+    artifact,
+    `Degradation summary for session ${artifact.session_id}`,
+  );
   const summary: ReviewDegradationSummaryArtifact = {
     schema_version: "1",
     session_id: artifact.session_id,
-    created_at: artifact.execution_completed_at,
+    created_at: terminal.execution_completed_at,
     source_execution_result_ref: executionPlan.execution_result_path,
     source_error_log_ref: (await fileExists(executionPlan.error_log_path))
       ? executionPlan.error_log_path
       : null,
-    execution_status: artifact.execution_status,
+    execution_status: terminal.execution_status,
     degradation_kinds: degradationKinds,
     degraded_lens_ids: artifact.degraded_lens_ids,
     excluded_lens_ids: artifact.excluded_lens_ids,
