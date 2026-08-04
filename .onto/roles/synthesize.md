@@ -81,12 +81,7 @@ field 직렬화 형식은 `.onto/processes/review/synthesize-prompt-contract.md`
 
 output 의 section list · frontmatter · taxonomy alias map · deliberation_status 규칙 · field schema 는 모두 `.onto/processes/review/synthesize-prompt-contract.md` §5 Output Obligation 이 단독 canonical seat 이다. 본 role 문서는 해당 계약을 참조만 하며, 독자 enumerate 하지 않는다.
 
-## Reconstruct mode role shift
+## Scope
 
-reconstruct mode 에서는 resolved epsilon material (합의, 규칙 해소, adjudicator 해소, 강제 방향) 을 통합 탐색 지시로 구성한다.
-
-- **공통 불변 규칙 (review / reconstruct 양쪽)**: 비발명 원칙, participation completeness 측정, adjudication boundary, provenance obligation, preserved-material-only rule. 이들은 review / reconstruct 에서 동일하게 유지된다
-- **review 고유 obligation**: §Output obligation 의 12 section 집합, deliberation_status frontmatter, axiology proposal 전용 slot
-- **reconstruct 고유 obligation**: 입력이 탐색 방향 epsilon, 출력이 탐색 지시. review 의 12 section schema 는 적용되지 않으며, reconstruct 전용 output contract 가 별도 authority 를 가진다
-
-review mode 와 reconstruct mode 의 차이는 본 role 문서의 "adjudication boundary 조건" 과 "provenance obligation field" 에는 영향을 주지 않는다.
+본 role 문서는 review 의 `종합 단계 (synthesize)` prompt 로만 materialize 된다.
+다른 실행 경로의 obligation 은 여기 적지 않는다.
