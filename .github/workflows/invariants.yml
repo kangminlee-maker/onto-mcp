@@ -56,6 +56,10 @@ jobs:
         run: bash scripts/check-push-currency.sh --self-test
       - name: G15 push-currency (런타임을 바꾸면 IMPLEMENTATION_MAP.html도 옮긴다)
         run: bash scripts/check-push-currency.sh "origin/${{ github.base_ref }}...HEAD"
+      - name: G16 history-append-only self-test (게이트가 실패할 수 있는지 먼저 증명)
+        run: bash scripts/check-history-append-only.sh --self-test
+      - name: G16 history-append-only (이력은 고쳐 쓰지 않는다)
+        run: bash scripts/check-history-append-only.sh "origin/${{ github.base_ref }}...HEAD"
       - name: Full vitest suite (unit + integration merge gate)
         # vitest.config include set; superset of the G3 invariant subset above.
         # Live/benchmark scripts (npm test, benchmark:*) stay out — they need credentials.

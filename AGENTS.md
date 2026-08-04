@@ -40,6 +40,43 @@
 
 > 위 규칙들의 구조적 강제(가드)는 [docs/architecture/structural-guardrails-enforcement.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/structural-guardrails-enforcement.md)를 따른다. G1~G6 구현 완료 — 실행 명령·불변식 매핑은 [INVARIANTS.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/INVARIANTS.md) §강제 수단 구현 현황. 빠른 일괄 확인: `npm run check:invariant-drift`.
 
+### 레포 운영 규칙 — 문서가 아니라 게이트가 강제한다
+
+**규칙 1. 활성 런타임은 현재만 말한다.** 이력·설계 서사·핸드오프·기각된 대안은
+`development-records/`에만 산다. 활성 런타임(`src/`·`.onto/`·`docs/`)은 그 안의
+파일을 가리키지 않는다. 폴더 이름을 부르는 것은 레포의 모양을 서술하는 일이라
+허용되고, 폴더 안 파일을 가리키는 것은 독자를 낡은 설계로 보내는 포인터라 막힌다.
+활성 문서가 근거로 인용해야 할 실행 기록은 `evidence/`로 승격한다. `README.md`·
+`AGENTS.md`·`CLAUDE.md`·`IMPLEMENTATION_MAP.html`·`repo-layout.md`는 지도라서
+격리 검사에서 빠지되 죽은 링크 검사에는 포함된다. → **G13**
+
+**하위 호환은 코드가 보장하는 것이지 주석이 보장하는 것이 아니다.** 어떤 입력을
+계속 받아야 한다면 그것을 받는 코드와 그것을 고정하는 테스트가 있어야 한다.
+"예전 형식도 받는다"고 적은 주석은 보장이 아니라 주장이다.
+
+**규칙 2. 이력은 고쳐 쓰지 않는다 — 매번 새로 쓴다.** 핸드오프 갱신은 언제나 새
+파일이다: `development-records/handoff/<YYYY-MM-DD>T<HHMM>--<short-sha>--<슬러그>.md`,
+머리에 `created_at`·`head`·`branch`·`kind`(있으면 `supersedes`). 한 파일을 계속
+고치면 "언제 기준의 진실인가"가 사라지고, 그 파일은 항상 최신인 척하면서 어느
+시점의 것도 아니게 된다. 기존 112개는 소급해 고치지 않는다 — 규약은 다음
+핸드오프부터 선다. → **G16**
+
+**규칙 3. 런타임을 바꾸는 push는 현재 상태 문서를 함께 옮긴다.**
+`IMPLEMENTATION_MAP.html`은 지금 무엇이 켜져 있고 무엇이 판단을 기다리는지에
+답한다. 검사는 "잘 고쳤는가"가 아니라 "잊지 않았는가"를 본다 — 한 글자만 바꿔도
+통과한다. `README.md`는 비차단 알림이다. 클론마다 한 번
+`git config core.hooksPath .githooks`. → **G15**
+
+**주석에는 지금 성립하는 것만 적는다** — 자명하지 않은 현재 동작, 불변식, 제약,
+지금도 유효한 위험. 기각된 대안을 지우라는 뜻이 아니다. 같은 실수가 돌아오는 것을
+막는 지식은 유지하되 **과거형 서사를 현재형 제약으로 바꿔 적는다.** 제약은 현재의
+사실이고 서사는 아니다.
+
+**커밋 전에는 `npm run gate` 하나를 돌린다.** 초록이 아니면 커밋하지 않는다.
+게이트는 자기 self-test를 본 검사보다 먼저 돌린다 — 심은 위반에 죽는 것을 보이기
+전에는 그 초록을 세지 않는다. 차단은 결정 가능한 위반에만 건다. 휴리스틱으로
+차단하면 다들 게이트를 우회하는 법부터 배운다.
+
 ---
 
 ## 1. Position
