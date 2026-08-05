@@ -203,6 +203,75 @@ describe("runRenderReviewFinalOutputCli", () => {
     }
   });
 
+  // Wiring guard. The renderer is documented as one of the terminal consumers
+  // that go through `requireTerminalExecutionResult`, and documentation is not a
+  // guarantee: dropping that call type-checks (the return is a cast) and, before
+  // this test, left the whole suite green. Without a check here the code can
+  // silently stop matching what mcp-native-tool-surface.md claims about it.
+  it("refuses to render final output from a mid-run execution-result", async () => {
+    const sessionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-final-output-"));
+    const finalOutputPath = path.join(sessionRoot, "final-output.md");
+    try {
+      fs.writeFileSync(
+        path.join(sessionRoot, "binding.yaml"),
+        [
+          "session_id: test-session",
+          "resolved_lens_set: [logic]",
+          `execution_result_path: ${JSON.stringify(path.join(sessionRoot, "execution-result.yaml"))}`,
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      fs.writeFileSync(
+        path.join(sessionRoot, "session-metadata.yaml"),
+        "session_id: test-session\ncreated_at: 2026-06-06T00:00:00.000Z\n",
+        "utf8",
+      );
+      // Exactly what the runtime upserts while lenses are still executing.
+      fs.writeFileSync(
+        path.join(sessionRoot, "execution-result.yaml"),
+        [
+          "session_id: test-session",
+          `session_root: ${JSON.stringify(sessionRoot)}`,
+          "execution_realization: worker",
+          "host_runtime: openai",
+          "review_mode: full",
+          "execution_status: running",
+          'execution_started_at: "2026-06-06T00:00:00.000Z"',
+          "execution_completed_at: null",
+          "total_duration_ms: null",
+          "max_concurrent_lenses: 1",
+          "retry_policy:",
+          "  lens_max_retries: 10",
+          "  issue_artifact_max_retries: 1",
+          "  deliberation_max_retries: 10",
+          "  synthesis_max_retries: 1",
+          "  retry_initial_delay_ms: 8000",
+          "planned_lens_ids: [logic]",
+          "participating_lens_ids: [logic]",
+          "degraded_lens_ids: []",
+          "excluded_lens_ids: []",
+          "executed_lens_count: 1",
+          "synthesis_executed: false",
+          "error_log_path: error-log.md",
+          "lens_execution_results: []",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      await expect(
+        runRenderReviewFinalOutputCli([
+          "--project-root", sessionRoot,
+          "--session-root", sessionRoot,
+        ]),
+      ).rejects.toThrow("execution_status=running");
+      expect(fs.existsSync(finalOutputPath)).toBe(false);
+    } finally {
+      fs.rmSync(sessionRoot, { recursive: true, force: true });
+    }
+  });
+
   it("renders actual sidecar lens refs and preserves boundary fallback notes", async () => {
     const sessionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-final-output-"));
     const finalOutputPath = path.join(sessionRoot, "final-output.md");
