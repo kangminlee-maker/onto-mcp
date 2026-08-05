@@ -1212,6 +1212,14 @@ async function finalizeHostExecutionResultIfComplete(
     .map((unit) => unit.unitId);
   const completedAt = isoNow();
   const startedAtMs = Date.parse(existing.execution_started_at);
+  if (!Number.isFinite(startedAtMs)) {
+    // Falling back to 0 here would re-create the very evidence this artifact was
+    // repaired to stop producing: a plausible-looking duration that no reader can
+    // tell apart from a real one, and that the terminal gate would accept.
+    throw new Error(
+      `finalizeHostExecutionResultIfComplete: execution-result.yaml has an unparseable execution_started_at (${JSON.stringify(existing.execution_started_at)}) in ${sessionRoot}; refusing to promote it to completed with a fabricated duration.`,
+    );
+  }
   await writeYamlDocument(resultPath, {
     ...existing,
     execution_status: "completed",
@@ -1219,9 +1227,7 @@ async function finalizeHostExecutionResultIfComplete(
     // Real wall-time across the host rounds. The scaffold no longer pre-fills a
     // duration, so a missed stamp here fails the terminal artifact validator
     // instead of silently recording every host run as 0 ms.
-    total_duration_ms: Number.isFinite(startedAtMs)
-      ? Math.max(0, Date.parse(completedAt) - startedAtMs)
-      : 0,
+    total_duration_ms: Math.max(0, Date.parse(completedAt) - startedAtMs),
     participating_lens_ids: trustedLensIds,
     executed_lens_count: trustedLensIds.length,
     synthesis_executed: true,

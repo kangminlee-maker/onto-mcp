@@ -11,7 +11,11 @@ import type {
   ReviewResultClassificationSummary,
   ReviewResultIssueProjection,
   ReviewSessionMetadata,
-  ReviewTerminalExecutionStatus,
+  ReviewTerminalExecutionResultArtifact,
+} from "../review/artifact-types.js";
+import {
+  REVIEW_EXECUTION_STATUS_VALUES,
+  requireTerminalExecutionResult,
 } from "../review/artifact-types.js";
 import type {
   ReviewSynthesisLedgerArtifact,
@@ -35,17 +39,6 @@ function requireString(
   }
   return value;
 }
-
-/**
- * Terminal statuses only — final output renders a finished run, so a mid-run
- * `running` artifact must be rejected here rather than rendered as a result. The
- * type binding keeps this set from drifting out of the artifact vocabulary.
- */
-const REVIEW_EXECUTION_STATUSES = new Set<ReviewTerminalExecutionStatus>([
-  "completed",
-  "completed_with_degradation",
-  "halted_partial",
-]);
 
 const REVIEW_EXECUTION_REALIZATIONS = new Set(["worker", "direct-call"]);
 const REVIEW_HOST_RUNTIMES = new Set([
@@ -153,10 +146,20 @@ function validateReviewRetryPolicy(
   }
 }
 
+/**
+ * Shape-check the artifact, then hand the terminal decision to the shared gate.
+ *
+ * Final output renders a finished run. The shape check accepts the whole status
+ * vocabulary and the nullable completion fields so a mid-run artifact produces
+ * "still running" rather than a misleading "execution_completed_at must be a
+ * non-empty string"; {@link requireTerminalExecutionResult} then refuses it.
+ * Enumerating the terminal subset here instead would put a second, narrower copy
+ * of the vocabulary in the tree and let the two drift.
+ */
 function validateReviewExecutionResultArtifact(
   value: unknown,
   artifactPath: string,
-): ReviewExecutionResultArtifact {
+): ReviewTerminalExecutionResultArtifact {
   if (!isRecord(value)) {
     throw new Error(
       `Malformed execution result artifact: ${artifactPath}: root must be a YAML mapping.`,
@@ -175,12 +178,16 @@ function validateReviewExecutionResultArtifact(
   requireArtifactEnum(
     value,
     "execution_status",
-    REVIEW_EXECUTION_STATUSES,
+    REVIEW_EXECUTION_STATUS_VALUES,
     artifactPath,
   );
   requireArtifactString(value, "execution_started_at", artifactPath);
-  requireArtifactString(value, "execution_completed_at", artifactPath);
-  requireArtifactNumber(value, "total_duration_ms", artifactPath);
+  if (value.execution_completed_at !== null) {
+    requireArtifactString(value, "execution_completed_at", artifactPath);
+  }
+  if (value.total_duration_ms !== null) {
+    requireArtifactNumber(value, "total_duration_ms", artifactPath);
+  }
   requireArtifactNumber(value, "max_concurrent_lenses", artifactPath);
   if (value.observed_dispatch_width !== undefined) {
     requireArtifactNumber(value, "observed_dispatch_width", artifactPath);
@@ -203,7 +210,10 @@ function validateReviewExecutionResultArtifact(
       `Malformed execution result artifact: ${artifactPath}: synthesize_execution_result must be present when synthesis_executed=true.`,
     );
   }
-  return value as unknown as ReviewExecutionResultArtifact;
+  return requireTerminalExecutionResult(
+    value as unknown as ReviewExecutionResultArtifact,
+    `Malformed execution result artifact: ${artifactPath}`,
+  );
 }
 
 const EMPTY_BOUNDARY_NOTE_PATTERN =

@@ -450,8 +450,32 @@ describe("mid-run execution-result tells the truth about itself", () => {
         buildInitialExecutionResultScaffold(plan),
         "test",
       ),
-    ).toThrow(/still running/);
+    ).toThrow(/execution_status=running/);
   });
+
+  // A terminal status with no completion stamp is a different failure from a run
+  // still in flight, and one diagnosis for both told the operator to poll a
+  // `completed` artifact until it terminated.
+  it("names the missing stamps instead of calling a completed artifact running", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    const malformed: ReviewExecutionResultArtifact = {
+      ...buildInitialExecutionResultScaffold(plan),
+      execution_status: "completed",
+    };
+    expect(() => requireTerminalExecutionResult(malformed, "test")).toThrow(
+      /execution_completed_at and total_duration_ms null/,
+    );
+    expect(() => requireTerminalExecutionResult(malformed, "test")).not.toThrow(
+      /still running|execution_status=running/,
+    );
+  });
+
+  // The sibling refusal — finalizeHostExecutionResultIfComplete throwing on an
+  // unparseable `execution_started_at` rather than fabricating a 0 ms duration —
+  // is only reachable once the whole host ledger converges, so no proportionate
+  // unit test drives it. It is a defensive branch: our own writers always stamp
+  // that field through isoNow()/isoFromTimestamp().
 
 });
 

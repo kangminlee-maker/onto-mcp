@@ -95,6 +95,17 @@ export type ReviewTerminalExecutionStatus = Exclude<
   ReviewExecutionStatus,
   "running"
 >;
+
+/**
+ * Runtime membership for {@link ReviewExecutionStatus}. Artifact validators read
+ * this rather than restating the vocabulary — a second enumeration is how a
+ * validator silently becomes narrower than the type it claims to check.
+ * Terminal-ness is decided by {@link requireTerminalExecutionResult}, not by a
+ * narrower copy of this set.
+ */
+export const REVIEW_EXECUTION_STATUS_VALUES: ReadonlySet<string> = new Set<
+  ReviewExecutionStatus
+>(["running", "completed", "completed_with_degradation", "halted_partial"]);
 export type ReviewUnitKind =
   | "lens"
   | "issue_artifact"
@@ -972,20 +983,30 @@ export function requireTerminalExecutionResult(
   artifact: ReviewExecutionResultArtifact,
   context: string,
 ): ReviewTerminalExecutionResultArtifact {
-  if (
-    artifact.execution_status === "running" ||
-    artifact.execution_completed_at === null ||
-    artifact.total_duration_ms === null
-  ) {
+  // Two different failures, two different diagnoses. Collapsing them told the
+  // operator a `completed` artifact was "still running" and to keep polling —
+  // untrue, and no amount of polling repairs a missing stamp.
+  if (artifact.execution_status === "running") {
     throw new Error(
-      `${context}: execution-result.yaml is still running (execution_status=${artifact.execution_status}); a terminal artifact cannot be derived from it. Poll onto_review_read until the run reaches a terminal status.`,
+      `${context}: execution-result.yaml reports execution_status=running; a terminal artifact cannot be derived from a run in progress. Poll onto_review_read until the run reaches a terminal status.`,
+    );
+  }
+  const completedAt = artifact.execution_completed_at;
+  const durationMs = artifact.total_duration_ms;
+  if (completedAt === null || durationMs === null) {
+    const missing = [
+      completedAt === null ? "execution_completed_at" : null,
+      durationMs === null ? "total_duration_ms" : null,
+    ].filter((field): field is string => field !== null);
+    throw new Error(
+      `${context}: execution-result.yaml declares execution_status=${artifact.execution_status} but leaves ${missing.join(" and ")} null. A terminal artifact must carry its completion stamp; the writer that set the status did not finish the record.`,
     );
   }
   return {
     ...artifact,
     execution_status: artifact.execution_status,
-    execution_completed_at: artifact.execution_completed_at,
-    total_duration_ms: artifact.total_duration_ms,
+    execution_completed_at: completedAt,
+    total_duration_ms: durationMs,
   };
 }
 
