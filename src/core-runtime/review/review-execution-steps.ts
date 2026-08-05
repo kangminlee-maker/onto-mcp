@@ -1327,11 +1327,13 @@ export async function reviewRound(
  * The artifact is upserted mid-run, so every field here must be readable as
  * "not finished": `running` status, and no completion stamp or duration.
  *
- * `executionStartedAtMs` is the run's real start. The onto path (A) seeds this
- * scaffold after the lens phase and must pass it, or the artifact would date the
- * run from the seed and understate elapsed time by the whole lens phase — the
- * progress projection reads this field as the session start. The host path (B)
- * seeds on its first advance, where "now" is the start.
+ * `executionStartedAtMs` is the run's real start; neither path may seed it from
+ * "now", because neither seeds at the start. The onto path (A) seeds after the
+ * lens phase and passes its own start. The host path (B) seeds on its first
+ * *advance* — which the host only calls after executing the first round's units —
+ * so it passes the session boundary instead. Seeding from `isoNow()` here would
+ * drop that round's real LLM work out of `total_duration_ms`, and the progress
+ * projection reads this field as the session start.
  */
 export function buildInitialExecutionResultScaffold(
   plan: ReviewExecutionPlan,
@@ -1392,8 +1394,17 @@ export async function reviewAdvance(
     frontier.frontierUnits.map((unit) => [unit.unitId, unit]),
   );
 
+  // The host already ran this round's units before calling advance, so the
+  // session boundary — not "now" — is the earliest defensible start.
+  const sessionStartedAtMs = Date.parse(
+    (await loadSessionMetadata(plan)).created_at,
+  );
   let base: ReviewExecutionResultArtifact | undefined =
-    opts?.base ?? buildInitialExecutionResultScaffold(plan);
+    opts?.base ??
+    buildInitialExecutionResultScaffold(
+      plan,
+      Number.isFinite(sessionStartedAtMs) ? sessionStartedAtMs : undefined,
+    );
   for (const unitId of executed) {
     const unit = frontierById.get(unitId);
     if (!unit) {
@@ -1418,5 +1429,41 @@ export async function reviewAdvance(
   await ensureDeliberationMarkdownProjection(sessionRoot, plan);
   await runRuntimeFixedPoint(sessionRoot, plan);
   await finalizeHostExecutionResultIfComplete(sessionRoot, plan);
-  return computeRoundResult(sessionRoot, plan);
+  const round = await computeRoundResult(sessionRoot, plan);
+  if (round.status === "halted") {
+    await finalizeHostExecutionResultAsHalted(sessionRoot, round.reason);
+  }
+  return round;
+}
+
+/**
+ * Close a halted host (B) run through the artifact, not just the return value.
+ *
+ * `computeRoundResult` tells the caller it halted, but that verdict used to
+ * reach no writer. While the scaffold said `halted_partial` the gap was hidden —
+ * the durable status ladder in `getReviewStatus` reads
+ * `execution_status === "halted_partial"` and matched by accident. With an honest
+ * `running` scaffold the same session falls through that rung and reports as
+ * running forever, so the halt has to be written down.
+ */
+async function finalizeHostExecutionResultAsHalted(
+  sessionRoot: string,
+  reason: string,
+): Promise<void> {
+  const resultPath = executionResultPath(sessionRoot);
+  const existing =
+    await readOptionalYamlArtifact<ReviewExecutionResultArtifact>(resultPath);
+  if (!existing || existing.execution_status !== "running") return;
+  const completedAt = isoNow();
+  const startedAtMs = Date.parse(existing.execution_started_at);
+  await writeYamlDocument(resultPath, {
+    ...existing,
+    execution_status: "halted_partial",
+    execution_completed_at: completedAt,
+    total_duration_ms: Number.isFinite(startedAtMs)
+      ? Math.max(0, Date.parse(completedAt) - startedAtMs)
+      : 0,
+    halt_reason: reason,
+    halt_phase: "host_round_frontier",
+  });
 }

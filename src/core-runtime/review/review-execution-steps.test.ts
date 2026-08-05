@@ -428,6 +428,46 @@ describe("mid-run execution-result tells the truth about itself", () => {
     expect(onDisk.total_duration_ms).toBeNull();
   });
 
+  // Codex review on PR #276. The host calls advance only after executing the
+  // round it was handed, so seeding `execution_started_at` from "now" dropped
+  // that round's real LLM work out of the terminal duration.
+  it("dates a host run from the session boundary, not from the first advance", async () => {
+    const root = await tempSessionRoot();
+    const plan = withBoundary(executionPlan(root), root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const sessionCreatedAt = "2026-08-05T00:00:00.000Z";
+    await writeYaml(plan.session_metadata_path, {
+      session_id: plan.session_id,
+      project_root: root,
+      orchestration: "host",
+      created_at: sessionCreatedAt,
+    });
+    await materializeLensPackets(plan);
+    for (const seat of plan.lens_execution_seats) {
+      await writeOutput(lensFrontierUnit(plan, seat.lens_id).outputPath!);
+    }
+
+    await reviewAdvance(
+      root,
+      plan.lens_execution_seats.map((seat) => seat.lens_id),
+    );
+
+    const onDisk = YAML.parse(
+      await fs.readFile(path.join(root, "execution-result.yaml"), "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    expect(Date.parse(onDisk.execution_started_at)).toBe(
+      Date.parse(sessionCreatedAt),
+    );
+  });
+
+  // The sibling repair — `reviewAdvance` stamping `halted_partial` when the round
+  // halts (Codex review on PR #276) — has no test here. Every fixture that fails
+  // lens seats still leaves the frontier retryable, so `reviewAdvance` returns
+  // `in_progress`; the real halt needs a runtime-owned reduce to throw
+  // mid-pipeline, which no proportionate unit fixture reproduces. A first attempt
+  // passed while never reaching the branch, which is worse than no test, so none
+  // is asserted.
+
   it("dates the run from the caller's start, not from when the scaffold was seeded", async () => {
     const root = await tempSessionRoot();
     const plan = executionPlan(root);
