@@ -12,6 +12,7 @@ import type {
   ReviewExecutionResultArtifact,
   ReviewRecord,
   ReviewRecordStatus,
+  ReviewTerminalExecutionResultArtifact,
   SharedPhenomenonClaimRelation,
   SharedPhenomenonSummaryEntry,
 } from "../review/artifact-types.js";
@@ -383,18 +384,13 @@ async function summarizeErrorLog(errorLogPath: string): Promise<ErrorLogSummary>
 }
 
 async function deriveRecordStatus(
-  executionResult: ReviewExecutionResultArtifact | null,
+  executionResult: ReviewTerminalExecutionResultArtifact | null,
   errorLogSummary: ErrorLogSummary,
   finalOutputPath: string,
 ): Promise<ReviewRecordStatus> {
+  // Already admitted through the terminal gate by the caller.
   if (executionResult) {
-    // A record is a terminal artifact, so it cannot inherit a mid-run status.
-    // Before `running` existed the scaffold said `halted_partial`, and assembling
-    // against a still-executing session silently recorded the review as halted.
-    return requireTerminalExecutionResult(
-      executionResult,
-      `Review record assembly for session ${executionResult.session_id}`,
-    ).execution_status;
+    return executionResult.execution_status;
   }
 
   const finalOutputExists = await fileExists(finalOutputPath);
@@ -512,8 +508,14 @@ export async function runAssembleReviewRecordCli(
 
   const invocationBindingArtifact =
     await readYamlDocument<InvocationBindingArtifact>(bindingPath);
-  const executionResult = await readYamlDocument<ReviewExecutionResultArtifact>(
-    executionResultPath,
+  // A record is a terminal artifact, so the execution result is admitted through
+  // the terminal gate once, here, and every downstream use reads the narrowed
+  // value. Before `running` existed the scaffold said `halted_partial`, and
+  // assembling against a still-executing session silently recorded the review as
+  // halted.
+  const executionResult = requireTerminalExecutionResult(
+    await readYamlDocument<ReviewExecutionResultArtifact>(executionResultPath),
+    `Review record assembly for session ${sessionId}`,
   );
   const synthesisExecuted = executionResult.synthesis_executed === true;
   if (synthesisExecuted) {
@@ -582,12 +584,7 @@ export async function runAssembleReviewRecordCli(
         !participatingLensIds.includes(lensId) && !degradedLensIds.includes(lensId),
     );
   const updatedAtSource = executionResult
-    ? Date.parse(
-        requireTerminalExecutionResult(
-          executionResult,
-          `Review record assembly for session ${sessionId}`,
-        ).execution_completed_at,
-      )
+    ? Date.parse(executionResult.execution_completed_at)
     : (await fs.stat(sessionRoot)).mtimeMs;
   if (synthesisExecuted) {
     await assertSynthesisDeliberationPerformed(synthesisPath);

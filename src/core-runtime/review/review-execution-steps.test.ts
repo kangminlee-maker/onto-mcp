@@ -453,6 +453,42 @@ describe("mid-run execution-result tells the truth about itself", () => {
     ).toThrow(/execution_status=running/);
   });
 
+  // The happy path only proves completed lenses land in `participating`. A failed
+  // seat must land in `degraded` and stay out of the count, or the derived summary
+  // contradicts the same file's `lens_execution_results` in the other direction.
+  it("routes a failed lens seat to degraded, not participating", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+
+    let base: ReviewExecutionResultArtifact | undefined =
+      buildInitialExecutionResultScaffold(plan);
+    const [good, bad] = plan.lens_execution_seats;
+    // One seat written, one left missing so its validation fails for real.
+    await writeOutput(lensFrontierUnit(plan, good!.lens_id).outputPath!);
+    for (const seat of [good!, bad!]) {
+      const result = await validateUnitSeatToResult({
+        sessionRoot: root,
+        unit: lensFrontierUnit(plan, seat.lens_id),
+      });
+      await mergeUnitResultIntoExecutionResult({ sessionRoot: root, result, base });
+      base = undefined;
+    }
+
+    const onDisk = YAML.parse(
+      await fs.readFile(path.join(root, "execution-result.yaml"), "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    expect(
+      onDisk.lens_execution_results.filter((r) => r.status === "failed"),
+    ).toHaveLength(1);
+    expect(onDisk.participating_lens_ids).toEqual([good!.lens_id]);
+    expect(onDisk.degraded_lens_ids).toEqual([bad!.lens_id]);
+    expect(onDisk.executed_lens_count).toBe(1);
+    // A pending lens is not an excluded one — that verdict belongs to the
+    // terminal writers, so mid-run this stays empty.
+    expect(onDisk.excluded_lens_ids).toEqual([]);
+  });
+
   // A terminal status with no completion stamp is a different failure from a run
   // still in flight, and one diagnosis for both told the operator to poll a
   // `completed` artifact until it terminated.
@@ -464,7 +500,7 @@ describe("mid-run execution-result tells the truth about itself", () => {
       execution_status: "completed",
     };
     expect(() => requireTerminalExecutionResult(malformed, "test")).toThrow(
-      /execution_completed_at and total_duration_ms null/,
+      /completion record is unusable — execution_completed_at \(null\) and total_duration_ms \(null\)/,
     );
     expect(() => requireTerminalExecutionResult(malformed, "test")).not.toThrow(
       /still running|execution_status=running/,

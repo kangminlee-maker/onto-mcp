@@ -3010,6 +3010,13 @@ async function writeDegradationSummaryArtifact(
   executionPlan: ReviewExecutionPlan,
   artifact: ReviewExecutionResultArtifact,
 ): Promise<void> {
+  // A degradation summary describes a finished run; every caller reaches here
+  // from a halt or final write. The gate runs before the no-degradation branch
+  // so a mid-run artifact cannot delete a prior summary on the way past.
+  const terminal = requireTerminalExecutionResult(
+    artifact,
+    `Degradation summary for session ${artifact.session_id}`,
+  );
   const summaryPath = degradationSummaryPathForSession(executionPlan.session_root);
   const failedUnits = collectFailedUnits(artifact);
   const degradationKinds = degradationKindsFor(artifact, failedUnits);
@@ -3017,12 +3024,6 @@ async function writeDegradationSummaryArtifact(
     await removeFileIfExists(summaryPath);
     return;
   }
-  // A degradation summary describes a finished run; every caller reaches here
-  // from a halt or final write.
-  const terminal = requireTerminalExecutionResult(
-    artifact,
-    `Degradation summary for session ${artifact.session_id}`,
-  );
   const summary: ReviewDegradationSummaryArtifact = {
     schema_version: "1",
     session_id: artifact.session_id,

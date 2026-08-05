@@ -103,9 +103,17 @@ export type ReviewTerminalExecutionStatus = Exclude<
  * Terminal-ness is decided by {@link requireTerminalExecutionResult}, not by a
  * narrower copy of this set.
  */
-export const REVIEW_EXECUTION_STATUS_VALUES: ReadonlySet<string> = new Set<
-  ReviewExecutionStatus
->(["running", "completed", "completed_with_degradation", "halted_partial"]);
+export const REVIEW_EXECUTION_STATUS_VALUES: ReadonlySet<string> = new Set(
+  // Keyed by the union so adding a status without listing it here is a compile
+  // error. A bare literal array would have let the set silently fall behind the
+  // type it claims to enumerate.
+  Object.keys({
+    running: true,
+    completed: true,
+    completed_with_degradation: true,
+    halted_partial: true,
+  } satisfies Record<ReviewExecutionStatus, true>),
+);
 export type ReviewUnitKind =
   | "lens"
   | "issue_artifact"
@@ -978,35 +986,51 @@ export interface ReviewTerminalExecutionResultArtifact
  * `execution-result.yaml` is upserted mid-run, so a terminal consumer can be
  * handed an artifact that is still executing. Reading one used to produce a
  * plausible-looking terminal verdict from mid-run values; this refuses instead.
+ *
+ * Callers hand this parsed YAML that TypeScript only *claims* has the artifact
+ * shape (`readOptionalYaml<T>` is an unchecked cast), so the fields it narrows
+ * are checked at runtime rather than trusted. Absence is checked as well as
+ * `null`: a dropped key arrives as `undefined`, which `=== null` does not catch,
+ * and used to sail through as a `string` that `Date.parse` turned into NaN.
  */
 export function requireTerminalExecutionResult(
   artifact: ReviewExecutionResultArtifact,
   context: string,
 ): ReviewTerminalExecutionResultArtifact {
+  const status: unknown = artifact.execution_status;
+  if (typeof status !== "string" || !REVIEW_EXECUTION_STATUS_VALUES.has(status)) {
+    throw new Error(
+      `${context}: execution-result.yaml has an unusable execution_status (${JSON.stringify(status)}); expected one of ${[...REVIEW_EXECUTION_STATUS_VALUES].join(", ")}.`,
+    );
+  }
   // Two different failures, two different diagnoses. Collapsing them told the
   // operator a `completed` artifact was "still running" and to keep polling —
   // untrue, and no amount of polling repairs a missing stamp.
-  if (artifact.execution_status === "running") {
+  if (status === "running") {
     throw new Error(
       `${context}: execution-result.yaml reports execution_status=running; a terminal artifact cannot be derived from a run in progress. Poll onto_review_read until the run reaches a terminal status.`,
     );
   }
-  const completedAt = artifact.execution_completed_at;
-  const durationMs = artifact.total_duration_ms;
-  if (completedAt === null || durationMs === null) {
-    const missing = [
-      completedAt === null ? "execution_completed_at" : null,
-      durationMs === null ? "total_duration_ms" : null,
-    ].filter((field): field is string => field !== null);
+  const completedAt: unknown = artifact.execution_completed_at;
+  const durationMs: unknown = artifact.total_duration_ms;
+  const unusable = [
+    typeof completedAt === "string" && completedAt.length > 0
+      ? null
+      : `execution_completed_at (${JSON.stringify(completedAt)})`,
+    typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs >= 0
+      ? null
+      : `total_duration_ms (${JSON.stringify(durationMs)})`,
+  ].filter((field): field is string => field !== null);
+  if (unusable.length > 0) {
     throw new Error(
-      `${context}: execution-result.yaml declares execution_status=${artifact.execution_status} but leaves ${missing.join(" and ")} null. A terminal artifact must carry its completion stamp; the writer that set the status did not finish the record.`,
+      `${context}: execution-result.yaml declares execution_status=${status} but its completion record is unusable — ${unusable.join(" and ")}. A terminal artifact must carry its completion stamp; the writer that set the status did not finish the record.`,
     );
   }
   return {
     ...artifact,
-    execution_status: artifact.execution_status,
-    execution_completed_at: completedAt,
-    total_duration_ms: durationMs,
+    execution_status: status as ReviewTerminalExecutionStatus,
+    execution_completed_at: completedAt as string,
+    total_duration_ms: durationMs as number,
   };
 }
 
