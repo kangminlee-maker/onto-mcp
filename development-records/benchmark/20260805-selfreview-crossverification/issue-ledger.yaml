@@ -1,0 +1,386 @@
+schema_version: 1
+session_id: 20260805-fdb85e12
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: executed_lens_count is derived from the completed-only
+      participating subset rather than from all recorded lens execution results.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: The aggregate execution summary undercounts executed lenses
+      when recorded lens results include failures.
+    proposed_action: Derive executed_lens_count from all recorded
+      lens_execution_results, or explicitly redefine and rename it as a
+      completed/participating-lens count, with a failed-lens regression case.
+    affected_purpose: The declared provenance, evidence-preservation, and
+      auditability goal that execution-result.yaml remain the truthful aggregate
+      artifact whose counters track merged per-unit results.
+    failure_condition: At least one failed lens execution result is merged before
+      any completed lens result, or failed results otherwise outnumber completed
+      results.
+    impact: Consumers see an internally contradictory progress summary and can
+      undercount executed work, recreating the misleading interim-artifact
+      behavior this change intends to eliminate.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/logic.findings.yaml#logic-candidate-001
+      - materialized-input.md:63-66
+      - materialized-input.md:588-617
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph identifies finding-001 as a singleton and
+      provides no same_root_candidate relation for a compliant merge.
+  - issue_id: issue-002
+    root_cause_hypothesis: Final-output rendering retains an independent
+      terminal-result validation path instead of consuming the declared
+      canonical terminal-result gate.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Final-output rendering is structurally disconnected from the
+      newly declared canonical terminal-result gate.
+    proposed_action: Route the renderer's validated execution result through
+      requireTerminalExecutionResult, or explicitly designate and document a
+      shared equivalent validator.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: The implementation contradicts the documented consumer contract and can
+      drift from the canonical status, completion-stamp, and duration
+      invariants.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/structure.findings.yaml#structure-candidate-001
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; the bounded evidence establishes a structural
+      inconsistency but no current material failure.
+  - issue_id: issue-003
+    root_cause_hypothesis: Final-output rendering owns a separate
+      terminal-eligibility definition rather than depending on the canonical
+      terminal-result authority.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: The final-output renderer does not depend on the newly
+      introduced canonical terminal-result gate.
+    proposed_action: Route the parsed execution result through
+      requireTerminalExecutionResult before rendering and remove or narrow the
+      duplicated local terminal-status gate.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: Two independent terminal-eligibility paths can develop different
+      acceptance behavior as status or temporal invariants change.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/dependency.findings.yaml#dependency-candidate-001
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding, so the required relation support for a multi-finding
+      issue is absent.
+  - issue_id: issue-004
+    root_cause_hypothesis: Host finalization silently normalizes an unparseable
+      authoritative start timestamp to a valid-looking zero duration.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: An invalid execution start timestamp can be promoted into a
+      plausible terminal duration of zero milliseconds.
+    proposed_action: Reject invalid timestamps before terminal promotion and
+      validate that terminal timestamps are parseable and total_duration_ms is
+      finite, nonnegative, and derived consistently from them.
+    affected_purpose: The confirmed user-request-intent criterion and review goals
+      of provenance, evidence preservation, and auditability for truthful
+      execution-result.yaml terminal fields.
+    failure_condition: A host execution result reaches finalization with an absent,
+      malformed, or otherwise unparseable execution_started_at.
+    impact: Terminal consumers can accept invented timing evidence as artifact
+      truth, making elapsed-time provenance unverifiable.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/semantics.findings.yaml#semantics-candidate-001
+      - change.diff:647-659
+      - change.diff:395-408
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The graph marks this finding as duplicating finding-009, but
+      supplies no same_root_candidate relation; the contract therefore does not
+      permit a multi-finding cluster.
+  - issue_id: issue-005
+    root_cause_hypothesis: "Terminality lacks one explicit canonical runtime
+      contract: status is inferred through negative rules and duplicated
+      classifications instead of an exhaustive shared predicate with
+      terminal-field integrity validation."
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-005
+      - finding-006
+    relation_refs:
+      - rel-005
+    raised_by_lens_ids:
+      - pragmatics
+      - evolution
+    issue_statement: Terminal-result certification and status classification are
+      split across incomplete negative checks and independently maintained
+      authorities.
+    proposed_action: Define one exhaustive terminal-status tuple or predicate,
+      derive the terminal type from it, reuse it across the gate and renderer,
+      and have the gate separately validate parseable timestamps, finite
+      nonnegative duration, and actionable malformed-artifact errors.
+    affected_purpose: The confirmed intent to preserve execution-result.yaml truth
+      and ensure terminal consumers cannot project an invalid verdict, together
+      with the review goals of provenance, evidence preservation, and
+      auditability.
+    failure_condition: A terminal consumer reads unsupported or temporally malformed
+      persisted data, or the execution-status vocabulary evolves without all
+      independent classification sites being updated consistently.
+    impact: Malformed execution facts can be certified, legitimate terminal states
+      can become unrenderable, new nonterminal states can be treated as
+      terminal, and operators can receive ineffective polling guidance.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/pragmatics.findings.yaml#pragmatics-candidate-001
+      - "change.diff: src/core-runtime/review/artifact-types.ts
+        requireTerminalExecutionResult"
+      - "change.diff: src/core-runtime/cli/assemble-review-record.ts
+        deriveRecordStatus and updatedAtSource call
+        requireTerminalExecutionResult"
+      - .onto/review/20260805-fdb85e12/round1/evolution.findings.yaml#evolution-candidate-001
+      - "change.diff: src/core-runtime/review/artifact-types.ts,
+        ReviewTerminalExecutionStatus definition"
+      - "change.diff: src/core-runtime/cli/render-review-final-output.ts,
+        REVIEW_EXECUTION_STATUSES definition"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-006
+    root_cause_hypothesis: A breaking serialized-shape change was introduced without
+      a versioned execution-result artifact boundary or compatibility
+      discriminator.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: Nullable completion fields change the persisted
+      execution-result.yaml contract without explicit format versioning.
+    proposed_action: Add and validate an execution-result schema version with
+      documented compatibility handling, or provide one shared
+      legacy-normalizing parser required for all consumers.
+    affected_purpose: Review target profile goals of provenance, evidence
+      preservation, and auditability, together with the confirmed
+      execution-result.yaml truthfulness contract.
+    failure_condition: A pre-change or independently maintained consumer reads an
+      in-flight artifact written by the new runtime and assumes the formerly
+      non-null completion fields.
+    impact: The same persisted evidence has incompatible meanings across runtime
+      versions, so readers may fail or derive invalid timing and lifecycle
+      conclusions.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/evolution.findings.yaml#evolution-candidate-002
+      - "change.diff: src/core-runtime/review/artifact-types.ts,
+        ReviewExecutionResultArtifact nullable field changes"
+      - "change.diff: README.md Status vocabularies entry for
+        execution-result.yaml"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph identifies finding-007 as a singleton and
+      provides no same_root_candidate relation for a compliant merge.
+  - issue_id: issue-007
+    root_cause_hypothesis: The host scaffold was converted to a real nonterminal
+      state without a bounded-diff-visible finalization path for every declared
+      non-success terminal outcome.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Host executions that halt or degrade may remain falsely running
+      because only successful completion is visibly finalized.
+    proposed_action: Add host termination finalization for halted_partial and
+      completed_with_degradation, including completion stamps, duration,
+      counters, and halt evidence, with end-to-end halted and degraded tests.
+    affected_purpose: The confirmed user-request intent that execution-result.yaml
+      truthfully represent running versus terminal review execution and remain
+      usable by terminal consumers.
+    failure_condition: A host-driven review stops or degrades before the ledger
+      reaches the all-trusted completion condition.
+    impact: The canonical aggregate artifact can remain falsely running, and
+      terminal record or degradation consumers can reject a run that has
+      actually ended.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/coverage.findings.yaml#coverage-candidate-001
+      - "src/core-runtime/review/review-execution-steps.ts:
+        buildInitialExecutionResultScaffold now emits running/null/null"
+      - "src/core-runtime/review/review-execution-steps.ts:
+        finalizeHostExecutionResultIfComplete only emits completed"
+      - "src/core-runtime/review/artifact-types.ts: terminal vocabulary includes
+        completed_with_degradation and halted_partial"
+      - "src/core-runtime/cli/assemble-review-record.ts: record assembly now
+        requires a terminal execution result"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph identifies finding-008 as a singleton; an
+      unchanged finalizer may exist outside the allowed evidence, but no
+      same_root_candidate relation supports merging.
+  - issue_id: issue-008
+    root_cause_hypothesis: Malformed timing authority is silently normalized to a
+      valid-looking duration rather than being rejected before terminal
+      promotion.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Host completion derivation converts an invalid execution start
+      timestamp into a plausible zero duration.
+    proposed_action: Reject an invalid execution_started_at or preserve an
+      explicitly invalid duration state that terminal validation refuses, and
+      add a negative invalid-start test.
+    affected_purpose: The confirmed truthfulness and auditability repair for
+      completion timestamps and total duration.
+    failure_condition: A persisted or resumed host execution result has an invalid
+      execution_started_at value when finalization runs.
+    impact: The terminal artifact records fabricated timing evidence and passes the
+      new terminal gate, undermining provenance and auditability.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/coverage.findings.yaml#coverage-candidate-002
+      - "src/core-runtime/review/review-execution-steps.ts:
+        `Number.isFinite(startedAtMs) ? ... : 0`"
+      - "src/core-runtime/review/artifact-types.ts:
+        requireTerminalExecutionResult accepts every non-null numeric duration"
+      - "src/core-api/review-api.test.ts: regression assertion expects duration
+        derived from artifact stamps"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The graph marks this finding as duplicating findings 004 and
+      012 and as enabled by finding-005, but supplies no same_root_candidate
+      relation permitting those findings to share one issue.
+  - issue_id: issue-009
+    root_cause_hypothesis: The renderer maintains status-only terminal validation
+      instead of invoking the shared gate that couples terminal status with
+      completion metadata.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Final-output rendering is not shown enforcing the new shared
+      terminal-result gate despite the documented consumer contract.
+    proposed_action: Pass the parsed execution result through
+      requireTerminalExecutionResult before rendering and add a renderer test
+      for a completed status with null completion fields.
+    affected_purpose: declared review purpose
+    failure_condition: upstream evidence outside the bounded lens context is
+      required to close this finding
+    impact: A separate validation path can drift from the coupled status,
+      completion-stamp, and duration invariant and leaves the single-gate
+      documentation inaccurate.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/coverage.findings.yaml#coverage-candidate-003
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding, and the source explicitly identifies an evidence gap
+      requiring context outside this unit.
+  - issue_id: issue-010
+    root_cause_hypothesis: The terminal-status concept is represented independently
+      as both a type-level definition and a non-exhaustive runtime set.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - conciseness
+    issue_statement: Terminal execution-status vocabulary is redundantly defined,
+      allowing the renderer's runtime set to become narrower than the canonical
+      type.
+    proposed_action: Define one canonical runtime terminal-status collection, derive
+      ReviewTerminalExecutionStatus from it, and reuse the collection in the
+      renderer.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: A future terminal status can be valid in the shared type while remaining
+      silently unsupported by final-output rendering.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/conciseness.findings.yaml#conciseness-candidate-001
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding, so the contract requires it to remain a singleton despite
+      thematic overlap with status-authority findings.
+  - issue_id: issue-011
+    root_cause_hypothesis: The finalizer treats an invalid authoritative start
+      timestamp as permission to synthesize a plausible numeric duration.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: The terminal writer knowingly recreates false zero-duration
+      evidence when the execution start timestamp is invalid.
+    proposed_action: Fail loudly when either timestamp is invalid before terminal
+      promotion and compute duration only from two validated timestamps.
+    affected_purpose: "Confirmed user-request-intent: repair the truthfulness and
+      auditability of execution-result.yaml terminal stamps and duration."
+    failure_condition: A persisted execution result reaches host finalization with
+      an absent, malformed, or otherwise unparsable execution_started_at.
+    impact: The canonical aggregate artifact records fabricated timing evidence
+      while presenting itself as completed, weakening provenance and
+      review-record trust.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md lines 645-665
+      - review-value-alignment-criteria.yaml criterion `user-request-intent`
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The graph marks this finding as duplicating finding-009, but
+      provides no same_root_candidate relation required to place both findings
+      in one issue.
+  - issue_id: issue-012
+    root_cause_hypothesis: The terminal gate combines lifecycle-state validation and
+      terminal-field integrity validation in one conditional with one fixed
+      running-state diagnosis.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-013
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: Malformed terminal artifacts are reported as still running,
+      producing an untruthful diagnosis and ineffective recovery instruction.
+    proposed_action: Report genuinely running artifacts with polling guidance, but
+      classify terminal statuses with missing or invalid completion fields as
+      malformed results requiring repair or rerun.
+    affected_purpose: "Confirmed user-request-intent: make execution-result.yaml
+      truthful and place a fail-loud terminal-consumer gate around it."
+    failure_condition: A terminal-status artifact is missing either
+      execution_completed_at or total_duration_ms.
+    impact: Consumers are blocked but receive the wrong state classification and
+      recovery action, reducing operational actionability and hiding corrupted
+      audit evidence.
+    evidence_refs:
+      - .onto/review/20260805-fdb85e12/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md lines 396-408
+      - review-value-alignment-criteria.yaml criterion `user-request-intent`
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph classifies this finding as a symptom of
+      finding-005 rather than a same_root_candidate, so it must remain a
+      distinct issue under the clustering contract.
+issue_dependencies: []
+validation:
+  unclustered_finding_ids: []
