@@ -1,0 +1,523 @@
+session_id: 20260805-511c354d
+session_root: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d
+execution_realization: worker
+host_runtime: codex
+review_mode: core-axis
+execution_status: completed
+execution_started_at: 2026-08-05T11:38:59+09:00
+execution_completed_at: 2026-08-05T11:42:44+09:00
+total_duration_ms: 224850
+max_concurrent_lenses: 4
+observed_dispatch_width: 4
+planned_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 6
+synthesis_executed: true
+deliberation_status: performed
+halt_reason: null
+error_log_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/error-log.md
+lens_completion_barrier_ref: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/lens-completion-barrier.yaml
+lens_execution_results:
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/axiology.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/round1/axiology.findings.yaml
+    status: completed
+    started_at: 2026-08-05T11:38:59+09:00
+    completed_at: 2026-08-05T11:39:42+09:00
+    duration_ms: 42635
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 23626
+    output_bytes: 3763
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/coverage.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/round1/coverage.findings.yaml
+    status: completed
+    started_at: 2026-08-05T11:39:01+09:00
+    completed_at: 2026-08-05T11:39:58+09:00
+    duration_ms: 57034
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19880
+    output_bytes: 4474
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/evolution.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/round1/evolution.findings.yaml
+    status: completed
+    started_at: 2026-08-05T11:39:02+09:00
+    completed_at: 2026-08-05T11:39:49+09:00
+    duration_ms: 46116
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18809
+    output_bytes: 3879
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/logic.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/round1/logic.findings.yaml
+    status: completed
+    started_at: 2026-08-05T11:39:04+09:00
+    completed_at: 2026-08-05T11:39:20+09:00
+    duration_ms: 15634
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 24013
+    output_bytes: 564
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/semantics.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/round1/semantics.findings.yaml
+    status: completed
+    started_at: 2026-08-05T11:39:20+09:00
+    completed_at: 2026-08-05T11:39:48+09:00
+    duration_ms: 28078
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19486
+    output_bytes: 805
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/structure.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/round1/structure.findings.yaml
+    status: completed
+    started_at: 2026-08-05T11:39:42+09:00
+    completed_at: 2026-08-05T11:40:01+09:00
+    duration_ms: 18886
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18350
+    output_bytes: 530
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/finding-ledger.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/finding-ledger.yaml
+    status: completed
+    started_at: 2026-08-05T11:40:01+09:00
+    completed_at: 2026-08-05T11:40:01+09:00
+    duration_ms: 8
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 854
+    output_bytes: 13574
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-08-05T11:40:01+09:00
+    completed_at: 2026-08-05T11:40:24+09:00
+    duration_ms: 22503
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 29474
+    output_bytes: 2244
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-ledger.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/issue-ledger.yaml
+    status: completed
+    started_at: 2026-08-05T11:40:24+09:00
+    completed_at: 2026-08-05T11:40:50+09:00
+    duration_ms: 26772
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16701
+    output_bytes: 4807
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/issue-stance-matrix.yaml
+    status: completed
+    started_at: 2026-08-05T11:40:50+09:00
+    completed_at: 2026-08-05T11:41:44+09:00
+    duration_ms: 53733
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 726
+    output_bytes: 9852
+    child_result_count: 6
+    child_results:
+      - unit_id: issue-stance:axiology
+        unit_kind: issue_artifact
+        packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-stance/axiology.prompt.md
+        output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/stance-responses/axiology.yaml
+        status: completed
+        started_at: 2026-08-05T11:40:50+09:00
+        completed_at: 2026-08-05T11:41:16+09:00
+        duration_ms: 25173
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 23307
+        output_bytes: 2131
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:coverage
+        unit_kind: issue_artifact
+        packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-stance/coverage.prompt.md
+        output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/stance-responses/coverage.yaml
+        status: completed
+        started_at: 2026-08-05T11:40:50+09:00
+        completed_at: 2026-08-05T11:41:04+09:00
+        duration_ms: 14068
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 23307
+        output_bytes: 1824
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:evolution
+        unit_kind: issue_artifact
+        packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-stance/evolution.prompt.md
+        output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/stance-responses/evolution.yaml
+        status: completed
+        started_at: 2026-08-05T11:40:50+09:00
+        completed_at: 2026-08-05T11:41:16+09:00
+        duration_ms: 26045
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 23321
+        output_bytes: 1609
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:logic
+        unit_kind: issue_artifact
+        packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-stance/logic.prompt.md
+        output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/stance-responses/logic.yaml
+        status: completed
+        started_at: 2026-08-05T11:40:50+09:00
+        completed_at: 2026-08-05T11:41:16+09:00
+        duration_ms: 25774
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 23265
+        output_bytes: 1282
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:semantics
+        unit_kind: issue_artifact
+        packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-stance/semantics.prompt.md
+        output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/stance-responses/semantics.yaml
+        status: completed
+        started_at: 2026-08-05T11:41:04+09:00
+        completed_at: 2026-08-05T11:41:44+09:00
+        duration_ms: 39626
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 23321
+        output_bytes: 1450
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+      - unit_id: issue-stance:structure
+        unit_kind: issue_artifact
+        packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/issue-stance/structure.prompt.md
+        output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/stance-responses/structure.yaml
+        status: completed
+        started_at: 2026-08-05T11:41:16+09:00
+        completed_at: 2026-08-05T11:41:44+09:00
+        duration_ms: 28137
+        timestamp_provenance: runner_wallclock
+        failure_message: null
+        failure_kind: null
+        attempt_count: 1
+        packet_bytes: 23321
+        output_bytes: 1370
+        executor_host_runtime: codex
+        artifact_generation_realization: live
+        semantic_quality_evidence:
+          status: not_evaluated
+          applicability: real_semantic_path_only
+          reason: live semantic path output requires a separate semantic quality gate
+            before quality is claimed
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation-plan
+    unit_kind: issue_artifact
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/deliberation-plan.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/deliberation-plan.yaml
+    status: completed
+    started_at: 2026-08-05T11:41:44+09:00
+    completed_at: 2026-08-05T11:41:56+09:00
+    duration_ms: 11866
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 30001
+    output_bytes: 622
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: problem-framing
+    unit_kind: issue_artifact
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/problem-framing.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/problem-framing.yaml
+    status: completed
+    started_at: 2026-08-05T11:41:56+09:00
+    completed_at: 2026-08-05T11:42:26+09:00
+    duration_ms: 30288
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 33579
+    output_bytes: 2277
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+deliberation_execution_results:
+  - unit_id: controlled-deliberation
+    unit_kind: deliberation
+    packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/teamlead.deliberation.prompt.md
+    output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/deliberation-resolution.yaml
+    status: completed
+    started_at: 2026-08-05T11:41:56+09:00
+    completed_at: 2026-08-05T11:41:56+09:00
+    duration_ms: 3
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 0
+    packet_bytes: 206
+    output_bytes: 1629
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+synthesize_execution_result:
+  unit_id: synthesize
+  unit_kind: synthesize
+  packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/synthesis-work-items.yaml
+  output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/synthesis-ledger.yaml
+  status: completed
+  started_at: 2026-08-05T11:42:26+09:00
+  completed_at: 2026-08-05T11:42:44+09:00
+  duration_ms: 17929
+  timestamp_provenance: runner_wallclock
+  failure_message: null
+  failure_kind: null
+  attempt_count: 1
+  packet_bytes: 43197
+  output_bytes: 25977
+  executor_host_runtime: codex
+  child_result_count: 2
+  child_results:
+    - unit_id: synthesis:issue-001
+      unit_kind: synthesize
+      packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/synthesis/issue-001.prompt.md
+      output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/synthesis/responses/issue-001.yaml
+      status: completed
+      started_at: 2026-08-05T11:42:26+09:00
+      completed_at: 2026-08-05T11:42:44+09:00
+      duration_ms: 17902
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 27694
+      output_bytes: 2454
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-002
+      unit_kind: synthesize
+      packet_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/prompt-packets/synthesis/issue-002.prompt.md
+      output_path: /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/c45f7650-98c7-4321-815b-fc94f1f6c018/scratchpad/liveproj/.onto/review/20260805-511c354d/synthesis/responses/issue-002.yaml
+      status: completed
+      started_at: 2026-08-05T11:42:26+09:00
+      completed_at: 2026-08-05T11:42:44+09:00
+      duration_ms: 17134
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 36674
+      output_bytes: 2691
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+  artifact_generation_realization: live
+  semantic_quality_evidence:
+    status: not_evaluated
+    applicability: real_semantic_path_only
+    reason: live semantic path output requires a separate semantic quality gate
+      before quality is claimed
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000
+  salvage:
+    enabled: true
+    delta_completion: unit_llm
+  resubmit:
+    enabled: true
+  dispatch_breaker:
+    enabled: true
+    systemic_threshold: 3
+    per_call_max_attempts: 3
+    backoff_initial_ms: 3000
+    backoff_cap_ms: 30000

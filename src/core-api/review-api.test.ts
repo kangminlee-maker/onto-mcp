@@ -563,6 +563,27 @@ describe("createOntoReviewCoreApi", () => {
     // The reference host driver reached a completed ReviewRecord.
     expect(assembled?.status).toBe("assembled");
     expect(assembled?.reviewStatus.status).toBe("completed");
+    // The finished host run stamps its own completion fields. The scaffold used
+    // to pre-fill `execution_completed_at`/`total_duration_ms: 0`, so a finalize
+    // that never computed them still looked terminal and every B-path record
+    // claimed the review took 0 ms. The scaffold now leaves both null, which the
+    // final-output validator rejects, and the duration must span the artifact's
+    // own stamps (second granularity — `isoNow()` carries no milliseconds).
+    const finalExecutionResult = await readYamlDocument<{
+      execution_status?: string;
+      execution_started_at?: string;
+      execution_completed_at?: string | null;
+      total_duration_ms?: number | null;
+    }>(path.join(prepared.sessionRoot, "execution-result.yaml"));
+    expect(finalExecutionResult.execution_status).toBe("completed");
+    expect(finalExecutionResult.execution_completed_at).not.toBeNull();
+    expect(finalExecutionResult.total_duration_ms).toBe(
+      Math.max(
+        0,
+        Date.parse(finalExecutionResult.execution_completed_at ?? "") -
+          Date.parse(finalExecutionResult.execution_started_at ?? ""),
+      ),
+    );
     // onto ran the runtime reduces inline (their seats exist, host never saw them).
     expect(fsSync.existsSync(plan.issue_stance_matrix_path)).toBe(true);
     expect(fsSync.existsSync(plan.synthesis_output_path)).toBe(true);

@@ -100,10 +100,15 @@ packaging changes only.
      the reduced behavior, its cause, and the `onto_review_read` fallback explicitly
      (per the domain fail-loud / graceful-degradation rule).
    - **Terminal-signal correctness** — the canonical terminal signal is the
-     `onto_review_read` lifecycle (`completed`/`halted`/`failed`) or `review-record.yaml`,
-     **not** raw `execution-result.yaml`, which is upserted mid-run and can read
-     `halted_partial` while the attempt is still active. Polling guidance must say so
-     (observed live in review `20260613-d1c99dba`: a raw-artifact poller false-terminates).
+     `onto_review_read` lifecycle (`completed`/`halted`/`failed`) or `review-record.yaml`.
+     `execution-result.yaml` is upserted mid-run and stays the aggregate artifact truth,
+     but it answers a narrower question: an in-flight attempt reads
+     `execution_status: running` with `execution_completed_at`/`total_duration_ms` null,
+     and its lens counters track the results merged so far. It carries no lifecycle
+     state (attempt identity, staleness, cancellability), which is why polling guidance
+     still points at `onto_review_read`. Terminal consumers go through
+     `requireTerminalExecutionResult`, which refuses a running artifact rather than
+     projecting a verdict from it.
 2. **Provider prerequisite.** ✅ **Implemented 2026-06-15**
    (`onto configure-provider`, `src/core-runtime/onboard/configure-provider.ts`; the
    `.mcpb` `manifest.json` `user_config` that feeds it shipped with item 4 —

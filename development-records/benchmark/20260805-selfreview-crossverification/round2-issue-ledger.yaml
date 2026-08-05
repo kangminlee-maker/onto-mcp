@@ -1,0 +1,437 @@
+schema_version: 1
+session_id: 20260805-1c915648
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: A single reliance on TypeScript-declared artifact shape
+      instead of fail-closed runtime validation causes both the broad
+      terminal-gate weakness and the completion-evidence semantic violation;
+      adding complete runtime validation at the gate should eliminate both. /
+      The unsupported-status defect is one falsifiable manifestation of the
+      broader gate design that trusts the static artifact type and implements
+      terminality as merely not running.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-001
+      - finding-004
+      - finding-005
+    relation_refs:
+      - rel-003
+      - rel-005
+    raised_by_lens_ids:
+      - logic
+      - semantics
+      - pragmatics
+    issue_statement: "Shared-root issue across finding-001, finding-004,
+      finding-005: A single reliance on TypeScript-declared artifact shape
+      instead of fail-closed runtime validation causes both the broad
+      terminal-gate weakness and the completion-evidence semantic violation;
+      adding complete runtime validation at the gate should eliminate both. /
+      The unsupported-status defect is one falsifiable manifestation of the
+      broader gate design that trusts the static artifact type and implements
+      terminality as merely not running."
+    proposed_action: "Make the shared gate validate runtime membership in
+      `REVIEW_EXECUTION_STATUS_VALUES`, exclude `running`, and require a
+      non-empty string completion timestamp plus a finite numeric duration. Add
+      negative tests using omitted fields (`undefined`) and an unsupported
+      status, and exercise record assembly so the assertions fail if its real
+      terminal path bypasses validation. / Make requireTerminalExecutionResult
+      validate runtime semantics: require a non-empty, parseable
+      execution_completed_at string and a finite, non-negative total_duration_ms
+      number, thereby also rejecting undefined and wrong types. Add contrast
+      tests for omitted fields, an unparseable timestamp, and invalid numeric
+      durations through at least one direct consumer such as record assembly. /
+      Make requireTerminalExecutionResult explicitly accept only completed,
+      completed_with_degradation, and halted_partial, rejecting every other
+      runtime value. Add a negative test that feeds an unsupported status
+      through the record-assembly path and asserts that no ReviewRecord is
+      produced."
+    affected_purpose: "The confirmed `user-request-intent` criterion that
+      `requireTerminalExecutionResult` reach and protect every terminal
+      consumer, and the review target's auditability goal. / The confirmed
+      user-request-intent criterion that terminal consumers receive
+      requireTerminalExecutionResult, new exception paths remain safe, and
+      assertions fail when the mechanism is wrong; also the target profile's
+      auditability goal. / Confirmed user-request-intent criterion: verify that
+      requireTerminalExecutionResult actually protects every terminal consumer
+      and that the response preserves provenance, auditability, and an
+      unambiguous terminal answer."
+    failure_condition: A terminal consumer receives parsed artifact data with a
+      non-running but unsupported/missing status or omitted completion fields. /
+      A deserialized terminal execution-result omits a completion field or
+      contains a syntactically present but semantically invalid timestamp or
+      duration. / A persisted execution-result.yaml contains an unsupported
+      status plus non-null completion fields and is consumed by record assembly
+      without the renderer's separate enum validation.
+    impact: The canonical terminal gate can certify an object that does not satisfy
+      the terminal artifact contract, weakening consistency and trust in review
+      records and terminal metadata; the added tests do not detect this bypass.
+      / The shared gate can certify an artifact that does not satisfy its
+      advertised terminal-evidence contract, so downstream records or summaries
+      may fail later with an unrelated error or preserve invalid audit
+      timestamps. / The canonical ReviewRecord can inherit a status outside its
+      declared vocabulary, so users and downstream readers cannot derive one
+      valid interpretation of whether and how the review terminated.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/logic.findings.yaml#logic-candidate-001
+      - "change.diff: src/core-runtime/review/artifact-types.ts
+        requireTerminalExecutionResult implementation"
+      - "change.diff: src/core-runtime/cli/assemble-review-record.ts
+        deriveRecordStatus and updatedAtSource calls"
+      - "change.diff: src/core-runtime/cli/render-review-final-output.ts
+        performs separate runtime shape/status validation before the gate"
+      - "change.diff: src/core-runtime/review/review-execution-steps.test.ts
+        null-only malformed-artifact assertion"
+      - "change.diff: artifact-types.ts hunk around lines 957-1019;
+        assemble-review-record.ts hunks around deriveRecordStatus and
+        updatedAtSource; review-execution-steps.test.ts test “names the missing
+        stamps instead of calling a completed artifact running”"
+      - .onto/review/20260805-1c915648/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:272-295
+      - materialized-input.md:478-506
+      - materialized-input.md:134-167
+      - materialized-input.md:320-343
+      - materialized-input.md:610-641
+      - .onto/review/20260805-1c915648/execution-preparation/materialized-input.md:272-295,
+        478-506; direct consumers at lines 134-167 and 320-343
+      - .onto/review/20260805-1c915648/round1/pragmatics.findings.yaml#pragmatics-candidate-001
+      - "change.diff: src/core-runtime/review/artifact-types.ts
+        requireTerminalExecutionResult"
+      - "change.diff: src/core-runtime/cli/assemble-review-record.ts
+        deriveRecordStatus and updatedAtSource"
+      - "change.diff: src/core-runtime/cli/render-review-final-output.ts
+        validateReviewExecutionResultArtifact"
+      - 'change.diff: artifact-types.ts requireTerminalExecutionResult rejects
+        only execution_status === "running" and null completion fields;
+        assemble-review-record.ts passes a YAML-read
+        ReviewExecutionResultArtifact directly to this gate and uses the
+        returned execution_status.'
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-002
+    root_cause_hypothesis: Terminal validation was inserted only in the
+      degradation-summary construction branch instead of dominating every
+      state-mutating path at the writer boundary.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The no-degradation early-return path can remove a degradation
+      summary before requireTerminalExecutionResult establishes that the
+      execution has terminated.
+    proposed_action: Validate terminality at the writer entry before deriving
+      degradation kinds or removing or writing the summary, and test that a
+      running artifact with no degradation kinds throws without deleting
+      existing evidence.
+    affected_purpose: The declared terminal-consumer contract and the target goals
+      of provenance, evidence preservation, and auditability.
+    failure_condition: writeDegradationSummaryArtifact receives a running execution
+      result for which degradationKindsFor returns an empty array.
+    impact: A terminal-artifact writer can erase audit evidence without
+      terminal-state proof, so summary absence no longer reliably represents a
+      finished non-degraded run.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/structure.findings.yaml#structure-candidate-001
+      - "change.diff: writeDegradationSummaryArtifact early return before
+        requireTerminalExecutionResult"
+      - "change.diff: docs/architecture/mcp-native-tool-surface.md states
+        terminal consumers go through requireTerminalExecutionResult"
+      - "change.diff, hunk @@ -3013,21 +3014,27: degradationKinds.length === 0
+        removes summaryPath and returns before requireTerminalExecutionResult is
+        called"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph links this finding to the consumer-test gap
+      only through an enables relation, not a shared root-cause relation.
+  - issue_id: issue-003
+    root_cause_hypothesis: The shared runtime gate relies on the compile-time
+      `ReviewExecutionResultArtifact` type instead of validating the persisted
+      artifact values it receives.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - dependency
+    issue_statement: "`requireTerminalExecutionResult` is not a complete runtime
+      gate for persisted execution results."
+    proposed_action: "Make the shared gate validate runtime status membership and
+      terminal field shapes: require a supported non-running status, a non-empty
+      parseable completion timestamp, and a finite non-negative duration. Add
+      contrast tests using omitted fields, unsupported status, malformed
+      timestamp, and non-number duration; then let all terminal consumers depend
+      on that single gate."
+    affected_purpose: Confirmed `user-request-intent`, specifically ensuring
+      `requireTerminalExecutionResult` reaches and correctly protects every
+      terminal consumer, plus the target profile goals of evidence preservation
+      and auditability.
+    failure_condition: A persisted execution-result is terminal-looking but omits or
+      malforms completion fields, or contains an unsupported non-`running`
+      status.
+    impact: Different terminal consumers can disagree about whether the same
+      execution result is valid, weakening trust in terminal records and
+      degradation evidence.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/dependency.findings.yaml#dependency-candidate-001
+      - change.diff:477-505
+      - change.diff:128-162
+      - change.diff:315-338
+      - change.diff:242-290
+      - change.diff:630-657
+      - change.diff:477-505; change.diff:128-142; change.diff:315-338; contrast
+        with final-output validation at change.diff:242-290; regression coverage
+        at change.diff:630-657
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-004
+    root_cause_hypothesis: Execution-status membership and terminality are
+      maintained as separate, non-exhaustive projections rather than being
+      derived from one exhaustive status-classification authority.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: The status model can classify a future non-terminal state as
+      terminal or reject a valid added status when the union, runtime set,
+      terminal type, and literal gate branch drift.
+    proposed_action: Introduce one exhaustive status-metadata authority and derive
+      runtime membership and terminal classification from it, keeping the
+      terminal artifact type aligned with explicitly terminal entries.
+    affected_purpose: The target goals of evidence preservation and auditability,
+      and the user criterion that terminal consumers must not derive terminal
+      verdicts from in-flight results.
+    failure_condition: A future execution status is added as non-terminal, or a new
+      union member is not added consistently to the separately maintained
+      runtime set and terminal projections.
+    impact: A valid execution artifact can be rejected or an unfinished lifecycle
+      can be projected as terminal, weakening continuity and trust in records
+      and final outputs.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/evolution.findings.yaml#evolution-candidate-001
+      - "change.diff: src/core-runtime/review/artifact-types.ts additions
+        defining `ReviewExecutionStatus`, `ReviewTerminalExecutionStatus`, and
+        `REVIEW_EXECUTION_STATUS_VALUES`"
+      - "change.diff: `requireTerminalExecutionResult` branch that rejects only
+        the literal `running`"
+      - "change.diff: terminal consumers in assemble-review-record.ts,
+        render-review-final-output.ts, and run-review-prompt-execution.ts"
+      - change.diff — `ReviewTerminalExecutionStatus =
+        Exclude<ReviewExecutionStatus, "running">`;
+        `requireTerminalExecutionResult` rejects only `execution_status ===
+        "running"`; `REVIEW_EXECUTION_STATUS_VALUES` is a manually populated
+        `Set`
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: rel-004 identifies only a shared-cause dependency with
+      finding-005; the contract forbids merging findings solely on that basis.
+  - issue_id: issue-005
+    root_cause_hypothesis: Regression coverage is placed at the shared helper
+      boundary rather than at each externally meaningful terminal-consumer
+      boundary.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: The added tests prove the helper but not that terminal
+      consumers remain connected to it.
+    proposed_action: "Add consumer-level negative tests using a real running
+      scaffold: record assembly must refuse it, final-output rendering must
+      refuse it, and degradation-summary writing must refuse it. Assert each
+      fails for the running-status diagnosis, then retain one positive terminal
+      case to prove normal execution remains intact."
+    affected_purpose: Confirmed `user-request-intent` criterion requiring proof that
+      `requireTerminalExecutionResult` reaches every terminal consumer and that
+      tests fail when the mechanism is wrong.
+    failure_condition: A later refactor removes or bypasses the gate in any terminal
+      consumer while the helper itself remains unchanged.
+    impact: The suite can report green while a consumer again projects a terminal
+      artifact from an in-flight result, so the claimed defect closure is not
+      regression-resistant.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/evolution.findings.yaml#evolution-candidate-002
+      - "change.diff: direct helper test `refuses to yield a terminal projection
+        while it is still running`"
+      - "change.diff: gate calls added in assemble-review-record.ts"
+      - "change.diff: gate call added in render-review-final-output.ts"
+      - "change.diff: gate call added in writeDegradationSummaryArtifact"
+      - change.diff — new `mid-run execution-result tells the truth about
+        itself` tests call `requireTerminalExecutionResult` directly; no added
+        test invokes record assembly, final-output rendering, or
+        degradation-summary writing with a running artifact
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-006
+    root_cause_hypothesis: 새 상태/nullable-field 계약을 소비자 경계에서 검증하는 음성 회귀 시나리오가 테스트 집합에 추가되지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 새 terminal gate가 각 종료 소비자에서 실제로 실행된다는 것을 실패 가능하게 증명하는 테스트가 없다.
+    proposed_action: 각 소비자 공개 진입점에 running artifact와 terminal status/null stamp
+      artifact를 주입하는 음성 테스트를 추가하고, 해당 소비자 문맥의 오류로 실패함을 단언한다. 최소한 세 소비자 중 각기 다른
+      경로를 모두 통과시켜 gate 호출을 제거하면 테스트가 실패하게 한다.
+    affected_purpose: 확인된 user-request-intent 기준 중 “requireTerminalExecutionResult가
+      모든 종료 소비자에 실제로 도달하는가”와 “테스트 어설션이 해당 메커니즘이 틀렸을 때 실제로 실패하는가”.
+    failure_condition: 향후 어느 한 종료 소비자에서 gate 호출이 제거·우회되거나 잘못된 artifact가 전달되어도 helper
+      단위 테스트와 정상 완료 API 테스트가 계속 통과하는 경우.
+    impact: mid-run artifact가 다시 최종 verdict 또는 record로 투영되는 회귀를 검증 단계가 놓쳐
+      provenance·auditability 신뢰를 훼손한다.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:133-172
+      - materialized-input.md:237-295
+      - materialized-input.md:320-349
+      - materialized-input.md:635-661
+      - materialized-input.md:133-172, 237-295, 320-349, 635-661; 새 테스트는
+        requireTerminalExecutionResult를 직접 호출하고 정상 완료 API 경로의 timestamp만 검증한다.
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+  - issue_id: issue-007
+    root_cause_hypothesis: Lens-summary tests are confined to completed-only mid-run
+      fixtures and therefore omit both failed-lens derivation and terminal
+      trusted-set narrowing.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: The new derived lens-summary logic is not tested across failure
+      cases or the mid-run-to-terminal transition, so contradictions between
+      derived summaries and the terminal writer can remain undetected.
+    proposed_action: Use a non-empty mixed completed/failed fixture to verify
+      mid-run participating, degraded, and count fields, then finalize the same
+      execution and assert terminal trusted, degraded, excluded, and count
+      projections with contrast controls.
+    affected_purpose: The user-request-intent criterion that derived lens summaries
+      remain consistent with the terminal writer, plus the target goals of
+      provenance and evidence preservation.
+    failure_condition: Failed lenses exist or the mid-run recorded set differs from
+      the terminal trusted set, while completed-only tests continue to pass
+      despite incorrect summary derivation.
+    impact: Participation and degradation evidence can contradict itself across
+      lifecycle stages, weakening trust in the execution result as an auditable
+      account.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:589-619
+      - materialized-input.md:703-737
+      - materialized-input.md:750-795
+      - materialized-input.md:589-619, 703-737, 750-795; 테스트 입력은 completed lens만
+        만들고 degraded_lens_ids나 terminal writer의 narrowing 결과를 단언하지 않는다.
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph explicitly records finding-009 as having no
+      accepted semantic relation to another finding.
+  - issue_id: issue-008
+    root_cause_hypothesis: Record assembly re-establishes one terminal-boundary
+      property separately for individual fields instead of retaining one
+      narrowed terminal result after validation.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - conciseness
+    issue_statement: Review-record assembly calls the same terminal gate twice for
+      the same execution result, adding a duplicate validation path and
+      unnecessary concept surface.
+    proposed_action: Validate the execution result once near the assembly boundary
+      and reuse the returned terminal artifact for both record status and
+      completion time.
+    affected_purpose: The declared review purpose, particularly the criterion that
+      the response avoid unnecessary concept surface while preserving the
+      terminal contract.
+    failure_condition: Record assembly derives status and completion time from the
+      same execution result through separate calls to the identical terminal
+      gate.
+    impact: The duplication obscures the single local terminal representation and
+      increases maintenance surface, but the bounded evidence does not show an
+      unsafe result for the declared purpose.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/conciseness.findings.yaml#conciseness-candidate-001
+      - change.diff, deriveRecordStatus() and updatedAtSource calculation around
+        hunks @@ -384 and @@ -572
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No accepted relation in the relation graph connects this
+      low-severity duplication finding to another finding.
+  - issue_id: issue-009
+    root_cause_hypothesis: Runtime validation in the canonical terminal gate assumes
+      the TypeScript-required YAML fields can only be valid values or null, so
+      absence and other malformed runtime values are not rejected.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: The shared terminal gate does not fail closed when required
+      completion fields are absent rather than explicitly null.
+    proposed_action: "Make requireTerminalExecutionResult validate runtime presence
+      and shape: require a non-empty, parseable completion timestamp and a
+      finite non-negative numeric duration, treating null and undefined as
+      missing. Add direct negative tests with omitted fields and verify
+      review-record assembly fails before projecting a record."
+    affected_purpose: Confirmed user-request-intent criterion that
+      requireTerminalExecutionResult actually protect all terminal consumers,
+      plus the review target profile goals of provenance, evidence preservation,
+      and auditability.
+    failure_condition: A terminal-status execution-result.yaml omits
+      execution_completed_at or total_duration_ms, and review-record assembly
+      consumes it without the final-output path’s separate shape validator.
+    impact: A consumer can accept an artifact that the shared terminal type claims
+      is complete, weakening trust that review records and their timestamps
+      derive from valid terminal evidence.
+    evidence_refs:
+      - .onto/review/20260805-1c915648/round1/axiology.findings.yaml#axiology-candidate-001
+      - "change.diff — src/core-runtime/review/artifact-types.ts:
+        requireTerminalExecutionResult checks completedAt === null and
+        durationMs === null only"
+      - "change.diff — src/core-runtime/cli/assemble-review-record.ts:
+        updatedAtSource parses
+        requireTerminalExecutionResult(...).execution_completed_at"
+      - review-value-alignment-criteria.yaml — criterion_id user-request-intent
+      - review-target-profile summary — review_goal provenance,
+        evidence_preservation, auditability
+      - "change.diff: src/core-runtime/review/artifact-types.ts
+        requireTerminalExecutionResult null-only checks;
+        src/core-runtime/cli/assemble-review-record.ts
+        deriveRecordStatus/updatedAtSource consume its narrowed result. Value
+        authority:
+        .onto/review/20260805-1c915648/execution-preparation/review-value-align\
+        ment-criteria.yaml, criterion user-request-intent —
+        “requireTerminalExecutionResult가 모든 종료 소비자에 실제로 도달하는가 … 테스트 어설션이 해당
+        메커니즘이 틀렸을 때 실제로 실패하는가”."
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Runtime completion: finding is not connected to another issue
+      by same_root_candidate relation refs."
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-004
+    relation_refs:
+      - rel-004
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Execution-status membership and terminality lack a
+      single exhaustive positive classification authority, leaving the gate to
+      infer terminality by excluding only the literal running status.)."
+validation:
+  unclustered_finding_ids: []

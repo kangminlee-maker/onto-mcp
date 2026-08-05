@@ -43,6 +43,7 @@ import type {
   ReviewUnitExecutionResult,
   ReviewUnitFailureKind,
 } from "../review/artifact-types.js";
+import { requireTerminalExecutionResult } from "../review/artifact-types.js";
 import {
   appendMarkdownLogEntry,
   fileExists,
@@ -3009,6 +3010,13 @@ async function writeDegradationSummaryArtifact(
   executionPlan: ReviewExecutionPlan,
   artifact: ReviewExecutionResultArtifact,
 ): Promise<void> {
+  // A degradation summary describes a finished run; every caller reaches here
+  // from a halt or final write. The gate runs before the no-degradation branch
+  // so a mid-run artifact cannot delete a prior summary on the way past.
+  const terminal = requireTerminalExecutionResult(
+    artifact,
+    `Degradation summary for session ${artifact.session_id}`,
+  );
   const summaryPath = degradationSummaryPathForSession(executionPlan.session_root);
   const failedUnits = collectFailedUnits(artifact);
   const degradationKinds = degradationKindsFor(artifact, failedUnits);
@@ -3019,12 +3027,12 @@ async function writeDegradationSummaryArtifact(
   const summary: ReviewDegradationSummaryArtifact = {
     schema_version: "1",
     session_id: artifact.session_id,
-    created_at: artifact.execution_completed_at,
+    created_at: terminal.execution_completed_at,
     source_execution_result_ref: executionPlan.execution_result_path,
     source_error_log_ref: (await fileExists(executionPlan.error_log_path))
       ? executionPlan.error_log_path
       : null,
-    execution_status: artifact.execution_status,
+    execution_status: terminal.execution_status,
     degradation_kinds: degradationKinds,
     degraded_lens_ids: artifact.degraded_lens_ids,
     excluded_lens_ids: artifact.excluded_lens_ids,
@@ -4983,9 +4991,13 @@ async function seedLensResultsForFrontier(args: {
   sessionRoot: string;
   executionPlan: ReviewExecutionPlan;
   outcomes: ExecutionOutcome[];
+  executionStartedAtMs: number;
 }): Promise<void> {
   let base: ReviewExecutionResultArtifact | undefined =
-    buildInitialExecutionResultScaffold(args.executionPlan);
+    buildInitialExecutionResultScaffold(
+      args.executionPlan,
+      args.executionStartedAtMs,
+    );
   for (const outcome of args.outcomes) {
     await mergeOutcomeIntoFrontierLedger({
       sessionRoot: args.sessionRoot,
@@ -7848,6 +7860,7 @@ export async function executeReviewPromptExecution(
     outcomes: executionOutcomes.filter(
       (outcome): outcome is ExecutionOutcome => outcome !== undefined,
     ),
+    executionStartedAtMs,
   });
 
   let controlledDeliberation!: Awaited<

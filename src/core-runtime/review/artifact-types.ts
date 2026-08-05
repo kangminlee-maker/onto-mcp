@@ -75,10 +75,45 @@ export type ReviewActionCandidate =
   | "continue_review"
   | "retry_execution";
 export type DeliberationStatus = "performed" | "not_performed";
+/**
+ * Status of a review execution as recorded in `execution-result.yaml`.
+ *
+ * `running` is the only non-terminal value: the artifact is upserted mid-run, so
+ * it must be able to say "not finished" without borrowing a terminal word. It
+ * shares the token with the `ReviewRunResult.status` union so the artifact and
+ * the run handle speak one vocabulary. Terminal artifacts (ReviewRecord,
+ * degradation summary) take {@link ReviewTerminalExecutionStatus}, which excludes
+ * it — assembling a record from a `running` result fails loud.
+ */
 export type ReviewExecutionStatus =
+  | "running"
   | "completed"
   | "completed_with_degradation"
   | "halted_partial";
+/** Execution statuses a finished run can hold. Excludes the mid-run `running`. */
+export type ReviewTerminalExecutionStatus = Exclude<
+  ReviewExecutionStatus,
+  "running"
+>;
+
+/**
+ * Runtime membership for {@link ReviewExecutionStatus}. Artifact validators read
+ * this rather than restating the vocabulary — a second enumeration is how a
+ * validator silently becomes narrower than the type it claims to check.
+ * Terminal-ness is decided by {@link requireTerminalExecutionResult}, not by a
+ * narrower copy of this set.
+ */
+export const REVIEW_EXECUTION_STATUS_VALUES: ReadonlySet<string> = new Set(
+  // Keyed by the union so adding a status without listing it here is a compile
+  // error. A bare literal array would have let the set silently fall behind the
+  // type it claims to enumerate.
+  Object.keys({
+    running: true,
+    completed: true,
+    completed_with_degradation: true,
+    halted_partial: true,
+  } satisfies Record<ReviewExecutionStatus, true>),
+);
 export type ReviewUnitKind =
   | "lens"
   | "issue_artifact"
@@ -889,8 +924,14 @@ export interface ReviewExecutionResultArtifact {
   review_mode: ReviewMode;
   execution_status: ReviewExecutionStatus;
   execution_started_at: string;
-  execution_completed_at: string;
-  total_duration_ms: number;
+  /**
+   * Wall-clock completion stamp, or `null` while `execution_status` is
+   * `running`. A mid-run artifact has no completion time; stamping "now" made a
+   * still-executing run read as one that had already finished.
+   */
+  execution_completed_at: string | null;
+  /** Total wall-time, or `null` while `execution_status` is `running`. */
+  total_duration_ms: number | null;
   max_concurrent_lenses: number;
   observed_dispatch_width?: number;
   retry_policy: ReviewRetrySettings;
@@ -927,6 +968,72 @@ export interface ReviewExecutionResultArtifact {
   synthesis_map_execution_results?: ReviewUnitExecutionResult[];
 }
 
+/**
+ * A {@link ReviewExecutionResultArtifact} that has reached a terminal status, so
+ * its completion stamp and duration are populated.
+ */
+export interface ReviewTerminalExecutionResultArtifact
+  extends ReviewExecutionResultArtifact {
+  execution_status: ReviewTerminalExecutionStatus;
+  execution_completed_at: string;
+  total_duration_ms: number;
+}
+
+/**
+ * Gate for consumers that may only read a finished run — record assembly,
+ * degradation summaries, final-output rendering.
+ *
+ * `execution-result.yaml` is upserted mid-run, so a terminal consumer can be
+ * handed an artifact that is still executing. Reading one used to produce a
+ * plausible-looking terminal verdict from mid-run values; this refuses instead.
+ *
+ * Callers hand this parsed YAML that TypeScript only *claims* has the artifact
+ * shape (`readOptionalYaml<T>` is an unchecked cast), so the fields it narrows
+ * are checked at runtime rather than trusted. Absence is checked as well as
+ * `null`: a dropped key arrives as `undefined`, which `=== null` does not catch,
+ * and used to sail through as a `string` that `Date.parse` turned into NaN.
+ */
+export function requireTerminalExecutionResult(
+  artifact: ReviewExecutionResultArtifact,
+  context: string,
+): ReviewTerminalExecutionResultArtifact {
+  const status: unknown = artifact.execution_status;
+  if (typeof status !== "string" || !REVIEW_EXECUTION_STATUS_VALUES.has(status)) {
+    throw new Error(
+      `${context}: execution-result.yaml has an unusable execution_status (${JSON.stringify(status)}); expected one of ${[...REVIEW_EXECUTION_STATUS_VALUES].join(", ")}.`,
+    );
+  }
+  // Two different failures, two different diagnoses. Collapsing them told the
+  // operator a `completed` artifact was "still running" and to keep polling —
+  // untrue, and no amount of polling repairs a missing stamp.
+  if (status === "running") {
+    throw new Error(
+      `${context}: execution-result.yaml reports execution_status=running; a terminal artifact cannot be derived from a run in progress. Poll onto_review_read until the run reaches a terminal status.`,
+    );
+  }
+  const completedAt: unknown = artifact.execution_completed_at;
+  const durationMs: unknown = artifact.total_duration_ms;
+  const unusable = [
+    typeof completedAt === "string" && completedAt.length > 0
+      ? null
+      : `execution_completed_at (${JSON.stringify(completedAt)})`,
+    typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs >= 0
+      ? null
+      : `total_duration_ms (${JSON.stringify(durationMs)})`,
+  ].filter((field): field is string => field !== null);
+  if (unusable.length > 0) {
+    throw new Error(
+      `${context}: execution-result.yaml declares execution_status=${status} but its completion record is unusable — ${unusable.join(" and ")}. A terminal artifact must carry its completion stamp; the writer that set the status did not finish the record.`,
+    );
+  }
+  return {
+    ...artifact,
+    execution_status: status as ReviewTerminalExecutionStatus,
+    execution_completed_at: completedAt as string,
+    total_duration_ms: durationMs as number,
+  };
+}
+
 export type ReviewDegradationKind =
   | "lens_degradation"
   | "halted_partial"
@@ -952,7 +1059,7 @@ export interface ReviewDegradationSummaryArtifact {
   created_at: string;
   source_execution_result_ref: string;
   source_error_log_ref: string | null;
-  execution_status: ReviewExecutionStatus;
+  execution_status: ReviewTerminalExecutionStatus;
   degradation_kinds: ReviewDegradationKind[];
   degraded_lens_ids: string[];
   excluded_lens_ids: string[];

@@ -9,8 +9,10 @@ import type {
   ReviewIssueArtifactId,
   ReviewUnitExecutionResult,
 } from "./artifact-types.js";
+import { requireTerminalExecutionResult } from "./artifact-types.js";
 import type { ReviewContinuationUnit } from "./continuation-plan.js";
 import {
+  buildInitialExecutionResultScaffold,
   computeReviewFrontier,
   ensureUnitPacket,
   finalizeStageGate,
@@ -161,10 +163,14 @@ function lensOnlyExecutionResult(
   };
 }
 
+// The production seed, not a look-alike. A local fixture used to declare
+// `execution_status: "completed"` with the lens counters pre-filled — the exact
+// inverse of what the runtime writes — so no test ever exercised the real
+// mid-run shape and the artifact could contradict itself unnoticed.
 function scaffoldExecutionResult(
   plan: ReviewExecutionPlan,
 ): ReviewExecutionResultArtifact {
-  return { ...lensOnlyExecutionResult(plan), lens_execution_results: [] };
+  return buildInitialExecutionResultScaffold(plan);
 }
 
 function lensFrontierUnit(
@@ -383,6 +389,170 @@ describe("mergeUnitResultIntoExecutionResult", () => {
     expect(frontierIds).toContain("finding-ledger");
     expect(frontierIds).not.toContain("logic");
   });
+});
+
+// Regression: a mid-run execution-result read as a terminal one. Observed live
+// on 2026-08-04 (development-records/benchmark/20260804-review-interim-artifact)
+// — a session with nine completed lenses reported `halted_partial` /
+// `executed_lens_count: 0`, and was read as a dead review.
+describe("mid-run execution-result tells the truth about itself", () => {
+  it("says running, and its lens summary matches its own lens results", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+
+    let base: ReviewExecutionResultArtifact | undefined =
+      buildInitialExecutionResultScaffold(plan);
+    for (const seat of plan.lens_execution_seats) {
+      const unit = lensFrontierUnit(plan, seat.lens_id);
+      await writeOutput(unit.outputPath!);
+      const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+      await mergeUnitResultIntoExecutionResult({ sessionRoot: root, result, base });
+      base = undefined;
+    }
+
+    const onDisk = YAML.parse(
+      await fs.readFile(path.join(root, "execution-result.yaml"), "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    const completedLensIds = onDisk.lens_execution_results
+      .filter((result) => result.status === "completed")
+      .map((result) => result.unit_id);
+
+    // The subject set must be non-empty or every claim below passes vacuously.
+    expect(completedLensIds.length).toBeGreaterThan(0);
+    expect(onDisk.execution_status).toBe("running");
+    expect(onDisk.executed_lens_count).toBe(completedLensIds.length);
+    expect(onDisk.participating_lens_ids).toEqual(completedLensIds);
+    // No terminal stamps on a run that has not terminated.
+    expect(onDisk.execution_completed_at).toBeNull();
+    expect(onDisk.total_duration_ms).toBeNull();
+  });
+
+  // Codex review on PR #276. The host calls advance only after executing the
+  // round it was handed, so seeding `execution_started_at` from "now" dropped
+  // that round's real LLM work out of the terminal duration.
+  it("dates a host run from the session boundary, not from the first advance", async () => {
+    const root = await tempSessionRoot();
+    const plan = withBoundary(executionPlan(root), root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const sessionCreatedAt = "2026-08-05T00:00:00.000Z";
+    await writeYaml(plan.session_metadata_path, {
+      session_id: plan.session_id,
+      project_root: root,
+      orchestration: "host",
+      created_at: sessionCreatedAt,
+    });
+    await materializeLensPackets(plan);
+    for (const seat of plan.lens_execution_seats) {
+      await writeOutput(lensFrontierUnit(plan, seat.lens_id).outputPath!);
+    }
+
+    await reviewAdvance(
+      root,
+      plan.lens_execution_seats.map((seat) => seat.lens_id),
+    );
+
+    const onDisk = YAML.parse(
+      await fs.readFile(path.join(root, "execution-result.yaml"), "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    expect(Date.parse(onDisk.execution_started_at)).toBe(
+      Date.parse(sessionCreatedAt),
+    );
+  });
+
+  // The sibling repair — `reviewAdvance` stamping `halted_partial` when the round
+  // halts (Codex review on PR #276) — has no test here. Every fixture that fails
+  // lens seats still leaves the frontier retryable, so `reviewAdvance` returns
+  // `in_progress`; the real halt needs a runtime-owned reduce to throw
+  // mid-pipeline, which no proportionate unit fixture reproduces. A first attempt
+  // passed while never reaching the branch, which is worse than no test, so none
+  // is asserted.
+
+  it("dates the run from the caller's start, not from when the scaffold was seeded", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    // The onto path seeds only after the lens phase; without the real start the
+    // artifact would date the run from that moment and the progress projection
+    // would understate elapsed time by the whole lens phase.
+    const startedAtMs = Date.parse("2026-08-04T21:37:08+09:00");
+    const seeded = buildInitialExecutionResultScaffold(plan, startedAtMs);
+    expect(Date.parse(seeded.execution_started_at)).toBe(startedAtMs);
+    // The host path seeds on its first advance, where "now" is the start.
+    const hostSeeded = buildInitialExecutionResultScaffold(plan);
+    expect(Date.parse(hostSeeded.execution_started_at)).toBeGreaterThan(startedAtMs);
+  });
+
+  it("refuses to yield a terminal projection while it is still running", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    expect(() =>
+      requireTerminalExecutionResult(
+        buildInitialExecutionResultScaffold(plan),
+        "test",
+      ),
+    ).toThrow(/execution_status=running/);
+  });
+
+  // The happy path only proves completed lenses land in `participating`. A failed
+  // seat must land in `degraded` and stay out of the count, or the derived summary
+  // contradicts the same file's `lens_execution_results` in the other direction.
+  it("routes a failed lens seat to degraded, not participating", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+
+    let base: ReviewExecutionResultArtifact | undefined =
+      buildInitialExecutionResultScaffold(plan);
+    const [good, bad] = plan.lens_execution_seats;
+    // One seat written, one left missing so its validation fails for real.
+    await writeOutput(lensFrontierUnit(plan, good!.lens_id).outputPath!);
+    for (const seat of [good!, bad!]) {
+      const result = await validateUnitSeatToResult({
+        sessionRoot: root,
+        unit: lensFrontierUnit(plan, seat.lens_id),
+      });
+      await mergeUnitResultIntoExecutionResult({ sessionRoot: root, result, base });
+      base = undefined;
+    }
+
+    const onDisk = YAML.parse(
+      await fs.readFile(path.join(root, "execution-result.yaml"), "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    expect(
+      onDisk.lens_execution_results.filter((r) => r.status === "failed"),
+    ).toHaveLength(1);
+    expect(onDisk.participating_lens_ids).toEqual([good!.lens_id]);
+    expect(onDisk.degraded_lens_ids).toEqual([bad!.lens_id]);
+    expect(onDisk.executed_lens_count).toBe(1);
+    // A pending lens is not an excluded one — that verdict belongs to the
+    // terminal writers, so mid-run this stays empty.
+    expect(onDisk.excluded_lens_ids).toEqual([]);
+  });
+
+  // A terminal status with no completion stamp is a different failure from a run
+  // still in flight, and one diagnosis for both told the operator to poll a
+  // `completed` artifact until it terminated.
+  it("names the missing stamps instead of calling a completed artifact running", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    const malformed: ReviewExecutionResultArtifact = {
+      ...buildInitialExecutionResultScaffold(plan),
+      execution_status: "completed",
+    };
+    expect(() => requireTerminalExecutionResult(malformed, "test")).toThrow(
+      /completion record is unusable — execution_completed_at \(null\) and total_duration_ms \(null\)/,
+    );
+    expect(() => requireTerminalExecutionResult(malformed, "test")).not.toThrow(
+      /still running|execution_status=running/,
+    );
+  });
+
+  // The sibling refusal — finalizeHostExecutionResultIfComplete throwing on an
+  // unparseable `execution_started_at` rather than fabricating a 0 ms duration —
+  // is only reachable once the whole host ledger converges, so no proportionate
+  // unit test drives it. It is a defensive branch: our own writers always stamp
+  // that field through isoNow()/isoFromTimestamp().
+
 });
 
 // Minimal-but-valid boundary fields so writeIssueArtifactPromptPacket can render

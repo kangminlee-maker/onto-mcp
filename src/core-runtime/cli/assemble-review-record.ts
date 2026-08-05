@@ -12,9 +12,11 @@ import type {
   ReviewExecutionResultArtifact,
   ReviewRecord,
   ReviewRecordStatus,
+  ReviewTerminalExecutionResultArtifact,
   SharedPhenomenonClaimRelation,
   SharedPhenomenonSummaryEntry,
 } from "../review/artifact-types.js";
+import { requireTerminalExecutionResult } from "../review/artifact-types.js";
 import { fileSha256IfPresent } from "../pipeline-execution-ledger.js";
 import {
   fileExists,
@@ -382,10 +384,11 @@ async function summarizeErrorLog(errorLogPath: string): Promise<ErrorLogSummary>
 }
 
 async function deriveRecordStatus(
-  executionResult: ReviewExecutionResultArtifact | null,
+  executionResult: ReviewTerminalExecutionResultArtifact | null,
   errorLogSummary: ErrorLogSummary,
   finalOutputPath: string,
 ): Promise<ReviewRecordStatus> {
+  // Already admitted through the terminal gate by the caller.
   if (executionResult) {
     return executionResult.execution_status;
   }
@@ -505,8 +508,14 @@ export async function runAssembleReviewRecordCli(
 
   const invocationBindingArtifact =
     await readYamlDocument<InvocationBindingArtifact>(bindingPath);
-  const executionResult = await readYamlDocument<ReviewExecutionResultArtifact>(
-    executionResultPath,
+  // A record is a terminal artifact, so the execution result is admitted through
+  // the terminal gate once, here, and every downstream use reads the narrowed
+  // value. Before `running` existed the scaffold said `halted_partial`, and
+  // assembling against a still-executing session silently recorded the review as
+  // halted.
+  const executionResult = requireTerminalExecutionResult(
+    await readYamlDocument<ReviewExecutionResultArtifact>(executionResultPath),
+    `Review record assembly for session ${sessionId}`,
   );
   const synthesisExecuted = executionResult.synthesis_executed === true;
   if (synthesisExecuted) {

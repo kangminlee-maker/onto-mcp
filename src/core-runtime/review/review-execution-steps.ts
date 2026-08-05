@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   fileExists,
+  isoFromTimestamp,
   isoNow,
   readYamlDocument,
   writeYamlDocument,
@@ -407,8 +408,41 @@ export async function mergeUnitResultIntoExecutionResult(args: {
     }
   })();
 
-  await writeYamlDocument(resultPath, merged);
-  return merged;
+  const withLensSummary = withDerivedLensSummary(merged);
+  await writeYamlDocument(resultPath, withLensSummary);
+  return withLensSummary;
+}
+
+/**
+ * Keep the lens summary counters in step with `lens_execution_results`.
+ *
+ * The mid-run artifact used to carry the scaffold's `[]` / `0` until the run
+ * finished, so a file holding nine completed lens results also said zero lenses
+ * had executed. Deriving on every merge means the two never disagree.
+ *
+ * This is the *recorded* view (a lens result whose seat validated). The terminal
+ * writers narrow further — {@link finalizeHostExecutionResultIfComplete} to
+ * ledger-trusted lenses, the runner's batch write to its own outcomes — so the
+ * count can shrink at the end; it can never read as zero while results exist.
+ */
+function withDerivedLensSummary(
+  artifact: ReviewExecutionResultArtifact,
+): ReviewExecutionResultArtifact {
+  const participating = artifact.lens_execution_results
+    .filter((result) => result.status === "completed")
+    .map((result) => result.unit_id);
+  const degraded = artifact.lens_execution_results
+    .filter((result) => result.status === "failed")
+    .map((result) => result.unit_id);
+  // `excluded_lens_ids` stays owned by the terminal writers: mid-run, a lens that
+  // has not reported is pending, not excluded, and "excluded" is a verdict about
+  // a finished run.
+  return {
+    ...artifact,
+    participating_lens_ids: participating,
+    degraded_lens_ids: degraded,
+    executed_lens_count: participating.length,
+  };
 }
 
 /** Session metadata the plan points at (carries project_root + orchestration). */
@@ -1156,9 +1190,11 @@ async function ensureDeliberationMarkdownProjection(
 
 /**
  * Once every ledger unit is trusted, promote the host (B) execution-result from
- * its in-progress `halted_partial` scaffold to `completed`, so assembly does not
- * treat the run as degraded/halted. Records the participating lenses and that
- * synthesis ran. No-op until the pipeline is terminal or if already completed.
+ * its `running` scaffold to `completed`, so assembly does not treat the run as
+ * degraded/halted. Narrows the participating lenses to the ledger-trusted set
+ * (mid-run merges record every lens whose seat validated) and stamps the
+ * completion fields the scaffold deliberately left null. No-op until the pipeline
+ * is terminal or if already completed.
  */
 async function finalizeHostExecutionResultIfComplete(
   sessionRoot: string,
@@ -1174,10 +1210,24 @@ async function finalizeHostExecutionResultIfComplete(
   const trustedLensIds = ledger.units
     .filter((unit) => unit.unitKind === "lens" && isTrustedLedgerUnit(unit))
     .map((unit) => unit.unitId);
+  const completedAt = isoNow();
+  const startedAtMs = Date.parse(existing.execution_started_at);
+  if (!Number.isFinite(startedAtMs)) {
+    // Falling back to 0 here would re-create the very evidence this artifact was
+    // repaired to stop producing: a plausible-looking duration that no reader can
+    // tell apart from a real one, and that the terminal gate would accept.
+    throw new Error(
+      `finalizeHostExecutionResultIfComplete: execution-result.yaml has an unparseable execution_started_at (${JSON.stringify(existing.execution_started_at)}) in ${sessionRoot}; refusing to promote it to completed with a fabricated duration.`,
+    );
+  }
   await writeYamlDocument(resultPath, {
     ...existing,
     execution_status: "completed",
-    execution_completed_at: isoNow(),
+    execution_completed_at: completedAt,
+    // Real wall-time across the host rounds. The scaffold no longer pre-fills a
+    // duration, so a missed stamp here fails the terminal artifact validator
+    // instead of silently recording every host run as 0 ms.
+    total_duration_ms: Math.max(0, Date.parse(completedAt) - startedAtMs),
     participating_lens_ids: trustedLensIds,
     executed_lens_count: trustedLensIds.length,
     synthesis_executed: true,
@@ -1270,12 +1320,24 @@ export async function reviewRound(
 /**
  * Initial execution-result.yaml scaffold for a host session (B), seeded on the
  * first advance before any unit result exists. It carries only the
- * execution-level metadata derived from the plan (status starts `halted_partial`
- * as an in-progress proxy — the enum has no explicit in-progress); per-unit
- * results are merged in by {@link mergeUnitResultIntoExecutionResult}.
+ * execution-level metadata derived from the plan; per-unit results are merged in
+ * by {@link mergeUnitResultIntoExecutionResult}, which keeps the lens summary
+ * counters in step with them.
+ *
+ * The artifact is upserted mid-run, so every field here must be readable as
+ * "not finished": `running` status, and no completion stamp or duration.
+ *
+ * `executionStartedAtMs` is the run's real start; neither path may seed it from
+ * "now", because neither seeds at the start. The onto path (A) seeds after the
+ * lens phase and passes its own start. The host path (B) seeds on its first
+ * *advance* — which the host only calls after executing the first round's units —
+ * so it passes the session boundary instead. Seeding from `isoNow()` here would
+ * drop that round's real LLM work out of `total_duration_ms`, and the progress
+ * projection reads this field as the session start.
  */
 export function buildInitialExecutionResultScaffold(
   plan: ReviewExecutionPlan,
+  executionStartedAtMs?: number,
 ): ReviewExecutionResultArtifact {
   const plannedLensIds = plan.lens_execution_seats.map((seat) => seat.lens_id);
   return {
@@ -1288,10 +1350,13 @@ export function buildInitialExecutionResultScaffold(
       plan.artifact_generation_realization,
     ),
     review_mode: plan.review_mode,
-    execution_status: "halted_partial",
-    execution_started_at: isoNow(),
-    execution_completed_at: isoNow(),
-    total_duration_ms: 0,
+    execution_status: "running",
+    execution_started_at:
+      executionStartedAtMs === undefined
+        ? isoNow()
+        : isoFromTimestamp(executionStartedAtMs),
+    execution_completed_at: null,
+    total_duration_ms: null,
     max_concurrent_lenses: plan.max_concurrent_lenses ?? plannedLensIds.length,
     // Resolved retry policy stamped on the plan at prepare; fall back to the
     // default only for plans serialized before the stamp existed.
@@ -1329,8 +1394,17 @@ export async function reviewAdvance(
     frontier.frontierUnits.map((unit) => [unit.unitId, unit]),
   );
 
+  // The host already ran this round's units before calling advance, so the
+  // session boundary — not "now" — is the earliest defensible start.
+  const sessionStartedAtMs = Date.parse(
+    (await loadSessionMetadata(plan)).created_at,
+  );
   let base: ReviewExecutionResultArtifact | undefined =
-    opts?.base ?? buildInitialExecutionResultScaffold(plan);
+    opts?.base ??
+    buildInitialExecutionResultScaffold(
+      plan,
+      Number.isFinite(sessionStartedAtMs) ? sessionStartedAtMs : undefined,
+    );
   for (const unitId of executed) {
     const unit = frontierById.get(unitId);
     if (!unit) {
@@ -1355,5 +1429,41 @@ export async function reviewAdvance(
   await ensureDeliberationMarkdownProjection(sessionRoot, plan);
   await runRuntimeFixedPoint(sessionRoot, plan);
   await finalizeHostExecutionResultIfComplete(sessionRoot, plan);
-  return computeRoundResult(sessionRoot, plan);
+  const round = await computeRoundResult(sessionRoot, plan);
+  if (round.status === "halted") {
+    await finalizeHostExecutionResultAsHalted(sessionRoot, round.reason);
+  }
+  return round;
+}
+
+/**
+ * Close a halted host (B) run through the artifact, not just the return value.
+ *
+ * `computeRoundResult` tells the caller it halted, but that verdict used to
+ * reach no writer. While the scaffold said `halted_partial` the gap was hidden —
+ * the durable status ladder in `getReviewStatus` reads
+ * `execution_status === "halted_partial"` and matched by accident. With an honest
+ * `running` scaffold the same session falls through that rung and reports as
+ * running forever, so the halt has to be written down.
+ */
+async function finalizeHostExecutionResultAsHalted(
+  sessionRoot: string,
+  reason: string,
+): Promise<void> {
+  const resultPath = executionResultPath(sessionRoot);
+  const existing =
+    await readOptionalYamlArtifact<ReviewExecutionResultArtifact>(resultPath);
+  if (!existing || existing.execution_status !== "running") return;
+  const completedAt = isoNow();
+  const startedAtMs = Date.parse(existing.execution_started_at);
+  await writeYamlDocument(resultPath, {
+    ...existing,
+    execution_status: "halted_partial",
+    execution_completed_at: completedAt,
+    total_duration_ms: Number.isFinite(startedAtMs)
+      ? Math.max(0, Date.parse(completedAt) - startedAtMs)
+      : 0,
+    halt_reason: reason,
+    halt_phase: "host_round_frontier",
+  });
 }
